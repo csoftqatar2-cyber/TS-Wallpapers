@@ -1,0 +1,325 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/fsclockRootView"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#000">
+
+    <systems.sieber.fsclock.WallpaperView
+        android:id="@+id/wallpaperView"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:visibility="gone" />
+
+    <ImageView
+        android:id="@+id/imageViewBackground"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent" />
+
+    <LinearLayout
+        android:id="@+id/linearLayoutMain"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:layout_margin="@dimen/margin_main"
+        android:gravity="center"
+        android:orientation="vertical"
+        android:divider="@drawable/divider_clock_vertical"
+        android:showDividers="middle">
+
+        <TextView
+            android:id="@+id/textViewEvents"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:text="@string/events"
+            android:textColor="@color/colorDefaultClock"
+            android:textSize="25sp" />
+
+        <GridLayout
+            android:id="@+id/analogClockContainer"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_gravity="top"
+            android:layout_marginLeft="@dimen/margin_clock"
+            android:layout_marginRight="@dimen/margin_clock">
+
+            <ImageView
+                android:id="@+id/imageViewClockFace"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_row="0"
+                android:layout_column="0"
+                android:adjustViewBounds="true"
+                android:scaleType="fitXY"
+                app:srcCompat="@drawable/analog_classic_bg" />
+
+            <ImageView
+                android:id="@+id/imageViewClockHoursHand"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_row="0"
+                android:layout_column="0"
+                android:adjustViewBounds="true"
+                android:scaleType="fitXY"
+                app:srcCompat="@drawable/analog_classic_h" />
+
+            <ImageView
+                android:id="@+id/imageViewClockMinutesHand"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_row="0"
+                android:layout_column="0"
+                android:adjustViewBounds="true"
+                android:scaleType="fitXY"
+                app:srcCompat="@drawable/analog_classic_m" />
+
+            <ImageView
+                android:id="@+id/imageViewClockSecondsHand"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_row="0"
+                android:layout_column="0"
+                android:adjustViewBounds="true"
+                android:scaleType="fitXY"
+                app:srcCompat="@drawable/analog_classic_s" />
+        </GridLayout>
+
+        <LinearLayout
+            android:id="@+id/digitalClockAndDateContainer"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_gravity="fill_vertical"
+            android:layout_weight="1"
+            android:orientation="vertical">
+
+            <systems.sieber.fsclock.DigitalClockView
+                android:id="@+id/digitalClock"
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_gravity="fill_vertical"
+                android:gravity="bottom"
+                android:layoutDirection="ltr"
+                android:layout_weight="1"
+                tools:ignore="NestedWeights" />
+
+            <systems.sieber.fsclock.DateView
+                android:id="@+id/textViewDate"
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_gravity="fill_vertical"
+                android:layout_weight="1"
+                android:gravity="center"
+                android:maxLines="1"
+                android:text="@string/clock_prefilled"
+                android:textAlignment="center"
+                android:textColor="@color/colorDefaultClock"
+                app:autoSizeMaxTextSize="800dp"
+                app:autoSizeMinTextSize="20dp"
+                app:autoSizeStepGranularity="1px"
+                app:autoSizeTextType="uniform" />
+
+            <TextView
+                android:id="@+id/textViewHijriDate"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center"
+                android:maxLines="1"
+                android:visibility="gone"
+                android:textColor="@color/colorDefaultClock"
+                android:textSize="22sp" />
+        </LinearLayout>
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/linearLayoutBottomBar"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom|center_horizontal"
+        android:layout_marginBottom="0dp"
+        android:showDividers="middle"
+        android:divider="@drawable/divider_statusbar"
+        android:orientation="horizontal">
+        <LinearLayout
+            android:id="@+id/linearLayoutWeather"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center_vertical"
+            android:visibility="gone"
+            android:orientation="horizontal">
+            <TextView
+                android:id="@+id/textViewWeather"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center"
+                android:gravity="center"
+                android:text=""
+                android:textColor="@color/colorDefaultClock"
+                android:textSize="20sp" />
+        </LinearLayout>
+        <LinearLayout
+            android:id="@+id/linearLayoutNotifications"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center_vertical"
+            android:orientation="horizontal">
+            <ImageView
+                android:id="@+id/imageViewNotifications"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center"
+                android:layout_marginEnd="4dp"
+                app:srcCompat="@drawable/ic_notifications_white_24dp" />
+            <TextView
+                android:id="@+id/textViewNotifications"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center"
+                android:gravity="center"
+                android:text="0"
+                android:textColor="@color/colorDefaultClock"
+                android:textSize="20sp" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/linearLayoutAlarm"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center_vertical"
+            android:orientation="horizontal">
+            <ImageView
+                android:id="@+id/imageViewAlarm"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center"
+                android:layout_marginEnd="4dp"
+                app:srcCompat="@drawable/ic_alarm_white_24dp" />
+            <TextView
+                android:id="@+id/textViewAlarm"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center"
+                android:gravity="center"
+                android:text="@string/clock_prefilled"
+                android:textColor="@color/colorDefaultClock"
+                android:textSize="20sp" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/linearLayoutBattery"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center_vertical"
+            android:orientation="horizontal">
+            <ImageView
+                android:id="@+id/imageViewBattery"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center"
+                app:srcCompat="@drawable/ic_battery_full_white_24dp" />
+            <TextView
+                android:id="@+id/textViewBattery"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center"
+                android:gravity="center"
+                android:text="@string/battery_prefilled"
+                android:textColor="@color/colorDefaultClock"
+                android:textSize="20sp" />
+        </LinearLayout>
+    </LinearLayout>
+    <!-- Activation Overlay (shown only when the device is not activated in Supabase) -->
+    <LinearLayout
+        android:id="@+id/layoutActivation"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="#E6000000"
+        android:gravity="center_horizontal|top"
+        android:orientation="vertical"
+        android:padding="32dp"
+        android:paddingTop="72dp"
+        android:visibility="gone"
+        tools:visibility="visible">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="تفعيل البرنامج"
+            android:textColor="#00FFCC"
+            android:textSize="32sp"
+            android:textStyle="bold"
+            android:gravity="center" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:text="يرجى إدخال الرقم التسلسلي لتفعيل البرنامج:"
+            android:textColor="#FFFFFF"
+            android:textSize="18sp"
+            android:gravity="center" />
+
+        <EditText
+            android:id="@+id/editTextActivationSerial"
+            android:layout_width="260dp"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:background="#22FFFFFF"
+            android:textColor="#FFFFFF"
+            android:textSize="20sp"
+            android:gravity="center"
+            android:padding="12dp"
+            android:inputType="number"
+            android:hint="******"
+            android:textColorHint="#66FFFFFF" />
+
+        <Button
+            android:id="@+id/buttonActivate"
+            android:layout_width="260dp"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:background="#00FFCC"
+            android:textColor="#000000"
+            android:text="تفعيل الآن"
+            android:textSize="18sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/textViewActivationStatus"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:textColor="#FF4444"
+            android:textSize="14sp"
+            android:gravity="center"
+            android:visibility="gone" />
+
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="20dp"
+            android:background="#11FFFFFF"
+            android:orientation="horizontal"
+            android:padding="8dp"
+            android:gravity="center">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="معرف الجهاز: "
+                android:textColor="#88FFFFFF"
+                android:textSize="12sp" />
+
+            <TextView
+                android:id="@+id/textViewActivationDeviceId"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="UNKNOWN"
+                android:textColor="#88FFFFFF"
+                android:textSize="12sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+    </LinearLayout>
+
+</FrameLayout>

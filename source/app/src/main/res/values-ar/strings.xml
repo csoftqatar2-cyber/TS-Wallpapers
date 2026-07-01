@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">ذبذبة خلفيات</string>
+    <string name="app_name_long">ذبذبة خلفيات</string>
+
+    <!-- in-app self update -->
+    <string name="update_check">التحقق من التحديثات</string>
+    <string name="update_title">يوجد تحديث جديد</string>
+    <string name="update_message">صدر إصدار جديد (%1$s).\n\nهل تريد التحديث الآن؟</string>
+    <string name="update_now">حدّث الآن</string>
+    <string name="update_later">لاحقاً</string>
+    <string name="update_downloading">جارٍ تنزيل التحديث…</string>
+    <string name="update_up_to_date">أنت تستخدم أحدث إصدار.</string>
+    <string name="update_check_failed">تعذّر التحقق من التحديثات.</string>
+    <string name="update_failed">فشل تنزيل التحديث.</string>
+    <string name="update_allow_unknown_sources">لتثبيت التحديث، يرجى السماح بتثبيت التطبيقات من هذا المصدر ثم الضغط على \"حدّث الآن\" مرة أخرى.</string>
+    <string name="update_cancel">إلغاء</string>
+</resources>

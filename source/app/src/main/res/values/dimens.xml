@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <dimen name="fab_margin">22dp</dimen>
+    <dimen name="margin_main">50dp</dimen>
+    <dimen name="margin_clock">20dp</dimen>
+    <dimen name="space_color_preview">8dp</dimen>
+    <dimen name="width_color_preview">18dp</dimen>
+    <dimen name="padding_setting">7dp</dimen>
+    <dimen name="color_preview_border">2dp</dimen>
+    <dimen name="color_preview_radius">2dp</dimen>
+</resources>

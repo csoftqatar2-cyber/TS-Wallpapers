@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:background="@color/dialog_bg"
+    android:padding="24dp"
+    android:minWidth="280dp">
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="تفعيل الإعدادات (Activation)"
+        android:textColor="@color/gold"
+        android:textSize="18sp"
+        android:textStyle="bold"
+        android:gravity="center"
+        android:layout_marginBottom="16dp" />
+
+    <EditText
+        android:id="@+id/editTextInputBox"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:inputType="number"
+        android:maxLength="6"
+        android:maxLines="1"
+        android:textColor="@color/gold"
+        android:backgroundTint="@color/gold"
+        android:gravity="center"
+        android:textSize="20sp"
+        android:textColorHint="@color/gold_dim"
+        android:hint="------"
+        android:layout_marginBottom="20dp"
+        android:autofillHints="" />
+
+    <Button
+        android:id="@+id/buttonOK"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="@string/ok"
+        android:textColor="#000000"
+        android:backgroundTint="@color/gold"
+        android:textStyle="bold" />
+
+    <Button
+        android:id="@+id/buttonBuyCode"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="@string/buy_a_code"
+        android:textColor="@color/gold"
+        style="@style/Widget.AppCompat.Button.Borderless"
+        android:visibility="gone" />
+
+</LinearLayout>

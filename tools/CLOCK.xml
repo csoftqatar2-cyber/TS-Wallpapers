@@ -1,0 +1,11 @@
+<?xml version='1.0' encoding='utf-8' standalone='yes' ?>
+<map>
+    <int name="started" value="4" />
+    <boolean name="wallpaper-enabled" value="true" />
+    <string name="wallpaper-manifest-url">http://localhost:8085/manifest.json</string>
+    <string name="wallpaper-cache-json">[{&quot;type&quot;:&quot;image&quot;,&quot;url&quot;:&quot;https://picsum.photos/seed/ts1/1080/1920&quot;},{&quot;type&quot;:&quot;image&quot;,&quot;url&quot;:&quot;https://picsum.photos/seed/ts2/1080/1920&quot;},{&quot;type&quot;:&quot;gif&quot;,&quot;url&quot;:&quot;https://upload.wikimedia.org/wikipedia/commons/2/2c/Rotating_earth_%28large%29.gif&quot;},{&quot;type&quot;:&quot;video&quot;,&quot;url&quot;:&quot;https://download.samplelib.com/mp4/sample-5s.mp4&quot;}]</string>
+    <int name="wallpaper-index" value="3" />
+    <boolean name="clock-overlay" value="true" />
+    <string name="clock-position">bottom_left</string>
+    <string name="clock-size">small</string>
+</map>

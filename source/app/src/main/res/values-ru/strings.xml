@@ -1,0 +1,131 @@
+<resources>
+    <string name="app_name">TS WALLPAPERS</string>
+    <string name="app_name_long">TS WALLPAPERS</string>
+
+    <string name="version">Версия</string>
+    <string name="analog_clock">Аналоговые часы</string>
+    <string name="show_seconds_hand">Показать секундную стрелку (отключить для экономии энергии)</string>
+    <string name="use_smooth_hands">Используйте мягкие стрелки часов (отключить для экономии энергии)</string>
+    <string name="digital_clock">Цифровые часы</string>
+    <string name="show_seconds">Показать секунды</string>
+    <string name="format_24hrs">Использовать 24-часовой формат</string>
+    <string name="events">События</string>
+    <string name="events_define_description">Определите повторяющиеся напоминания, голосовые подсказки и сигналы уведомлений.</string>
+    <string name="apply">Применять</string>
+    <string name="save">Сохранять</string>
+    <string name="display_event">Показать на экране</string>
+    <string name="play_alarm">Воспроизвести звук будильника</string>
+    <string name="read_text">Говорить текст</string>
+    <string name="title">Заголовок</string>
+    <string name="remove">Удалять</string>
+    <string name="show_analog_clock">Показать аналоговые часы</string>
+    <string name="show_digital_clock">Показать цифровые часы</string>
+    <string name="show_date">Показать дату</string>
+    <string name="new_event">Новое событие</string>
+    <string name="unlock_settings">Разблокировать настройки</string>
+    <string name="ok">В ПОРЯДКЕ</string>
+    <string name="activation_failed">Активация не удалось</string>
+    <string name="invalid_code">Неверный код</string>
+    <string name="red">красный</string>
+    <string name="green">Зеленый</string>
+    <string name="blue">Синий</string>
+    <string name="review_app_title">Вам нравится это приложение? Пожалуйста, оставьте отзыв.</string>
+    <string name="review_now">Оценить сейчас в Play Маркете</string>
+    <string name="purchase_support_note">Разблокировав настройки с помощью разовой покупки внутри приложения, вы также получите доступ к новым циферблатам и стрелкам и поддержите дальнейшую разработку этого приложения ♥</string>
+    <string name="background">Задний план</string>
+    <string name="general">Общий</string>
+    <string name="keep_screen_on">Оставьте экран включенным</string>
+    <string name="use_own_images">Использовать собственные изображения</string>
+    <string name="clock_face_color">Цвет циферблата часов</string>
+    <string name="hour_hand_color">Цвет часовой стрелки</string>
+    <string name="minute_hand_color">Цвет минутной стрелки</string>
+    <string name="seconds_hand_color">Цвет секундной стрелки</string>
+    <string name="own_images_note">Изображения должны быть квадратными (одинаковой ширины и высоты), а ширина и высота не должны превышать 1000 пикселей. Фон должен быть прозрачным, а стрелки часов должны быть расположены по центру и направлены вверх.</string>
+    <string name="use_own_image">Использовать настраиваемое изображение</string>
+    <string name="use_own_color_for_seconds_hand">Использовать произвольный цвет для секундной стрелки</string>
+    <string name="use_own_color_for_hour_and_minutes_hand">Использовать нестандартный цвет для часовой и минутной стрелки</string>
+    <string name="use_own_color_for_clock_face">Использовать собственный цвет для циферблата</string>
+    <string name="show_battery_status_when_power_supply_is_not_plugged_in">Показывать состояние батареи при разрядке</string>
+    <string name="show_battery_status_when_power_supply_is_plugged_in">Показывать состояние батареи при зарядке</string>
+    <string name="open_settings">Открыть настройки</string>
+    <string name="tv_settings_note">Подсказка: нажмите кнопку ОК или МЕНЮ, чтобы войти в настройки.</string>
+    <string name="more_apps">Больше приложений</string>
+    <string name="customer_database_for_android">База данных клиентов для Android</string>
+    <string name="remote_pointer_for_android">RemotePointer для Android</string>
+    <string name="ballbreak_for_android">BallBreak для Android</string>
+    <string name="video_screensaver_for_android">Видеозаставка для Android</string>
+    <string name="clock_desklet_for_cinnamon">Десклет «Аналоговые часы» для рабочего стола Cinnamon</string>
+    <string name="open_source_text">Это приложение с открытым исходным кодом. Если вы хотите улучшить приложение или его переводы, посетите репозиторий на Github.</string>
+    <string name="open_source">Вилка меня</string>
+    <string name="allow_system_calendar_access">Разрешить доступ к системному календарю</string>
+    <string name="access_already_granted">Доступ уже предоставлен</string>
+    <string name="access_denied_by_user">Вы ранее запрещали доступ к календарю. Перейдите в настройки Android и вручную предоставьте доступ к календарю для этого приложения.</string>
+    <string name="fire_tv_notes">Важное замечание для устройств FireTV: Amazon FireOS официально не позволяет заменять системную заставку на стороннее приложение, но есть обходной путь с помощью инструментов разработчика. Подробности объяснены в репозитории Github (см. Ниже). Без обходного пути часы все еще можно запускать на устройствах FireTV, как обычное приложение.</string>
+    <string name="no_web_browser_found">Не найден веб-браузер для открытия этого URL-адреса</string>
+    <string name="set_as_screensaver_in_android_settings">Сделать заставкой в настройках Android</string>
+    <string name="screensaver_not_supported">Это устройство не поддерживает заставки Android.</string>
+    <string name="check_internet_conn">Пожалуйста, проверьте подключение к интернету и попробуйте снова.</string>
+    <string name="play_store_not_avail">Магазин Google Play недоступен</string>
+    <string name="amazon_store_not_avail">Amazon App Store недоступен</string>
+    <string name="huawei_store_not_avail">Галерея приложений Huawei недоступна</string>
+    <string name="could_not_fetch_prices">Не удалось получить текущие цены для покупок в приложении.</string>
+    <string name="choose_color">Выберите цвет</string>
+    <string name="use_custom_color">Используйте свой собственный цвет</string>
+    <string name="apply_for_all">Подать заявку на все</string>
+    <string name="buy_a_code">Купите код</string>
+    <string name="unlock_code">Код разблокировки</string>
+    <string name="classic_design">Дизайн по умолчанию</string>
+    <string name="rounded_design">Закругленный</string>
+    <string name="elegant_design">Элегантный</string>
+    <string name="rustic_design">Деревенский</string>
+    <string name="outlined_design">Окруженный</string>
+    <string name="dot_design">Точка</string>
+    <string name="number_design">Числа</string>
+    <string name="square_design">Квадрат</string>
+    <string name="vinyl_design">Винил</string>
+    <string name="custom_image">Пользовательское изображение</string>
+    <string name="custom_image_stretch">Пользовательское изображение (Растянуть)</string>
+    <string name="custom_image_zoom">Пользовательское изображение (увеличение)</string>
+    <string name="no_image">Нет изображения</string>
+    <string name="force_landscape_view_only_when_started_manually">Принудительно использовать альбомный формат (только при запуске приложения вручную)</string>
+    <string name="date_format">Формат даты</string>
+    <string name="burn_in_prevention">Предотвращение выгорания (для экранов OLED; слегка перемещает контент)</string>
+    <string name="night_mode_for_dark_rooms">Ночной режим (для темных помещений)</string>
+    <string name="show_alarms">Показать сигналы тревоги</string>
+    <string name="reset_default">Сбросить настройки по умолчанию</string>
+    <string name="date_format_placeholders_help_title">Вы можете использовать следующие заполнители (с примерами)</string>
+    <string name="date_format_placeholders_help">
+    G - Обозначение эпохи (AD)\n
+    yyyy или yy - Год (2024 или 24)\n
+    ММ или МММ или ММММ — месяц (12 или дек или декабрь)\n
+    ww - Неделя в году (27)\n
+    W - Неделя в месяце (2)\n
+    DDD - День года (189)\n
+    d или dd — день месяца (1 или 01)\n
+    F - День недели в месяце (2)\n
+    EEEE или E - Naam van de weekdag (Понедельник или Пн.)\n
+    u - Номер дня недели (1-7)\n
+    a - Маркер AM/PM\n
+    HH - Час в день (0-23)\n
+    hh - Час в AM/PM (1-12)\n
+    mm - Минута в час\n
+    ss - Секунда в минуте\n
+    zzzz или z - Название часового пояса (Pacific Standard Time или PST)\n
+    Z - RFC 822 часовой пояс (-0800)\n
+    XXX или X - RFC 8601 часовой пояс (-08:00 или -08)\n\n
+    Пользовательский текст можно добавить в одинарные кавычки, например. \'ваш текст\'.
+    </string>
+    <string name="high_contrast_text_notes">Важно: в настройках специальных возможностей системы Android включен параметр «Высококонтрастный текст». Это разрушит конструкцию цифровых часов. Пожалуйста, отключите этот параметр для более удобного использования.</string>
+    <string name="show_until_confirmed">Показать до подтверждения</string>
+    <string name="gregorian_calendar">Григорианский календарь</string>
+    <string name="hijri_calendar">Календарь Хиджры</string>
+    <string name="digital_clock_color">Цвет цифровых часов</string>
+    <string name="date_color">Цвет даты</string>
+    <string name="event_color">Цвет события</string>
+    <string name="start">Начало:</string>
+    <string name="end">Конец:</string>
+    <string name="allow_notification_access">Разрешить доступ к уведомлениям</string>
+    <string name="widget_digital_name">Виджет цифровых часов</string>
+    <string name="widget_analog_name">Виджет аналоговых часов</string>
+    <string name="widget_draw_background">Рисовать цвет фона</string>
+</resources>

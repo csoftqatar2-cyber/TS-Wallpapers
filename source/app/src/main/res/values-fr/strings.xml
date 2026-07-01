@@ -1,0 +1,131 @@
+<resources>
+    <string name="app_name">TS WALLPAPERS</string>
+    <string name="app_name_long">TS WALLPAPERS</string>
+
+    <string name="version">Version</string>
+    <string name="analog_clock">Horloge analogique</string>
+    <string name="show_seconds_hand">Afficher la trotteuse (désactiver pour économiser de l\'énergie)</string>
+    <string name="use_smooth_hands">Utilisez des aiguilles d\'horloge douces (désactiver pour économiser de l\'énergie)</string>
+    <string name="digital_clock">Horloge digitale</string>
+    <string name="show_seconds">Afficher les secondes</string>
+    <string name="format_24hrs">Utiliser le format 24 heures</string>
+    <string name="events">&#201;v&#233;nements</string>
+    <string name="events_define_description">D&#233;finissez des rappels r&#233;currents, des invites vocales et des tonalit&#233;s de notification.</string>
+    <string name="apply">Appliquer</string>
+    <string name="save">Sauvegarder</string>
+    <string name="display_event">Afficher &#224; l\'&#233;cran</string>
+    <string name="play_alarm">Jouer le son de l\'alarme</string>
+    <string name="read_text">Parler du texte</string>
+    <string name="title">Titre</string>
+    <string name="remove">Supprimer</string>
+    <string name="show_analog_clock">Afficher l\'horloge analogique</string>
+    <string name="show_digital_clock">Afficher l\'horloge num&#233;rique</string>
+    <string name="show_date">Afficher la date</string>
+    <string name="new_event">Nouvel &#233;v&#232;nement&#8230;</string>
+    <string name="unlock_settings">D&#233;verrouiller les param&#232;tres&#8230;</string>
+    <string name="ok">d\'accord</string>
+    <string name="activation_failed">Activation echou&#233;e</string>
+    <string name="invalid_code">Code invalide</string>
+    <string name="red">rouge</string>
+    <string name="green">Vert</string>
+    <string name="blue">Bleu</string>
+    <string name="review_app_title">Aimez-vous cette application? Veuillez soumettre un avis.</string>
+    <string name="review_now">&#201;valuez maintenant sur le Play Store&#8230;</string>
+    <string name="purchase_support_note">En débloquant les paramètres grâce à l\'achat unique intégré, vous accédez également aux nouveaux cadrans et aiguilles, tout en soutenant le développement continu de cette application ♥</string>
+    <string name="background">Fond</string>
+    <string name="general">G&#233;n&#233;ral</string>
+    <string name="keep_screen_on">Gardez l\'&#233;cran allum&#233;</string>
+    <string name="use_own_images">Utiliser des images personnalis&#233;es</string>
+    <string name="clock_face_color">Couleur du cadran de l\'horloge</string>
+    <string name="hour_hand_color">Couleur de l\'aiguille des heures</string>
+    <string name="minute_hand_color">Couleur de l\'aiguille des minutes</string>
+    <string name="seconds_hand_color">Couleur de l\'aiguille des secondes</string>
+    <string name="own_images_note">Les images doivent &#234;tre carr&#233;es (m&#234;me largeur et hauteur) et la largeur et la hauteur ne doivent pas d&#233;passer 1000px. Le fond doit être transparent et les aiguilles de l’horloge doivent être centrées et pointées vers le haut.</string>
+    <string name="use_own_image">Utiliser une image personnalis&#233;e</string>
+    <string name="use_own_color_for_seconds_hand">Utiliser une couleur personnalis&#233;e pour l\'aiguille des secondes</string>
+    <string name="use_own_color_for_hour_and_minutes_hand">Utiliser une couleur personnalis&#233;e pour l\'aiguille des heures et des minutes</string>
+    <string name="use_own_color_for_clock_face">Utiliser une couleur personnalis&#233;e pour le cadran de l\'horloge</string>
+    <string name="show_battery_status_when_power_supply_is_not_plugged_in">Afficher l\'&#233;tat de la batterie lors de la d&#233;charge</string>
+    <string name="show_battery_status_when_power_supply_is_plugged_in">Afficher l\'&#233;tat de la batterie lors de la charge</string>
+    <string name="open_settings">Ouvrir les param&#232;tres</string>
+    <string name="tv_settings_note">Astuce : Appuyez sur le bouton OK ou MENU pour entrer les param&#232;tres.</string>
+    <string name="more_apps">Plus d\'applications</string>
+    <string name="customer_database_for_android">Base de donn&#233;es clients pour Android</string>
+    <string name="remote_pointer_for_android">RemotePointer pour Android</string>
+    <string name="ballbreak_for_android">BallBreak pour Android</string>
+    <string name="video_screensaver_for_android">Écran de veille vidéo pour Android</string>
+    <string name="clock_desklet_for_cinnamon">Desklet d\'horloge analogique pour le bureau Cinnamon</string>
+    <string name="open_source_text">Cette application est Open Source. Si vous souhaitez am&#233;liorer l\'application ou ses traductions, veuillez consulter le r&#233;f&#233;rentiel sur Github.</string>
+    <string name="open_source">Fourche-moi</string>
+    <string name="allow_system_calendar_access">Autoriser l\'accès au calendrier système</string>
+    <string name="access_already_granted">Accès déjà accordé</string>
+    <string name="access_denied_by_user">Vous avez précédemment refusé l\'accès au calendrier. Veuillez accéder aux paramètres Android et accorder manuellement l\'accès au calendrier pour cette application.</string>
+    <string name="fire_tv_notes">Avis important pour les appareils FireTV: Amazon FireOS n\'autorise pas officiellement la modification de l\'économiseur d\'écran du système en une application tierce, mais il existe une solution de contournement possible à l\'aide des outils de développement. Les détails sont expliqués dans le dépôt Github (voir ci-dessous). Sans la solution de contournement, l\'horloge peut toujours être démarrée sur les appareils FireTV comme une application normale.</string>
+    <string name="no_web_browser_found">Aucun navigateur Web trouvé pour ouvrir cette URL</string>
+    <string name="set_as_screensaver_in_android_settings">Définir comme économiseur d\'écran dans les paramètres Android</string>
+    <string name="screensaver_not_supported">Cet appareil ne prend pas en charge les économiseurs d\'écran Android.</string>
+    <string name="check_internet_conn">Veuillez vérifier votre connexion internet et réessayer.</string>
+    <string name="play_store_not_avail">Google Play Store n\'est pas disponible</string>
+    <string name="amazon_store_not_avail">Amazon App Store non disponible</string>
+    <string name="huawei_store_not_avail">Galerie d\'applications Huawei non disponible</string>
+    <string name="could_not_fetch_prices">Impossible de récupérer les prix actuels pour les achats intégrés.</string>
+    <string name="choose_color">Choisir la couleur</string>
+    <string name="use_custom_color">Utilisez votre propre couleur</string>
+    <string name="apply_for_all">Postuler pour tous</string>
+    <string name="buy_a_code">Acheter un code</string>
+    <string name="unlock_code">Code de dévérouillage</string>
+    <string name="classic_design">Conception par défaut</string>
+    <string name="rounded_design">Arrondi</string>
+    <string name="elegant_design">Élégant</string>
+    <string name="rustic_design">Rustique</string>
+    <string name="outlined_design">Entouré</string>
+    <string name="dot_design">Point</string>
+    <string name="number_design">Nombres</string>
+    <string name="square_design">Carré</string>
+    <string name="vinyl_design">Vinyl</string>
+    <string name="custom_image">Image personnalisée</string>
+    <string name="custom_image_stretch">Image personnalisée (étirement)</string>
+    <string name="custom_image_zoom">Image personnalisée (Zoom)</string>
+    <string name="no_image">Pas d\'image</string>
+    <string name="force_landscape_view_only_when_started_manually">Forcer le format paysage (uniquement lors du démarrage manuel de l\'application)</string>
+    <string name="date_format">Format de date</string>
+    <string name="burn_in_prevention">Prévention des brûlures (pour les écrans OLED; déplace légèrement le contenu)</string>
+    <string name="night_mode_for_dark_rooms">Mode nuit (pour les pièces sombres)</string>
+    <string name="show_alarms">Afficher les alarmes</string>
+    <string name="reset_default">Réinitialiser par défaut</string>
+    <string name="date_format_placeholders_help_title">Vous pouvez utiliser les espaces réservés suivants (avec des exemples)</string>
+    <string name="date_format_placeholders_help">
+    G - Désignateur d\'époque (AD)\n
+    yyyy ou yy - Année (2024 ou 24)\n
+    MM ou MMM ou MMMM - Mois (12 ou déc ou décembre)\n
+    ww - Semaine dans l\'année (27)\n
+    W - Semaine après mois (2)\n
+    DDD - Jour de l\'année (189)\n
+    d ou dd - Jour du mois (1 ou 01)\n
+    F - Jour de la semaine dans le mois (2)\n
+    EEEE ou E - Nom du jour de la semaine (Lundi ou Lun.)\n
+    u - Numero del giorno della settimana (1-7)\n
+    a - Marqueur AM/PM\n
+    HH - Heure dans la journée (0-23)\n
+    hh - Heure en AM/PM (1-12)\n
+    mm - Minute en heure\n
+    ss - Seconde en minute\n
+    zzzz ou z - Nom du fuseau horaire (Pacific Standard Time ou PST)\n
+    Z - RFC 822 fuseau horaire (-0800)\n
+    XXX ou X - RFC 8601 fuseau horaire (-08:00 ou -08)\n\n
+    Un texte personnalisé peut être ajouté entre guillemets simples, par ex. \'ton texte\'.
+    </string>
+    <string name="high_contrast_text_notes">Important: vous avez activé «Texte à contraste élevé» dans les paramètres d\'accessibilité du système Android. Cela détruirait la conception de l\’horloge numérique. Veuillez désactiver ce paramètre pour une expérience utilisateur appropriée.</string>
+    <string name="show_until_confirmed">Afficher jusqu\'à confirmation</string>
+    <string name="gregorian_calendar">Calendrier Grégorien</string>
+    <string name="hijri_calendar">Calendrier hégirien</string>
+    <string name="digital_clock_color">Couleur de l\'horloge numérique</string>
+    <string name="date_color">Couleur des dates</string>
+    <string name="event_color">Couleur de l\'événement</string>
+    <string name="start">Début:</string>
+    <string name="end">Fin:</string>
+    <string name="allow_notification_access">Autoriser l\'accès aux notifications</string>
+    <string name="widget_digital_name">Widget d\'horloge numérique</string>
+    <string name="widget_analog_name">Widget d\'horloge analogique</string>
+    <string name="widget_draw_background">Dessiner la couleur d\'arrière-plan</string>
+</resources>
