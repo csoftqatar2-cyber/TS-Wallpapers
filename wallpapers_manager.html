@@ -1,0 +1,1688 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>مدير خلفيات TS Wallpapers</title>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&family=Tajawal:wght@300;500;700;800&display=swap" rel="stylesheet">
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- SweetAlert2 -->
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <!-- Canvas Confetti -->
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+
+    <style>
+        :root {
+            --bg-color: #0b0f19;
+            --panel-bg: rgba(255, 255, 255, 0.03);
+            --panel-border: rgba(255, 255, 255, 0.08);
+            --panel-border-hover: rgba(255, 255, 255, 0.15);
+            --primary: #6366f1;
+            --primary-glow: rgba(99, 102, 241, 0.35);
+            --success: #10b981;
+            --success-glow: rgba(16, 185, 129, 0.35);
+            --danger: #ef4444;
+            --danger-glow: rgba(239, 68, 68, 0.35);
+            --text-main: #f3f4f6;
+            --text-muted: #9ca3af;
+            --accent: #a855f7;
+            --font-family: 'Tajawal', 'Outfit', sans-serif;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            font-family: var(--font-family);
+            min-height: 100vh;
+            overflow-x: hidden;
+            position: relative;
+        }
+
+        /* Ambient Glowing Background Orbs */
+        .orb {
+            position: absolute;
+            border-radius: 50%;
+            filter: blur(120px);
+            z-index: -1;
+            opacity: 0.45;
+            pointer-events: none;
+        }
+
+        .orb-1 {
+            width: 450px;
+            height: 450px;
+            background: var(--primary);
+            top: -150px;
+            left: -150px;
+        }
+
+        .orb-2 {
+            width: 400px;
+            height: 400px;
+            background: var(--accent);
+            bottom: -100px;
+            right: -100px;
+        }
+
+        .orb-3 {
+            width: 300px;
+            height: 300px;
+            background: #3b82f6;
+            top: 40%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+        }
+
+        /* Container Layout */
+        .container {
+            max-width: 1300px;
+            margin: 0 auto;
+            padding: 40px 20px;
+        }
+
+        /* Header section */
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 40px;
+            padding-bottom: 20px;
+            border-bottom: 1px solid var(--panel-border);
+        }
+
+        .logo-area {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .logo-icon {
+            font-size: 2.2rem;
+            background: linear-gradient(135deg, var(--primary), var(--accent));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            filter: drop-shadow(0 0 10px var(--primary-glow));
+        }
+
+        .logo-text h1 {
+            font-size: 1.8rem;
+            font-weight: 800;
+            letter-spacing: -0.5px;
+            background: linear-gradient(to left, #ffffff, #d1d5db);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .logo-text p {
+            font-size: 0.85rem;
+            color: var(--text-muted);
+        }
+
+        .db-status {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: rgba(16, 185, 129, 0.1);
+            border: 1px solid rgba(16, 185, 129, 0.2);
+            color: var(--success);
+            padding: 8px 16px;
+            border-radius: 50px;
+            font-size: 0.9rem;
+            font-weight: 600;
+        }
+
+        .db-status.error {
+            background: rgba(239, 68, 68, 0.1);
+            border: 1px solid rgba(239, 68, 68, 0.2);
+            color: var(--danger);
+        }
+
+        .db-status i {
+            font-size: 0.75rem;
+        }
+
+        /* Stats Grid */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 20px;
+            margin-bottom: 40px;
+        }
+
+        .stat-card {
+            background: var(--panel-bg);
+            border: 1px solid var(--panel-border);
+            border-radius: 20px;
+            padding: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            position: relative;
+            overflow: hidden;
+            backdrop-filter: blur(16px);
+        }
+
+        .stat-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, rgba(255,255,255,0.02) 0%, transparent 100%);
+            pointer-events: none;
+        }
+
+        .stat-card:hover {
+            border-color: var(--panel-border-hover);
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px -10px rgba(0, 0, 0, 0.5);
+        }
+
+        .stat-info h3 {
+            font-size: 0.9rem;
+            color: var(--text-muted);
+            font-weight: 500;
+            margin-bottom: 8px;
+        }
+
+        .stat-info p {
+            font-size: 2.2rem;
+            font-weight: 800;
+            color: var(--text-main);
+            font-family: 'Outfit', sans-serif;
+        }
+
+        .stat-icon {
+            width: 55px;
+            height: 55px;
+            border-radius: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.4rem;
+        }
+
+        .stat-icon.blue {
+            background: rgba(59, 130, 246, 0.1);
+            color: #3b82f6;
+            border: 1px solid rgba(59, 130, 246, 0.2);
+        }
+
+        .stat-icon.purple {
+            background: rgba(168, 85, 247, 0.1);
+            color: var(--accent);
+            border: 1px solid rgba(168, 85, 247, 0.2);
+        }
+
+        .stat-icon.green {
+            background: rgba(16, 185, 129, 0.1);
+            color: var(--success);
+            border: 1px solid rgba(16, 185, 129, 0.2);
+        }
+
+        /* Grid Workspace Layout */
+        .workspace-grid {
+            display: grid;
+            grid-template-columns: 430px 1fr;
+            gap: 30px;
+            align-items: start;
+        }
+
+        @media (max-width: 1024px) {
+            .workspace-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* Glass Cards */
+        .card {
+            background: var(--panel-bg);
+            border: 1px solid var(--panel-border);
+            border-radius: 24px;
+            padding: 30px;
+            backdrop-filter: blur(16px);
+            box-shadow: 0 4px 30px rgba(0, 0, 0, 0.2);
+        }
+
+        .card-title {
+            font-size: 1.25rem;
+            font-weight: 700;
+            margin-bottom: 25px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            color: #ffffff;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+            padding-bottom: 12px;
+        }
+
+        .card-title i {
+            color: var(--primary);
+        }
+
+        /* Forms Elements */
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: var(--text-main);
+            margin-bottom: 8px;
+        }
+
+        .input-wrapper {
+            position: relative;
+        }
+
+        .input-wrapper i {
+            position: absolute;
+            right: 15px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--text-muted);
+        }
+
+        .form-control {
+            width: 100%;
+            background: rgba(0, 0, 0, 0.2);
+            border: 1px solid var(--panel-border);
+            border-radius: 12px;
+            padding: 12px 42px 12px 15px;
+            color: var(--text-main);
+            font-family: var(--font-family);
+            font-size: 0.95rem;
+        }
+
+        .form-control:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px var(--primary-glow);
+            background: rgba(0, 0, 0, 0.3);
+        }
+
+        /* Toggle Button Group */
+        .toggle-group {
+            display: flex;
+            background: rgba(0, 0, 0, 0.2);
+            border: 1px solid var(--panel-border);
+            padding: 4px;
+            border-radius: 12px;
+            margin-bottom: 20px;
+        }
+
+        .toggle-btn {
+            flex: 1;
+            background: transparent;
+            border: none;
+            color: var(--text-muted);
+            padding: 10px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-family: var(--font-family);
+            font-size: 0.9rem;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .toggle-btn.active {
+            background: var(--primary);
+            color: #ffffff;
+            box-shadow: 0 4px 12px var(--primary-glow);
+        }
+
+        /* Drag & Drop Area */
+        .dropzone {
+            border: 2px dashed var(--panel-border);
+            border-radius: 16px;
+            padding: 30px 20px;
+            text-align: center;
+            cursor: pointer;
+            background: rgba(255, 255, 255, 0.01);
+            position: relative;
+            overflow: hidden;
+            margin-bottom: 20px;
+        }
+
+        .dropzone:hover, .dropzone.dragover {
+            border-color: var(--primary);
+            background: rgba(99, 102, 241, 0.04);
+        }
+
+        .dropzone i {
+            font-size: 2.5rem;
+            color: var(--text-muted);
+            margin-bottom: 12px;
+        }
+
+        .dropzone h4 {
+            font-size: 0.95rem;
+            font-weight: 700;
+            margin-bottom: 5px;
+        }
+
+        .dropzone p {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+        }
+
+        .dropzone input[type="file"] {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            opacity: 0;
+            cursor: pointer;
+        }
+
+        /* Upload Previews */
+        .previews-container {
+            max-height: 250px;
+            overflow-y: auto;
+            margin-bottom: 20px;
+            border-radius: 12px;
+            border: 1px solid var(--panel-border);
+            background: rgba(0,0,0,0.15);
+            display: none;
+        }
+
+        .preview-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 10px 15px;
+            border-bottom: 1px solid var(--panel-border);
+        }
+
+        .preview-item:last-child {
+            border-bottom: none;
+        }
+
+        .preview-info {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            max-width: 70%;
+        }
+
+        .preview-thumb {
+            width: 40px;
+            height: 40px;
+            border-radius: 6px;
+            object-fit: cover;
+            border: 1px solid var(--panel-border);
+        }
+
+        .preview-thumb-icon {
+            width: 40px;
+            height: 40px;
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(255,255,255,0.05);
+            color: var(--text-muted);
+            border: 1px solid var(--panel-border);
+        }
+
+        .preview-meta {
+            overflow: hidden;
+        }
+
+        .preview-name {
+            font-size: 0.85rem;
+            font-weight: 600;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .preview-size {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+        }
+
+        .remove-preview {
+            background: transparent;
+            border: none;
+            color: var(--text-muted);
+            cursor: pointer;
+            font-size: 0.95rem;
+        }
+
+        .remove-preview:hover {
+            color: var(--danger);
+        }
+
+        /* Upload Queue Progress */
+        .upload-progress-container {
+            margin-top: 15px;
+            display: none;
+        }
+
+        .progress-bar-wrapper {
+            background: rgba(255,255,255,0.05);
+            height: 6px;
+            border-radius: 10px;
+            overflow: hidden;
+            margin-bottom: 8px;
+            position: relative;
+        }
+
+        .progress-bar-fill {
+            background: linear-gradient(to left, var(--primary), var(--accent));
+            width: 0%;
+            height: 100%;
+            border-radius: 10px;
+            box-shadow: 0 0 8px var(--primary-glow);
+        }
+
+        .progress-text {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.8rem;
+            color: var(--text-muted);
+        }
+
+        /* Buttons styling */
+        .btn {
+            width: 100%;
+            padding: 14px;
+            border-radius: 12px;
+            border: none;
+            font-family: var(--font-family);
+            font-size: 1rem;
+            font-weight: 700;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--primary), var(--accent));
+            color: #ffffff;
+        }
+
+        .btn-primary:hover {
+            opacity: 0.9;
+            transform: translateY(-1px);
+            box-shadow: 0 8px 20px var(--primary-glow);
+        }
+
+        .btn-primary:active {
+            transform: translateY(0);
+        }
+
+        .btn-primary:disabled {
+            background: #4b5563;
+            color: #9ca3af;
+            cursor: not-allowed;
+            box-shadow: none;
+            transform: none;
+        }
+
+        /* Wallpapers List Section */
+        .wallpapers-header-actions {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .search-box {
+            position: relative;
+            width: 250px;
+        }
+
+        .search-box i {
+            position: absolute;
+            right: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--text-muted);
+            font-size: 0.9rem;
+        }
+
+        .search-box input {
+            padding: 8px 35px 8px 12px;
+            border-radius: 8px;
+            font-size: 0.85rem;
+        }
+
+        /* Wallpapers Grid View */
+        .wallpapers-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+            gap: 20px;
+            max-height: 750px;
+            overflow-y: auto;
+            padding-right: 5px;
+        }
+
+        .wp-card {
+            background: rgba(0,0,0,0.2);
+            border: 1px solid var(--panel-border);
+            border-radius: 16px;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+        }
+
+        .wp-card:hover {
+            border-color: var(--panel-border-hover);
+            transform: scale(1.02);
+            box-shadow: 0 10px 20px rgba(0,0,0,0.3);
+        }
+
+        .wp-media-wrapper {
+            position: relative;
+            width: 100%;
+            height: 150px;
+            background: #111827;
+            overflow: hidden;
+        }
+
+        .wp-media {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .wp-badge {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            padding: 4px 10px;
+            border-radius: 50px;
+            font-size: 0.7rem;
+            font-weight: 700;
+            backdrop-filter: blur(8px);
+            z-index: 2;
+        }
+
+        .wp-badge.global {
+            background: rgba(16, 185, 129, 0.2);
+            border: 1px solid rgba(16, 185, 129, 0.4);
+            color: #34d399;
+        }
+
+        .wp-badge.private {
+            background: rgba(168, 85, 247, 0.2);
+            border: 1px solid rgba(168, 85, 247, 0.4);
+            color: #c084fc;
+        }
+
+        .wp-type-icon {
+            position: absolute;
+            bottom: 10px;
+            right: 10px;
+            width: 30px;
+            height: 30px;
+            background: rgba(0,0,0,0.6);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.85rem;
+            color: #ffffff;
+            backdrop-filter: blur(4px);
+            z-index: 2;
+        }
+
+        .wp-details {
+            padding: 15px;
+            display: flex;
+            flex-direction: column;
+            flex-grow: 1;
+        }
+
+        .wp-filename {
+            font-size: 0.85rem;
+            font-weight: 700;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            margin-bottom: 5px;
+            color: #ffffff;
+        }
+
+        .wp-target {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .wp-target i {
+            font-size: 0.8rem;
+        }
+
+        .wp-actions {
+            margin-top: auto;
+            display: flex;
+            gap: 8px;
+        }
+
+        .wp-btn {
+            flex: 1;
+            padding: 8px;
+            border-radius: 8px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            border: none;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            font-family: var(--font-family);
+        }
+
+        .wp-btn-delete {
+            background: rgba(239, 68, 68, 0.1);
+            color: var(--danger);
+            border: 1px solid rgba(239, 68, 68, 0.2);
+        }
+
+        .wp-btn-delete:hover {
+            background: var(--danger);
+            color: #ffffff;
+            box-shadow: 0 4px 10px var(--danger-glow);
+        }
+
+        .wp-btn-view {
+            background: rgba(255,255,255,0.05);
+            color: var(--text-main);
+            border: 1px solid var(--panel-border);
+        }
+
+        .wp-btn-view:hover {
+            background: rgba(255,255,255,0.1);
+            border-color: var(--text-muted);
+        }
+
+        /* Empty State */
+        .empty-state {
+            grid-column: 1 / -1;
+            text-align: center;
+            padding: 80px 20px;
+            background: rgba(0,0,0,0.15);
+            border-radius: 20px;
+            border: 1px dashed var(--panel-border);
+            color: var(--text-muted);
+        }
+
+        .empty-state i {
+            font-size: 3rem;
+            margin-bottom: 15px;
+            color: var(--text-muted);
+        }
+
+        .empty-state p {
+            font-size: 0.95rem;
+        }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: rgba(0,0,0,0.1);
+            border-radius: 10px;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: var(--panel-border);
+            border-radius: 10px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: var(--panel-border-hover);
+        }
+
+        /* Animations */
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .pulse {
+            animation: pulse 2s infinite;
+        }
+    </style>
+</head>
+<body>
+    <div class="orb orb-1"></div>
+    <div class="orb orb-2"></div>
+    <div class="orb orb-3"></div>
+
+    <div class="container">
+        <!-- Header -->
+        <header>
+            <div class="logo-area">
+                <i class="fa-solid fa-photo-film logo-icon"></i>
+                <div class="logo-text">
+                    <h1>مدير خلفيات TS Wallpapers</h1>
+                    <p>إدارة ورفع الخلفيات العامة والخاصة بالأجهزة عبر Supabase</p>
+                </div>
+            </div>
+            <div id="connection-status" class="db-status pulse">
+                <i class="fa-solid fa-circle-notch fa-spin"></i>
+                <span>جاري الاتصال بقاعدة البيانات...</span>
+            </div>
+        </header>
+
+        <!-- Stats -->
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-info">
+                    <h3>إجمالي الخلفيات المرفوعة</h3>
+                    <p id="stat-total-wp">-</p>
+                </div>
+                <div class="stat-icon blue">
+                    <i class="fa-regular fa-image"></i>
+                </div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-info">
+                    <h3>الخلفيات المخصصة (الخاصة)</h3>
+                    <p id="stat-private-wp">-</p>
+                </div>
+                <div class="stat-icon purple">
+                    <i class="fa-solid fa-user-shield"></i>
+                </div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-info">
+                    <h3>إجمالي الأجهزة المسجلة</h3>
+                    <p id="stat-total-devices">-</p>
+                </div>
+                <div class="stat-icon green">
+                    <i class="fa-solid fa-mobile-screen-button"></i>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Workspace Grid -->
+        <div class="workspace-grid">
+            <!-- Sidebar: Upload Section -->
+            <div class="card">
+                <h2 class="card-title">
+                    <i class="fa-solid fa-cloud-arrow-up"></i>
+                    <span>رفع خلفيات جديدة</span>
+                </h2>
+
+                <form id="upload-form" onsubmit="event.preventDefault(); startUpload();">
+                    <!-- Target Type (Global vs Private) -->
+                    <div class="form-group">
+                        <label>من يستطيع رؤية هذه الخلفيات؟</label>
+                        <div class="toggle-group">
+                            <button type="button" class="toggle-btn active" id="btn-target-global" onclick="setTargetType('global')">
+                                <i class="fa-solid fa-globe"></i> جميع الأجهزة (عام)
+                            </button>
+                            <button type="button" class="toggle-btn" id="btn-target-private" onclick="setTargetType('private')">
+                                <i class="fa-solid fa-laptop-code"></i> جهاز محدد (خاص)
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Device Selector (Shown only for private) -->
+                    <div class="form-group" id="device-selection-group" style="display: none;">
+                        <label for="device-select">اختر الجهاز المستهدف:</label>
+                        <div class="input-wrapper">
+                            <i class="fa-solid fa-microchip"></i>
+                            <select id="device-select" class="form-control" onchange="onDeviceSelectChange()">
+                                <option value="">-- اختر جهازاً أو اكتب كوداً مخصصاً --</option>
+                            </select>
+                        </div>
+                        
+                        <div style="margin-top: 12px;">
+                            <label for="custom-hw-id">أو أدخل معرف العتاد (Hardware ID) يدوياً:</label>
+                            <div class="input-wrapper">
+                                <i class="fa-solid fa-fingerprint"></i>
+                                <input type="text" id="custom-hw-id" class="form-control" placeholder="مثال: MAC-304AC427F290">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Upload Input Mode Toggle (Files vs Folder) -->
+                    <div class="form-group">
+                        <label>طريقة اختيار الملفات</label>
+                        <div class="toggle-group">
+                            <button type="button" class="toggle-btn active" id="btn-mode-files" onclick="setInputMode('files')">
+                                <i class="fa-regular fa-file-image"></i> ملفات محددة
+                            </button>
+                            <button type="button" class="toggle-btn" id="btn-mode-folder" onclick="setInputMode('folder')">
+                                <i class="fa-regular fa-folder-open"></i> مجلد كامل
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Drag & Drop Area -->
+                    <div class="dropzone" id="drop-zone">
+                        <i class="fa-solid fa-images"></i>
+                        <h4 id="dropzone-title">اسحب وأسقط الصور هنا</h4>
+                        <p id="dropzone-subtitle">أو انقر هنا لتصفح الملفات</p>
+                        <!-- Dynamic inputs based on mode -->
+                        <input type="file" id="file-input-files" multiple accept="image/*,video/*" onchange="handleFileSelect(event)">
+                        <input type="file" id="file-input-folder" webkitdirectory directory multiple onchange="handleFileSelect(event)" style="display: none;">
+                    </div>
+
+                    <!-- Selected Files Previews -->
+                    <div class="previews-container" id="previews-container">
+                        <!-- Preview Items will be injected here -->
+                    </div>
+
+                    <!-- Progress bar -->
+                    <div class="upload-progress-container" id="progress-container">
+                        <div class="progress-bar-wrapper">
+                            <div class="progress-bar-fill" id="progress-bar"></div>
+                        </div>
+                        <div class="progress-text">
+                            <span id="progress-status">جاري الرفع...</span>
+                            <span id="progress-percent">0%</span>
+                        </div>
+                    </div>
+
+                    <!-- Submit Button -->
+                    <button type="submit" id="submit-btn" class="btn btn-primary" disabled>
+                        <i class="fa-solid fa-cloud-arrow-up"></i>
+                        <span>ابدأ الرفع والمزامنة</span>
+                    </button>
+                </form>
+            </div>
+
+            <!-- Content Panel: Active Wallpapers Manager -->
+            <div class="card">
+                <div class="wallpapers-header-actions">
+                    <h2 class="card-title" style="margin-bottom: 0; border: none; padding-bottom: 0;">
+                        <i class="fa-solid fa-images"></i>
+                        <span>الخلفيات النشطة حالياً</span>
+                    </h2>
+                    
+                    <div class="search-box">
+                        <i class="fa-solid fa-magnifying-glass"></i>
+                        <input type="text" id="search-input" class="form-control" placeholder="ابحث باسم الملف أو معرف الجهاز..." oninput="filterWallpapers()">
+                    </div>
+                </div>
+
+                <!-- Grid list of wallpapers -->
+                <div class="wallpapers-grid" id="wallpapers-grid">
+                    <!-- Wallpaper cards will be injected here -->
+                </div>
+            </div>
+        </div>
+
+        <!-- App Update Publisher -->
+        <div class="card" style="margin-top: 25px;">
+            <h2 class="card-title">
+                <i class="fa-solid fa-rocket"></i>
+                <span>نشر تحديث للتطبيق (APK)</span>
+            </h2>
+            <p style="opacity:.7; margin-bottom:18px;">
+                ارفع نسخة APK جديدة وسجّل رقم الإصدار. سيصل التحديث تلقائياً لكل الأجهزة عند فتح الإعدادات.
+                <br><b>مهم:</b> رقم الإصدار (versionCode) لازم يكون أكبر من رقم النسخة المثبّتة حالياً.
+            </p>
+
+            <div id="current-version-box" style="opacity:.7; margin-bottom:14px;">
+                <i class="fa-solid fa-circle-info"></i> أحدث إصدار منشور: <b id="latest-version-label">—</b>
+            </div>
+
+            <form id="update-form" onsubmit="event.preventDefault(); publishUpdate();">
+                <div class="form-group">
+                    <label>رقم الإصدار (versionCode) — رقم صحيح</label>
+                    <input type="number" id="update-version-code" class="form-control" placeholder="مثال: 43" required>
+                </div>
+                <div class="form-group">
+                    <label>اسم الإصدار (versionName)</label>
+                    <input type="text" id="update-version-name" class="form-control" placeholder="مثال: 2.4" required>
+                </div>
+                <div class="form-group">
+                    <label>ملاحظات التحديث (تظهر للمستخدم)</label>
+                    <textarea id="update-changelog" class="form-control" rows="2" placeholder="مثال: إصلاح مشاكل وإضافة خلفيات جديدة"></textarea>
+                </div>
+                <div class="form-group">
+                    <label>ملف الـ APK</label>
+                    <input type="file" id="update-apk-file" class="form-control" accept=".apk,application/vnd.android.package-archive" required>
+                </div>
+                <button type="submit" class="toggle-btn active" style="width:100%;">
+                    <i class="fa-solid fa-cloud-arrow-up"></i> رفع ونشر التحديث
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        // Supabase Settings (Linked directly to your project)
+        const PROJECT_REF = "ihgmqwzdpugdzddobhbc";
+        const ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImloZ21xd3pkcHVnZHpkZG9iaGJjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI2NTI4ODAsImV4cCI6MjA5ODIyODg4MH0.xG0ch3u5rcbb81pSa8wmybeEYj8kz2LjCGQM_-Xg6Yk";
+        
+        const SUPABASE_URL = `https://${PROJECT_REF}.supabase.co`;
+        const STORAGE_API = `${SUPABASE_URL}/storage/v1/object/wallpapers`;
+        const PUBLIC_URL_PREFIX = `${SUPABASE_URL}/storage/v1/object/public/wallpapers`;
+        const REST_WALLPAPERS = `${SUPABASE_URL}/rest/v1/wallpapers`;
+        const REST_DEVICES = `${SUPABASE_URL}/rest/v1/devices`;
+        const REST_APP_VERSIONS = `${SUPABASE_URL}/rest/v1/app_versions`;
+        const APK_STORAGE_API = `${SUPABASE_URL}/storage/v1/object/apk`;
+        const APK_PUBLIC_PREFIX = `${SUPABASE_URL}/storage/v1/object/public/apk`;
+
+        // App States
+        let devicesList = [];
+        let wallpapersList = [];
+        let selectedFiles = [];
+        let targetType = 'global'; // global or private
+        let inputMode = 'files'; // files or folder
+
+        // Initialize connection
+        document.addEventListener("DOMContentLoaded", () => {
+            initConnection();
+            setupDragAndDrop();
+        });
+
+        // Test Connection & Load initial data
+        async function initConnection() {
+            const statusEl = document.getElementById("connection-status");
+            try {
+                // Fetch stats, wallpapers, devices
+                await Promise.all([
+                    loadDevices(),
+                    loadWallpapers(),
+                    loadLatestVersion()
+                ]);
+
+                // Update connection status UI
+                statusEl.className = "db-status";
+                statusEl.innerHTML = '<i class="fa-solid fa-circle-check"></i> متصل بنجاح مع Supabase';
+            } catch (err) {
+                console.error("Connection error:", err);
+                statusEl.className = "db-status error";
+                statusEl.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i> فشل الاتصال بقاعدة البيانات';
+                Swal.fire({
+                    icon: 'error',
+                    title: 'فشل الاتصال',
+                    text: 'تأكد من اتصالك بالإنترنت وصلاحية مفتاح Supabase.',
+                    confirmButtonText: 'حسناً'
+                });
+            }
+        }
+
+        // Fetch registered devices
+        async function loadDevices() {
+            const response = await fetch(`${REST_DEVICES}?order=created_at.desc`, {
+                headers: {
+                    "apikey": ANON_KEY,
+                    "Authorization": `Bearer ${ANON_KEY}`
+                }
+            });
+            if (!response.ok) throw new Error("Failed to load devices");
+            devicesList = await response.json();
+            
+            // Render Stats & Dropdown
+            document.getElementById("stat-total-devices").innerText = devicesList.length;
+            renderDevicesDropdown();
+        }
+
+        // Fetch wallpapers
+        async function loadWallpapers() {
+            const response = await fetch(`${REST_WALLPAPERS}?order=created_at.desc`, {
+                headers: {
+                    "apikey": ANON_KEY,
+                    "Authorization": `Bearer ${ANON_KEY}`
+                }
+            });
+            if (!response.ok) throw new Error("Failed to load wallpapers");
+            wallpapersList = await response.json();
+
+            // Render stats
+            document.getElementById("stat-total-wp").innerText = wallpapersList.length;
+            const privateCount = wallpapersList.filter(w => !w.is_global).length;
+            document.getElementById("stat-private-wp").innerText = privateCount;
+
+            renderWallpapersGrid(wallpapersList);
+        }
+
+        // Render devices into selection dropdown
+        function renderDevicesDropdown() {
+            const selectEl = document.getElementById("device-select");
+            // Clear current options keeping the first one
+            selectEl.innerHTML = '<option value="">-- اختر جهازاً أو اكتب كوداً مخصصاً --</option>';
+
+            devicesList.forEach(device => {
+                const serial = device.serial_number || 'بدون كود';
+                const label = `${serial} | الماك: ${device.hardware_id}`;
+                const option = document.createElement("option");
+                option.value = device.hardware_id;
+                option.innerText = label;
+                selectEl.appendChild(option);
+            });
+        }
+
+        // Set Target Type (Global vs Private)
+        function setTargetType(type) {
+            targetType = type;
+            const btnGlobal = document.getElementById("btn-target-global");
+            const btnPrivate = document.getElementById("btn-target-private");
+            const deviceGroup = document.getElementById("device-selection-group");
+
+            if (type === 'global') {
+                btnGlobal.classList.add('active');
+                btnPrivate.classList.remove('active');
+                deviceGroup.style.display = 'none';
+            } else {
+                btnGlobal.classList.remove('active');
+                btnPrivate.classList.add('active');
+                deviceGroup.style.display = 'block';
+            }
+            validateForm();
+        }
+
+        // Set Input Mode (Files vs Folder)
+        function setInputMode(mode) {
+            inputMode = mode;
+            const btnFiles = document.getElementById("btn-mode-files");
+            const btnFolder = document.getElementById("btn-mode-folder");
+            const fileInputFiles = document.getElementById("file-input-files");
+            const fileInputFolder = document.getElementById("file-input-folder");
+            const dropzoneTitle = document.getElementById("dropzone-title");
+            const dropzoneSubtitle = document.getElementById("dropzone-subtitle");
+
+            selectedFiles = [];
+            renderPreviews();
+            validateForm();
+
+            if (mode === 'files') {
+                btnFiles.classList.add('active');
+                btnFolder.classList.remove('active');
+                fileInputFiles.style.display = 'block';
+                fileInputFolder.style.display = 'none';
+                dropzoneTitle.innerText = "اسحب وأسقط الصور هنا";
+                dropzoneSubtitle.innerText = "أو انقر هنا لتصفح الملفات";
+            } else {
+                btnFiles.classList.remove('active');
+                btnFolder.classList.add('active');
+                fileInputFiles.style.display = 'none';
+                fileInputFolder.style.display = 'block';
+                dropzoneTitle.innerText = "اختر مجلداً كاملاً من جهازك";
+                dropzoneSubtitle.innerText = "سيتم رفع جميع الصور من المجلد";
+            }
+        }
+
+        // On dropdown select
+        function onDeviceSelectChange() {
+            const selectEl = document.getElementById("device-select");
+            const customInput = document.getElementById("custom-hw-id");
+            if (selectEl.value) {
+                customInput.value = selectEl.value;
+            }
+            validateForm();
+        }
+
+        // Handle File Select
+        function handleFileSelect(e) {
+            const files = e.target.files;
+            if (!files || files.length === 0) return;
+
+            // Filter for images/videos
+            const allowedExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.mp4', '.mkv', '.bin'];
+            
+            for (let i = 0; i < files.length; i++) {
+                const file = files[i];
+                const fileExt = file.name.substring(file.name.lastIndexOf('.')).toLowerCase();
+                const isImage = file.type.startsWith('image/');
+                const isVideo = file.type.startsWith('video/') || file.name.endsWith('.bin');
+
+                if (isImage || isVideo || allowedExtensions.includes(fileExt)) {
+                    selectedFiles.push(file);
+                }
+            }
+
+            renderPreviews();
+            validateForm();
+        }
+
+        // Setup Drag and Drop
+        function setupDragAndDrop() {
+            const dropZone = document.getElementById("drop-zone");
+
+            ['dragenter', 'dragover'].forEach(eventName => {
+                dropZone.addEventListener(eventName, (e) => {
+                    e.preventDefault();
+                    dropZone.classList.add('dragover');
+                }, false);
+            });
+
+            ['dragleave', 'drop'].forEach(eventName => {
+                dropZone.addEventListener(eventName, (e) => {
+                    e.preventDefault();
+                    dropZone.classList.remove('dragover');
+                }, false);
+            });
+
+            dropZone.addEventListener('drop', (e) => {
+                if (inputMode === 'folder') return; // Folders drag and drop is not fully supported in standard input, use browser click
+                const dt = e.dataTransfer;
+                const files = dt.files;
+                if (files && files.length > 0) {
+                    handleFileSelect({ target: { files } });
+                }
+            });
+        }
+
+        // Render selected files previews
+        function renderPreviews() {
+            const container = document.getElementById("previews-container");
+            container.innerHTML = "";
+
+            if (selectedFiles.length === 0) {
+                container.style.display = "none";
+                return;
+            }
+
+            container.style.display = "block";
+
+            selectedFiles.forEach((file, index) => {
+                const item = document.createElement("div");
+                item.className = "preview-item";
+
+                const info = document.createElement("div");
+                info.className = "preview-info";
+
+                // Generate thumbnail if image
+                if (file.type.startsWith('image/')) {
+                    const img = document.createElement("img");
+                    img.className = "preview-thumb";
+                    img.src = URL.createObjectURL(file);
+                    img.onload = () => URL.revokeObjectURL(img.src);
+                    info.appendChild(img);
+                } else {
+                    const icon = document.createElement("div");
+                    icon.className = "preview-thumb-icon";
+                    icon.innerHTML = file.name.endsWith('.mp4') || file.name.endsWith('.bin') 
+                        ? '<i class="fa-regular fa-file-video"></i>' 
+                        : '<i class="fa-regular fa-image"></i>';
+                    info.appendChild(icon);
+                }
+
+                const meta = document.createElement("div");
+                meta.className = "preview-meta";
+
+                const name = document.createElement("div");
+                name.className = "preview-name";
+                name.innerText = file.name;
+                name.title = file.name;
+
+                const size = document.createElement("div");
+                size.className = "preview-size";
+                size.innerText = formatBytes(file.size);
+
+                meta.appendChild(name);
+                meta.appendChild(size);
+                info.appendChild(meta);
+
+                const removeBtn = document.createElement("button");
+                removeBtn.type = "button";
+                removeBtn.className = "remove-preview";
+                removeBtn.innerHTML = '<i class="fa-solid fa-trash-can"></i>';
+                removeBtn.onclick = () => {
+                    selectedFiles.splice(index, 1);
+                    renderPreviews();
+                    validateForm();
+                };
+
+                item.appendChild(info);
+                item.appendChild(removeBtn);
+                container.appendChild(item);
+            });
+        }
+
+        // Form Validation
+        function validateForm() {
+            const submitBtn = document.getElementById("submit-btn");
+            let isValid = true;
+
+            if (selectedFiles.length === 0) isValid = false;
+
+            if (targetType === 'private') {
+                const hwId = document.getElementById("custom-hw-id").value.trim();
+                if (!hwId) isValid = false;
+            }
+
+            submitBtn.disabled = !isValid;
+        }
+
+        // Upload loop
+        async function startUpload() {
+            const submitBtn = document.getElementById("submit-btn");
+            const progressContainer = document.getElementById("progress-container");
+            const progressBar = document.getElementById("progress-bar");
+            const progressStatus = document.getElementById("progress-status");
+            const progressPercent = document.getElementById("progress-percent");
+
+            submitBtn.disabled = true;
+            progressContainer.style.display = "block";
+            
+            const hwId = targetType === 'private' ? document.getElementById("custom-hw-id").value.trim() : null;
+            const isGlobal = targetType === 'global';
+
+            let successCount = 0;
+            const totalFiles = selectedFiles.length;
+
+            for (let i = 0; i < totalFiles; i++) {
+                const file = selectedFiles[i];
+                const filePercent = Math.round((i / totalFiles) * 100);
+                
+                progressStatus.innerText = `جاري رفع: ${file.name} (${i + 1}/${totalFiles})`;
+                progressBar.style.width = `${filePercent}%`;
+                progressPercent.innerText = `${filePercent}%`;
+
+                try {
+                    // 1. Upload to Supabase Storage
+                    const uploadSuccess = await uploadToStorage(file);
+                    
+                    if (uploadSuccess) {
+                        // 2. Insert reference to public.wallpapers
+                        const fileUrl = `${PUBLIC_URL_PREFIX}/${encodeURIComponent(file.name)}`;
+                        const fileType = file.name.endsWith('.mp4') || file.name.endsWith('.bin') ? 'video' : 'image';
+                        
+                        await insertWallpaperRecord(fileUrl, fileType, isGlobal, hwId);
+                        successCount++;
+                    }
+                } catch (err) {
+                    console.error(`Error uploading ${file.name}:`, err);
+                }
+            }
+
+            // Finish progress
+            progressBar.style.width = "100%";
+            progressPercent.innerText = "100%";
+            progressStatus.innerText = "اكتمل الرفع والمزامنة!";
+
+            // Fire Confetti!
+            confetti({
+                particleCount: 150,
+                spread: 70,
+                origin: { y: 0.6 }
+            });
+
+            // Show success alert
+            Swal.fire({
+                icon: 'success',
+                title: 'اكتملت العملية',
+                text: `تم رفع ومزامنة ${successCount} من أصل ${totalFiles} ملفات بنجاح.`,
+                confirmButtonText: 'رائع'
+            });
+
+            // Reset Form and reload grid
+            selectedFiles = [];
+            document.getElementById("upload-form").reset();
+            setTargetType('global');
+            setInputMode('files');
+            renderPreviews();
+            
+            progressContainer.style.display = "none";
+            
+            await loadWallpapers();
+        }
+
+        // Sub function: Upload single file to Supabase storage via fetch
+        async function uploadToStorage(file) {
+            const uploadUrl = `${STORAGE_API}/${encodeURIComponent(file.name)}`;
+            
+            const response = await fetch(uploadUrl, {
+                method: "POST",
+                headers: {
+                    "Authorization": `Bearer ${ANON_KEY}`,
+                    "apikey": ANON_KEY,
+                    "Content-Type": file.type || "image/jpeg",
+                    "x-upsert": "true"
+                },
+                body: file
+            });
+
+            return response.ok;
+        }
+
+        // Sub function: Insert wallpaper record into REST DB
+        async function insertWallpaperRecord(url, type, isGlobal, hardwareId) {
+            const body = {
+                url: url,
+                type: type,
+                is_global: isGlobal,
+                hardware_id: hardwareId
+            };
+
+            const response = await fetch(REST_WALLPAPERS, {
+                method: "POST",
+                headers: {
+                    "Authorization": `Bearer ${ANON_KEY}`,
+                    "apikey": ANON_KEY,
+                    "Content-Type": "application/json",
+                    "Prefer": "return=representation"
+                },
+                body: JSON.stringify(body)
+            });
+
+            return response.ok;
+        }
+
+        // ============ App Update Publisher ============
+
+        // Load & display the latest published app version
+        async function loadLatestVersion() {
+            try {
+                const response = await fetch(`${REST_APP_VERSIONS}?select=version_code,version_name&order=version_code.desc&limit=1`, {
+                    headers: { "apikey": ANON_KEY, "Authorization": `Bearer ${ANON_KEY}` }
+                });
+                if (!response.ok) return;
+                const rows = await response.json();
+                const label = document.getElementById("latest-version-label");
+                if (rows.length === 0) {
+                    label.innerText = "لا يوجد إصدار منشور بعد";
+                } else {
+                    label.innerText = `${rows[0].version_name} (code ${rows[0].version_code})`;
+                }
+            } catch (err) {
+                console.error("loadLatestVersion error:", err);
+            }
+        }
+
+        // Upload the APK to storage then insert a version row
+        async function publishUpdate() {
+            const versionCode = parseInt(document.getElementById("update-version-code").value, 10);
+            const versionName = document.getElementById("update-version-name").value.trim();
+            const changelog = document.getElementById("update-changelog").value.trim();
+            const fileInput = document.getElementById("update-apk-file");
+            const file = fileInput.files[0];
+
+            if (!Number.isInteger(versionCode) || !versionName || !file) {
+                Swal.fire({ icon: 'warning', title: 'بيانات ناقصة', text: 'أدخل رقم الإصدار واسمه واختر ملف APK.', confirmButtonText: 'حسناً' });
+                return;
+            }
+
+            Swal.fire({ title: 'جاري رفع التحديث...', html: 'يرجى الانتظار حتى يكتمل الرفع', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+
+            try {
+                // 1. Upload APK to the "apk" storage bucket (versioned filename to avoid overwrites)
+                const safeName = `ts-wallpapers-${versionName.replace(/[^a-zA-Z0-9._-]/g, "_")}-${versionCode}.apk`;
+                const uploadUrl = `${APK_STORAGE_API}/${encodeURIComponent(safeName)}`;
+                const uploadRes = await fetch(uploadUrl, {
+                    method: "POST",
+                    headers: {
+                        "Authorization": `Bearer ${ANON_KEY}`,
+                        "apikey": ANON_KEY,
+                        "Content-Type": "application/vnd.android.package-archive",
+                        "x-upsert": "true"
+                    },
+                    body: file
+                });
+                if (!uploadRes.ok) throw new Error("فشل رفع ملف الـ APK إلى التخزين");
+
+                const apkUrl = `${APK_PUBLIC_PREFIX}/${encodeURIComponent(safeName)}`;
+
+                // 2. Insert the version record
+                const insertRes = await fetch(REST_APP_VERSIONS, {
+                    method: "POST",
+                    headers: {
+                        "Authorization": `Bearer ${ANON_KEY}`,
+                        "apikey": ANON_KEY,
+                        "Content-Type": "application/json",
+                        "Prefer": "return=representation"
+                    },
+                    body: JSON.stringify({
+                        version_code: versionCode,
+                        version_name: versionName,
+                        apk_url: apkUrl,
+                        changelog: changelog || null
+                    })
+                });
+                if (!insertRes.ok) {
+                    const errText = await insertRes.text();
+                    throw new Error("فشل تسجيل الإصدار في قاعدة البيانات: " + errText);
+                }
+
+                Swal.fire({ icon: 'success', title: 'تم نشر التحديث!', text: `الإصدار ${versionName} أصبح متاحاً لكل الأجهزة.`, confirmButtonText: 'رائع' });
+                if (typeof confetti === "function") confetti();
+                document.getElementById("update-form").reset();
+                loadLatestVersion();
+            } catch (err) {
+                console.error("publishUpdate error:", err);
+                Swal.fire({ icon: 'error', title: 'فشل النشر', text: err.message || 'حدث خطأ غير متوقع.', confirmButtonText: 'حسناً' });
+            }
+        }
+
+        // Render Wallpapers Grid List
+        function renderWallpapersGrid(list) {
+            const grid = document.getElementById("wallpapers-grid");
+            grid.innerHTML = "";
+
+            if (list.length === 0) {
+                grid.innerHTML = `
+                    <div class="empty-state">
+                        <i class="fa-regular fa-image"></i>
+                        <p>لا توجد خلفيات نشطة حالياً تطابق بحثك.</p>
+                    </div>
+                `;
+                return;
+            }
+
+            list.forEach(wp => {
+                // Find filename from url
+                const filename = decodeURIComponent(wp.url.substring(wp.url.lastIndexOf('/') + 1));
+                
+                const card = document.createElement("div");
+                card.className = "wp-card";
+
+                // Media wrapper
+                const mediaWrapper = document.createElement("div");
+                mediaWrapper.className = "wp-media-wrapper";
+
+                if (wp.type === 'video') {
+                    // Show a placeholder or icon for video
+                    mediaWrapper.innerHTML = `
+                        <div style="width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;background:#1e293b;color:var(--text-muted);">
+                            <i class="fa-regular fa-file-video" style="font-size:2rem;margin-bottom:8px;"></i>
+                            <span style="font-size:0.75rem;">ملف فيديو / عتاد</span>
+                        </div>
+                    `;
+                } else {
+                    const img = document.createElement("img");
+                    img.className = "wp-media";
+                    img.src = wp.url;
+                    img.loading = "lazy";
+                    mediaWrapper.appendChild(img);
+                }
+
+                // Badge
+                const badge = document.createElement("span");
+                if (wp.is_global) {
+                    badge.className = "wp-badge global";
+                    badge.innerHTML = '<i class="fa-solid fa-globe"></i> عام';
+                } else {
+                    badge.className = "wp-badge private";
+                    badge.innerHTML = '<i class="fa-solid fa-user-shield"></i> خاص';
+                }
+                mediaWrapper.appendChild(badge);
+
+                // Type Icon
+                const typeIcon = document.createElement("div");
+                typeIcon.className = "wp-type-icon";
+                typeIcon.innerHTML = wp.type === 'video' ? '<i class="fa-solid fa-video"></i>' : '<i class="fa-solid fa-image"></i>';
+                mediaWrapper.appendChild(typeIcon);
+
+                card.appendChild(mediaWrapper);
+
+                // Details
+                const details = document.createElement("div");
+                details.className = "wp-details";
+
+                const title = document.createElement("div");
+                title.className = "wp-filename";
+                title.innerText = filename;
+                title.title = filename;
+
+                // Target Device or Serial
+                const target = document.createElement("div");
+                target.className = "wp-target";
+                if (wp.is_global) {
+                    target.innerHTML = '<i class="fa-solid fa-users"></i> متاح لجميع الأجهزة النشطة';
+                } else {
+                    // Try to find device serial
+                    const device = devicesList.find(d => d.hardware_id === wp.hardware_id);
+                    const serial = device ? device.serial_number : 'غير معروف';
+                    target.innerHTML = `<i class="fa-solid fa-key"></i> كود: ${serial} | الماك: ${wp.hardware_id}`;
+                    target.title = `معرف الجهاز: ${wp.hardware_id}`;
+                }
+
+                details.appendChild(title);
+                details.appendChild(target);
+
+                // Actions Buttons
+                const actions = document.createElement("div");
+                actions.className = "wp-actions";
+
+                const viewBtn = document.createElement("button");
+                viewBtn.className = "wp-btn wp-btn-view";
+                viewBtn.innerHTML = '<i class="fa-solid fa-eye"></i> معاينة';
+                viewBtn.onclick = () => window.open(wp.url, '_blank');
+
+                const deleteBtn = document.createElement("button");
+                deleteBtn.className = "wp-btn wp-btn-delete";
+                deleteBtn.innerHTML = '<i class="fa-solid fa-trash-can"></i> حذف';
+                deleteBtn.onclick = () => confirmDelete(wp.id, filename);
+
+                actions.appendChild(viewBtn);
+                actions.appendChild(deleteBtn);
+                details.appendChild(actions);
+
+                card.appendChild(details);
+                grid.appendChild(card);
+            });
+        }
+
+        // Delete confirmation
+        function confirmDelete(id, filename) {
+            Swal.fire({
+                title: 'هل أنت متأكد؟',
+                text: `سيتم حذف ملف الخلفية (${filename}) نهائياً من التخزين وقاعدة البيانات!`,
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#ef4444',
+                cancelButtonColor: '#374151',
+                confirmButtonText: 'نعم، احذفه',
+                cancelButtonText: 'إلغاء',
+                background: '#1f2937',
+                color: '#ffffff'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    performDelete(id, filename);
+                }
+            });
+        }
+
+        // Perform delete operations
+        async function performDelete(id, filename) {
+            try {
+                // 1. Delete from public.wallpapers DB
+                const dbResponse = await fetch(`${REST_WALLPAPERS}?id=eq.${id}`, {
+                    method: "DELETE",
+                    headers: {
+                        "Authorization": `Bearer ${ANON_KEY}`,
+                        "apikey": ANON_KEY
+                    }
+                });
+
+                // 2. Delete from Storage bucket
+                const storageResponse = await fetch(`${STORAGE_API}/${encodeURIComponent(filename)}`, {
+                    method: "DELETE",
+                    headers: {
+                        "Authorization": `Bearer ${ANON_KEY}`,
+                        "apikey": ANON_KEY
+                    }
+                });
+
+                if (dbResponse.ok && storageResponse.ok) {
+                    Swal.fire({
+                        title: 'تم الحذف!',
+                        text: 'تمت إزالة الملف بنجاح وتحديث النظام.',
+                        icon: 'success',
+                        background: '#1f2937',
+                        color: '#ffffff'
+                    });
+                    loadWallpapers();
+                } else {
+                    throw new Error("Failed to complete delete process on storage or DB.");
+                }
+            } catch (err) {
+                console.error("Delete error:", err);
+                Swal.fire({
+                    icon: 'error',
+                    title: 'خطأ أثناء الحذف',
+                    text: 'حدثت مشكلة أثناء إزالة الملف من الخادم.',
+                    confirmButtonText: 'حسناً'
+                });
+            }
+        }
+
+        // Filter Wallpapers in list
+        function filterWallpapers() {
+            const query = document.getElementById("search-input").value.toLowerCase().trim();
+            if (!query) {
+                renderWallpapersGrid(wallpapersList);
+                return;
+            }
+
+            const filtered = wallpapersList.filter(wp => {
+                const filename = decodeURIComponent(wp.url.substring(wp.url.lastIndexOf('/') + 1)).toLowerCase();
+                const hwId = (wp.hardware_id || '').toLowerCase();
+                
+                // Also search by device serial if matched
+                const device = devicesList.find(d => d.hardware_id === wp.hardware_id);
+                const serial = device ? (device.serial_number || '').toLowerCase() : '';
+
+                return filename.includes(query) || hwId.includes(query) || serial.includes(query);
+            });
+
+            renderWallpapersGrid(filtered);
+        }
+
+        // Helper: Format bytes to human readable format
+        function formatBytes(bytes, decimals = 2) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const dm = decimals < 0 ? 0 : decimals;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  TS WALLPAPERS / THABTHABA STORE app icon.
+  A gold clock bezel (app = clock/wallpaper) framing a gold+grey calligraphic
+  mark inspired by the THABTHABA STORE logo.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- clock bezel ring -->
+    <path
+        android:pathData="M54,22 A32,32 0 1 0 54,86 A32,32 0 1 0 54,22 Z"
+        android:fillColor="#00000000"
+        android:strokeColor="#B8860B"
+        android:strokeWidth="2.6" />
+    <!-- 12 / 3 / 6 / 9 ticks -->
+    <path android:pathData="M52.6,24 h2.8 v4 h-2.8 z" android:fillColor="#B8860B" />
+    <path android:pathData="M52.6,80 h2.8 v4 h-2.8 z" android:fillColor="#B8860B" />
+    <path android:pathData="M80,52.6 h4 v2.8 h-4 z" android:fillColor="#B8860B" />
+    <path android:pathData="M24,52.6 h4 v2.8 h-4 z" android:fillColor="#B8860B" />
+
+    <!-- calligraphic flourish (grey, like the logo's top mark) -->
+    <path
+        android:pathData="M69,45 C73,33 60,28 51,34 C45,38 49,47 57,44 C62,42 61,37 56,37"
+        android:fillColor="#00000000"
+        android:strokeColor="#555560"
+        android:strokeWidth="3"
+        android:strokeLineCap="round" />
+
+    <!-- gold calligraphic wordmark strokes (ذبذبة feel) -->
+    <path android:pathData="M39,67 H69" android:strokeColor="#B8860B" android:strokeWidth="4" android:strokeLineCap="round" android:fillColor="#00000000" />
+    <path android:pathData="M45,67 V57" android:strokeColor="#B8860B" android:strokeWidth="3.6" android:strokeLineCap="round" android:fillColor="#00000000" />
+    <path android:pathData="M54,67 V55" android:strokeColor="#B8860B" android:strokeWidth="3.6" android:strokeLineCap="round" android:fillColor="#00000000" />
+    <path android:pathData="M63,67 V57" android:strokeColor="#B8860B" android:strokeWidth="3.6" android:strokeLineCap="round" android:fillColor="#00000000" />
+    <!-- dots -->
+    <path android:pathData="M48,51 m-2.2,0 a2.2,2.2 0 1,0 4.4,0 a2.2,2.2 0 1,0 -4.4,0 z" android:fillColor="#B8860B" />
+    <path android:pathData="M60,51 m-2.2,0 a2.2,2.2 0 1,0 4.4,0 a2.2,2.2 0 1,0 -4.4,0 z" android:fillColor="#B8860B" />
+</vector>

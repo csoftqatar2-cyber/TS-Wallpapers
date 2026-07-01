@@ -1,0 +1,198 @@
+<resources>
+    <string name="app_name">TS Wallpapers</string>
+    <string name="app_name_long">TS Wallpapers</string>
+
+    <!-- wallpaper slideshow + clock layout (added by THABTHABA STORE build) -->
+    <string name="wallpapers_section">الخلفيات (Wallpapers)</string>
+    <string name="wallpaper_enable">تفعيل عرض الخلفيات والتبديل بينها</string>
+    <string name="wallpaper_url_hint">رابط قائمة الخلفيات (JSON manifest URL)</string>
+    <string name="wallpaper_sync">تحديث الخلفيات من الرابط الآن</string>
+    <string name="wallpaper_help">اسحب يمين/شمال على الشاشة للتبديل بين الخلفيات. ادعم: صور JPG/PNG، GIF متحرك، وفيديو MP4. الرابط بيرجّع قائمة JSON بالشكل: {\"wallpapers\":[{\"type\":\"image\",\"url\":\"...\"},{\"type\":\"video\",\"url\":\"...\"}]}</string>
+    <string name="wallpaper_syncing">جارٍ التحديث…</string>
+    <string name="wallpaper_count">تم تحميل %d خلفية ✓</string>
+    <string name="wallpaper_failed">فشل التحديث: %s</string>
+    <string name="wallpaper_need_url">من فضلك أدخل رابط القائمة أولاً</string>
+    <string name="show_weather">إظهار الطقس الحالي</string>
+    <string name="arabic_digits">أرقام عربية (١٢٣) بدل (123)</string>
+    <string name="show_hijri_date">إظهار التاريخ الهجري تحت الميلادي</string>
+    <string name="auto_contrast">لون الساعة تلقائي عكس الخلفية (للوضوح)</string>
+    <string name="wallpaper_local_enable">عرض الصور/الفيديو من مجلد الجهاز كمان</string>
+    <string name="wallpaper_add_local">إضافة صور/فيديو من الجهاز</string>
+    <string name="wallpaper_pair_phone">رفع صورة من هاتف العميل (QR / واي‑فاي)</string>
+    <string name="pair_scan_hint">الزبون يصوّر الكود ده بكاميرا موبايله (لازم نفس شبكة الواي‑فاي) ويرفع الصورة.\nلو الصفحة مفتحتش: تأكد إن الراوتر مش مفعّل فيه عزل الأجهزة (AP isolation)، أو وصّل الموبايلين على هوت‑سبوت واحد.</string>
+    <string name="pair_uploaded">تم استلام الصورة ✓ وأصبحت الخلفية الافتراضية</string>
+    <string name="pair_no_wifi">تأكد من اتصال الجهاز بشبكة واي‑فاي</string>
+    <string name="wallpaper_local_folder">مجلد الخلفيات على الجهاز:\n%s</string>
+    <string name="wallpaper_added">تمت إضافة %d ملف ✓</string>
+    <string name="clock_layout_section">شكل الساعة (Clock layout)</string>
+    <string name="show_clock_overlay">إظهار الساعة فوق الخلفية</string>
+    <string name="clock_position">مكان الساعة</string>
+    <string name="clock_size">حجم الساعة</string>
+
+    <string-array name="clock_position_labels">
+        <item>المنتصف</item>
+        <item>أسفل يسار</item>
+        <item>أسفل يمين</item>
+        <item>أعلى يسار</item>
+        <item>أعلى يمين</item>
+    </string-array>
+    <string-array name="clock_size_labels">
+        <item>صغير</item>
+        <item>متوسط</item>
+        <item>كبير</item>
+        <item>كامل الشاشة</item>
+    </string-array>
+
+    <string name="clock_prefilled" translatable="false">00:00</string>
+    <string name="clock_prefilled_seconds" translatable="false">00</string>
+    <string name="battery_prefilled" translatable="false">100%</string>
+
+    <string name="project_website" translatable="false">https://github.com/schorschii/FsClock-Android</string>
+    <string name="unlock_api" translatable="false">"https://apps.sieber.systems/activate"</string>
+
+    <string name="dseg_font_note" translatable="false">
+DSEG Font Copyright (c) 2017, keshikan (http://www.keshikan.net). Cairo Font Copyright (c) Mohamed Gaber.
+This Font Software is licensed under the SIL Open Font License, Version 1.1 (http://scripts.sil.org/OFL).
+Roboto Font Copyright (c) Christian Robertson. Licensed under the Apache License, Version 2.0.
+    </string>
+
+    <string name="version">Version</string>
+    <string name="analog_clock">Analog Clock</string>
+    <string name="show_seconds_hand">Show Seconds Hand (disable to save energy)</string>
+    <string name="use_smooth_hands">Use Smooth Clock Hands (disable to save energy)</string>
+    <string name="digital_clock">Digital Clock</string>
+    <string name="show_seconds">Show Seconds</string>
+    <string name="format_24hrs">Use 24-Hours-Format</string>
+    <string name="events">Events</string>
+    <string name="events_define_description">Define recurring reminders, voice prompts and notification tones.</string>
+    <string name="apply">Apply</string>
+    <string name="save">Save</string>
+    <string name="display_event">Show On Screen</string>
+    <string name="play_alarm">Play Alarm Sound</string>
+    <string name="read_text">Speak Text</string>
+    <string name="title">Title</string>
+    <string name="remove">Remove</string>
+    <string name="show_analog_clock">Show Analog Clock</string>
+    <string name="show_digital_clock">Show Digital Clock</string>
+    <string name="show_date">Show Date</string>
+    <string name="new_event">New Event</string>
+    <string name="unlock_settings">Unlock Settings</string>
+    <string name="ok">OK</string>
+    <string name="activation_failed">Activation failed</string>
+    <string name="invalid_code">Invalid code</string>
+    <string name="red">Red</string>
+    <string name="green">Green</string>
+    <string name="blue">Blue</string>
+    <string name="review_app_title">Do you like this app? Please submit a review.</string>
+    <string name="review_now">Rate now at the Play Store</string>
+    <string name="purchase_support_note">By unlocking the settings with the one-time in-app purchase, you also get access to the new clock faces and hands and support the further development of this app ♥</string>
+    <string name="background">Background</string>
+    <string name="general">General</string>
+    <string name="keep_screen_on">Keep Screen On</string>
+    <string name="use_own_images">Use Custom Images</string>
+    <string name="clock_face_color">Clock Face Color</string>
+    <string name="hour_hand_color">Hour Hand Color</string>
+    <string name="minute_hand_color">Minute Hand Color</string>
+    <string name="seconds_hand_color">Seconds Hand Color</string>
+    <string name="own_images_note">Custom images should be square (same width and height) and width and height should not be larger than 1000px. The background should be transparent and the clock hands should be centered and pointing upwards.</string>
+    <string name="use_own_image">Use Custom Image</string>
+    <string name="use_own_color_for_seconds_hand">Use Custom Color For Seconds Hand</string>
+    <string name="use_own_color_for_hour_and_minutes_hand">Use Custom Color For Hour And Minutes Hand</string>
+    <string name="use_own_color_for_clock_face">Use Custom Color For Clock Face</string>
+    <string name="show_battery_status_when_power_supply_is_not_plugged_in">Show Battery Status When Discharging</string>
+    <string name="show_battery_status_when_power_supply_is_plugged_in">Show Battery Status When Charging</string>
+    <string name="open_settings">Open Settings</string>
+    <string name="tv_settings_note">Hint: Press OK or MENU button to enter settings.</string>
+
+    <!-- in-app self update -->
+    <string name="update_check">Check for updates</string>
+    <string name="update_title">Update available</string>
+    <string name="update_message">A new version (%1$s) is available.\n\nWould you like to update now?</string>
+    <string name="update_now">Update now</string>
+    <string name="update_later">Later</string>
+    <string name="update_downloading">Downloading update…</string>
+    <string name="update_up_to_date">You are using the latest version.</string>
+    <string name="update_check_failed">Could not check for updates.</string>
+    <string name="update_failed">Update download failed.</string>
+    <string name="update_allow_unknown_sources">To install the update, please allow installing apps from this source, then tap \"Update now\" again.</string>
+    <string name="update_cancel">Cancel</string>
+    <string name="more_apps">More Apps</string>
+    <string name="customer_database_for_android">Customer Database for Android</string>
+    <string name="remote_pointer_for_android">RemotePointer for Android</string>
+    <string name="ballbreak_for_android">BallBreak for Android</string>
+    <string name="video_screensaver_for_android">Video Screensaver for Android</string>
+    <string name="clock_desklet_for_cinnamon">Analog Clock Desklet for the Cinnamon Desktop</string>
+    <string name="open_source_text">This app is Open Source. If you want to improve the app or its translations, please check out the repository on Github.</string>
+    <string name="open_source">Fork Me</string>
+    <string name="allow_system_calendar_access">Allow System Calendar Access</string>
+    <string name="access_already_granted">Access already granted</string>
+    <string name="access_denied_by_user">You have previously denied calendar access. Please go to the Android settings and manually grant calendar access for this app.</string>
+    <string name="fire_tv_notes">Important notice for FireTV devices: Amazon FireOS does not officially allow changing the system screensaver to a 3rd party app, but there is a workaround possible using the developer tools. Details are explained in the Github repo (see below). Without the workaround, the clock can still be started on FireTV devices like a normal app.</string>
+    <string name="no_web_browser_found">No web browser found to open this URL</string>
+    <string name="set_as_screensaver_in_android_settings">Set as screensaver in Android settings</string>
+    <string name="screensaver_not_supported">This device does not support Android screensavers.</string>
+    <string name="check_internet_conn">Please check your internet connection and try again.</string>
+    <string name="play_store_not_avail">Google Play Store not available</string>
+    <string name="amazon_store_not_avail">Amazon App Store not available</string>
+    <string name="huawei_store_not_avail">Huawei App Gallery not available</string>
+    <string name="could_not_fetch_prices">Could not fetch current prices for in-app purchases.</string>
+    <string name="choose_color">Choose color</string>
+    <string name="use_custom_color">Use Custom Color</string>
+    <string name="apply_for_all">Apply for all</string>
+    <string name="buy_a_code">Buy a code</string>
+    <string name="unlock_code">Unlock Code</string>
+    <string name="classic_design">Classic</string>
+    <string name="rounded_design">Rounded</string>
+    <string name="elegant_design">Elegant</string>
+    <string name="rustic_design">Rustic</string>
+    <string name="outlined_design">Outlined</string>
+    <string name="dot_design">Dot</string>
+    <string name="number_design">Numbers</string>
+    <string name="square_design">Square</string>
+    <string name="vinyl_design">Vinyl</string>
+    <string name="custom_image">Custom Image</string>
+    <string name="custom_image_stretch">Custom Image (Stretch)</string>
+    <string name="custom_image_zoom">Custom Image (Zoom)</string>
+    <string name="no_image">No Image</string>
+    <string name="force_landscape_view_only_when_started_manually">Force landscape view (only when started manually)</string>
+    <string name="date_format">Date Format</string>
+    <string name="burn_in_prevention">Burn-in prevention (for OLED screens; moves content slightly)</string>
+    <string name="night_mode_for_dark_rooms">Night Mode (for dark rooms)</string>
+    <string name="show_alarms">Show Alarms</string>
+    <string name="reset_default">Reset default</string>
+    <string name="date_format_placeholders_help_title">You can use the following placeholders (example in brackets)</string>
+    <string name="date_format_placeholders_help">
+    G - Era designator (AD)\n
+    yyyy or yy - Year (2024 or 24)\n
+    MM or MMM or MMMM - Month (12 or Dec or December)\n
+    ww - Week in year (27)\n
+    W - Week in month (2)\n
+    DDD - Day in year (189)\n
+    d or dd - Day in month (1 or 01)\n
+    F - Day of week in month (2)\n
+    EEEE or E - Week day name (Monday or Mon.)\n
+    u - Day number of week (1-7)\n
+    a - AM/PM marker\n
+    HH - Hour in day (0-23)\n
+    hh - Hour in AM/PM (1-12)\n
+    mm - Minute in hour\n
+    ss - Second in minute\n
+    zzzz or z - Time zone name (Pacific Standard Time or PST)\n
+    Z - RFC 822 time zone (-0800)\n
+    XXX or X - RFC 8601 time zone (-08:00 or -08)\n\n
+    Custom text can be added in single quotes, e.g. \'your text\'.
+    </string>
+    <string name="high_contrast_text_notes">Attention: you have \'High Contrast Text\' enabled in the Android system accessibility settings. This will destroy the digital clock design. Please disable this setting for a proper user experience.</string>
+    <string name="show_until_confirmed">Show Until Confirmed</string>
+    <string name="gregorian_calendar">Gregorian Calendar</string>
+    <string name="hijri_calendar">Hijri Calendar</string>
+    <string name="digital_clock_color">Digital Clock Color</string>
+    <string name="date_color">Date Color</string>
+    <string name="event_color">Event Color</string>
+    <string name="start">Start:</string>
+    <string name="end">End:</string>
+    <string name="allow_notification_access">Allow notification access</string>
+    <string name="widget_digital_name">Digital Clock Widget</string>
+    <string name="widget_analog_name">Analog Clock Widget</string>
+    <string name="widget_draw_background">Draw Background Color</string>
+</resources>

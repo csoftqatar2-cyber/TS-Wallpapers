@@ -1,0 +1,8 @@
+{
+  "wallpapers": [
+    { "type": "image", "url": "https://your-domain.com/wallpapers/sunset.jpg" },
+    { "type": "image", "url": "https://your-domain.com/wallpapers/city.png" },
+    { "type": "gif",   "url": "https://your-domain.com/wallpapers/neon.gif" },
+    { "type": "video", "url": "https://your-domain.com/wallpapers/ocean.mp4" }
+  ]
+}

@@ -1,0 +1,131 @@
+<resources>
+    <string name="app_name">TS WALLPAPERS</string>
+    <string name="app_name_long">TS WALLPAPERS</string>
+
+    <string name="version">Version</string>
+    <string name="analog_clock">Analoguhr</string>
+    <string name="show_seconds_hand">Sekundenzeiger anzeigen (deaktivieren, um Energie zu sparen)</string>
+    <string name="use_smooth_hands">Weiche Uhrzeiger verwenden (deaktivieren, um Energie zu sparen)</string>
+    <string name="digital_clock">Digitaluhr</string>
+    <string name="show_seconds">Sekunden anzeigen</string>
+    <string name="format_24hrs">24-Stunden-Format benutzen</string>
+    <string name="events">Events</string>
+    <string name="events_define_description">Definieren Sie wiederkehrende Erinnerungen, Sprachansagen und Hinweistöne.</string>
+    <string name="apply">Übernehmen</string>
+    <string name="save">Speichern</string>
+    <string name="display_event">Auf Display anzeigen</string>
+    <string name="play_alarm">Alarmton wiedergeben</string>
+    <string name="read_text">Text vorlesen</string>
+    <string name="title">Titel</string>
+    <string name="remove">Entfernen</string>
+    <string name="show_analog_clock">Analoguhr anzeigen</string>
+    <string name="show_digital_clock">Digitaluhr anzeigen</string>
+    <string name="show_date">Datum anzeigen</string>
+    <string name="new_event">Neues Event</string>
+    <string name="unlock_settings">Einstellungen freischalten</string>
+    <string name="ok">OK</string>
+    <string name="activation_failed">Aktivierung fehlgeschlagen</string>
+    <string name="invalid_code">Ungültiger Code</string>
+    <string name="red">Rot</string>
+    <string name="green">Grün</string>
+    <string name="blue">Blau</string>
+    <string name="review_app_title">Gefällt Ihnen die App? Bitte geben Sie eine Bewertung ab.</string>
+    <string name="review_now">Jetzt im Play Store bewerten</string>
+    <string name="purchase_support_note">Durch das Freischalten der Einstellungen mittels des einmaligen In-App-Kaufs erhalten Sie zudem Zugriff auf die neuen Zifferblätter und Zeiger und unterstützen die Weiterentwicklung dieser App ♥</string>
+    <string name="background">Hintergrund</string>
+    <string name="general">Allgemein</string>
+    <string name="keep_screen_on">Bildschirm eingeschaltet lassen</string>
+    <string name="use_own_images">Eigene Bilder verwenden</string>
+    <string name="clock_face_color">Zifferblatt-Farbe</string>
+    <string name="hour_hand_color">Stundenzeiger-Farbe</string>
+    <string name="minute_hand_color">Minutenzeiger-Farbe</string>
+    <string name="seconds_hand_color">Sekundenzeiger-Farbe</string>
+    <string name="own_images_note">Eigene Bilder sollten quadratisch sein (gleiche Breite und Höhe) und die Höhe und Breite sollte nicht größer als 1000px sein. Der Hintergrund sollte transparent sein und die Uhrzeiger mittig ausgerichtet nach oben zeigen.</string>
+    <string name="use_own_image">Eigenes Bild verwenden</string>
+    <string name="use_own_color_for_seconds_hand">Eigene Farbe für Sekundenzeiger verwenden</string>
+    <string name="use_own_color_for_hour_and_minutes_hand">Eigene Farbe für Stunden- und Minutenzeiger verwenden</string>
+    <string name="use_own_color_for_clock_face">Eigene Farbe für Zifferblatt verwenden</string>
+    <string name="show_battery_status_when_power_supply_is_not_plugged_in">Zeige Akku-Status beim Entladen</string>
+    <string name="show_battery_status_when_power_supply_is_plugged_in">Zeige Akku-Status beim Laden</string>
+    <string name="open_settings">Einstellungen öffnen</string>
+    <string name="tv_settings_note">Hinweis: OK oder MENU-Taste drücken, um die Einstellungen zu öffnen.</string>
+    <string name="more_apps">Weitere Apps</string>
+    <string name="customer_database_for_android">Kundendatenbank für Android</string>
+    <string name="remote_pointer_for_android">RemotePointer für Android</string>
+    <string name="ballbreak_for_android">BallBreak für Android</string>
+    <string name="video_screensaver_for_android">Video-Bildschirmschoner für Android</string>
+    <string name="clock_desklet_for_cinnamon">Analoguhr-Desklet für den Cinnamon Desktop</string>
+    <string name="open_source_text">Diese App ist Open Source. Wenn Sie die App oder die Übersetzungen verbessern möchten, besuchen Sie bitte das Repository auf Github.</string>
+    <string name="open_source">Gabel mich</string>
+    <string name="allow_system_calendar_access">Zugriff auf System-Kalender erlauben</string>
+    <string name="access_already_granted">Zugriff wurde bereits erlaubt</string>
+    <string name="access_denied_by_user">Sie haben den Kalenderzugriff zuvor abgelehnt. Bitte gehen Sie in die Android-Einstellungen und gewähren Sie den Kalenderzugriff manuell für diese App.</string>
+    <string name="fire_tv_notes">Wichtiger Hinweis für FireTV-Geräte: Amazon FireOS erlaubt es offiziell nicht den Systembildschirmschoner auf eine Drittanbieter-App zu ändern, aber es gibt ein Workaround über die Entwicklertools. Details werden im Github-Repo erklärt (siehe unten). Ohne den Workaround kann die Uhr auf FireTV-Geräten trotzdem wie eine normale App gestartet werden.</string>
+    <string name="no_web_browser_found">Kein Webbrowser zum Öffnen der URL gefunden</string>
+    <string name="set_as_screensaver_in_android_settings">Als Bildschirmschoner in Android-Einstellungen festlegen</string>
+    <string name="screensaver_not_supported">Dieses Gerät unterstützt keine Bildschirmschoner.</string>
+    <string name="check_internet_conn">Bitte prüfen Sie Ihre Internetverbindung und versuchen Sie es erneut.</string>
+    <string name="play_store_not_avail">Google Play Store nicht verfügbar</string>
+    <string name="amazon_store_not_avail">Amazon App Store nicht verfügbar</string>
+    <string name="huawei_store_not_avail">Huawei App Gallery nicht verfügbar</string>
+    <string name="could_not_fetch_prices">Die aktuellen Preise für In-App-Einkäufe konnten nicht geladen werden.</string>
+    <string name="choose_color">Farbe auswählen</string>
+    <string name="use_custom_color">Eigene Farbe verwenden</string>
+    <string name="apply_for_all">Für alle übernehmen</string>
+    <string name="buy_a_code">Code kaufen</string>
+    <string name="unlock_code">Freischaltcode</string>
+    <string name="classic_design">Klassisch</string>
+    <string name="rounded_design">Rund</string>
+    <string name="elegant_design">Elegant</string>
+    <string name="rustic_design">Rustikal</string>
+    <string name="outlined_design">Umrandet</string>
+    <string name="dot_design">Punkt</string>
+    <string name="number_design">Nummern</string>
+    <string name="square_design">Quatratisch</string>
+    <string name="vinyl_design">Vinyl</string>
+    <string name="custom_image">Eigenes Bild</string>
+    <string name="custom_image_stretch">Eigenes Bild (strecken)</string>
+    <string name="custom_image_zoom">Eigenes Bild (zoomen)</string>
+    <string name="no_image">Kein Bild</string>
+    <string name="force_landscape_view_only_when_started_manually">Querformat erzwingen (nur bei manuellem Start der App)</string>
+    <string name="date_format">Datumsformat</string>
+    <string name="burn_in_prevention">Einbrennschutz (für OLED-Bildschirme, verschiebt den Inhalt leicht)</string>
+    <string name="night_mode_for_dark_rooms">Nachtmodus (für dunkle Räume)</string>
+    <string name="show_alarms">Wecker anzeigen</string>
+    <string name="reset_default">Standard zurücksetzen</string>
+    <string name="date_format_placeholders_help_title">Sie können die folgenden Platzhalter nutzen (Beispiele in Klammern)</string>
+    <string name="date_format_placeholders_help">
+    G - Epochenbezeichnung (AD)\n
+    yyyy oder yy - Jahr (2024 oder 24)\n
+    MM oder MMM oder MMMM - Monat (12 oder Dez oder Dezember)\n
+    ww - Woche des Jahrs (27)\n
+    W - Woche des Monats (2)\n
+    DDD - Tag des Jahres (189)\n
+    d oder dd - Tag des Monats (1 oder 01)\n
+    F - Tag der Woche im Monat (2)\n
+    EEEE oder E - Wochentag-Name (Montag oder Mo.)\n
+    u - Wochentag-Nummer (1-7)\n
+    a - AM/PM-Markierung\n
+    HH - Stunde des Tages (0-23)\n
+    hh - Stunde in AM/PM (1-12)\n
+    mm - Minute der Stunde\n
+    ss - Sekunde der Minute\n
+    zzzz oder z - Zeitzonenname (Pacific Standard Time oder PST)\n
+    Z - Zeitzone nach RFC 822 (-0800)\n
+    XXX oder X - Zeitzone nach RFC 8601 (-08:00 oder -08)\n\n
+    Benutzerdefinierter Text kann in einfachen Anführungszeichen hinzugefügt werden, z. B. \'dein Text\'.
+    </string>
+    <string name="high_contrast_text_notes">Achtung: Sie haben „Text mit hohem Kontrast“ in den Barrierefreiheitseinstellungen des Android-Systems aktiviert. Dadurch wird das Design der Digitaluhr zerstört. Bitte deaktivieren Sie diese Einstellung für ein ordnungsgemäßes Aussehen.</string>
+    <string name="show_until_confirmed">Bis zur Bestätigung anzeigen</string>
+    <string name="gregorian_calendar">Gregorianischer Kalender</string>
+    <string name="hijri_calendar">Islamischer Kalender</string>
+    <string name="digital_clock_color">Digitaluhr-Farbe</string>
+    <string name="date_color">Datums-Farbe</string>
+    <string name="event_color">Event-Farbe</string>
+    <string name="start">Start:</string>
+    <string name="end">Ende:</string>
+    <string name="allow_notification_access">Zugriff auf Benachrichtigungen erlauben</string>
+    <string name="widget_digital_name">Digitaluhr-Widget</string>
+    <string name="widget_analog_name">Analoguhr-Widget</string>
+    <string name="widget_draw_background">Hintergrundfarbe zeichnen</string>
+</resources>

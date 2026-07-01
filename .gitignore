@@ -1,0 +1,48 @@
+# ============================================================
+# TS Wallpapers - .gitignore
+# ============================================================
+
+# ---- Secrets / credentials (NEVER commit) ----
+.mcp.json
+**/local.properties
+**/keystore.properties
+**/secrets.properties
+*.jks
+*.keystore
+*.pem
+*.p12
+*.p8
+*.env
+.env
+.env.*
+google-services.json
+
+# ---- Stale upstream clone (excluded per project setup) ----
+/src/
+
+# ---- Android / Gradle build output ----
+**/build/
+.gradle/
+**/.gradle/
+.cxx/
+captures/
+*.apk.idsig
+*.aab
+release/
+
+# ---- IDE / editor ----
+.idea/
+*.iml
+.vscode/
+*.swp
+*~
+
+# ---- OS junk ----
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ---- Logs / temp ----
+*.log
+tmp/
+temp/

@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Custom theme for activation dialog -->
+    <style name="GoldDialogTheme" parent="Theme.AppCompat.Light.Dialog">
+        <item name="android:windowBackground">@color/dialog_bg</item>
+        <item name="android:textColor">@color/gold</item>
+        <item name="android:textColorHint">@color/gold_dim</item>
+        <item name="colorAccent">@color/gold</item>
+        <item name="colorPrimary">@color/dialog_bg</item>
+    </style>
+</resources>

@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="colorSettingsCheckBoxes">#fff</color>
+    <color name="colorBackground">#181818</color> <!-- original: #303030 -->
+    <color name="colorBackgroundSecondary">#303030</color>
+    <color name="colorPreviewBorder">#BABABA</color> <!-- should look like checkboxes -->
+    <color name="colorDemoClock">#fff</color>
+</resources>

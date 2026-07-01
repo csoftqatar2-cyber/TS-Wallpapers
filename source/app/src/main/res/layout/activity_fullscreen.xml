@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/fullscreenRootView"
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#000"
+    tools:context=".FullscreenActivity">
+
+    <systems.sieber.fsclock.FsClockView
+        android:id="@+id/fsClockViewFullscreen"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent" />
+
+    <LinearLayout
+        android:id="@+id/linearLayoutControls"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom">
+        <com.google.android.material.floatingactionbutton.FloatingActionButton
+            android:id="@+id/fabSettings"
+            android:focusable="true"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginLeft="100dp"
+            android:layout_marginStart="100dp"
+            android:layout_marginRight="@dimen/fab_margin"
+            android:layout_marginEnd="@dimen/fab_margin"
+            android:layout_marginTop="@dimen/fab_margin"
+            android:layout_marginBottom="@dimen/fab_margin"
+            app:srcCompat="@drawable/ic_settings_white_24dp"
+            android:alpha="0.25"
+            app:backgroundTint="#80FFFFFF"
+            app:elevation="0dp"
+            android:contentDescription="@string/open_settings" />
+        <!-- red dot: only visible when an app update is available -->
+        <View
+            android:id="@+id/viewUpdateBadge"
+            android:layout_width="12dp"
+            android:layout_height="12dp"
+            android:layout_gravity="center_vertical"
+            android:layout_marginStart="2dp"
+            android:layout_marginLeft="2dp"
+            android:background="@drawable/badge_dot"
+            android:visibility="gone" />
+        <View
+            android:layout_width="0dp"
+            android:layout_height="0dp"
+            android:layout_weight="1" />
+    </LinearLayout>
+
+</FrameLayout>

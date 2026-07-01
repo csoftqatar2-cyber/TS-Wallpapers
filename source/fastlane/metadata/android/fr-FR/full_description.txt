@@ -1,0 +1,10 @@
+Cette application affiche une horloge simple en plein écran, utilisable comme économiseur d'écran ou comme widget.
+
+- choisissez parmi différents cadrans et aiguilles prédéfinis ou utilisez des images personnalisées
+- l'horloge analogique et numérique peut être activée ou désactivée individuellement
+- vue facultative de la date et du jour de la semaine avec option de format personnalisé
+- affiche les alarmes et les rendez-vous du calendrier Android ou de la base de données d'événements interne
+- couleur d'arrière-plan et d'horloge réglable
+- peut être défini comme économiseur d'écran du système Android ("DayDream") sur les smartphones et les tablettes
+- compatible avec les appareils Android TV
+- le contenu peut être légèrement déplacé pour éviter les rémanences sur les écrans OLED
