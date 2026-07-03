@@ -24,10 +24,12 @@ android {
     }
     signingConfigs {
         release {
+            // Credentials come ONLY from local.properties / env (never hardcoded).
+            // See README "Required local secrets". Build fails loudly if missing.
             storeFile file("../thabthaba.jks")
-            storePassword localProps.getProperty('KEYSTORE_PASSWORD', 'thabthaba123')
-            keyAlias localProps.getProperty('KEY_ALIAS', 'thabthaba')
-            keyPassword localProps.getProperty('KEY_PASSWORD', 'thabthaba123')
+            storePassword localProps.getProperty('KEYSTORE_PASSWORD', System.getenv('KEYSTORE_PASSWORD'))
+            keyAlias localProps.getProperty('KEY_ALIAS', System.getenv('KEY_ALIAS'))
+            keyPassword localProps.getProperty('KEY_PASSWORD', System.getenv('KEY_PASSWORD'))
         }
     }
     buildTypes {
