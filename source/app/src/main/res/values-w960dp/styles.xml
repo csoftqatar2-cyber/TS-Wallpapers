@@ -1,0 +1,9 @@
+<resources>
+    <!-- TV / very wide landscape screens (e.g. 1920dp Android TV boxes).
+         720dp (the tablet width) looks tiny and "piled up" in the centre of a
+         1920dp screen, so give the two-column settings layout a much wider column.
+         Kept below full width so content stays clear of TV overscan at the edges. -->
+    <style name="width_match_parent_max_200">
+        <item name="android:layout_width">1280dp</item>
+    </style>
+</resources>
