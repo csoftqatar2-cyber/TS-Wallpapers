@@ -1951,74 +1951,113 @@
 
             submitBtn.disabled = true;
             progressContainer.style.display = "block";
-            
+
             const hwId = targetType === 'private' ? document.getElementById("custom-hw-id").value.trim() : null;
             const isGlobal = targetType === 'global';
 
+            // Make sure we hold a fresh admin token before uploading. On mobile the
+            // background refresh timer can be suspended, letting the access token
+            // expire; that would make every upload fail the admin RLS check (HTTP 400).
+            progressStatus.innerText = "جارٍ التحقق من جلسة الدخول…";
+            const sessionOk = await refreshSession();
+            if (!sessionOk) {
+                progressContainer.style.display = "none";
+                submitBtn.disabled = false;
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'انتهت جلسة الدخول',
+                    text: 'سجّل الدخول من جديد ثم أعد رفع الصورة.',
+                    confirmButtonText: 'تسجيل الدخول'
+                }).then(() => showLogin());
+                return;
+            }
+
             let successCount = 0;
+            const failures = [];
             const totalFiles = selectedFiles.length;
 
             for (let i = 0; i < totalFiles; i++) {
                 const file = selectedFiles[i];
                 const filePercent = Math.round((i / totalFiles) * 100);
-                
+
                 progressStatus.innerText = `جاري رفع: ${file.name} (${i + 1}/${totalFiles})`;
                 progressBar.style.width = `${filePercent}%`;
                 progressPercent.innerText = `${filePercent}%`;
 
                 try {
-                    // 1. Upload to Supabase Storage
-                    const uploadSuccess = await uploadToStorage(file);
-                    
-                    if (uploadSuccess) {
-                        // 2. Insert reference to public.wallpapers
-                        const fileUrl = `${PUBLIC_URL_PREFIX}/${encodeURIComponent(file.name)}`;
-                        const fileType = file.name.endsWith('.mp4') || file.name.endsWith('.bin') ? 'video' : 'image';
-                        
-                        await insertWallpaperRecord(fileUrl, fileType, isGlobal, hwId);
-                        successCount++;
-                    }
+                    // 1. Upload to Supabase Storage (throws on failure)
+                    await uploadToStorage(file);
+
+                    // 2. Insert reference to public.wallpapers (throws on failure)
+                    const fileUrl = `${PUBLIC_URL_PREFIX}/${encodeURIComponent(file.name)}`;
+                    const fileType = file.name.endsWith('.mp4') || file.name.endsWith('.bin') ? 'video' : 'image';
+
+                    await insertWallpaperRecord(fileUrl, fileType, isGlobal, hwId);
+                    successCount++;
                 } catch (err) {
                     console.error(`Error uploading ${file.name}:`, err);
+                    failures.push(`${file.name}: ${err.message || err}`);
                 }
             }
 
             // Finish progress
             progressBar.style.width = "100%";
             progressPercent.innerText = "100%";
-            progressStatus.innerText = "اكتمل الرفع والمزامنة!";
 
-            // Fire Confetti!
-            confetti({
-                particleCount: 150,
-                spread: 70,
-                origin: { y: 0.6 }
-            });
+            if (successCount === totalFiles) {
+                progressStatus.innerText = "اكتمل الرفع والمزامنة!";
+                // Fire Confetti!
+                confetti({ particleCount: 150, spread: 70, origin: { y: 0.6 } });
+                Swal.fire({
+                    icon: 'success',
+                    title: 'اكتملت العملية',
+                    text: `تم رفع ومزامنة ${successCount} من أصل ${totalFiles} ملفات بنجاح.`,
+                    confirmButtonText: 'رائع'
+                });
+            } else {
+                // Some (or all) files failed — show the real reason instead of a fake success.
+                progressStatus.innerText = "فشلت بعض الملفات";
+                Swal.fire({
+                    icon: successCount === 0 ? 'error' : 'warning',
+                    title: successCount === 0 ? 'فشل الرفع' : 'اكتمل جزئياً',
+                    html: `تم رفع <b>${successCount}</b> من أصل <b>${totalFiles}</b>.<br><br>`
+                        + `<div style="text-align:right;max-height:180px;overflow:auto;font-size:13px;opacity:.9;">`
+                        + failures.map(f => `• ${f}`).join("<br>") + `</div>`,
+                    confirmButtonText: 'حسناً'
+                });
+            }
 
-            // Show success alert
-            Swal.fire({
-                icon: 'success',
-                title: 'اكتملت العملية',
-                text: `تم رفع ومزامنة ${successCount} من أصل ${totalFiles} ملفات بنجاح.`,
-                confirmButtonText: 'رائع'
-            });
+            // Reset form only for fully-successful uploads; keep the selection on
+            // failure so the admin can retry without re-picking the files.
+            if (successCount === totalFiles) {
+                selectedFiles = [];
+                document.getElementById("upload-form").reset();
+                setTargetType('global');
+                setInputMode('files');
+                renderPreviews();
+            } else {
+                submitBtn.disabled = false;
+            }
 
-            // Reset Form and reload grid
-            selectedFiles = [];
-            document.getElementById("upload-form").reset();
-            setTargetType('global');
-            setInputMode('files');
-            renderPreviews();
-            
             progressContainer.style.display = "none";
-            
+
             await loadWallpapers();
         }
 
-        // Sub function: Upload single file to Supabase storage via fetch
+        // Turn a failed Supabase response into a human message. Supabase Storage
+        // returns HTTP 400 with an RLS message when the token isn't the admin's.
+        async function describeError(response) {
+            let detail = "";
+            try { detail = (await response.text()) || ""; } catch (e) {}
+            if (detail.includes("row-level security") || response.status === 401 || response.status === 403) {
+                return "انتهت صلاحية جلسة الدخول. سجّل الدخول من جديد ثم أعد المحاولة.";
+            }
+            return `فشل الطلب (HTTP ${response.status})${detail ? ": " + detail.slice(0, 200) : ""}`;
+        }
+
         async function uploadToStorage(file) {
             const uploadUrl = `${STORAGE_API}/${encodeURIComponent(file.name)}`;
-            
+
             const response = await fetch(uploadUrl, {
                 method: "POST",
                 headers: {
@@ -2030,7 +2069,8 @@
                 body: file
             });
 
-            return response.ok;
+            if (!response.ok) throw new Error(await describeError(response));
+            return true;
         }
 
         // Sub function: Insert wallpaper record into REST DB
@@ -2053,7 +2093,8 @@
                 body: JSON.stringify(body)
             });
 
-            return response.ok;
+            if (!response.ok) throw new Error(await describeError(response));
+            return true;
         }
 
         // ============ App Update Publisher ============
