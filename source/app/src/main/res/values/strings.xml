@@ -5,6 +5,7 @@
     <!-- wallpaper slideshow + clock layout (added by THABTHABA STORE build) -->
     <string name="wallpapers_section">الخلفيات (Wallpapers)</string>
     <string name="wallpaper_enable">تفعيل عرض الخلفيات والتبديل بينها</string>
+    <string name="wallpaper_auto_switch">التبديل التلقائي (تغيير الصورة كل دقيقة)</string>
     <string name="wallpaper_url_hint">رابط قائمة الخلفيات (JSON manifest URL)</string>
     <string name="wallpaper_sync">تحديث الخلفيات من الرابط الآن</string>
     <string name="wallpaper_help">اسحب يمين/شمال على الشاشة للتبديل بين الخلفيات. ادعم: صور JPG/PNG، GIF متحرك، وفيديو MP4. الرابط بيرجّع قائمة JSON بالشكل: {\"wallpapers\":[{\"type\":\"image\",\"url\":\"...\"},{\"type\":\"video\",\"url\":\"...\"}]}</string>
@@ -12,6 +13,10 @@
     <string name="wallpaper_count">تم تحميل %d خلفية ✓</string>
     <string name="wallpaper_failed">فشل التحديث: %s</string>
     <string name="wallpaper_need_url">من فضلك أدخل رابط القائمة أولاً</string>
+    <string name="mac_show_qr">عرض الـ MAC كـ QR (Show MAC QR)</string>
+    <string name="mac_qr_title">عنوان الجهاز MAC</string>
+    <string name="mac_qr_hint">امسح الكود ده بالكاميرا عشان يظهر عنوان الـ MAC بتاع الجهاز.</string>
+    <string name="mac_unavailable">عنوان الـ MAC غير متاح على هذا الجهاز</string>
     <string name="show_weather">إظهار الطقس الحالي</string>
     <string name="arabic_digits">أرقام عربية (١٢٣) بدل (123)</string>
     <string name="show_hijri_date">إظهار التاريخ الهجري تحت الميلادي</string>

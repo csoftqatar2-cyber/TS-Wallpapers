@@ -236,6 +236,12 @@ public class WallpaperRepo {
         return mPref.getBoolean(PREF_ENABLED, true) && !mItems.isEmpty();
     }
 
+    /** Whether wallpaper syncing is turned on, regardless of whether any items are cached yet.
+     *  Used to trigger the very first automatic download right after install/activation. */
+    public boolean isSyncEnabled() {
+        return mPref.getBoolean(PREF_ENABLED, true);
+    }
+
     public boolean hasItems() {
         return !mItems.isEmpty();
     }

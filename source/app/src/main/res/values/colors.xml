@@ -9,6 +9,9 @@
     <color name="colorSettingsCheckBoxes">#222</color>
     <color name="colorBackground">#FFFFFF</color>
     <color name="colorBackgroundSecondary">#F2F2F2</color>
+    <!-- tablet settings redesign -->
+    <color name="colorSettingsBg">#ECEFF1</color>
+    <color name="colorCard">#FFFFFF</color>
     <color name="colorPreviewBorder">#757575</color> <!-- should look like checkboxes -->
     <color name="colorDemoClock">#222</color>
     

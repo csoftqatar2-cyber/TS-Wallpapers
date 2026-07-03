@@ -37,6 +37,7 @@ import android.view.Gravity;
 import android.view.View;
 import android.view.ViewTreeObserver;
 import android.view.WindowManager;
+import android.view.inputmethod.InputMethodManager;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.FrameLayout;
@@ -82,6 +83,18 @@ public class FsClockView extends FrameLayout {
     ImageView mBackgroundImage;
     WallpaperView mWallpaper;
     WallpaperRepo mWallpaperRepo;
+
+    // auto-switch: change the wallpaper automatically every minute when enabled
+    static final long AUTO_SWITCH_INTERVAL_MS = 60_000;
+    private final Runnable mAutoSwitchRunnable = new Runnable() {
+        @Override
+        public void run() {
+            if(isAutoSwitchActive()) {
+                nextWallpaper();
+                postDelayed(this, AUTO_SWITCH_INTERVAL_MS);
+            }
+        }
+    };
     View mLayoutActivation;
     TextView mTextViewActivationDeviceId;
     EditText mEditTextActivationSerial;
@@ -187,6 +200,13 @@ public class FsClockView extends FrameLayout {
                                     if (success) {
                                         mTextViewActivationStatus.setText("تم التفعيل بنجاح!");
                                         mTextViewActivationStatus.setTextColor(Color.GREEN);
+
+                                        // activation done -> now hide the on-screen keyboard
+                                        InputMethodManager imm = (InputMethodManager) getContext().getSystemService(Context.INPUT_METHOD_SERVICE);
+                                        if (imm != null) {
+                                            imm.hideSoftInputFromWindow(mEditTextActivationSerial.getWindowToken(), 0);
+                                        }
+                                        mEditTextActivationSerial.clearFocus();
                                         postDelayed(new Runnable() {
                                             @Override
                                             public void run() {
@@ -282,8 +302,10 @@ public class FsClockView extends FrameLayout {
             ContextCompat.registerReceiver(getContext(), mNotificationBroadcastReceiver, intentFilter, ContextCompat.RECEIVER_EXPORTED);
         }
 
-        // Auto-sync wallpapers from Supabase on startup
-        if(mWallpaperRepo != null && mWallpaperRepo.isEnabled()) {
+        // Auto-sync wallpapers from Supabase on startup.
+        // Use isSyncEnabled() (not isEnabled()) so the very first download also runs on a
+        // fresh install, when no wallpapers are cached locally yet.
+        if(mWallpaperRepo != null && mWallpaperRepo.isSyncEnabled()) {
             mWallpaperRepo.sync(new WallpaperRepo.SyncCallback() {
                 @Override
                 public void done(final boolean success, final int count, String error) {
@@ -691,6 +713,8 @@ public class FsClockView extends FrameLayout {
                 mWallpaper.clearAll();
                 mBackgroundImage.setVisibility(View.GONE);
             }
+            // start/stop the automatic wallpaper switching according to the settings
+            updateAutoSwitch();
         }
 
         // Apply activation layout visibility
@@ -946,6 +970,20 @@ public class FsClockView extends FrameLayout {
         }
     }
 
+    /** Whether the automatic wallpaper switching should currently be running. */
+    private boolean isAutoSwitchActive() {
+        return mSharedPref != null && mSharedPref.getBoolean("wallpaper-auto-switch", false)
+                && mWallpaperRepo != null && mWallpaperRepo.isEnabled() && mWallpaperRepo.isActive();
+    }
+
+    /** (Re)start or stop the auto-switch timer based on the current settings. */
+    private void updateAutoSwitch() {
+        removeCallbacks(mAutoSwitchRunnable);
+        if(isAutoSwitchActive()) {
+            postDelayed(mAutoSwitchRunnable, AUTO_SWITCH_INTERVAL_MS);
+        }
+    }
+
     /** Switch to the next wallpaper with a left-swipe animation. */
     public void nextWallpaper() {
         if(mWallpaperRepo != null && mWallpaperRepo.isEnabled()) {
@@ -1179,6 +1217,7 @@ public class FsClockView extends FrameLayout {
 
     protected void pause() {
         unregisterTempSensor();
+        removeCallbacks(mAutoSwitchRunnable);
         if(mWallpaper != null) mWallpaper.pauseVideo();
         mTimerAnalogClock.cancel();
         mTimerAnalogClock.purge();

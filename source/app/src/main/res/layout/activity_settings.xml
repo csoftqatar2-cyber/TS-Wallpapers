@@ -6,6 +6,7 @@
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
+    android:background="@color/colorSettingsBg"
     tools:context=".SettingsActivity">
 
     <com.google.android.material.appbar.AppBarLayout
@@ -29,7 +30,7 @@
         <LinearLayout
             style="@style/width_match_parent_max_200"
             android:layout_height="wrap_content"
-            android:layout_margin="10dp"
+            android:layout_margin="16dp"
             android:orientation="vertical"
             android:layout_gravity="center_horizontal">
 
@@ -217,910 +218,984 @@
                 android:id="@+id/linearLayoutSettings"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:orientation="vertical">
+                android:orientation="horizontal"
+                android:baselineAligned="false">
 
-                <TextView
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:text="@string/general"
-                    android:textAppearance="@style/TextAppearance.AppCompat.Large" />
-
-                <CheckBox
-                    android:id="@+id/checkBoxKeepScreenOn"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:text="@string/keep_screen_on" />
-                <CheckBox
-                    android:id="@+id/checkBoxShowBatteryInfo"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:text="@string/show_battery_status_when_power_supply_is_not_plugged_in" />
-                <CheckBox
-                    android:id="@+id/checkBoxShowBatteryInfoWhenCharging"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:text="@string/show_battery_status_when_power_supply_is_plugged_in" />
-                <CheckBox
-                    android:id="@+id/checkBoxShowAlarms"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:text="@string/show_alarms" />
-                <CheckBox
-                    android:id="@+id/checkBoxShowWeather"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:text="@string/show_weather" />
-                <CheckBox
-                    android:id="@+id/checkBoxBurnInPrevention"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:text="@string/burn_in_prevention" />
-                <CheckBox
-                    android:id="@+id/checkBoxForceLandscape"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:text="@string/force_landscape_view_only_when_started_manually" />
-                <CheckBox
-                    android:id="@+id/checkBoxDarkMode"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:text="@string/night_mode_for_dark_rooms" />
+                <!-- ==================== LEFT COLUMN ==================== -->
                 <LinearLayout
-                    android:layout_width="wrap_content"
+                    android:layout_width="0dp"
                     android:layout_height="wrap_content"
-                    android:layout_gravity="center">
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="@string/start" />
-                    <Button
-                        android:id="@+id/buttonDarkModeStart"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:onClick="onClickDarkModeStart" />
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="@string/end" />
-                    <Button
-                        android:id="@+id/buttonDarkModeEnd"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:onClick="onClickDarkModeEnd" />
-                </LinearLayout>
-
-                <Space
-                    android:layout_width="match_parent"
-                    android:layout_height="15dp" />
-
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:orientation="horizontal">
-                    <TextView
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:text="@string/analog_clock"
-                        android:textAppearance="@style/TextAppearance.AppCompat.Large" />
-                    <ImageButton
-                        android:layout_width="40dp"
-                        android:layout_height="match_parent"
-                        style="@style/Widget.AppCompat.Button.Borderless.Colored"
-                        app:tint="@color/colorAccent"
-                        app:srcCompat="@drawable/ic_help_outline_white_24dp"
-                        android:onClick="onClickCustomAnalogImagesHelp" />
-                </LinearLayout>
-
-                <CheckBox
-                    android:id="@+id/checkBoxShowAnalogClock"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:text="@string/show_analog_clock" />
-
-                <CheckBox
-                    android:id="@+id/checkBoxSecondsAnalog"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:text="@string/show_seconds_hand" />
-
-                <CheckBox
-                    android:id="@+id/checkBoxAnalogSmoothHands"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:text="@string/use_smooth_hands" />
-
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:orientation="horizontal">
-                    <LinearLayout
-                        android:id="@+id/viewColorChangerAnalogFace"
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:orientation="horizontal"
-                        android:padding="@dimen/padding_setting"
-                        android:focusable="true"
-                        android:clickable="true"
-                        android:background="?attr/selectableItemBackground">
-                        <FrameLayout
-                            android:layout_width="@dimen/width_color_preview"
-                            android:layout_height="match_parent"
-                            android:padding="@dimen/color_preview_border"
-                            android:background="@drawable/border">
-                            <View
-                                android:id="@+id/viewColorPreviewAnalogFace"
-                                android:layout_width="match_parent"
-                                android:layout_height="match_parent"
-                                android:background="@color/colorPrimary" />
-                        </FrameLayout>
-                        <Space
-                            android:layout_width="@dimen/space_color_preview"
-                            android:layout_height="match_parent" />
-                        <TextView
-                            android:layout_width="0dp"
-                            android:layout_height="wrap_content"
-                            android:layout_weight="1"
-                            android:textColor="@color/checkbox_text_color"
-                            android:duplicateParentState="true"
-                            android:hyphenationFrequency="normal"
-                            android:text="@string/clock_face_color" />
-                    </LinearLayout>
-                    <FrameLayout
-                        android:layout_width="0dp"
-                        android:layout_height="match_parent"
-                        android:layout_weight="1">
-                        <ImageView
-                            android:layout_width="32dp"
-                            android:layout_height="30dp"
-                            android:paddingEnd="2dp"
-                            android:layout_gravity="center_vertical|end"
-                            app:srcCompat="@drawable/spinner_arrow" />
-                        <Spinner
-                            android:id="@+id/spinnerDesignAnalogFace"
-                            android:layout_width="match_parent"
-                            android:layout_height="match_parent" />
-                    </FrameLayout>
-                </LinearLayout>
-
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:orientation="horizontal">
-                    <LinearLayout
-                        android:id="@+id/viewColorChangerAnalogHour"
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:orientation="horizontal"
-                        android:padding="@dimen/padding_setting"
-                        android:focusable="true"
-                        android:clickable="true"
-                        android:background="?attr/selectableItemBackground">
-                        <FrameLayout
-                            android:layout_width="@dimen/width_color_preview"
-                            android:layout_height="match_parent"
-                            android:padding="@dimen/color_preview_border"
-                            android:background="@drawable/border">
-                            <View
-                                android:id="@+id/viewColorPreviewAnalogHour"
-                                android:layout_width="@dimen/width_color_preview"
-                                android:layout_height="match_parent"
-                                android:background="@color/colorPrimary" />
-                        </FrameLayout>
-                        <Space
-                            android:layout_width="@dimen/space_color_preview"
-                            android:layout_height="match_parent" />
-                        <TextView
-                            android:layout_width="0dp"
-                            android:layout_height="wrap_content"
-                            android:layout_weight="1"
-                            android:textColor="@color/checkbox_text_color"
-                            android:duplicateParentState="true"
-                            android:hyphenationFrequency="normal"
-                            android:text="@string/hour_hand_color" />
-                    </LinearLayout>
-                    <FrameLayout
-                        android:layout_width="0dp"
-                        android:layout_height="match_parent"
-                        android:layout_weight="1">
-                        <ImageView
-                            android:layout_width="32dp"
-                            android:layout_height="30dp"
-                            android:paddingEnd="2dp"
-                            android:layout_gravity="center_vertical|end"
-                            app:srcCompat="@drawable/spinner_arrow" />
-                        <Spinner
-                            android:id="@+id/spinnerDesignAnalogHours"
-                            android:layout_width="match_parent"
-                            android:layout_height="match_parent" />
-                    </FrameLayout>
-                </LinearLayout>
-
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:orientation="horizontal">
-                    <LinearLayout
-                        android:id="@+id/viewColorChangerAnalogMinute"
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:orientation="horizontal"
-                        android:padding="@dimen/padding_setting"
-                        android:focusable="true"
-                        android:clickable="true"
-                        android:background="?attr/selectableItemBackground">
-                        <FrameLayout
-                            android:layout_width="@dimen/width_color_preview"
-                            android:layout_height="match_parent"
-                            android:padding="@dimen/color_preview_border"
-                            android:background="@drawable/border">
-                            <View
-                                android:id="@+id/viewColorPreviewAnalogMinute"
-                                android:layout_width="@dimen/width_color_preview"
-                                android:layout_height="match_parent"
-                                android:background="@color/colorPrimary" />
-                        </FrameLayout>
-                        <Space
-                            android:layout_width="@dimen/space_color_preview"
-                            android:layout_height="match_parent" />
-                        <TextView
-                            android:layout_width="0dp"
-                            android:layout_height="wrap_content"
-                            android:layout_weight="1"
-                            android:textColor="@color/checkbox_text_color"
-                            android:duplicateParentState="true"
-                            android:hyphenationFrequency="normal"
-                            android:text="@string/minute_hand_color" />
-                    </LinearLayout>
-                    <FrameLayout
-                        android:layout_width="0dp"
-                        android:layout_height="match_parent"
-                        android:layout_weight="1">
-                        <ImageView
-                            android:layout_width="32dp"
-                            android:layout_height="30dp"
-                            android:paddingEnd="2dp"
-                            android:layout_gravity="center_vertical|end"
-                            app:srcCompat="@drawable/spinner_arrow" />
-                        <Spinner
-                            android:id="@+id/spinnerDesignAnalogMinutes"
-                            android:layout_width="match_parent"
-                            android:layout_height="match_parent" />
-                    </FrameLayout>
-                </LinearLayout>
-
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:orientation="horizontal">
-                    <LinearLayout
-                        android:id="@+id/viewColorChangerAnalogSecond"
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:orientation="horizontal"
-                        android:padding="@dimen/padding_setting"
-                        android:focusable="true"
-                        android:clickable="true"
-                        android:background="?attr/selectableItemBackground">
-                        <FrameLayout
-                            android:layout_width="@dimen/width_color_preview"
-                            android:layout_height="match_parent"
-                            android:padding="@dimen/color_preview_border"
-                            android:background="@drawable/border">
-                            <View
-                                android:id="@+id/viewColorPreviewAnalogSecond"
-                                android:layout_width="@dimen/width_color_preview"
-                                android:layout_height="match_parent"
-                                android:background="@color/colorPrimary" />
-                        </FrameLayout>
-                        <Space
-                            android:layout_width="@dimen/space_color_preview"
-                            android:layout_height="match_parent" />
-                        <TextView
-                            android:layout_width="0dp"
-                            android:layout_height="wrap_content"
-                            android:layout_weight="1"
-                            android:textColor="@color/checkbox_text_color"
-                            android:duplicateParentState="true"
-                            android:hyphenationFrequency="normal"
-                            android:text="@string/seconds_hand_color" />
-                    </LinearLayout>
-                    <FrameLayout
-                        android:layout_width="0dp"
-                        android:layout_height="match_parent"
-                        android:layout_weight="1">
-                        <ImageView
-                            android:layout_width="32dp"
-                            android:layout_height="30dp"
-                            android:paddingEnd="2dp"
-                            android:layout_gravity="center_vertical|end"
-                            app:srcCompat="@drawable/spinner_arrow" />
-                        <Spinner
-                            android:id="@+id/spinnerDesignAnalogSeconds"
-                            android:layout_width="match_parent"
-                            android:layout_height="match_parent" />
-                    </FrameLayout>
-                </LinearLayout>
-
-                <Space
-                    android:layout_width="match_parent"
-                    android:layout_height="15dp" />
-
-                <TextView
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:text="@string/digital_clock"
-                    android:textAppearance="@style/TextAppearance.AppCompat.Large" />
-
-                <CheckBox
-                    android:id="@+id/checkBoxShowDigitalClock"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:text="@string/show_digital_clock" />
-
-                <CheckBox
-                    android:id="@+id/checkBox24HrsFormat"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:text="@string/format_24hrs" />
-
-                <CheckBox
-                    android:id="@+id/checkBoxArabicDigits"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:text="@string/arabic_digits" />
-
-                <CheckBox
-                    android:id="@+id/checkBoxShowHijri"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:text="@string/show_hijri_date" />
-
-                <CheckBox
-                    android:id="@+id/checkBoxAutoContrast"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:text="@string/auto_contrast" />
-
-                <CheckBox
-                    android:id="@+id/checkBoxSecondsDigital"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:text="@string/show_seconds" />
-
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:orientation="horizontal">
-                    <CheckBox
-                        android:id="@+id/checkBoxShowDate"
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:layout_gravity="center"
-                        android:text="@string/show_date" />
-                    <LinearLayout
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1">
-                        <EditText
-                            android:id="@+id/editTextDateFormat"
-                            android:layout_width="0dp"
-                            android:layout_height="wrap_content"
-                            android:layout_weight="1"
-                            android:hint="@string/date_format" />
-                        <ImageButton
-                            android:layout_width="40dp"
-                            android:layout_height="match_parent"
-                            style="@style/Widget.AppCompat.Button.Borderless.Colored"
-                            app:tint="@color/colorAccent"
-                            app:srcCompat="@drawable/ic_help_outline_white_24dp"
-                            android:onClick="onClickDateFormatHelp" />
-                    </LinearLayout>
-                </LinearLayout>
-
-                <LinearLayout
-                    android:id="@+id/linearLayoutCalendarSystem"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:orientation="horizontal">
-                    <RadioButton
-                        android:id="@+id/radioButtonGregorianCalendar"
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:text="@string/gregorian_calendar" />
-                    <RadioButton
-                        android:id="@+id/radioButtonHijriCalendar"
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:text="@string/hijri_calendar" />
-                </LinearLayout>
-
-                <Space
-                    android:layout_width="match_parent"
-                    android:layout_height="5dp" />
-
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:orientation="horizontal">
-                    <LinearLayout
-                        android:id="@+id/viewColorChangerDigitalClock"
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:orientation="horizontal"
-                        android:padding="@dimen/padding_setting"
-                        android:focusable="true"
-                        android:clickable="true"
-                        android:background="?attr/selectableItemBackground">
-                        <FrameLayout
-                            android:layout_width="@dimen/width_color_preview"
-                            android:layout_height="match_parent"
-                            android:padding="@dimen/color_preview_border"
-                            android:background="@drawable/border">
-                            <View
-                                android:id="@+id/viewColorPreviewDigitalClock"
-                                android:layout_width="@dimen/width_color_preview"
-                                android:layout_height="match_parent"
-                                android:background="@color/colorPrimary" />
-                        </FrameLayout>
-                        <Space
-                            android:layout_width="@dimen/space_color_preview"
-                            android:layout_height="match_parent" />
-                        <TextView
-                            android:layout_width="0dp"
-                            android:layout_height="wrap_content"
-                            android:layout_weight="1"
-                            android:textColor="@color/checkbox_text_color"
-                            android:duplicateParentState="true"
-                            android:text="@string/digital_clock_color"
-                            tools:ignore="NestedWeights" />
-                    </LinearLayout>
-                    <FrameLayout
-                        android:layout_width="0dp"
-                        android:layout_height="match_parent"
-                        android:layout_weight="1">
-                        <ImageView
-                            android:layout_width="32dp"
-                            android:layout_height="30dp"
-                            android:paddingEnd="2dp"
-                            android:layout_gravity="center_vertical|end"
-                            app:srcCompat="@drawable/spinner_arrow"
-                            tools:ignore="RtlSymmetry" />
-                        <Spinner
-                            android:id="@+id/spinnerDigitalClockFont"
-                            android:layout_width="match_parent"
-                            android:layout_height="match_parent" />
-                    </FrameLayout>
-                </LinearLayout>
-
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:orientation="horizontal">
-                    <LinearLayout
-                        android:id="@+id/viewColorChangerDigitalDate"
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:orientation="horizontal"
-                        android:padding="@dimen/padding_setting"
-                        android:focusable="true"
-                        android:clickable="true"
-                        android:background="?attr/selectableItemBackground">
-                        <FrameLayout
-                            android:layout_width="@dimen/width_color_preview"
-                            android:layout_height="match_parent"
-                            android:padding="@dimen/color_preview_border"
-                            android:background="@drawable/border">
-                            <View
-                                android:id="@+id/viewColorPreviewDigitalDate"
-                                android:layout_width="@dimen/width_color_preview"
-                                android:layout_height="match_parent"
-                                android:background="@color/colorPrimary" />
-                        </FrameLayout>
-                        <Space
-                            android:layout_width="@dimen/space_color_preview"
-                            android:layout_height="match_parent" />
-                        <TextView
-                            android:layout_width="0dp"
-                            android:layout_height="wrap_content"
-                            android:layout_weight="1"
-                            android:textColor="@color/checkbox_text_color"
-                            android:duplicateParentState="true"
-                            android:text="@string/date_color"
-                            tools:ignore="NestedWeights" />
-                    </LinearLayout>
-                    <FrameLayout
-                        android:layout_width="0dp"
-                        android:layout_height="match_parent"
-                        android:layout_weight="1">
-                        <ImageView
-                            android:layout_width="32dp"
-                            android:layout_height="30dp"
-                            android:paddingEnd="2dp"
-                            android:layout_gravity="center_vertical|end"
-                            app:srcCompat="@drawable/spinner_arrow"
-                            tools:ignore="RtlSymmetry" />
-                        <Spinner
-                            android:id="@+id/spinnerDigitalDateFont"
-                            android:layout_width="match_parent"
-                            android:layout_height="match_parent" />
-                    </FrameLayout>
-                </LinearLayout>
-
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:orientation="horizontal">
-                    <LinearLayout
-                        android:id="@+id/viewColorChangerEvents"
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:orientation="horizontal"
-                        android:padding="@dimen/padding_setting"
-                        android:focusable="true"
-                        android:clickable="true"
-                        android:background="?attr/selectableItemBackground">
-                        <FrameLayout
-                            android:layout_width="@dimen/width_color_preview"
-                            android:layout_height="match_parent"
-                            android:padding="@dimen/color_preview_border"
-                            android:background="@drawable/border">
-                            <View
-                                android:id="@+id/viewColorPreviewEvents"
-                                android:layout_width="@dimen/width_color_preview"
-                                android:layout_height="match_parent"
-                                android:background="@color/colorPrimary" />
-                        </FrameLayout>
-                        <Space
-                            android:layout_width="@dimen/space_color_preview"
-                            android:layout_height="match_parent" />
-                        <TextView
-                            android:layout_width="0dp"
-                            android:layout_height="wrap_content"
-                            android:layout_weight="1"
-                            android:textColor="@color/checkbox_text_color"
-                            android:duplicateParentState="true"
-                            android:text="@string/event_color"
-                            tools:ignore="NestedWeights" />
-                    </LinearLayout>
-                    <FrameLayout
-                        android:layout_width="0dp"
-                        android:layout_height="match_parent"
-                        android:layout_weight="1">
-                        <ImageView
-                            android:layout_width="32dp"
-                            android:layout_height="30dp"
-                            android:paddingEnd="2dp"
-                            android:layout_gravity="center_vertical|end"
-                            app:srcCompat="@drawable/spinner_arrow"
-                            tools:ignore="RtlSymmetry" />
-                        <Spinner
-                            android:id="@+id/spinnerEventsFont"
-                            android:layout_width="match_parent"
-                            android:layout_height="match_parent" />
-                    </FrameLayout>
-                </LinearLayout>
-
-                <Space
-                    android:layout_width="match_parent"
-                    android:layout_height="5dp" />
-
-                <TextView
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:padding="@dimen/padding_setting"
-                    android:text="@string/dseg_font_note"
-                    android:textSize="11sp" />
-
-                <Space
-                    android:layout_width="match_parent"
-                    android:layout_height="15dp" />
-
-                <TextView
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:text="@string/wallpapers_section"
-                    android:textAppearance="@style/TextAppearance.AppCompat.Large" />
-
-                <TextView
-                    android:id="@+id/textViewSettingsDeviceId"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:paddingTop="8dp"
-                    android:paddingBottom="8dp"
-                    android:textStyle="bold"
-                    android:textColor="#009688"
-                    android:textSize="15sp"
-                    android:text="Device ID: " />
-
-                <CheckBox
-                    android:id="@+id/checkBoxWallpaperEnabled"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:text="@string/wallpaper_enable" />
-
-                <EditText
-                    android:id="@+id/editTextWallpaperUrl"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:hint="@string/wallpaper_url_hint"
-                    android:inputType="textUri"
-                    android:maxLines="2" />
-
-                <Button
-                    android:id="@+id/buttonSyncWallpapers"
-                    style="@style/Widget.AppCompat.Button.Colored"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:textAllCaps="false"
-                    android:onClick="onClickSyncWallpapers"
-                    android:text="@string/wallpaper_sync" />
-
-                <TextView
-                    android:id="@+id/textViewWallpaperStatus"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:padding="@dimen/padding_setting"
-                    android:textSize="12sp"
-                    android:text="" />
-
-                <TextView
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:padding="@dimen/padding_setting"
-                    android:textSize="11sp"
-                    android:text="@string/wallpaper_help" />
-
-                <CheckBox
-                    android:id="@+id/checkBoxWallpaperLocal"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:text="@string/wallpaper_local_enable" />
-
-                <Button
-                    android:id="@+id/buttonAddLocalWallpapers"
-                    style="@style/Widget.AppCompat.Button.Colored"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:textAllCaps="false"
-                    android:onClick="onClickAddLocalWallpapers"
-                    android:text="@string/wallpaper_add_local" />
-
-                <Button
-                    android:id="@+id/buttonPairPhone"
-                    style="@style/Widget.AppCompat.Button.Colored"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:textAllCaps="false"
-                    android:onClick="onClickPairPhone"
-                    android:text="@string/wallpaper_pair_phone" />
-
-                <TextView
-                    android:id="@+id/textViewLocalFolder"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:padding="@dimen/padding_setting"
-                    android:textSize="11sp"
-                    android:text="" />
-
-                <Space
-                    android:layout_width="match_parent"
-                    android:layout_height="15dp" />
-
-                <TextView
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:text="@string/clock_layout_section"
-                    android:textAppearance="@style/TextAppearance.AppCompat.Large" />
-
-                <CheckBox
-                    android:id="@+id/checkBoxShowClockOverlay"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:text="@string/show_clock_overlay" />
-
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:gravity="center_vertical"
-                    android:orientation="horizontal">
-                    <TextView
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:text="@string/clock_position" />
-                    <Spinner
-                        android:id="@+id/spinnerClockPosition"
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1" />
-                </LinearLayout>
-
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:gravity="center_vertical"
-                    android:orientation="horizontal">
-                    <TextView
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:text="@string/clock_size" />
-                    <Spinner
-                        android:id="@+id/spinnerClockSize"
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1" />
-                </LinearLayout>
-
-                <Space
-                    android:layout_width="match_parent"
-                    android:layout_height="15dp" />
-
-                <TextView
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:text="@string/background"
-                    android:textAppearance="@style/TextAppearance.AppCompat.Large" />
-
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:orientation="horizontal">
-                    <LinearLayout
-                        android:id="@+id/viewColorChangerBack"
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:orientation="horizontal"
-                        android:padding="@dimen/padding_setting"
-                        android:focusable="true"
-                        android:clickable="true"
-                        android:background="?attr/selectableItemBackground">
-                        <FrameLayout
-                            android:layout_width="@dimen/width_color_preview"
-                            android:layout_height="match_parent"
-                            android:padding="@dimen/color_preview_border"
-                            android:background="@drawable/border">
-                            <View
-                                android:id="@+id/viewColorPreviewBack"
-                                android:layout_width="@dimen/width_color_preview"
-                                android:layout_height="match_parent"
-                                android:background="@color/colorPrimary" />
-                        </FrameLayout>
-                        <Space
-                            android:layout_width="@dimen/space_color_preview"
-                            android:layout_height="match_parent" />
-                        <TextView
-                            android:layout_width="0dp"
-                            android:layout_height="wrap_content"
-                            android:layout_weight="1"
-                            android:textColor="@color/checkbox_text_color"
-                            android:duplicateParentState="true"
-                            android:text="@string/choose_color" />
-                    </LinearLayout>
-                    <FrameLayout
-                        android:layout_width="0dp"
-                        android:layout_height="match_parent"
-                        android:layout_weight="1">
-                        <ImageView
-                            android:layout_width="32dp"
-                            android:layout_height="30dp"
-                            android:paddingEnd="2dp"
-                            android:layout_gravity="center_vertical|end"
-                            app:srcCompat="@drawable/spinner_arrow" />
-                        <Spinner
-                            android:id="@+id/spinnerDesignBack"
-                            android:layout_width="match_parent"
-                            android:layout_height="match_parent" />
-                    </FrameLayout>
-                </LinearLayout>
-
-                <Space
-                    android:layout_width="match_parent"
-                    android:layout_height="15dp" />
-
-                <TextView
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:text="@string/events"
-                    android:textAppearance="@style/TextAppearance.AppCompat.Large" />
-
-                <Button
-                    android:id="@+id/buttonAllowSystemCalendarAccess"
-                    style="@style/Widget.AppCompat.Button.Borderless.Colored"
-                    android:textAllCaps="false"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:onClick="onClickAllowSystemCalendarAccess"
-                    android:text="@string/allow_system_calendar_access" />
-                <Button
-                    android:id="@+id/buttonAllowNotificationAccess"
-                    style="@style/Widget.AppCompat.Button.Borderless.Colored"
-                    android:textAllCaps="false"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:onClick="onClickAllowNotificationAccess"
-                    android:text="@string/allow_notification_access" />
-
-                <Space
-                    android:layout_width="match_parent"
-                    android:layout_height="10dp" />
-                <TextView
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:textAppearance="@style/TextAppearance.AppCompat.Body1"
-                    android:text="@string/events_define_description" />
-
-                <Button
-                    android:id="@+id/buttonNewEvent"
-                    style="@style/Widget.AppCompat.Button.Colored"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:onClick="onClickNewEvent"
-                    android:text="@string/new_event" />
-
-                <LinearLayout
-                    android:id="@+id/linearLayoutSettingsEvents"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:layout_marginEnd="8dp"
                     android:orientation="vertical">
+
+                    <!-- General -->
+                    <com.google.android.material.card.MaterialCardView style="@style/SettingsCard">
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:orientation="vertical">
+
+                            <TextView
+                                style="@style/SectionHeader"
+                                android:text="@string/general" />
+
+                            <CheckBox
+                                android:id="@+id/checkBoxKeepScreenOn"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:text="@string/keep_screen_on" />
+                            <CheckBox
+                                android:id="@+id/checkBoxShowBatteryInfo"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:text="@string/show_battery_status_when_power_supply_is_not_plugged_in" />
+                            <CheckBox
+                                android:id="@+id/checkBoxShowBatteryInfoWhenCharging"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:text="@string/show_battery_status_when_power_supply_is_plugged_in" />
+                            <CheckBox
+                                android:id="@+id/checkBoxShowAlarms"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:text="@string/show_alarms" />
+                            <CheckBox
+                                android:id="@+id/checkBoxShowWeather"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:text="@string/show_weather" />
+                            <CheckBox
+                                android:id="@+id/checkBoxBurnInPrevention"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:text="@string/burn_in_prevention" />
+                            <CheckBox
+                                android:id="@+id/checkBoxForceLandscape"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:text="@string/force_landscape_view_only_when_started_manually" />
+                            <CheckBox
+                                android:id="@+id/checkBoxDarkMode"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:text="@string/night_mode_for_dark_rooms" />
+                            <LinearLayout
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:layout_gravity="center">
+                                <TextView
+                                    android:layout_width="wrap_content"
+                                    android:layout_height="wrap_content"
+                                    android:text="@string/start" />
+                                <Button
+                                    android:id="@+id/buttonDarkModeStart"
+                                    android:layout_width="wrap_content"
+                                    android:layout_height="wrap_content"
+                                    android:onClick="onClickDarkModeStart" />
+                                <TextView
+                                    android:layout_width="wrap_content"
+                                    android:layout_height="wrap_content"
+                                    android:text="@string/end" />
+                                <Button
+                                    android:id="@+id/buttonDarkModeEnd"
+                                    android:layout_width="wrap_content"
+                                    android:layout_height="wrap_content"
+                                    android:onClick="onClickDarkModeEnd" />
+                            </LinearLayout>
+                        </LinearLayout>
+                    </com.google.android.material.card.MaterialCardView>
+
+                    <!-- Analog clock -->
+                    <com.google.android.material.card.MaterialCardView style="@style/SettingsCard">
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:orientation="vertical">
+
+                            <LinearLayout
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:orientation="horizontal">
+                                <TextView
+                                    style="@style/SectionHeader"
+                                    android:layout_width="0dp"
+                                    android:layout_weight="1"
+                                    android:text="@string/analog_clock" />
+                                <ImageButton
+                                    android:layout_width="40dp"
+                                    android:layout_height="match_parent"
+                                    style="@style/Widget.AppCompat.Button.Borderless.Colored"
+                                    app:tint="@color/colorAccent"
+                                    app:srcCompat="@drawable/ic_help_outline_white_24dp"
+                                    android:onClick="onClickCustomAnalogImagesHelp" />
+                            </LinearLayout>
+
+                            <CheckBox
+                                android:id="@+id/checkBoxShowAnalogClock"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:text="@string/show_analog_clock" />
+
+                            <CheckBox
+                                android:id="@+id/checkBoxSecondsAnalog"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:text="@string/show_seconds_hand" />
+
+                            <CheckBox
+                                android:id="@+id/checkBoxAnalogSmoothHands"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:text="@string/use_smooth_hands" />
+
+                            <LinearLayout
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:orientation="horizontal">
+                                <LinearLayout
+                                    android:id="@+id/viewColorChangerAnalogFace"
+                                    android:layout_width="0dp"
+                                    android:layout_height="wrap_content"
+                                    android:layout_weight="1"
+                                    android:orientation="horizontal"
+                                    android:padding="@dimen/padding_setting"
+                                    android:focusable="true"
+                                    android:clickable="true"
+                                    android:background="?attr/selectableItemBackground">
+                                    <FrameLayout
+                                        android:layout_width="@dimen/width_color_preview"
+                                        android:layout_height="match_parent"
+                                        android:padding="@dimen/color_preview_border"
+                                        android:background="@drawable/border">
+                                        <View
+                                            android:id="@+id/viewColorPreviewAnalogFace"
+                                            android:layout_width="match_parent"
+                                            android:layout_height="match_parent"
+                                            android:background="@color/colorPrimary" />
+                                    </FrameLayout>
+                                    <Space
+                                        android:layout_width="@dimen/space_color_preview"
+                                        android:layout_height="match_parent" />
+                                    <TextView
+                                        android:layout_width="0dp"
+                                        android:layout_height="wrap_content"
+                                        android:layout_weight="1"
+                                        android:textColor="@color/checkbox_text_color"
+                                        android:duplicateParentState="true"
+                                        android:hyphenationFrequency="normal"
+                                        android:text="@string/clock_face_color" />
+                                </LinearLayout>
+                                <FrameLayout
+                                    android:layout_width="0dp"
+                                    android:layout_height="match_parent"
+                                    android:layout_weight="1">
+                                    <ImageView
+                                        android:layout_width="32dp"
+                                        android:layout_height="30dp"
+                                        android:paddingEnd="2dp"
+                                        android:layout_gravity="center_vertical|end"
+                                        app:srcCompat="@drawable/spinner_arrow" />
+                                    <Spinner
+                                        android:id="@+id/spinnerDesignAnalogFace"
+                                        android:layout_width="match_parent"
+                                        android:layout_height="match_parent" />
+                                </FrameLayout>
+                            </LinearLayout>
+
+                            <LinearLayout
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:orientation="horizontal">
+                                <LinearLayout
+                                    android:id="@+id/viewColorChangerAnalogHour"
+                                    android:layout_width="0dp"
+                                    android:layout_height="wrap_content"
+                                    android:layout_weight="1"
+                                    android:orientation="horizontal"
+                                    android:padding="@dimen/padding_setting"
+                                    android:focusable="true"
+                                    android:clickable="true"
+                                    android:background="?attr/selectableItemBackground">
+                                    <FrameLayout
+                                        android:layout_width="@dimen/width_color_preview"
+                                        android:layout_height="match_parent"
+                                        android:padding="@dimen/color_preview_border"
+                                        android:background="@drawable/border">
+                                        <View
+                                            android:id="@+id/viewColorPreviewAnalogHour"
+                                            android:layout_width="@dimen/width_color_preview"
+                                            android:layout_height="match_parent"
+                                            android:background="@color/colorPrimary" />
+                                    </FrameLayout>
+                                    <Space
+                                        android:layout_width="@dimen/space_color_preview"
+                                        android:layout_height="match_parent" />
+                                    <TextView
+                                        android:layout_width="0dp"
+                                        android:layout_height="wrap_content"
+                                        android:layout_weight="1"
+                                        android:textColor="@color/checkbox_text_color"
+                                        android:duplicateParentState="true"
+                                        android:hyphenationFrequency="normal"
+                                        android:text="@string/hour_hand_color" />
+                                </LinearLayout>
+                                <FrameLayout
+                                    android:layout_width="0dp"
+                                    android:layout_height="match_parent"
+                                    android:layout_weight="1">
+                                    <ImageView
+                                        android:layout_width="32dp"
+                                        android:layout_height="30dp"
+                                        android:paddingEnd="2dp"
+                                        android:layout_gravity="center_vertical|end"
+                                        app:srcCompat="@drawable/spinner_arrow" />
+                                    <Spinner
+                                        android:id="@+id/spinnerDesignAnalogHours"
+                                        android:layout_width="match_parent"
+                                        android:layout_height="match_parent" />
+                                </FrameLayout>
+                            </LinearLayout>
+
+                            <LinearLayout
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:orientation="horizontal">
+                                <LinearLayout
+                                    android:id="@+id/viewColorChangerAnalogMinute"
+                                    android:layout_width="0dp"
+                                    android:layout_height="wrap_content"
+                                    android:layout_weight="1"
+                                    android:orientation="horizontal"
+                                    android:padding="@dimen/padding_setting"
+                                    android:focusable="true"
+                                    android:clickable="true"
+                                    android:background="?attr/selectableItemBackground">
+                                    <FrameLayout
+                                        android:layout_width="@dimen/width_color_preview"
+                                        android:layout_height="match_parent"
+                                        android:padding="@dimen/color_preview_border"
+                                        android:background="@drawable/border">
+                                        <View
+                                            android:id="@+id/viewColorPreviewAnalogMinute"
+                                            android:layout_width="@dimen/width_color_preview"
+                                            android:layout_height="match_parent"
+                                            android:background="@color/colorPrimary" />
+                                    </FrameLayout>
+                                    <Space
+                                        android:layout_width="@dimen/space_color_preview"
+                                        android:layout_height="match_parent" />
+                                    <TextView
+                                        android:layout_width="0dp"
+                                        android:layout_height="wrap_content"
+                                        android:layout_weight="1"
+                                        android:textColor="@color/checkbox_text_color"
+                                        android:duplicateParentState="true"
+                                        android:hyphenationFrequency="normal"
+                                        android:text="@string/minute_hand_color" />
+                                </LinearLayout>
+                                <FrameLayout
+                                    android:layout_width="0dp"
+                                    android:layout_height="match_parent"
+                                    android:layout_weight="1">
+                                    <ImageView
+                                        android:layout_width="32dp"
+                                        android:layout_height="30dp"
+                                        android:paddingEnd="2dp"
+                                        android:layout_gravity="center_vertical|end"
+                                        app:srcCompat="@drawable/spinner_arrow" />
+                                    <Spinner
+                                        android:id="@+id/spinnerDesignAnalogMinutes"
+                                        android:layout_width="match_parent"
+                                        android:layout_height="match_parent" />
+                                </FrameLayout>
+                            </LinearLayout>
+
+                            <LinearLayout
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:orientation="horizontal">
+                                <LinearLayout
+                                    android:id="@+id/viewColorChangerAnalogSecond"
+                                    android:layout_width="0dp"
+                                    android:layout_height="wrap_content"
+                                    android:layout_weight="1"
+                                    android:orientation="horizontal"
+                                    android:padding="@dimen/padding_setting"
+                                    android:focusable="true"
+                                    android:clickable="true"
+                                    android:background="?attr/selectableItemBackground">
+                                    <FrameLayout
+                                        android:layout_width="@dimen/width_color_preview"
+                                        android:layout_height="match_parent"
+                                        android:padding="@dimen/color_preview_border"
+                                        android:background="@drawable/border">
+                                        <View
+                                            android:id="@+id/viewColorPreviewAnalogSecond"
+                                            android:layout_width="@dimen/width_color_preview"
+                                            android:layout_height="match_parent"
+                                            android:background="@color/colorPrimary" />
+                                    </FrameLayout>
+                                    <Space
+                                        android:layout_width="@dimen/space_color_preview"
+                                        android:layout_height="match_parent" />
+                                    <TextView
+                                        android:layout_width="0dp"
+                                        android:layout_height="wrap_content"
+                                        android:layout_weight="1"
+                                        android:textColor="@color/checkbox_text_color"
+                                        android:duplicateParentState="true"
+                                        android:hyphenationFrequency="normal"
+                                        android:text="@string/seconds_hand_color" />
+                                </LinearLayout>
+                                <FrameLayout
+                                    android:layout_width="0dp"
+                                    android:layout_height="match_parent"
+                                    android:layout_weight="1">
+                                    <ImageView
+                                        android:layout_width="32dp"
+                                        android:layout_height="30dp"
+                                        android:paddingEnd="2dp"
+                                        android:layout_gravity="center_vertical|end"
+                                        app:srcCompat="@drawable/spinner_arrow" />
+                                    <Spinner
+                                        android:id="@+id/spinnerDesignAnalogSeconds"
+                                        android:layout_width="match_parent"
+                                        android:layout_height="match_parent" />
+                                </FrameLayout>
+                            </LinearLayout>
+                        </LinearLayout>
+                    </com.google.android.material.card.MaterialCardView>
+
+                    <!-- Wallpapers -->
+                    <com.google.android.material.card.MaterialCardView style="@style/SettingsCard">
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:orientation="vertical">
+
+                            <TextView
+                                style="@style/SectionHeader"
+                                android:text="@string/wallpapers_section" />
+
+                            <TextView
+                                android:id="@+id/textViewSettingsDeviceId"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:paddingTop="8dp"
+                                android:paddingBottom="8dp"
+                                android:textStyle="bold"
+                                android:textColor="#009688"
+                                android:textSize="15sp"
+                                android:text="Device ID: " />
+
+                            <TextView
+                                android:id="@+id/textViewSettingsMacAddress"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:paddingBottom="8dp"
+                                android:textStyle="bold"
+                                android:textColor="#009688"
+                                android:textSize="15sp"
+                                android:textIsSelectable="true"
+                                android:text="MAC: " />
+
+                            <Button
+                                android:id="@+id/buttonShowMacQr"
+                                style="@style/Widget.AppCompat.Button.Colored"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:textAllCaps="false"
+                                android:onClick="onClickShowMacQr"
+                                android:text="@string/mac_show_qr" />
+
+                            <CheckBox
+                                android:id="@+id/checkBoxWallpaperEnabled"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:text="@string/wallpaper_enable" />
+
+                            <CheckBox
+                                android:id="@+id/checkBoxWallpaperAutoSwitch"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:text="@string/wallpaper_auto_switch" />
+
+                            <EditText
+                                android:id="@+id/editTextWallpaperUrl"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:hint="@string/wallpaper_url_hint"
+                                android:inputType="textUri"
+                                android:maxLines="2" />
+
+                            <Button
+                                android:id="@+id/buttonSyncWallpapers"
+                                style="@style/Widget.AppCompat.Button.Colored"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:textAllCaps="false"
+                                android:onClick="onClickSyncWallpapers"
+                                android:text="@string/wallpaper_sync" />
+
+                            <TextView
+                                android:id="@+id/textViewWallpaperStatus"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:padding="@dimen/padding_setting"
+                                android:textSize="12sp"
+                                android:text="" />
+
+                            <TextView
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:padding="@dimen/padding_setting"
+                                android:textSize="11sp"
+                                android:text="@string/wallpaper_help" />
+
+                            <CheckBox
+                                android:id="@+id/checkBoxWallpaperLocal"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:text="@string/wallpaper_local_enable" />
+
+                            <Button
+                                android:id="@+id/buttonAddLocalWallpapers"
+                                style="@style/Widget.AppCompat.Button.Colored"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:textAllCaps="false"
+                                android:onClick="onClickAddLocalWallpapers"
+                                android:text="@string/wallpaper_add_local" />
+
+                            <Button
+                                android:id="@+id/buttonPairPhone"
+                                style="@style/Widget.AppCompat.Button.Colored"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:textAllCaps="false"
+                                android:onClick="onClickPairPhone"
+                                android:text="@string/wallpaper_pair_phone" />
+
+                            <TextView
+                                android:id="@+id/textViewLocalFolder"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:padding="@dimen/padding_setting"
+                                android:textSize="11sp"
+                                android:text="" />
+                        </LinearLayout>
+                    </com.google.android.material.card.MaterialCardView>
+
+                    <!-- Clock layout -->
+                    <com.google.android.material.card.MaterialCardView style="@style/SettingsCard">
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:orientation="vertical">
+
+                            <TextView
+                                style="@style/SectionHeader"
+                                android:text="@string/clock_layout_section" />
+
+                            <CheckBox
+                                android:id="@+id/checkBoxShowClockOverlay"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:text="@string/show_clock_overlay" />
+
+                            <LinearLayout
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:gravity="center_vertical"
+                                android:orientation="horizontal">
+                                <TextView
+                                    android:layout_width="0dp"
+                                    android:layout_height="wrap_content"
+                                    android:layout_weight="1"
+                                    android:text="@string/clock_position" />
+                                <Spinner
+                                    android:id="@+id/spinnerClockPosition"
+                                    android:layout_width="0dp"
+                                    android:layout_height="wrap_content"
+                                    android:layout_weight="1" />
+                            </LinearLayout>
+
+                            <LinearLayout
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:gravity="center_vertical"
+                                android:orientation="horizontal">
+                                <TextView
+                                    android:layout_width="0dp"
+                                    android:layout_height="wrap_content"
+                                    android:layout_weight="1"
+                                    android:text="@string/clock_size" />
+                                <Spinner
+                                    android:id="@+id/spinnerClockSize"
+                                    android:layout_width="0dp"
+                                    android:layout_height="wrap_content"
+                                    android:layout_weight="1" />
+                            </LinearLayout>
+                        </LinearLayout>
+                    </com.google.android.material.card.MaterialCardView>
+
                 </LinearLayout>
 
-                <Space
-                    android:layout_width="match_parent"
-                    android:layout_height="15dp" />
-
-                <TextView
-                    android:layout_width="wrap_content"
+                <!-- ==================== RIGHT COLUMN ==================== -->
+                <LinearLayout
+                    android:layout_width="0dp"
                     android:layout_height="wrap_content"
-                    android:text="@string/open_source"
-                    android:textAppearance="@style/TextAppearance.AppCompat.Headline" />
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="@string/open_source_text"
-                    android:textAppearance="@style/TextAppearance.AppCompat.Body1" />
-                <Button
-                    style="@style/Widget.AppCompat.Button.Borderless.Colored"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:onClick="onClickGithub"
-                    android:textAllCaps="false"
-                    android:text="@string/project_website" />
+                    android:layout_weight="1"
+                    android:layout_marginStart="8dp"
+                    android:orientation="vertical">
 
-                <Button
-                    android:id="@+id/buttonCheckUpdate"
-                    style="@style/Widget.AppCompat.Button.Colored"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:onClick="onClickCheckUpdate"
-                    android:textAllCaps="false"
-                    android:text="@string/update_check" />
+                    <!-- Digital clock -->
+                    <com.google.android.material.card.MaterialCardView style="@style/SettingsCard">
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:orientation="vertical">
 
-                <TextView
-                    android:id="@+id/textViewBuildInfo"
-                    android:layout_width="match_parent"
-                    android:layout_height="match_parent"
-                    android:textAlignment="center"
-                    android:textAllCaps="true"
-                    android:textSize="11sp"
-                    android:alpha="0.5"
-                    android:text="" />
+                            <TextView
+                                style="@style/SectionHeader"
+                                android:text="@string/digital_clock" />
 
-                <Space
-                    android:layout_width="match_parent"
-                    android:layout_height="15dp" />
+                            <CheckBox
+                                android:id="@+id/checkBoxShowDigitalClock"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:text="@string/show_digital_clock" />
+
+                            <CheckBox
+                                android:id="@+id/checkBox24HrsFormat"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:text="@string/format_24hrs" />
+
+                            <CheckBox
+                                android:id="@+id/checkBoxArabicDigits"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:text="@string/arabic_digits" />
+
+                            <CheckBox
+                                android:id="@+id/checkBoxShowHijri"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:text="@string/show_hijri_date" />
+
+                            <CheckBox
+                                android:id="@+id/checkBoxAutoContrast"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:text="@string/auto_contrast" />
+
+                            <CheckBox
+                                android:id="@+id/checkBoxSecondsDigital"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:text="@string/show_seconds" />
+
+                            <LinearLayout
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:orientation="horizontal">
+                                <CheckBox
+                                    android:id="@+id/checkBoxShowDate"
+                                    android:layout_width="0dp"
+                                    android:layout_height="wrap_content"
+                                    android:layout_weight="1"
+                                    android:layout_gravity="center"
+                                    android:text="@string/show_date" />
+                                <LinearLayout
+                                    android:layout_width="0dp"
+                                    android:layout_height="wrap_content"
+                                    android:layout_weight="1">
+                                    <EditText
+                                        android:id="@+id/editTextDateFormat"
+                                        android:layout_width="0dp"
+                                        android:layout_height="wrap_content"
+                                        android:layout_weight="1"
+                                        android:hint="@string/date_format" />
+                                    <ImageButton
+                                        android:layout_width="40dp"
+                                        android:layout_height="match_parent"
+                                        style="@style/Widget.AppCompat.Button.Borderless.Colored"
+                                        app:tint="@color/colorAccent"
+                                        app:srcCompat="@drawable/ic_help_outline_white_24dp"
+                                        android:onClick="onClickDateFormatHelp" />
+                                </LinearLayout>
+                            </LinearLayout>
+
+                            <LinearLayout
+                                android:id="@+id/linearLayoutCalendarSystem"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:orientation="horizontal">
+                                <RadioButton
+                                    android:id="@+id/radioButtonGregorianCalendar"
+                                    android:layout_width="0dp"
+                                    android:layout_height="wrap_content"
+                                    android:layout_weight="1"
+                                    android:text="@string/gregorian_calendar" />
+                                <RadioButton
+                                    android:id="@+id/radioButtonHijriCalendar"
+                                    android:layout_width="0dp"
+                                    android:layout_height="wrap_content"
+                                    android:layout_weight="1"
+                                    android:text="@string/hijri_calendar" />
+                            </LinearLayout>
+
+                            <Space
+                                android:layout_width="match_parent"
+                                android:layout_height="5dp" />
+
+                            <LinearLayout
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:orientation="horizontal">
+                                <LinearLayout
+                                    android:id="@+id/viewColorChangerDigitalClock"
+                                    android:layout_width="0dp"
+                                    android:layout_height="wrap_content"
+                                    android:layout_weight="1"
+                                    android:orientation="horizontal"
+                                    android:padding="@dimen/padding_setting"
+                                    android:focusable="true"
+                                    android:clickable="true"
+                                    android:background="?attr/selectableItemBackground">
+                                    <FrameLayout
+                                        android:layout_width="@dimen/width_color_preview"
+                                        android:layout_height="match_parent"
+                                        android:padding="@dimen/color_preview_border"
+                                        android:background="@drawable/border">
+                                        <View
+                                            android:id="@+id/viewColorPreviewDigitalClock"
+                                            android:layout_width="@dimen/width_color_preview"
+                                            android:layout_height="match_parent"
+                                            android:background="@color/colorPrimary" />
+                                    </FrameLayout>
+                                    <Space
+                                        android:layout_width="@dimen/space_color_preview"
+                                        android:layout_height="match_parent" />
+                                    <TextView
+                                        android:layout_width="0dp"
+                                        android:layout_height="wrap_content"
+                                        android:layout_weight="1"
+                                        android:textColor="@color/checkbox_text_color"
+                                        android:duplicateParentState="true"
+                                        android:text="@string/digital_clock_color"
+                                        tools:ignore="NestedWeights" />
+                                </LinearLayout>
+                                <FrameLayout
+                                    android:layout_width="0dp"
+                                    android:layout_height="match_parent"
+                                    android:layout_weight="1">
+                                    <ImageView
+                                        android:layout_width="32dp"
+                                        android:layout_height="30dp"
+                                        android:paddingEnd="2dp"
+                                        android:layout_gravity="center_vertical|end"
+                                        app:srcCompat="@drawable/spinner_arrow"
+                                        tools:ignore="RtlSymmetry" />
+                                    <Spinner
+                                        android:id="@+id/spinnerDigitalClockFont"
+                                        android:layout_width="match_parent"
+                                        android:layout_height="match_parent" />
+                                </FrameLayout>
+                            </LinearLayout>
+
+                            <LinearLayout
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:orientation="horizontal">
+                                <LinearLayout
+                                    android:id="@+id/viewColorChangerDigitalDate"
+                                    android:layout_width="0dp"
+                                    android:layout_height="wrap_content"
+                                    android:layout_weight="1"
+                                    android:orientation="horizontal"
+                                    android:padding="@dimen/padding_setting"
+                                    android:focusable="true"
+                                    android:clickable="true"
+                                    android:background="?attr/selectableItemBackground">
+                                    <FrameLayout
+                                        android:layout_width="@dimen/width_color_preview"
+                                        android:layout_height="match_parent"
+                                        android:padding="@dimen/color_preview_border"
+                                        android:background="@drawable/border">
+                                        <View
+                                            android:id="@+id/viewColorPreviewDigitalDate"
+                                            android:layout_width="@dimen/width_color_preview"
+                                            android:layout_height="match_parent"
+                                            android:background="@color/colorPrimary" />
+                                    </FrameLayout>
+                                    <Space
+                                        android:layout_width="@dimen/space_color_preview"
+                                        android:layout_height="match_parent" />
+                                    <TextView
+                                        android:layout_width="0dp"
+                                        android:layout_height="wrap_content"
+                                        android:layout_weight="1"
+                                        android:textColor="@color/checkbox_text_color"
+                                        android:duplicateParentState="true"
+                                        android:text="@string/date_color"
+                                        tools:ignore="NestedWeights" />
+                                </LinearLayout>
+                                <FrameLayout
+                                    android:layout_width="0dp"
+                                    android:layout_height="match_parent"
+                                    android:layout_weight="1">
+                                    <ImageView
+                                        android:layout_width="32dp"
+                                        android:layout_height="30dp"
+                                        android:paddingEnd="2dp"
+                                        android:layout_gravity="center_vertical|end"
+                                        app:srcCompat="@drawable/spinner_arrow"
+                                        tools:ignore="RtlSymmetry" />
+                                    <Spinner
+                                        android:id="@+id/spinnerDigitalDateFont"
+                                        android:layout_width="match_parent"
+                                        android:layout_height="match_parent" />
+                                </FrameLayout>
+                            </LinearLayout>
+
+                            <LinearLayout
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:orientation="horizontal">
+                                <LinearLayout
+                                    android:id="@+id/viewColorChangerEvents"
+                                    android:layout_width="0dp"
+                                    android:layout_height="wrap_content"
+                                    android:layout_weight="1"
+                                    android:orientation="horizontal"
+                                    android:padding="@dimen/padding_setting"
+                                    android:focusable="true"
+                                    android:clickable="true"
+                                    android:background="?attr/selectableItemBackground">
+                                    <FrameLayout
+                                        android:layout_width="@dimen/width_color_preview"
+                                        android:layout_height="match_parent"
+                                        android:padding="@dimen/color_preview_border"
+                                        android:background="@drawable/border">
+                                        <View
+                                            android:id="@+id/viewColorPreviewEvents"
+                                            android:layout_width="@dimen/width_color_preview"
+                                            android:layout_height="match_parent"
+                                            android:background="@color/colorPrimary" />
+                                    </FrameLayout>
+                                    <Space
+                                        android:layout_width="@dimen/space_color_preview"
+                                        android:layout_height="match_parent" />
+                                    <TextView
+                                        android:layout_width="0dp"
+                                        android:layout_height="wrap_content"
+                                        android:layout_weight="1"
+                                        android:textColor="@color/checkbox_text_color"
+                                        android:duplicateParentState="true"
+                                        android:text="@string/event_color"
+                                        tools:ignore="NestedWeights" />
+                                </LinearLayout>
+                                <FrameLayout
+                                    android:layout_width="0dp"
+                                    android:layout_height="match_parent"
+                                    android:layout_weight="1">
+                                    <ImageView
+                                        android:layout_width="32dp"
+                                        android:layout_height="30dp"
+                                        android:paddingEnd="2dp"
+                                        android:layout_gravity="center_vertical|end"
+                                        app:srcCompat="@drawable/spinner_arrow"
+                                        tools:ignore="RtlSymmetry" />
+                                    <Spinner
+                                        android:id="@+id/spinnerEventsFont"
+                                        android:layout_width="match_parent"
+                                        android:layout_height="match_parent" />
+                                </FrameLayout>
+                            </LinearLayout>
+
+                            <Space
+                                android:layout_width="match_parent"
+                                android:layout_height="5dp" />
+
+                            <TextView
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:padding="@dimen/padding_setting"
+                                android:text="@string/dseg_font_note"
+                                android:textSize="11sp" />
+                        </LinearLayout>
+                    </com.google.android.material.card.MaterialCardView>
+
+                    <!-- Background -->
+                    <com.google.android.material.card.MaterialCardView style="@style/SettingsCard">
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:orientation="vertical">
+
+                            <TextView
+                                style="@style/SectionHeader"
+                                android:text="@string/background" />
+
+                            <LinearLayout
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:orientation="horizontal">
+                                <LinearLayout
+                                    android:id="@+id/viewColorChangerBack"
+                                    android:layout_width="0dp"
+                                    android:layout_height="wrap_content"
+                                    android:layout_weight="1"
+                                    android:orientation="horizontal"
+                                    android:padding="@dimen/padding_setting"
+                                    android:focusable="true"
+                                    android:clickable="true"
+                                    android:background="?attr/selectableItemBackground">
+                                    <FrameLayout
+                                        android:layout_width="@dimen/width_color_preview"
+                                        android:layout_height="match_parent"
+                                        android:padding="@dimen/color_preview_border"
+                                        android:background="@drawable/border">
+                                        <View
+                                            android:id="@+id/viewColorPreviewBack"
+                                            android:layout_width="@dimen/width_color_preview"
+                                            android:layout_height="match_parent"
+                                            android:background="@color/colorPrimary" />
+                                    </FrameLayout>
+                                    <Space
+                                        android:layout_width="@dimen/space_color_preview"
+                                        android:layout_height="match_parent" />
+                                    <TextView
+                                        android:layout_width="0dp"
+                                        android:layout_height="wrap_content"
+                                        android:layout_weight="1"
+                                        android:textColor="@color/checkbox_text_color"
+                                        android:duplicateParentState="true"
+                                        android:text="@string/choose_color" />
+                                </LinearLayout>
+                                <FrameLayout
+                                    android:layout_width="0dp"
+                                    android:layout_height="match_parent"
+                                    android:layout_weight="1">
+                                    <ImageView
+                                        android:layout_width="32dp"
+                                        android:layout_height="30dp"
+                                        android:paddingEnd="2dp"
+                                        android:layout_gravity="center_vertical|end"
+                                        app:srcCompat="@drawable/spinner_arrow" />
+                                    <Spinner
+                                        android:id="@+id/spinnerDesignBack"
+                                        android:layout_width="match_parent"
+                                        android:layout_height="match_parent" />
+                                </FrameLayout>
+                            </LinearLayout>
+                        </LinearLayout>
+                    </com.google.android.material.card.MaterialCardView>
+
+                    <!-- Events -->
+                    <com.google.android.material.card.MaterialCardView style="@style/SettingsCard">
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:orientation="vertical">
+
+                            <TextView
+                                style="@style/SectionHeader"
+                                android:text="@string/events" />
+
+                            <Button
+                                android:id="@+id/buttonAllowSystemCalendarAccess"
+                                style="@style/Widget.AppCompat.Button.Borderless.Colored"
+                                android:textAllCaps="false"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:onClick="onClickAllowSystemCalendarAccess"
+                                android:text="@string/allow_system_calendar_access" />
+                            <Button
+                                android:id="@+id/buttonAllowNotificationAccess"
+                                style="@style/Widget.AppCompat.Button.Borderless.Colored"
+                                android:textAllCaps="false"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:onClick="onClickAllowNotificationAccess"
+                                android:text="@string/allow_notification_access" />
+
+                            <Space
+                                android:layout_width="match_parent"
+                                android:layout_height="10dp" />
+                            <TextView
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:textAppearance="@style/TextAppearance.AppCompat.Body1"
+                                android:text="@string/events_define_description" />
+
+                            <Button
+                                android:id="@+id/buttonNewEvent"
+                                style="@style/Widget.AppCompat.Button.Colored"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:onClick="onClickNewEvent"
+                                android:text="@string/new_event" />
+
+                            <LinearLayout
+                                android:id="@+id/linearLayoutSettingsEvents"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:orientation="vertical">
+                            </LinearLayout>
+                        </LinearLayout>
+                    </com.google.android.material.card.MaterialCardView>
+
+                    <!-- About / updates -->
+                    <com.google.android.material.card.MaterialCardView style="@style/SettingsCard">
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:orientation="vertical">
+
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="@string/open_source"
+                                android:textAppearance="@style/TextAppearance.AppCompat.Headline" />
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="@string/open_source_text"
+                                android:textAppearance="@style/TextAppearance.AppCompat.Body1" />
+                            <Button
+                                style="@style/Widget.AppCompat.Button.Borderless.Colored"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:onClick="onClickGithub"
+                                android:textAllCaps="false"
+                                android:text="@string/project_website" />
+
+                            <Button
+                                android:id="@+id/buttonCheckUpdate"
+                                style="@style/Widget.AppCompat.Button.Colored"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:onClick="onClickCheckUpdate"
+                                android:textAllCaps="false"
+                                android:text="@string/update_check" />
+
+                            <TextView
+                                android:id="@+id/textViewBuildInfo"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:textAlignment="center"
+                                android:textAllCaps="true"
+                                android:textSize="11sp"
+                                android:alpha="0.5"
+                                android:text="" />
+                        </LinearLayout>
+                    </com.google.android.material.card.MaterialCardView>
+
+                </LinearLayout>
 
             </LinearLayout>
 

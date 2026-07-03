@@ -1,0 +1,17 @@
+# Only the wallpapers manager page needs to ship to Vercel.
+# Everything below is excluded from the deployment (keeps it small & private).
+
+TS Wallpapers.apk
+*.apk
+*.jks
+Wallpapers/
+source/
+src/
+tools/
+assets_src/
+shots/
+.agents/
+*.sql
+*.md
+skills-lock.json
+wallpapers-manifest-example.json
