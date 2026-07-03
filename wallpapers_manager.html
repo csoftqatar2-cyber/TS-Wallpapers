@@ -1141,6 +1141,22 @@
     <div class="orb orb-2"></div>
     <div class="orb orb-3"></div>
 
+    <!-- Login gate -->
+    <div id="login-overlay" style="position:fixed;inset:0;z-index:9999;display:none;align-items:center;justify-content:center;background:rgba(8,10,20,0.92);backdrop-filter:blur(8px);">
+        <form id="login-form" style="width:min(90vw,360px);background:rgba(20,24,40,0.95);border:1px solid rgba(255,255,255,0.08);border-radius:18px;padding:32px 28px;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,0.5);">
+            <i class="fa-solid fa-lock" style="font-size:32px;color:#7c9cff;margin-bottom:12px;"></i>
+            <h2 style="color:#fff;margin:0 0 6px;font-size:20px;">مدير خلفيات TS Wallpapers</h2>
+            <p style="color:#9aa4c0;margin:0 0 20px;font-size:14px;">أدخل كلمة المرور للدخول</p>
+            <input id="login-password" type="password" autocomplete="current-password" placeholder="كلمة المرور"
+                   style="width:100%;box-sizing:border-box;padding:12px 14px;border-radius:12px;border:1px solid rgba(255,255,255,0.12);background:rgba(0,0,0,0.3);color:#fff;font-size:16px;text-align:center;outline:none;" />
+            <div id="login-error" style="display:none;color:#ff6b6b;font-size:13px;margin-top:10px;">كلمة المرور غير صحيحة</div>
+            <button type="submit" id="login-btn"
+                    style="width:100%;margin-top:18px;padding:12px;border:none;border-radius:12px;background:linear-gradient(135deg,#5b7cfa,#7c5bfa);color:#fff;font-size:16px;font-weight:600;cursor:pointer;">
+                دخول
+            </button>
+        </form>
+    </div>
+
     <div class="container">
         <!-- Header -->
         <header>
@@ -1155,6 +1171,10 @@
                 <i class="fa-solid fa-circle-notch fa-spin"></i>
                 <span>جاري الاتصال بقاعدة البيانات...</span>
             </div>
+            <button onclick="logout()" title="تسجيل الخروج"
+                    style="margin-inline-start:12px;padding:8px 14px;border:1px solid rgba(255,255,255,0.15);border-radius:10px;background:rgba(255,255,255,0.05);color:#cbd3ea;font-size:14px;cursor:pointer;white-space:nowrap;">
+                <i class="fa-solid fa-right-from-bracket"></i> خروج
+            </button>
         </header>
 
         <!-- Stats -->
@@ -1419,6 +1439,63 @@
         const REST_APP_VERSIONS = `${SUPABASE_URL}/rest/v1/app_versions`;
         const APK_STORAGE_API = `${SUPABASE_URL}/storage/v1/object/apk`;
         const APK_PUBLIC_PREFIX = `${SUPABASE_URL}/storage/v1/object/public/apk`;
+        const AUTH_URL = `${SUPABASE_URL}/auth/v1`;
+
+        // ---- Auth session ----
+        // Fixed admin identity: the user only ever types the password.
+        const ADMIN_EMAIL = "admin@tswallpapers.app";
+        const SESSION_KEY = "ts_wm_session"; // localStorage key holding the refresh token
+        // Every authenticated request uses this token. Starts as the public anon
+        // key (so nothing works beyond public reads) and becomes the admin JWT
+        // after a successful login.
+        let SESSION_TOKEN = ANON_KEY;
+        let refreshTimer = null;
+
+        function applySession(data) {
+            // data = { access_token, refresh_token, expires_in }
+            SESSION_TOKEN = data.access_token;
+            try { localStorage.setItem(SESSION_KEY, data.refresh_token); } catch (e) {}
+            // refresh ~1 min before expiry (default expiry 3600s)
+            const ms = Math.max(30, (data.expires_in || 3600) - 60) * 1000;
+            if (refreshTimer) clearTimeout(refreshTimer);
+            refreshTimer = setTimeout(refreshSession, ms);
+        }
+
+        function clearSession() {
+            SESSION_TOKEN = ANON_KEY;
+            if (refreshTimer) { clearTimeout(refreshTimer); refreshTimer = null; }
+            try { localStorage.removeItem(SESSION_KEY); } catch (e) {}
+        }
+
+        async function loginWithPassword(password) {
+            const res = await fetch(`${AUTH_URL}/token?grant_type=password`, {
+                method: "POST",
+                headers: { "apikey": ANON_KEY, "Content-Type": "application/json" },
+                body: JSON.stringify({ email: ADMIN_EMAIL, password })
+            });
+            if (!res.ok) throw new Error("bad-credentials");
+            applySession(await res.json());
+        }
+
+        // Try to resume a stored session (keeps the device logged in). Returns true on success.
+        async function refreshSession() {
+            let token = null;
+            try { token = localStorage.getItem(SESSION_KEY); } catch (e) {}
+            if (!token) return false;
+            try {
+                const res = await fetch(`${AUTH_URL}/token?grant_type=refresh_token`, {
+                    method: "POST",
+                    headers: { "apikey": ANON_KEY, "Content-Type": "application/json" },
+                    body: JSON.stringify({ refresh_token: token })
+                });
+                if (!res.ok) throw new Error("refresh-failed");
+                applySession(await res.json());
+                return true;
+            } catch (e) {
+                clearSession();
+                return false;
+            }
+        }
 
         // App States
         let devicesList = [];
@@ -1428,11 +1505,53 @@
         let inputMode = 'files'; // files or folder
         let activeFilter = 'all'; // all | global | private (main grid filter)
 
-        // Initialize connection
-        document.addEventListener("DOMContentLoaded", () => {
+        // ---- Boot: require login before showing the app ----
+        let appStarted = false;
+        function startApp() {
+            if (appStarted) return;
+            appStarted = true;
+            document.getElementById("login-overlay").style.display = "none";
             initConnection();
             setupDragAndDrop();
+        }
+
+        function showLogin() {
+            const overlay = document.getElementById("login-overlay");
+            overlay.style.display = "flex";
+            document.getElementById("login-password").focus();
+        }
+
+        document.addEventListener("DOMContentLoaded", async () => {
+            // Login form handler
+            document.getElementById("login-form").addEventListener("submit", async (e) => {
+                e.preventDefault();
+                const btn = document.getElementById("login-btn");
+                const err = document.getElementById("login-error");
+                const pw = document.getElementById("login-password").value;
+                err.style.display = "none";
+                btn.disabled = true; btn.innerText = "جارٍ الدخول…";
+                try {
+                    await loginWithPassword(pw);
+                    startApp();
+                } catch (ex) {
+                    err.style.display = "block";
+                    document.getElementById("login-password").value = "";
+                    document.getElementById("login-password").focus();
+                } finally {
+                    btn.disabled = false; btn.innerText = "دخول";
+                }
+            });
+
+            // Resume a stored session so the device stays logged in.
+            const resumed = await refreshSession();
+            if (resumed) startApp();
+            else showLogin();
         });
+
+        function logout() {
+            clearSession();
+            location.reload();
+        }
 
         // Test Connection & Load initial data
         async function initConnection() {
@@ -1466,7 +1585,7 @@
             const response = await fetch(`${REST_DEVICES}?order=created_at.desc`, {
                 headers: {
                     "apikey": ANON_KEY,
-                    "Authorization": `Bearer ${ANON_KEY}`
+                    "Authorization": `Bearer ${SESSION_TOKEN}`
                 }
             });
             if (!response.ok) throw new Error("Failed to load devices");
@@ -1482,7 +1601,7 @@
             const response = await fetch(`${REST_WALLPAPERS}?order=created_at.desc`, {
                 headers: {
                     "apikey": ANON_KEY,
-                    "Authorization": `Bearer ${ANON_KEY}`
+                    "Authorization": `Bearer ${SESSION_TOKEN}`
                 }
             });
             if (!response.ok) throw new Error("Failed to load wallpapers");
@@ -1903,7 +2022,7 @@
             const response = await fetch(uploadUrl, {
                 method: "POST",
                 headers: {
-                    "Authorization": `Bearer ${ANON_KEY}`,
+                    "Authorization": `Bearer ${SESSION_TOKEN}`,
                     "apikey": ANON_KEY,
                     "Content-Type": file.type || "image/jpeg",
                     "x-upsert": "true"
@@ -1926,7 +2045,7 @@
             const response = await fetch(`${REST_WALLPAPERS}?on_conflict=url`, {
                 method: "POST",
                 headers: {
-                    "Authorization": `Bearer ${ANON_KEY}`,
+                    "Authorization": `Bearer ${SESSION_TOKEN}`,
                     "apikey": ANON_KEY,
                     "Content-Type": "application/json",
                     "Prefer": "resolution=merge-duplicates,return=representation"
@@ -1943,7 +2062,7 @@
         async function loadLatestVersion() {
             try {
                 const response = await fetch(`${REST_APP_VERSIONS}?select=version_code,version_name&order=version_code.desc&limit=1`, {
-                    headers: { "apikey": ANON_KEY, "Authorization": `Bearer ${ANON_KEY}` }
+                    headers: { "apikey": ANON_KEY, "Authorization": `Bearer ${SESSION_TOKEN}` }
                 });
                 if (!response.ok) return;
                 const rows = await response.json();
@@ -1980,7 +2099,7 @@
                 const uploadRes = await fetch(uploadUrl, {
                     method: "POST",
                     headers: {
-                        "Authorization": `Bearer ${ANON_KEY}`,
+                        "Authorization": `Bearer ${SESSION_TOKEN}`,
                         "apikey": ANON_KEY,
                         "Content-Type": "application/vnd.android.package-archive",
                         "x-upsert": "true"
@@ -1995,7 +2114,7 @@
                 const insertRes = await fetch(REST_APP_VERSIONS, {
                     method: "POST",
                     headers: {
-                        "Authorization": `Bearer ${ANON_KEY}`,
+                        "Authorization": `Bearer ${SESSION_TOKEN}`,
                         "apikey": ANON_KEY,
                         "Content-Type": "application/json",
                         "Prefer": "return=representation"
@@ -2164,7 +2283,7 @@
                 const dbResponse = await fetch(`${REST_WALLPAPERS}?${filter}`, {
                     method: "DELETE",
                     headers: {
-                        "Authorization": `Bearer ${ANON_KEY}`,
+                        "Authorization": `Bearer ${SESSION_TOKEN}`,
                         "apikey": ANON_KEY,
                         "Prefer": "return=representation"
                     }
@@ -2189,7 +2308,7 @@
                 const storageResponse = await fetch(`${STORAGE_API}/${encodeURIComponent(filename)}`, {
                     method: "DELETE",
                     headers: {
-                        "Authorization": `Bearer ${ANON_KEY}`,
+                        "Authorization": `Bearer ${SESSION_TOKEN}`,
                         "apikey": ANON_KEY
                     }
                 });
