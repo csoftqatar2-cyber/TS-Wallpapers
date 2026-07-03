@@ -4,6 +4,15 @@
 TS Wallpapers.apk
 *.apk
 *.jks
+*.keystore
+*.pem
+*.p12
+*.p8
+.mcp.json
+.env
+.env.*
+local.properties
+**/local.properties
 Wallpapers/
 source/
 src/
