@@ -1,5 +1,9 @@
 <resources>
+    <!-- On large screens (tablets / iPad-class devices the app ships on) don't stretch the
+         settings rows across the full width. Constrain the column to a comfortable width;
+         the container's layout_gravity="center_horizontal" centres it, so it looks like a
+         proper iPad settings page instead of edge-to-edge stretched controls. -->
     <style name="width_match_parent_max_200">
-        <item name="android:layout_width">600dp</item>
+        <item name="android:layout_width">720dp</item>
     </style>
 </resources>

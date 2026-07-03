@@ -58,4 +58,25 @@
         <item name="android:layout_width">match_parent</item>
     </style>
 
+    <!-- tablet settings redesign: card wrapper for each settings section -->
+    <style name="SettingsCard" parent="Widget.MaterialComponents.CardView">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:layout_marginBottom">16dp</item>
+        <item name="cardCornerRadius">18dp</item>
+        <item name="cardElevation">3dp</item>
+        <item name="contentPadding">18dp</item>
+        <item name="cardBackgroundColor">@color/colorCard</item>
+    </style>
+
+    <!-- tablet settings redesign: section title inside a card -->
+    <style name="SectionHeader">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:textAppearance">@style/TextAppearance.AppCompat.Large</item>
+        <item name="android:textColor">@color/colorAccent</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:paddingBottom">8dp</item>
+    </style>
+
 </resources>

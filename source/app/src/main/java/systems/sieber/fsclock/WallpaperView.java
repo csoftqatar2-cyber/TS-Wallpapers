@@ -11,7 +11,6 @@ import android.util.AttributeSet;
 import java.io.File;
 import android.view.Surface;
 import android.view.TextureView;
-import android.view.animation.AccelerateInterpolator;
 import android.view.animation.DecelerateInterpolator;
 import android.widget.FrameLayout;
 import android.widget.ImageView;
@@ -31,7 +30,7 @@ import com.bumptech.glide.Glide;
  */
 public class WallpaperView extends FrameLayout {
 
-    private static final int DURATION = 480;
+    private static final int DURATION = 650;
 
     private class Slot {
         FrameLayout root;
@@ -134,27 +133,26 @@ public class WallpaperView extends FrameLayout {
         final Slot outgoing = mFront;
         populate(incoming, item);
 
-        int w = getWidth();
+        // Smooth crossfade: the incoming wallpaper fades in on top of the
+        // outgoing one, so both overlap and blend during the transition.
+        // No black background on the incoming slot while fading, otherwise it
+        // would darken the outgoing wallpaper showing through underneath.
+        incoming.root.setBackgroundColor(Color.TRANSPARENT);
+        incoming.root.setTranslationX(0);
+        incoming.root.setRotationY(0);
         incoming.root.setVisibility(VISIBLE);
-        incoming.root.setTranslationX(direction * w);
-        incoming.root.setRotationY(-direction * 18);
-        incoming.root.setAlpha(0.35f);
+        incoming.root.setAlpha(0f);
+        bringChildToFront(incoming.root);
         incoming.root.animate()
-                .translationX(0).rotationY(0).alpha(1f)
+                .alpha(1f)
                 .setDuration(DURATION)
                 .setInterpolator(new DecelerateInterpolator())
-                .start();
-
-        outgoing.root.animate()
-                .translationX(-direction * w * 0.6f).rotationY(direction * 18).alpha(0.2f)
-                .setDuration(DURATION)
-                .setInterpolator(new AccelerateInterpolator())
                 .withEndAction(new Runnable() {
                     @Override
                     public void run() {
+                        // restore the opaque background once fully shown
+                        incoming.root.setBackgroundColor(Color.BLACK);
                         outgoing.root.setVisibility(GONE);
-                        outgoing.root.setTranslationX(0);
-                        outgoing.root.setRotationY(0);
                         outgoing.root.setAlpha(1f);
                         releaseVideo(outgoing);
                         outgoing.image.setImageDrawable(null);

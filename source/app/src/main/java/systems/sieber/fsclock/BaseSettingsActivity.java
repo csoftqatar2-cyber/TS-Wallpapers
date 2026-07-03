@@ -162,6 +162,7 @@ public class BaseSettingsActivity extends AppCompatActivity {
 
     // wallpaper slideshow + clock layout
     CheckBox mCheckBoxWallpaperEnabled;
+    CheckBox mCheckBoxWallpaperAutoSwitch;
     EditText mEditTextWallpaperUrl;
     Button mButtonSyncWallpapers;
     TextView mTextViewWallpaperStatus;
@@ -174,6 +175,7 @@ public class BaseSettingsActivity extends AppCompatActivity {
     WallpaperRepo mWallpaperRepo;
     UploadServer mUploadServer;
     TextView mTextViewSettingsDeviceId;
+    TextView mTextViewSettingsMacAddress;
     TextView mPairStatus;
     static final String[] CLOCK_POSITION_VALUES = {"center", "bottom_left", "bottom_right", "top_left", "top_right"};
     static final String[] CLOCK_SIZE_VALUES = {"small", "medium", "large", "full"};
@@ -288,6 +290,7 @@ public class BaseSettingsActivity extends AppCompatActivity {
         mCheckBoxShowWeather = findViewById(R.id.checkBoxShowWeather);
         mButtonNewEvent = findViewById(R.id.buttonNewEvent);
         mCheckBoxWallpaperEnabled = findViewById(R.id.checkBoxWallpaperEnabled);
+        mCheckBoxWallpaperAutoSwitch = findViewById(R.id.checkBoxWallpaperAutoSwitch);
         mEditTextWallpaperUrl = findViewById(R.id.editTextWallpaperUrl);
         mButtonSyncWallpapers = findViewById(R.id.buttonSyncWallpapers);
         mTextViewWallpaperStatus = findViewById(R.id.textViewWallpaperStatus);
@@ -299,6 +302,8 @@ public class BaseSettingsActivity extends AppCompatActivity {
         mTextViewLocalFolder = findViewById(R.id.textViewLocalFolder);
         mWallpaperRepo = new WallpaperRepo(this);
         mTextViewSettingsDeviceId = findViewById(R.id.textViewSettingsDeviceId);
+        mTextViewSettingsMacAddress = findViewById(R.id.textViewSettingsMacAddress);
+        updateDeviceInfoViews();
 
         // init settings
         mSharedPref = getSharedPreferences(SHARED_PREF_DOMAIN, Context.MODE_PRIVATE);
@@ -346,6 +351,7 @@ public class BaseSettingsActivity extends AppCompatActivity {
 
         // wallpaper + clock layout settings
         mCheckBoxWallpaperEnabled.setChecked(mSharedPref.getBoolean(WallpaperRepo.PREF_ENABLED, true));
+        mCheckBoxWallpaperAutoSwitch.setChecked(mSharedPref.getBoolean("wallpaper-auto-switch", false));
         mEditTextWallpaperUrl.setText(mSharedPref.getString(WallpaperRepo.PREF_URL, ""));
         mCheckBoxShowClockOverlay.setChecked(mSharedPref.getBoolean("clock-overlay", true));
         ArrayAdapter<CharSequence> posAdapter = ArrayAdapter.createFromResource(this, R.array.clock_position_labels, android.R.layout.simple_spinner_item);
@@ -528,6 +534,7 @@ public class BaseSettingsActivity extends AppCompatActivity {
         mCheckBoxShowWeather.setEnabled(state);
         mButtonNewEvent.setEnabled(state);
         mCheckBoxWallpaperEnabled.setEnabled(state);
+        mCheckBoxWallpaperAutoSwitch.setEnabled(state);
         mEditTextWallpaperUrl.setEnabled(state);
         mButtonSyncWallpapers.setEnabled(state);
         mCheckBoxShowClockOverlay.setEnabled(state);
@@ -580,6 +587,69 @@ public class BaseSettingsActivity extends AppCompatActivity {
                 });
             }
         });
+    }
+
+    /** Fill the Device ID and MAC address text views shown in the wallpapers section. */
+    @SuppressLint("SetTextI18n")
+    private void updateDeviceInfoViews() {
+        if(mTextViewSettingsDeviceId != null && mWallpaperRepo != null) {
+            String status = mWallpaperRepo.isActive() ? "نشط (Activated)" : "غير نشط (Pending Activation)";
+            mTextViewSettingsDeviceId.setText("كود الجهاز (Device ID): " + mWallpaperRepo.getDeviceId() + "\nالحالة (Status): " + status);
+        }
+        if(mTextViewSettingsMacAddress != null) {
+            String mac = WallpaperRepo.getMacAddress();
+            if(mac == null || mac.isEmpty() || mac.equals("02:00:00:00:00:00")) {
+                mTextViewSettingsMacAddress.setText("MAC: " + getString(R.string.mac_unavailable));
+            } else {
+                mTextViewSettingsMacAddress.setText("عنوان الجهاز (MAC): " + mac);
+            }
+        }
+    }
+
+    /** Show a dialog with a QR code that encodes the device MAC address. */
+    public void onClickShowMacQr(View v) {
+        String mac = WallpaperRepo.getMacAddress();
+        if(mac == null || mac.isEmpty() || mac.equals("02:00:00:00:00:00")) {
+            Toast.makeText(this, getString(R.string.mac_unavailable), Toast.LENGTH_LONG).show();
+            return;
+        }
+
+        float d = getResources().getDisplayMetrics().density;
+        int pad = (int) (20 * d);
+        int qrPx = (int) (240 * d);
+
+        LinearLayout ll = new LinearLayout(this);
+        ll.setOrientation(LinearLayout.VERTICAL);
+        ll.setPadding(pad, pad, pad, pad);
+        ll.setGravity(android.view.Gravity.CENTER_HORIZONTAL);
+
+        TextView hint = new TextView(this);
+        hint.setText(getString(R.string.mac_qr_hint));
+        hint.setGravity(android.view.Gravity.CENTER);
+
+        ImageView qr = new ImageView(this);
+        Bitmap bmp = QrCode.generate(mac, 600);
+        qr.setImageBitmap(bmp);
+        LinearLayout.LayoutParams qlp = new LinearLayout.LayoutParams(qrPx, qrPx);
+        qlp.topMargin = pad;
+        qlp.bottomMargin = pad;
+        qr.setLayoutParams(qlp);
+
+        TextView macText = new TextView(this);
+        macText.setText(mac);
+        macText.setGravity(android.view.Gravity.CENTER);
+        macText.setTextIsSelectable(true);
+        macText.setTextSize(18);
+
+        ll.addView(hint);
+        ll.addView(qr);
+        ll.addView(macText);
+
+        new AlertDialog.Builder(this)
+                .setTitle(R.string.mac_qr_title)
+                .setView(ll)
+                .setPositiveButton(R.string.ok, null)
+                .show();
     }
 
     private void initFontSpinner() {
@@ -1038,6 +1108,7 @@ public class BaseSettingsActivity extends AppCompatActivity {
         editor.putBoolean("show-alarms", mCheckBoxShowAlarms.isChecked());
         editor.putBoolean("show-weather", mCheckBoxShowWeather.isChecked());
         editor.putBoolean(WallpaperRepo.PREF_ENABLED, mCheckBoxWallpaperEnabled.isChecked());
+        editor.putBoolean("wallpaper-auto-switch", mCheckBoxWallpaperAutoSwitch.isChecked());
         editor.putString(WallpaperRepo.PREF_URL, mEditTextWallpaperUrl.getText().toString().trim());
         editor.putBoolean("clock-overlay", mCheckBoxShowClockOverlay.isChecked());
         editor.putString("clock-position", CLOCK_POSITION_VALUES[clampSelection(mSpinnerClockPosition, CLOCK_POSITION_VALUES.length)]);

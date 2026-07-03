@@ -14,6 +14,8 @@
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <!-- Canvas Confetti -->
     <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    <!-- jsQR (QR Code reader) -->
+    <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
 
     <style>
         :root {
@@ -232,6 +234,12 @@
             border: 1px solid rgba(16, 185, 129, 0.2);
         }
 
+        .stat-icon.cyan {
+            background: rgba(6, 182, 212, 0.1);
+            color: #06b6d4;
+            border: 1px solid rgba(6, 182, 212, 0.2);
+        }
+
         /* Grid Workspace Layout */
         .workspace-grid {
             display: grid;
@@ -391,6 +399,40 @@
             height: 100%;
             opacity: 0;
             cursor: pointer;
+        }
+
+        /* QR Scan Result Box */
+        .qr-result {
+            margin-top: 12px;
+            padding: 12px 15px;
+            border-radius: 12px;
+            font-size: 0.85rem;
+            border: 1px solid var(--panel-border);
+            background: rgba(0, 0, 0, 0.2);
+            line-height: 1.6;
+        }
+
+        .qr-result.success {
+            border-color: rgba(16, 185, 129, 0.4);
+            background: rgba(16, 185, 129, 0.08);
+        }
+
+        .qr-result.warn {
+            border-color: rgba(168, 85, 247, 0.4);
+            background: rgba(168, 85, 247, 0.08);
+        }
+
+        .qr-result.error {
+            border-color: rgba(239, 68, 68, 0.4);
+            background: rgba(239, 68, 68, 0.08);
+            color: #fca5a5;
+        }
+
+        .qr-result .qr-mac {
+            font-family: 'Outfit', monospace;
+            font-weight: 700;
+            color: var(--text-main);
+            word-break: break-all;
         }
 
         /* Upload Previews */
@@ -568,6 +610,41 @@
             padding: 8px 35px 8px 12px;
             border-radius: 8px;
             font-size: 0.85rem;
+        }
+
+        /* Wallpapers Filter Chips */
+        .wp-filter-bar {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+
+        .wp-filter-btn {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid var(--panel-border);
+            color: var(--text-muted);
+            padding: 8px 16px;
+            border-radius: 50px;
+            cursor: pointer;
+            font-family: var(--font-family);
+            font-size: 0.85rem;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 7px;
+        }
+
+        .wp-filter-btn:hover {
+            border-color: var(--panel-border-hover);
+            color: var(--text-main);
+        }
+
+        .wp-filter-btn.active {
+            background: var(--primary);
+            border-color: var(--primary);
+            color: #fff;
+            box-shadow: 0 4px 12px var(--primary-glow);
         }
 
         /* Wallpapers Grid View */
@@ -778,6 +855,285 @@
         .pulse {
             animation: pulse 2s infinite;
         }
+
+        /* Clickable stat card hint */
+        .stat-card.clickable {
+            cursor: pointer;
+        }
+
+        .stat-card.clickable:hover {
+            border-color: var(--accent);
+            box-shadow: 0 10px 25px -8px rgba(168, 85, 247, 0.4);
+        }
+
+        .stat-card .stat-hint {
+            font-size: 0.72rem;
+            color: var(--accent);
+            margin-top: 6px;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .stat-card .stat-hint.cyan {
+            color: #06b6d4;
+        }
+
+        /* ===== Private Wallpapers Modal ===== */
+        .modal-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(4, 7, 15, 0.75);
+            backdrop-filter: blur(6px);
+            z-index: 1000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .modal-box {
+            background: #0f1421;
+            border: 1px solid var(--panel-border);
+            border-radius: 24px;
+            width: 100%;
+            max-width: 1100px;
+            max-height: 88vh;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 30px 80px rgba(0, 0, 0, 0.6);
+            overflow: hidden;
+        }
+
+        .modal-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 22px 26px;
+            border-bottom: 1px solid var(--panel-border);
+        }
+
+        .modal-header h2 {
+            font-size: 1.25rem;
+            font-weight: 800;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .modal-header h2 i {
+            color: var(--accent);
+        }
+
+        .modal-close {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--panel-border);
+            color: var(--text-muted);
+            width: 40px;
+            height: 40px;
+            border-radius: 12px;
+            cursor: pointer;
+            font-size: 1.1rem;
+        }
+
+        .modal-close:hover {
+            background: var(--danger);
+            color: #fff;
+            border-color: var(--danger);
+        }
+
+        .modal-toolbar {
+            padding: 16px 26px;
+            border-bottom: 1px solid var(--panel-border);
+        }
+
+        .modal-toolbar-row {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+        }
+
+        .modal-toolbar .modal-jump {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .modal-toolbar .modal-jump select {
+            padding: 12px 42px 12px 15px;
+        }
+
+        .modal-toolbar .modal-search-box {
+            flex: 1;
+            width: auto;
+            min-width: 0;
+        }
+
+        @media (max-width: 640px) {
+            .modal-toolbar-row { flex-direction: column; align-items: stretch; }
+        }
+
+        .modal-body {
+            padding: 20px 26px 26px;
+            overflow-y: auto;
+        }
+
+        /* Device group inside modal */
+        .device-group {
+            background: rgba(0, 0, 0, 0.2);
+            border: 1px solid var(--panel-border);
+            border-radius: 18px;
+            margin-bottom: 20px;
+            overflow: hidden;
+        }
+
+        .device-group-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            padding: 16px 18px;
+            background: rgba(168, 85, 247, 0.06);
+            border-bottom: 1px solid var(--panel-border);
+            flex-wrap: wrap;
+        }
+
+        .device-group-info {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            min-width: 0;
+        }
+
+        .device-group-avatar {
+            width: 44px;
+            height: 44px;
+            border-radius: 12px;
+            background: rgba(168, 85, 247, 0.12);
+            border: 1px solid rgba(168, 85, 247, 0.3);
+            color: var(--accent);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.15rem;
+            flex-shrink: 0;
+        }
+
+        .device-group-meta { min-width: 0; }
+
+        .device-group-serial {
+            font-size: 1rem;
+            font-weight: 800;
+            color: #fff;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .device-group-count {
+            background: rgba(168, 85, 247, 0.15);
+            color: #c084fc;
+            font-size: 0.7rem;
+            font-weight: 700;
+            padding: 2px 9px;
+            border-radius: 50px;
+        }
+
+        .device-group-mac {
+            font-size: 0.78rem;
+            color: var(--text-muted);
+            font-family: 'Outfit', monospace;
+            word-break: break-all;
+        }
+
+        .device-group-add {
+            background: linear-gradient(135deg, var(--primary), var(--accent));
+            color: #fff;
+            border: none;
+            padding: 9px 16px;
+            border-radius: 10px;
+            font-family: var(--font-family);
+            font-size: 0.82rem;
+            font-weight: 700;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 7px;
+            flex-shrink: 0;
+        }
+
+        .device-group-add:hover {
+            opacity: 0.9;
+            box-shadow: 0 6px 16px var(--primary-glow);
+        }
+
+        .device-group-body {
+            padding: 16px 18px;
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+            gap: 14px;
+        }
+
+        .mini-wp {
+            background: #0b0f19;
+            border: 1px solid var(--panel-border);
+            border-radius: 12px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .mini-wp-media {
+            width: 100%;
+            height: 110px;
+            object-fit: cover;
+            background: #111827;
+            display: block;
+        }
+
+        .mini-wp-video {
+            width: 100%;
+            height: 110px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            background: #1e293b;
+            color: var(--text-muted);
+            font-size: 0.72rem;
+            gap: 6px;
+        }
+
+        .mini-wp-name {
+            font-size: 0.7rem;
+            padding: 7px 9px;
+            color: var(--text-muted);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .mini-wp-actions {
+            display: flex;
+            border-top: 1px solid var(--panel-border);
+        }
+
+        .mini-wp-btn {
+            flex: 1;
+            padding: 7px;
+            border: none;
+            background: transparent;
+            color: var(--text-muted);
+            cursor: pointer;
+            font-size: 0.75rem;
+            font-family: var(--font-family);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 5px;
+        }
+
+        .mini-wp-btn:hover { background: rgba(255, 255, 255, 0.05); color: #fff; }
+        .mini-wp-btn.del:hover { background: var(--danger); color: #fff; }
+        .mini-wp-btn + .mini-wp-btn { border-right: 1px solid var(--panel-border); }
     </style>
 </head>
 <body>
@@ -812,10 +1168,22 @@
                     <i class="fa-regular fa-image"></i>
                 </div>
             </div>
-            <div class="stat-card">
+            <div class="stat-card clickable" onclick="showGlobalWallpapers()" title="اضغط لعرض الخلفيات العامة فقط">
+                <div class="stat-info">
+                    <h3>الخلفيات العامة</h3>
+                    <p id="stat-global-wp">-</p>
+                    <span class="stat-hint cyan"><i class="fa-solid fa-arrow-pointer"></i> اضغط لعرض الخلفيات العامة فقط</span>
+                </div>
+                <div class="stat-icon cyan">
+                    <i class="fa-solid fa-globe"></i>
+                </div>
+            </div>
+
+            <div class="stat-card clickable" onclick="openPrivateModal()" title="اضغط لعرض الصور المخصصة حسب الجهاز">
                 <div class="stat-info">
                     <h3>الخلفيات المخصصة (الخاصة)</h3>
                     <p id="stat-private-wp">-</p>
+                    <span class="stat-hint"><i class="fa-solid fa-arrow-pointer"></i> اضغط لإدارة الصور حسب الجهاز</span>
                 </div>
                 <div class="stat-icon purple">
                     <i class="fa-solid fa-user-shield"></i>
@@ -869,8 +1237,23 @@
                             <label for="custom-hw-id">أو أدخل معرف العتاد (Hardware ID) يدوياً:</label>
                             <div class="input-wrapper">
                                 <i class="fa-solid fa-fingerprint"></i>
-                                <input type="text" id="custom-hw-id" class="form-control" placeholder="مثال: MAC-304AC427F290">
+                                <input type="text" id="custom-hw-id" class="form-control" placeholder="مثال: MAC-304AC427F290" oninput="validateForm()">
                             </div>
+                        </div>
+
+                        <!-- QR Code Scanner: extract MAC / Hardware ID from an uploaded QR image -->
+                        <div style="margin-top: 14px; padding-top: 14px; border-top: 1px dashed var(--panel-border);">
+                            <label>
+                                <i class="fa-solid fa-qrcode" style="color: var(--accent);"></i>
+                                أو ارفع صورة QR Code لاستخراج المعرّف تلقائياً:
+                            </label>
+                            <div class="dropzone" id="qr-drop-zone" style="padding: 22px 15px; margin-bottom: 0;">
+                                <i class="fa-solid fa-qrcode"></i>
+                                <h4 id="qr-dz-title">اسحب صورة QR أو انقر للرفع</h4>
+                                <p>سيتم قراءة الكود واستخراج معرّف العتاد (MAC)</p>
+                                <input type="file" id="qr-file-input" accept="image/*" onchange="handleQrUpload(event)">
+                            </div>
+                            <div id="qr-result" class="qr-result" style="display: none;"></div>
                         </div>
                     </div>
 
@@ -935,6 +1318,19 @@
                     </div>
                 </div>
 
+                <!-- Filter chips: All / Global only / Private only -->
+                <div class="wp-filter-bar">
+                    <button type="button" class="wp-filter-btn active" id="wp-filter-all" onclick="setWallpaperFilter('all')">
+                        <i class="fa-solid fa-layer-group"></i> الكل
+                    </button>
+                    <button type="button" class="wp-filter-btn" id="wp-filter-global" onclick="setWallpaperFilter('global')">
+                        <i class="fa-solid fa-globe"></i> العامة فقط
+                    </button>
+                    <button type="button" class="wp-filter-btn" id="wp-filter-private" onclick="setWallpaperFilter('private')">
+                        <i class="fa-solid fa-user-shield"></i> الخاصة فقط
+                    </button>
+                </div>
+
                 <!-- Grid list of wallpapers -->
                 <div class="wallpapers-grid" id="wallpapers-grid">
                     <!-- Wallpaper cards will be injected here -->
@@ -981,6 +1377,35 @@
         </div>
     </div>
 
+    <!-- Private Wallpapers (per-device) Modal -->
+    <div id="private-modal" class="modal-overlay" style="display: none;" onclick="if(event.target === this) closePrivateModal()">
+        <div class="modal-box">
+            <div class="modal-header">
+                <h2><i class="fa-solid fa-user-shield"></i> الصور المخصصة حسب الجهاز</h2>
+                <button class="modal-close" onclick="closePrivateModal()" title="إغلاق">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+            <div class="modal-toolbar">
+                <div class="modal-toolbar-row">
+                    <div class="input-wrapper modal-jump">
+                        <i class="fa-solid fa-microchip"></i>
+                        <select id="private-jump" class="form-control" onchange="goToDevice(this.value)">
+                            <option value="">-- انتقل سريعاً إلى جهاز (الكود | الماك) --</option>
+                        </select>
+                    </div>
+                    <div class="search-box modal-search-box">
+                        <i class="fa-solid fa-magnifying-glass"></i>
+                        <input type="text" id="private-search" class="form-control" placeholder="ابحث بكود الجهاز أو الماك أو اسم الصورة..." oninput="renderPrivateModal()">
+                    </div>
+                </div>
+            </div>
+            <div class="modal-body" id="private-modal-body">
+                <!-- Device groups injected here -->
+            </div>
+        </div>
+    </div>
+
     <script>
         // Supabase Settings (Linked directly to your project)
         const PROJECT_REF = "ihgmqwzdpugdzddobhbc";
@@ -1001,6 +1426,7 @@
         let selectedFiles = [];
         let targetType = 'global'; // global or private
         let inputMode = 'files'; // files or folder
+        let activeFilter = 'all'; // all | global | private (main grid filter)
 
         // Initialize connection
         document.addEventListener("DOMContentLoaded", () => {
@@ -1066,8 +1492,11 @@
             document.getElementById("stat-total-wp").innerText = wallpapersList.length;
             const privateCount = wallpapersList.filter(w => !w.is_global).length;
             document.getElementById("stat-private-wp").innerText = privateCount;
+            const globalCount = wallpapersList.filter(w => w.is_global).length;
+            document.getElementById("stat-global-wp").innerText = globalCount;
 
-            renderWallpapersGrid(wallpapersList);
+            // Respect the currently active filter + search query
+            filterWallpapers();
         }
 
         // Render devices into selection dropdown
@@ -1144,6 +1573,120 @@
                 customInput.value = selectEl.value;
             }
             validateForm();
+        }
+
+        // ============ QR Code -> Hardware ID (MAC) ============
+
+        // Read a File as a data URL
+        function readFileAsDataURL(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(reader.result);
+                reader.onerror = reject;
+                reader.readAsDataURL(file);
+            });
+        }
+
+        // Load an image element from a src
+        function loadImage(src) {
+            return new Promise((resolve, reject) => {
+                const img = new Image();
+                img.onload = () => resolve(img);
+                img.onerror = reject;
+                img.src = src;
+            });
+        }
+
+        // Extract a normalized 12-hex MAC (uppercase, no separators) from arbitrary text, or null
+        function extractMac(text) {
+            if (!text) return null;
+            // Prefer a MAC with separators (aa:bb:cc:dd:ee:ff or aa-bb-...)
+            let m = text.match(/([0-9A-Fa-f]{2}[:\-]){5}[0-9A-Fa-f]{2}/);
+            if (m) return m[0].replace(/[:\-]/g, "").toUpperCase();
+            // Fallback: a bare run of exactly 12 hex chars
+            m = text.match(/\b[0-9A-Fa-f]{12}\b/);
+            if (m) return m[0].toUpperCase();
+            return null;
+        }
+
+        // Hex-only, uppercase view of any id (for comparing against registered devices)
+        function hexOnly(str) {
+            return (str || "").replace(/[^0-9A-Fa-f]/g, "").toUpperCase();
+        }
+
+        // Handle an uploaded QR image: decode it and fill the hardware id field
+        async function handleQrUpload(e) {
+            const file = e.target.files && e.target.files[0];
+            const resultEl = document.getElementById("qr-result");
+            if (!file) return;
+
+            resultEl.style.display = "block";
+            resultEl.className = "qr-result";
+            resultEl.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> جاري قراءة الكود...';
+
+            try {
+                if (typeof jsQR !== "function") throw new Error("مكتبة قراءة QR لم تُحمّل. تحقق من اتصال الإنترنت.");
+
+                const dataUrl = await readFileAsDataURL(file);
+                const img = await loadImage(dataUrl);
+
+                const canvas = document.createElement("canvas");
+                canvas.width = img.naturalWidth;
+                canvas.height = img.naturalHeight;
+                const ctx = canvas.getContext("2d");
+                ctx.drawImage(img, 0, 0);
+                const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+
+                const code = jsQR(imageData.data, imageData.width, imageData.height, { inversionAttempts: "attemptBoth" });
+
+                if (!code || !code.data) {
+                    resultEl.className = "qr-result error";
+                    resultEl.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i> تعذّر قراءة أي QR Code في هذه الصورة. جرّب صورة أوضح أو أقرب.';
+                    return;
+                }
+
+                const raw = code.data.trim();
+                const mac = extractMac(raw);
+
+                // Try to match a registered device by hex MAC
+                let matchedDevice = null;
+                if (mac) {
+                    matchedDevice = devicesList.find(d => hexOnly(d.hardware_id).includes(mac));
+                }
+
+                const hwInput = document.getElementById("custom-hw-id");
+                const selectEl = document.getElementById("device-select");
+
+                if (matchedDevice) {
+                    // Use the exact stored hardware_id and sync the dropdown
+                    hwInput.value = matchedDevice.hardware_id;
+                    selectEl.value = matchedDevice.hardware_id;
+                    resultEl.className = "qr-result success";
+                    resultEl.innerHTML =
+                        '<i class="fa-solid fa-circle-check"></i> تم التعرّف على جهاز مسجّل!' +
+                        '<br>الكود: <b>' + (matchedDevice.serial_number || 'بدون كود') + '</b>' +
+                        '<br>المعرّف: <span class="qr-mac">' + matchedDevice.hardware_id + '</span>';
+                } else {
+                    // Not registered yet: use extracted MAC if found, else the raw QR content
+                    const finalId = mac || raw;
+                    hwInput.value = finalId;
+                    selectEl.value = "";
+                    resultEl.className = "qr-result warn";
+                    resultEl.innerHTML =
+                        '<i class="fa-solid fa-circle-info"></i> تم استخراج المعرّف من الكود (جهاز غير مسجّل مسبقاً):' +
+                        '<br><span class="qr-mac">' + finalId + '</span>' +
+                        '<br><small style="opacity:.75;">تأكّد من صحته أو عدّله يدوياً بالأعلى قبل الرفع.</small>';
+                }
+
+                validateForm();
+            } catch (err) {
+                console.error("QR read error:", err);
+                resultEl.className = "qr-result error";
+                resultEl.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i> ' + (err.message || 'حدث خطأ أثناء قراءة الصورة.');
+            } finally {
+                // Allow re-uploading the same file again
+                e.target.value = "";
+            }
         }
 
         // Handle File Select
@@ -1380,13 +1923,13 @@
                 hardware_id: hardwareId
             };
 
-            const response = await fetch(REST_WALLPAPERS, {
+            const response = await fetch(`${REST_WALLPAPERS}?on_conflict=url`, {
                 method: "POST",
                 headers: {
                     "Authorization": `Bearer ${ANON_KEY}`,
                     "apikey": ANON_KEY,
                     "Content-Type": "application/json",
-                    "Prefer": "return=representation"
+                    "Prefer": "resolution=merge-duplicates,return=representation"
                 },
                 body: JSON.stringify(body)
             });
@@ -1577,7 +2120,7 @@
                 const deleteBtn = document.createElement("button");
                 deleteBtn.className = "wp-btn wp-btn-delete";
                 deleteBtn.innerHTML = '<i class="fa-solid fa-trash-can"></i> حذف';
-                deleteBtn.onclick = () => confirmDelete(wp.id, filename);
+                deleteBtn.onclick = () => confirmDelete(wp.id, filename, wp.url);
 
                 actions.appendChild(viewBtn);
                 actions.appendChild(deleteBtn);
@@ -1589,10 +2132,10 @@
         }
 
         // Delete confirmation
-        function confirmDelete(id, filename) {
+        function confirmDelete(id, filename, url) {
             Swal.fire({
                 title: 'هل أنت متأكد؟',
-                text: `سيتم حذف ملف الخلفية (${filename}) نهائياً من التخزين وقاعدة البيانات!`,
+                html: `سيتم حذف ملف الخلفية (<b>${filename}</b>) نهائياً من التخزين وقاعدة البيانات،<br>وسيختفي من عند <b>جميع الأجهزة</b>.`,
                 icon: 'warning',
                 showCancelButton: true,
                 confirmButtonColor: '#ef4444',
@@ -1603,24 +2146,46 @@
                 color: '#ffffff'
             }).then((result) => {
                 if (result.isConfirmed) {
-                    performDelete(id, filename);
+                    performDelete(id, filename, url);
                 }
             });
         }
 
         // Perform delete operations
-        async function performDelete(id, filename) {
+        async function performDelete(id, filename, url) {
+            // Show a blocking loader while we delete from DB + Storage
+            Swal.fire({ title: 'جاري الحذف...', html: 'يتم إزالة الصورة من قاعدة البيانات والتخزين', allowOutsideClick: false, background: '#1f2937', color: '#ffffff', didOpen: () => Swal.showLoading() });
+
             try {
-                // 1. Delete from public.wallpapers DB
-                const dbResponse = await fetch(`${REST_WALLPAPERS}?id=eq.${id}`, {
+                // 1. Delete EVERY DB row that references this exact file, so it disappears
+                //    for everyone (a public copy + any per-device copies share the same url).
+                //    Fall back to deleting by id if we don't have the url for some reason.
+                const filter = url ? `url=eq.${encodeURIComponent(url)}` : `id=eq.${id}`;
+                const dbResponse = await fetch(`${REST_WALLPAPERS}?${filter}`, {
                     method: "DELETE",
                     headers: {
                         "Authorization": `Bearer ${ANON_KEY}`,
-                        "apikey": ANON_KEY
+                        "apikey": ANON_KEY,
+                        "Prefer": "return=representation"
                     }
                 });
 
-                // 2. Delete from Storage bucket
+                if (!dbResponse.ok) {
+                    const errText = await dbResponse.text();
+                    throw new Error("فشل الحذف من قاعدة البيانات (HTTP " + dbResponse.status + "): " + errText);
+                }
+
+                // Confirm rows were ACTUALLY removed — with RLS blocking, the request can
+                // return 200 while deleting nothing. That's the usual "still showing" cause.
+                const deletedRows = await dbResponse.json();
+                if (!Array.isArray(deletedRows) || deletedRows.length === 0) {
+                    throw new Error("لم يُحذف أي سجل من قاعدة البيانات. على الأرجح سياسات الصلاحيات (RLS) على جدول wallpapers تمنع الحذف بمفتاح anon. أضف سياسة DELETE للجدول في Supabase.");
+                }
+
+                // 2. Delete the actual file from the Storage bucket so it's gone for everyone.
+                //    A 404 here is fine (file already removed); other errors are non-fatal
+                //    because the DB rows — what the apps read — are already gone.
+                let storageWarning = "";
                 const storageResponse = await fetch(`${STORAGE_API}/${encodeURIComponent(filename)}`, {
                     method: "DELETE",
                     headers: {
@@ -1628,42 +2193,244 @@
                         "apikey": ANON_KEY
                     }
                 });
-
-                if (dbResponse.ok && storageResponse.ok) {
-                    Swal.fire({
-                        title: 'تم الحذف!',
-                        text: 'تمت إزالة الملف بنجاح وتحديث النظام.',
-                        icon: 'success',
-                        background: '#1f2937',
-                        color: '#ffffff'
-                    });
-                    loadWallpapers();
-                } else {
-                    throw new Error("Failed to complete delete process on storage or DB.");
+                if (!storageResponse.ok && storageResponse.status !== 404) {
+                    storageWarning = " (ملاحظة: تعذّر حذف الملف من التخزين، لكن تمت إزالته من قاعدة البيانات فلن يظهر للمستخدمين.)";
+                    console.warn("Storage delete failed:", storageResponse.status, await storageResponse.text());
                 }
+
+                await loadWallpapers();
+                // Refresh the per-device modal if it's currently open
+                if (document.getElementById("private-modal").style.display === "flex") {
+                    renderPrivateModal();
+                }
+
+                Swal.fire({
+                    title: 'تم الحذف!',
+                    html: `تمت إزالة الصورة نهائياً وستختفي من عند جميع الأجهزة.${storageWarning}`,
+                    icon: 'success',
+                    background: '#1f2937',
+                    color: '#ffffff'
+                });
             } catch (err) {
                 console.error("Delete error:", err);
                 Swal.fire({
                     icon: 'error',
                     title: 'خطأ أثناء الحذف',
-                    text: 'حدثت مشكلة أثناء إزالة الملف من الخادم.',
+                    text: err.message || 'حدثت مشكلة أثناء إزالة الملف من الخادم.',
                     confirmButtonText: 'حسناً'
                 });
             }
         }
 
-        // Filter Wallpapers in list
-        function filterWallpapers() {
-            const query = document.getElementById("search-input").value.toLowerCase().trim();
-            if (!query) {
-                renderWallpapersGrid(wallpapersList);
+        // ============ Private Wallpapers (per-device) Modal ============
+
+        // Open the modal and render the per-device private wallpapers
+        function openPrivateModal() {
+            document.getElementById("private-search").value = "";
+            document.getElementById("private-modal").style.display = "flex";
+            renderPrivateModal();
+        }
+
+        // Close the modal
+        function closePrivateModal() {
+            document.getElementById("private-modal").style.display = "none";
+        }
+
+        // Group private (non-global) wallpapers by device and render them
+        function renderPrivateModal() {
+            const body = document.getElementById("private-modal-body");
+            const query = (document.getElementById("private-search").value || "").toLowerCase().trim();
+
+            // Only private wallpapers that are actually assigned to a device
+            const privateList = wallpapersList.filter(w => !w.is_global && w.hardware_id);
+
+            // Group by hardware_id
+            const groups = {};
+            privateList.forEach(wp => {
+                const key = wp.hardware_id;
+                if (!groups[key]) groups[key] = [];
+                groups[key].push(wp);
+            });
+
+            // Build a searchable, sorted array of device groups
+            let deviceKeys = Object.keys(groups);
+            if (query) {
+                deviceKeys = deviceKeys.filter(hwId => {
+                    const device = devicesList.find(d => d.hardware_id === hwId);
+                    const serial = device ? (device.serial_number || '').toLowerCase() : '';
+                    const items = groups[hwId];
+                    const nameMatch = items.some(wp =>
+                        decodeURIComponent(wp.url.substring(wp.url.lastIndexOf('/') + 1)).toLowerCase().includes(query)
+                    );
+                    return hwId.toLowerCase().includes(query) || serial.includes(query) || nameMatch;
+                });
+            }
+
+            // Populate the quick-jump dropdown (serial | MAC) for the currently shown devices
+            const jumpEl = document.getElementById("private-jump");
+            jumpEl.innerHTML = '<option value="">-- انتقل سريعاً إلى جهاز (الكود | الماك) --</option>';
+            deviceKeys.forEach(hwId => {
+                const device = devicesList.find(d => d.hardware_id === hwId);
+                const serial = device ? (device.serial_number || 'بدون كود') : 'غير مسجّل';
+                const opt = document.createElement("option");
+                opt.value = hwId;
+                opt.innerText = `${serial} | ${hwId} (${groups[hwId].length} صورة)`;
+                jumpEl.appendChild(opt);
+            });
+
+            if (deviceKeys.length === 0) {
+                body.innerHTML = `
+                    <div class="empty-state">
+                        <i class="fa-solid fa-user-shield"></i>
+                        <p>${query ? 'لا توجد نتائج تطابق بحثك.' : 'لا توجد أي صور مخصصة لأي جهاز حتى الآن.'}</p>
+                    </div>
+                `;
                 return;
             }
 
+            body.innerHTML = "";
+
+            deviceKeys.forEach(hwId => {
+                const items = groups[hwId];
+                const device = devicesList.find(d => d.hardware_id === hwId);
+                const serial = device ? (device.serial_number || 'بدون كود') : 'جهاز غير مسجّل';
+
+                const group = document.createElement("div");
+                group.className = "device-group";
+                group.id = "dg-" + hwId.replace(/[^a-zA-Z0-9]/g, "_");
+
+                // Header (serial + mac + count + add button)
+                const header = document.createElement("div");
+                header.className = "device-group-header";
+                header.innerHTML = `
+                    <div class="device-group-info">
+                        <div class="device-group-avatar"><i class="fa-solid fa-mobile-screen-button"></i></div>
+                        <div class="device-group-meta">
+                            <div class="device-group-serial">
+                                <span>${serial}</span>
+                                <span class="device-group-count">${items.length} صورة</span>
+                            </div>
+                            <div class="device-group-mac">${hwId}</div>
+                        </div>
+                    </div>
+                `;
+
+                const addBtn = document.createElement("button");
+                addBtn.className = "device-group-add";
+                addBtn.innerHTML = '<i class="fa-solid fa-plus"></i> إضافة صور لهذا الجهاز';
+                addBtn.onclick = () => addWallpaperForDevice(hwId);
+                header.appendChild(addBtn);
+
+                group.appendChild(header);
+
+                // Body (image grid)
+                const grid = document.createElement("div");
+                grid.className = "device-group-body";
+
+                items.forEach(wp => {
+                    const filename = decodeURIComponent(wp.url.substring(wp.url.lastIndexOf('/') + 1));
+
+                    const cell = document.createElement("div");
+                    cell.className = "mini-wp";
+
+                    if (wp.type === 'video') {
+                        cell.innerHTML = `
+                            <div class="mini-wp-video">
+                                <i class="fa-regular fa-file-video" style="font-size:1.4rem;"></i>
+                                <span>ملف فيديو / عتاد</span>
+                            </div>
+                        `;
+                    } else {
+                        cell.innerHTML = `<img class="mini-wp-media" src="${wp.url}" loading="lazy" alt="">`;
+                    }
+
+                    const name = document.createElement("div");
+                    name.className = "mini-wp-name";
+                    name.innerText = filename;
+                    name.title = filename;
+                    cell.appendChild(name);
+
+                    const actions = document.createElement("div");
+                    actions.className = "mini-wp-actions";
+
+                    const viewBtn = document.createElement("button");
+                    viewBtn.className = "mini-wp-btn";
+                    viewBtn.innerHTML = '<i class="fa-solid fa-eye"></i> عرض';
+                    viewBtn.onclick = () => window.open(wp.url, '_blank');
+
+                    const delBtn = document.createElement("button");
+                    delBtn.className = "mini-wp-btn del";
+                    delBtn.innerHTML = '<i class="fa-solid fa-trash-can"></i> حذف';
+                    delBtn.onclick = () => confirmDelete(wp.id, filename, wp.url);
+
+                    actions.appendChild(viewBtn);
+                    actions.appendChild(delBtn);
+                    cell.appendChild(actions);
+
+                    grid.appendChild(cell);
+                });
+
+                group.appendChild(grid);
+                body.appendChild(group);
+            });
+        }
+
+        // Scroll to a device group inside the modal (from the quick-jump dropdown)
+        function goToDevice(hwId) {
+            if (!hwId) return;
+            const el = document.getElementById("dg-" + hwId.replace(/[^a-zA-Z0-9]/g, "_"));
+            if (!el) return;
+            el.scrollIntoView({ behavior: "smooth", block: "start" });
+            // Brief highlight so it's clear which device we landed on
+            el.style.boxShadow = "0 0 0 2px var(--accent)";
+            setTimeout(() => { el.style.boxShadow = ""; }, 1500);
+        }
+
+        // Close modal, jump to the upload form pre-configured for a specific device
+        function addWallpaperForDevice(hwId) {
+            closePrivateModal();
+            setTargetType('private');
+            const hwInput = document.getElementById("custom-hw-id");
+            const selectEl = document.getElementById("device-select");
+            hwInput.value = hwId;
+            // Sync dropdown if this device is registered
+            selectEl.value = devicesList.some(d => d.hardware_id === hwId) ? hwId : "";
+            validateForm();
+            document.getElementById("upload-form").scrollIntoView({ behavior: "smooth", block: "start" });
+            hwInput.focus();
+        }
+
+        // From the "الخلفيات العامة" stat card: filter to global only and scroll to the grid
+        function showGlobalWallpapers() {
+            document.getElementById("search-input").value = "";
+            setWallpaperFilter('global');
+            document.getElementById("wallpapers-grid").scrollIntoView({ behavior: "smooth", block: "center" });
+        }
+
+        // Set the main grid filter (all / global only / private only)
+        function setWallpaperFilter(filter) {
+            activeFilter = filter;
+            document.getElementById("wp-filter-all").classList.toggle('active', filter === 'all');
+            document.getElementById("wp-filter-global").classList.toggle('active', filter === 'global');
+            document.getElementById("wp-filter-private").classList.toggle('active', filter === 'private');
+            filterWallpapers();
+        }
+
+        // Filter Wallpapers in list (combines the type filter with the search query)
+        function filterWallpapers() {
+            const query = document.getElementById("search-input").value.toLowerCase().trim();
+
             const filtered = wallpapersList.filter(wp => {
+                // 1) Type filter
+                if (activeFilter === 'global' && !wp.is_global) return false;
+                if (activeFilter === 'private' && wp.is_global) return false;
+
+                // 2) Search query
+                if (!query) return true;
+
                 const filename = decodeURIComponent(wp.url.substring(wp.url.lastIndexOf('/') + 1)).toLowerCase();
                 const hwId = (wp.hardware_id || '').toLowerCase();
-                
+
                 // Also search by device serial if matched
                 const device = devicesList.find(d => d.hardware_id === wp.hardware_id);
                 const serial = device ? (device.serial_number || '').toLowerCase() : '';
