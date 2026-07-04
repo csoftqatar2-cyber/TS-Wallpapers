@@ -885,6 +885,10 @@
             color: #06b6d4;
         }
 
+        .stat-card .stat-hint.green {
+            color: var(--success);
+        }
+
         /* ===== Private Wallpapers Modal ===== */
         .modal-overlay {
             position: fixed;
@@ -1140,6 +1144,54 @@
         .mini-wp-btn:hover { background: rgba(255, 255, 255, 0.05); color: #fff; }
         .mini-wp-btn.del:hover { background: var(--danger); color: #fff; }
         .mini-wp-btn + .mini-wp-btn { border-right: 1px solid var(--panel-border); }
+
+        /* ===== Devices / Users management ===== */
+        .devices-filter { display: flex; gap: 8px; flex-wrap: wrap; }
+        .dev-filter-btn {
+            padding: 8px 14px; border-radius: 10px; cursor: pointer;
+            border: 1px solid var(--panel-border); background: rgba(255,255,255,0.03);
+            color: var(--text-muted); font-family: var(--font-family); font-size: 0.85rem;
+            font-weight: 600; white-space: nowrap;
+        }
+        .dev-filter-btn:hover { color: #fff; border-color: var(--panel-border-hover); }
+        .dev-filter-btn.active { background: var(--primary); border-color: var(--primary); color: #fff; }
+
+        .dev-row {
+            display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+            background: #0b0f19; border: 1px solid var(--panel-border);
+            border-radius: 14px; padding: 14px 16px; margin-bottom: 12px;
+        }
+        .dev-row.is-blocked { border-color: rgba(239,68,68,0.5); background: rgba(239,68,68,0.06); }
+        .dev-row-avatar {
+            width: 44px; height: 44px; border-radius: 12px; flex-shrink: 0;
+            display: flex; align-items: center; justify-content: center;
+            background: rgba(16,185,129,0.1); color: var(--success); font-size: 1.2rem;
+        }
+        .dev-row.is-blocked .dev-row-avatar { background: rgba(239,68,68,0.12); color: var(--danger); }
+        .dev-row-info { flex: 1; min-width: 200px; }
+        .dev-row-title { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 5px; }
+        .dev-row-serial { font-weight: 700; color: var(--text-main); font-size: 0.98rem; }
+        .dev-row-mac { font-family: 'Outfit', monospace; font-size: 0.78rem; color: var(--text-muted); direction: ltr; }
+        .dev-badge {
+            font-size: 0.68rem; font-weight: 700; padding: 3px 9px; border-radius: 50px;
+            display: inline-flex; align-items: center; gap: 4px;
+        }
+        .dev-badge.on  { background: rgba(16,185,129,0.12); color: var(--success); border: 1px solid rgba(16,185,129,0.25); }
+        .dev-badge.off { background: rgba(148,163,184,0.12); color: #94a3b8; border: 1px solid rgba(148,163,184,0.25); }
+        .dev-badge.blk { background: rgba(239,68,68,0.12); color: var(--danger); border: 1px solid rgba(239,68,68,0.3); }
+        .dev-row-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+        .dev-act {
+            padding: 8px 12px; border-radius: 10px; cursor: pointer; font-size: 0.8rem;
+            font-family: var(--font-family); font-weight: 600; border: 1px solid var(--panel-border);
+            background: rgba(255,255,255,0.04); color: #cbd3ea; display: inline-flex; align-items: center; gap: 6px;
+            white-space: nowrap;
+        }
+        .dev-act:hover { background: rgba(255,255,255,0.08); color: #fff; }
+        .dev-act.warn { border-color: rgba(239,68,68,0.35); color: #fca5a5; }
+        .dev-act.warn:hover { background: var(--danger); color: #fff; }
+        .dev-act.ok { border-color: rgba(16,185,129,0.35); color: #6ee7b7; }
+        .dev-act.ok:hover { background: var(--success); color: #fff; }
+        .dev-act:disabled { opacity: 0.5; cursor: default; }
     </style>
 </head>
 <body>
@@ -1215,10 +1267,11 @@
                     <i class="fa-solid fa-user-shield"></i>
                 </div>
             </div>
-            <div class="stat-card">
+            <div class="stat-card clickable" onclick="openDevicesModal()" title="اضغط لإدارة الأجهزة (حظر / تفعيل / حذف)">
                 <div class="stat-info">
                     <h3>إجمالي الأجهزة المسجلة</h3>
                     <p id="stat-total-devices">-</p>
+                    <span class="stat-hint green"><i class="fa-solid fa-arrow-pointer"></i> اضغط لإدارة الأجهزة (حظر / تفعيل)</span>
                 </div>
                 <div class="stat-icon green">
                     <i class="fa-solid fa-mobile-screen-button"></i>
@@ -1428,6 +1481,35 @@
             </div>
             <div class="modal-body" id="private-modal-body">
                 <!-- Device groups injected here -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Devices / Users management modal -->
+    <div id="devices-modal" class="modal-overlay" style="display: none;" onclick="if(event.target === this) closeDevicesModal()">
+        <div class="modal-box">
+            <div class="modal-header">
+                <h2><i class="fa-solid fa-users-gear"></i> إدارة الأجهزة والمستخدمين</h2>
+                <button class="modal-close" onclick="closeDevicesModal()" title="إغلاق">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+            <div class="modal-toolbar">
+                <div class="modal-toolbar-row">
+                    <div class="search-box modal-search-box" style="flex:1;">
+                        <i class="fa-solid fa-magnifying-glass"></i>
+                        <input type="text" id="devices-search" class="form-control" placeholder="ابحث بالكود أو الماك أو اسم العميل..." oninput="renderDevicesModal()">
+                    </div>
+                    <div class="devices-filter">
+                        <button type="button" class="dev-filter-btn active" data-filter="all" onclick="setDevicesFilter('all')">الكل</button>
+                        <button type="button" class="dev-filter-btn" data-filter="active" onclick="setDevicesFilter('active')">المفعّلة</button>
+                        <button type="button" class="dev-filter-btn" data-filter="inactive" onclick="setDevicesFilter('inactive')">غير مفعّلة</button>
+                        <button type="button" class="dev-filter-btn" data-filter="blocked" onclick="setDevicesFilter('blocked')">المحظورة</button>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-body" id="devices-modal-body">
+                <!-- Device rows injected here -->
             </div>
         </div>
     </div>
@@ -2365,6 +2447,264 @@
         // ============ Private Wallpapers (per-device) Modal ============
 
         // Open the modal and render the per-device private wallpapers
+        // ============ Devices / Users management ============
+        let devicesModalFilter = 'all';
+
+        function openDevicesModal() {
+            document.getElementById("devices-search").value = "";
+            setDevicesFilter('all');
+            document.getElementById("devices-modal").style.display = "flex";
+            renderDevicesModal();
+        }
+
+        function closeDevicesModal() {
+            document.getElementById("devices-modal").style.display = "none";
+        }
+
+        function setDevicesFilter(f) {
+            devicesModalFilter = f;
+            document.querySelectorAll('.dev-filter-btn').forEach(b =>
+                b.classList.toggle('active', b.dataset.filter === f));
+            renderDevicesModal();
+        }
+
+        // PATCH a device row via PostgREST (admin token required by RLS)
+        async function patchDevice(hwId, patch) {
+            const res = await fetch(`${REST_DEVICES}?hardware_id=eq.${encodeURIComponent(hwId)}`, {
+                method: "PATCH",
+                headers: {
+                    "apikey": ANON_KEY,
+                    "Authorization": `Bearer ${SESSION_TOKEN}`,
+                    "Content-Type": "application/json",
+                    "Prefer": "return=representation"
+                },
+                body: JSON.stringify(patch)
+            });
+            if (!res.ok) {
+                let msg = ""; try { msg = await res.text(); } catch (e) {}
+                if (res.status === 401 || res.status === 403) throw new Error("انتهت صلاحية جلسة الدخول. سجّل الدخول من جديد.");
+                throw new Error(`فشل الطلب (HTTP ${res.status})${msg ? ": " + msg.slice(0, 150) : ""}`);
+            }
+            const rows = await res.json();
+            if (!rows || rows.length === 0) throw new Error("لم يتم تحديث أي جهاز (تحقق من الصلاحيات).");
+            return rows;
+        }
+
+        async function afterDeviceChange() {
+            await loadDevices();
+            renderDevicesModal();
+        }
+
+        function toast(icon, title) {
+            Swal.fire({ icon, title, timer: 1500, showConfirmButton: false, background: '#1f2937', color: '#fff' });
+        }
+
+        async function toggleDeviceBlock(hwId) {
+            const dev = devicesList.find(d => d.hardware_id === hwId);
+            if (!dev) return;
+            const willBlock = !dev.is_blocked;
+            const c = await Swal.fire({
+                icon: willBlock ? 'warning' : 'question',
+                title: willBlock ? 'حظر هذا الجهاز؟' : 'رفع الحظر عن الجهاز؟',
+                html: willBlock
+                    ? `سيتوقف الجهاز فوراً عن عرض الخلفيات، ولن يستطيع إعادة التفعيل بأي كود.<br><br><b>${dev.serial_number || 'بدون كود'}</b><br><small style="opacity:.7;">${hwId}</small>`
+                    : `سيُسمح للجهاز بالعمل والتفعيل من جديد.<br><br><b>${dev.serial_number || 'بدون كود'}</b>`,
+                showCancelButton: true,
+                confirmButtonText: willBlock ? 'نعم، احظره' : 'نعم، ارفع الحظر',
+                cancelButtonText: 'إلغاء',
+                confirmButtonColor: willBlock ? '#ef4444' : '#6366f1',
+                background: '#1f2937', color: '#fff'
+            });
+            if (!c.isConfirmed) return;
+            try {
+                await patchDevice(hwId, { is_blocked: willBlock });
+                await afterDeviceChange();
+                toast('success', willBlock ? 'تم حظر الجهاز' : 'تم رفع الحظر');
+            } catch (e) {
+                Swal.fire({ icon: 'error', title: 'تعذّر تنفيذ العملية', text: e.message, background: '#1f2937', color: '#fff' });
+            }
+        }
+
+        async function toggleDeviceActive(hwId) {
+            const dev = devicesList.find(d => d.hardware_id === hwId);
+            if (!dev) return;
+            if (dev.is_blocked) {
+                Swal.fire({ icon: 'info', title: 'الجهاز محظور', text: 'ارفع الحظر أولاً ثم فعّله.', background: '#1f2937', color: '#fff' });
+                return;
+            }
+            const willActivate = !dev.is_active;
+            try {
+                await patchDevice(hwId, { is_active: willActivate });
+                await afterDeviceChange();
+                toast('success', willActivate ? 'تم تفعيل الجهاز' : 'تم إيقاف تفعيل الجهاز');
+            } catch (e) {
+                Swal.fire({ icon: 'error', title: 'تعذّر تنفيذ العملية', text: e.message, background: '#1f2937', color: '#fff' });
+            }
+        }
+
+        async function renameDevice(hwId) {
+            const dev = devicesList.find(d => d.hardware_id === hwId);
+            if (!dev) return;
+            const c = await Swal.fire({
+                title: 'اسم العميل / ملاحظة',
+                input: 'text',
+                inputValue: dev.client_name || '',
+                inputPlaceholder: 'مثال: محمد - الدوحة',
+                showCancelButton: true,
+                confirmButtonText: 'حفظ',
+                cancelButtonText: 'إلغاء',
+                confirmButtonColor: '#6366f1',
+                background: '#1f2937', color: '#fff'
+            });
+            if (!c.isConfirmed) return;
+            try {
+                await patchDevice(hwId, { client_name: (c.value || '').trim() || null });
+                await afterDeviceChange();
+                toast('success', 'تم حفظ الاسم');
+            } catch (e) {
+                Swal.fire({ icon: 'error', title: 'تعذّر الحفظ', text: e.message, background: '#1f2937', color: '#fff' });
+            }
+        }
+
+        async function deleteDevice(hwId) {
+            const dev = devicesList.find(d => d.hardware_id === hwId);
+            if (!dev) return;
+            const c = await Swal.fire({
+                icon: 'warning',
+                title: 'حذف الجهاز نهائياً؟',
+                html: `سيُحذف تسجيل الجهاز. لو شغّل التطبيق مرة أخرى سيظهر له كجهاز جديد يحتاج تفعيل.<br><br><b>${dev.serial_number || 'بدون كود'}</b><br><small style="opacity:.7;">${hwId}</small><br><br><small>ملاحظة: الصور المخصصة لهذا الجهاز لا تُحذف تلقائياً.</small>`,
+                showCancelButton: true,
+                confirmButtonText: 'نعم، احذفه',
+                cancelButtonText: 'إلغاء',
+                confirmButtonColor: '#ef4444',
+                background: '#1f2937', color: '#fff'
+            });
+            if (!c.isConfirmed) return;
+            try {
+                const res = await fetch(`${REST_DEVICES}?hardware_id=eq.${encodeURIComponent(hwId)}`, {
+                    method: "DELETE",
+                    headers: { "apikey": ANON_KEY, "Authorization": `Bearer ${SESSION_TOKEN}`, "Prefer": "return=minimal" }
+                });
+                if (!res.ok) {
+                    let msg = ""; try { msg = await res.text(); } catch (e) {}
+                    throw new Error(`فشل الحذف (HTTP ${res.status})${msg ? ": " + msg.slice(0, 150) : ""}`);
+                }
+                await afterDeviceChange();
+                toast('success', 'تم حذف الجهاز');
+            } catch (e) {
+                Swal.fire({ icon: 'error', title: 'تعذّر الحذف', text: e.message, background: '#1f2937', color: '#fff' });
+            }
+        }
+
+        // Render the full devices list with block/activate/rename/delete controls
+        function renderDevicesModal() {
+            const body = document.getElementById("devices-modal-body");
+            const q = (document.getElementById("devices-search").value || "").toLowerCase().trim();
+
+            // count private wallpapers per device
+            const wpCount = {};
+            wallpapersList.filter(w => !w.is_global && w.hardware_id).forEach(w => {
+                wpCount[w.hardware_id] = (wpCount[w.hardware_id] || 0) + 1;
+            });
+
+            let list = devicesList.filter(d => {
+                if (devicesModalFilter === 'active') return d.is_active && !d.is_blocked;
+                if (devicesModalFilter === 'inactive') return !d.is_active && !d.is_blocked;
+                if (devicesModalFilter === 'blocked') return d.is_blocked;
+                return true;
+            });
+            if (q) {
+                list = list.filter(d =>
+                    (d.hardware_id || '').toLowerCase().includes(q) ||
+                    (d.serial_number || '').toLowerCase().includes(q) ||
+                    (d.client_name || '').toLowerCase().includes(q));
+            }
+
+            if (list.length === 0) {
+                body.innerHTML = `
+                    <div class="empty-state">
+                        <i class="fa-solid fa-mobile-screen-button"></i>
+                        <p>${q || devicesModalFilter !== 'all' ? 'لا توجد أجهزة تطابق هذا الفلتر/البحث.' : 'لا توجد أجهزة مسجّلة بعد.'}</p>
+                    </div>`;
+                return;
+            }
+
+            body.innerHTML = "";
+            list.forEach(d => {
+                const hwId = d.hardware_id;
+                const row = document.createElement("div");
+                row.className = "dev-row" + (d.is_blocked ? " is-blocked" : "");
+
+                const avatar = document.createElement("div");
+                avatar.className = "dev-row-avatar";
+                avatar.innerHTML = d.is_blocked
+                    ? '<i class="fa-solid fa-ban"></i>'
+                    : '<i class="fa-solid fa-mobile-screen-button"></i>';
+
+                const info = document.createElement("div");
+                info.className = "dev-row-info";
+                const count = wpCount[hwId] || 0;
+                const statusBadge = d.is_blocked
+                    ? '<span class="dev-badge blk"><i class="fa-solid fa-ban"></i> محظور</span>'
+                    : (d.is_active
+                        ? '<span class="dev-badge on"><i class="fa-solid fa-circle-check"></i> مفعّل</span>'
+                        : '<span class="dev-badge off"><i class="fa-solid fa-circle-pause"></i> غير مفعّل</span>');
+                const nameBit = d.client_name ? ` · ${escapeHtml(d.client_name)}` : '';
+                info.innerHTML = `
+                    <div class="dev-row-title">
+                        <span class="dev-row-serial">${escapeHtml(d.serial_number || 'بدون كود')}${nameBit}</span>
+                        ${statusBadge}
+                        <span class="dev-badge off">${count} صورة</span>
+                    </div>
+                    <div class="dev-row-mac">${escapeHtml(hwId)}</div>`;
+
+                const actions = document.createElement("div");
+                actions.className = "dev-row-actions";
+
+                const blockBtn = document.createElement("button");
+                blockBtn.className = "dev-act " + (d.is_blocked ? "ok" : "warn");
+                blockBtn.innerHTML = d.is_blocked
+                    ? '<i class="fa-solid fa-unlock"></i> رفع الحظر'
+                    : '<i class="fa-solid fa-ban"></i> حظر';
+                blockBtn.onclick = () => toggleDeviceBlock(hwId);
+
+                const activeBtn = document.createElement("button");
+                activeBtn.className = "dev-act";
+                activeBtn.disabled = d.is_blocked;
+                activeBtn.innerHTML = d.is_active
+                    ? '<i class="fa-solid fa-toggle-on"></i> إيقاف التفعيل'
+                    : '<i class="fa-solid fa-toggle-off"></i> تفعيل';
+                activeBtn.onclick = () => toggleDeviceActive(hwId);
+
+                const renameBtn = document.createElement("button");
+                renameBtn.className = "dev-act";
+                renameBtn.innerHTML = '<i class="fa-solid fa-pen"></i> اسم';
+                renameBtn.onclick = () => renameDevice(hwId);
+
+                const delBtn = document.createElement("button");
+                delBtn.className = "dev-act warn";
+                delBtn.innerHTML = '<i class="fa-solid fa-trash-can"></i> حذف';
+                delBtn.onclick = () => deleteDevice(hwId);
+
+                actions.appendChild(blockBtn);
+                actions.appendChild(activeBtn);
+                actions.appendChild(renameBtn);
+                actions.appendChild(delBtn);
+
+                row.appendChild(avatar);
+                row.appendChild(info);
+                row.appendChild(actions);
+                body.appendChild(row);
+            });
+        }
+
+        // Small HTML escaper for user-controlled text injected via innerHTML
+        function escapeHtml(s) {
+            return String(s == null ? '' : s)
+                .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+        }
+
         function openPrivateModal() {
             document.getElementById("private-search").value = "";
             document.getElementById("private-modal").style.display = "flex";
