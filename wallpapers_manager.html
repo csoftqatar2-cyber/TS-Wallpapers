@@ -42,6 +42,10 @@
             transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         }
 
+        html {
+            overflow-x: hidden;
+        }
+
         body {
             background-color: var(--bg-color);
             color: var(--text-main);
@@ -51,9 +55,11 @@
             position: relative;
         }
 
-        /* Ambient Glowing Background Orbs */
+        /* Ambient Glowing Background Orbs — fixed so their negative offsets
+           decorate the viewport without widening the document (which in RTL
+           shifted the whole page and clipped it on the right). */
         .orb {
-            position: absolute;
+            position: fixed;
             border-radius: 50%;
             filter: blur(120px);
             z-index: -1;
