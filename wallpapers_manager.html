@@ -1440,6 +1440,7 @@
         const APK_STORAGE_API = `${SUPABASE_URL}/storage/v1/object/apk`;
         const APK_PUBLIC_PREFIX = `${SUPABASE_URL}/storage/v1/object/public/apk`;
         const AUTH_URL = `${SUPABASE_URL}/auth/v1`;
+        const FUNCTIONS_URL = `${SUPABASE_URL}/functions/v1`;
 
         // ---- Auth session ----
         // Fixed admin identity: the user only ever types the password.
@@ -1985,14 +1986,8 @@
                 progressPercent.innerText = `${filePercent}%`;
 
                 try {
-                    // 1. Upload to Supabase Storage (throws on failure)
-                    await uploadToStorage(file);
-
-                    // 2. Insert reference to public.wallpapers (throws on failure)
-                    const fileUrl = `${PUBLIC_URL_PREFIX}/${encodeURIComponent(file.name)}`;
-                    const fileType = file.name.endsWith('.mp4') || file.name.endsWith('.bin') ? 'video' : 'image';
-
-                    await insertWallpaperRecord(fileUrl, fileType, isGlobal, hwId);
+                    // Upload + record via the admin-upload Edge Function (throws on failure)
+                    await uploadViaFunction(file, isGlobal, hwId);
                     successCount++;
                 } catch (err) {
                     console.error(`Error uploading ${file.name}:`, err);
@@ -2044,56 +2039,35 @@
             await loadWallpapers();
         }
 
-        // Turn a failed Supabase response into a human message. Supabase Storage
-        // returns HTTP 400 with an RLS message when the token isn't the admin's.
-        async function describeError(response) {
-            let detail = "";
-            try { detail = (await response.text()) || ""; } catch (e) {}
-            if (detail.includes("row-level security") || response.status === 401 || response.status === 403) {
-                return "انتهت صلاحية جلسة الدخول. سجّل الدخول من جديد ثم أعد المحاولة.";
-            }
-            return `فشل الطلب (HTTP ${response.status})${detail ? ": " + detail.slice(0, 200) : ""}`;
-        }
+        // Upload one file + create its DB record through the admin-upload Edge
+        // Function. The function verifies the caller is the admin and performs the
+        // storage write with the service role, which sidesteps the fact that the
+        // Storage service does not accept this project's user JWTs directly.
+        async function uploadViaFunction(file, isGlobal, hardwareId) {
+            const fileType = file.name.endsWith('.mp4') || file.name.endsWith('.bin') ? 'video' : 'image';
 
-        async function uploadToStorage(file) {
-            const uploadUrl = `${STORAGE_API}/${encodeURIComponent(file.name)}`;
-
-            const response = await fetch(uploadUrl, {
+            const response = await fetch(`${FUNCTIONS_URL}/admin-upload`, {
                 method: "POST",
                 headers: {
                     "Authorization": `Bearer ${SESSION_TOKEN}`,
                     "apikey": ANON_KEY,
-                    "Content-Type": file.type || "image/jpeg",
-                    "x-upsert": "true"
+                    "Content-Type": file.type || "application/octet-stream",
+                    "x-file-name": encodeURIComponent(file.name),
+                    "x-file-type": fileType,
+                    "x-is-global": String(isGlobal),
+                    "x-hardware-id": hardwareId || ""
                 },
                 body: file
             });
 
-            if (!response.ok) throw new Error(await describeError(response));
-            return true;
-        }
-
-        // Sub function: Insert wallpaper record into REST DB
-        async function insertWallpaperRecord(url, type, isGlobal, hardwareId) {
-            const body = {
-                url: url,
-                type: type,
-                is_global: isGlobal,
-                hardware_id: hardwareId
-            };
-
-            const response = await fetch(`${REST_WALLPAPERS}?on_conflict=url`, {
-                method: "POST",
-                headers: {
-                    "Authorization": `Bearer ${SESSION_TOKEN}`,
-                    "apikey": ANON_KEY,
-                    "Content-Type": "application/json",
-                    "Prefer": "resolution=merge-duplicates,return=representation"
-                },
-                body: JSON.stringify(body)
-            });
-
-            if (!response.ok) throw new Error(await describeError(response));
+            if (!response.ok) {
+                let msg = "";
+                try { msg = (await response.json()).error || ""; } catch (e) {}
+                if (response.status === 401 || response.status === 403 || /session|token|authoriz/i.test(msg)) {
+                    throw new Error("انتهت صلاحية جلسة الدخول. سجّل الدخول من جديد ثم أعد المحاولة.");
+                }
+                throw new Error(`فشل الرفع (HTTP ${response.status})${msg ? ": " + msg.slice(0, 200) : ""}`);
+            }
             return true;
         }
 
