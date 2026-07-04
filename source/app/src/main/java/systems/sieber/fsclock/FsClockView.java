@@ -232,6 +232,8 @@ public class FsClockView extends FrameLayout {
                                             mTextViewActivationStatus.setText("هذا الرقم التسلسلي مستخدم بالفعل على جهاز آخر");
                                         } else if ("invalid_format".equals(result)) {
                                             mTextViewActivationStatus.setText("الرقم التسلسلي غير صالح (يجب أن يبدأ بـ 7078)");
+                                        } else if ("blocked".equals(result)) {
+                                            mTextViewActivationStatus.setText("تم حظر هذا الجهاز. يرجى التواصل مع الدعم.");
                                         } else {
                                             mTextViewActivationStatus.setText("فشل التفعيل: " + (error != null ? error : "خطأ غير معروف"));
                                         }
