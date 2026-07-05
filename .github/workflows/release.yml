@@ -1,36 +1,32 @@
 name: Build & Publish APK Update
 
-# Automatic delivery pipeline:
-#   1. You create a GitHub Release (tag like v1.3) — or run this manually.
-#   2. This workflow builds the signed "standalone" release APK.
-#   3. It attaches the APK to the Release as `TS-Wallpapers.apk`.
-#   4. It upserts the Supabase `app_versions` row so every device running
-#      an older versionCode is offered the update in-app (UpdateManager).
-#
-# IMPORTANT before releasing: bump `versionCode` (and `versionName`) in
-# source/app/build.gradle and commit it, THEN create the release/tag.
+# Automatic delivery on every push to main:
+#   1. Reads versionCode/versionName from source/app/build.gradle.
+#   2. GATE: if that versionCode is NOT higher than the latest already in
+#      Supabase app_versions, it stops (nothing new to deliver). Android
+#      itself refuses to update to a same/lower versionCode, so you MUST
+#      bump `versionCode` in source/app/build.gradle before pushing.
+#   3. Otherwise: builds the signed "standalone" release APK, uploads it to
+#      the Supabase `apk` storage bucket, and inserts the app_versions row.
+#      Every device on an older versionCode is then offered the update in-app.
 #
 # Required repository secrets (Settings -> Secrets and variables -> Actions):
 #   SIGNING_KEYSTORE_BASE64    - base64 of source/thabthaba.jks
 #   KEYSTORE_PASSWORD          - keystore store password
 #   KEY_ALIAS                  - signing key alias
 #   KEY_PASSWORD               - signing key password
-#   SUPABASE_SERVICE_ROLE_KEY  - Supabase service_role key (bypasses RLS to write app_versions)
+#   SUPABASE_SERVICE_ROLE_KEY  - Supabase service_role key (bypasses RLS to
+#                                write storage + app_versions)
 
 on:
-  release:
-    types: [published]
+  push:
+    branches: [main]
   workflow_dispatch:
-    inputs:
-      tag:
-        description: "Existing release tag to attach the APK to (e.g. v1.3)"
-        required: true
-
-permissions:
-  contents: write   # needed to upload the APK asset to the Release
 
 env:
   SUPABASE_URL: https://ihgmqwzdpugdzddobhbc.supabase.co
+  # anon key is public (already shipped in the manager page) — used only to READ the latest version
+  SUPABASE_ANON_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImloZ21xd3pkcHVnZHpkZG9iaGJjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI2NTI4ODAsImV4cCI6MjA5ODIyODg4MH0.xG0ch3u5rcbb81pSa8wmybeEYj8kz2LjCGQM_-Xg6Yk
 
 jobs:
   build-publish:
@@ -39,19 +35,43 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Read version + decide whether to publish
+        id: gate
+        run: |
+          VC=$(grep -oE 'versionCode[[:space:]]+[0-9]+' source/app/build.gradle | grep -oE '[0-9]+' | head -1)
+          VN=$(grep -oE 'versionName[[:space:]]+"[^"]+"' source/app/build.gradle | sed -E 's/.*"([^"]+)".*/\1/' | head -1)
+          LATEST=$(curl -s "${SUPABASE_URL}/rest/v1/app_versions?select=version_code&order=version_code.desc&limit=1" \
+            -H "apikey: ${SUPABASE_ANON_KEY}" -H "Authorization: Bearer ${SUPABASE_ANON_KEY}" \
+            | grep -oE '"version_code":[0-9]+' | grep -oE '[0-9]+' | head -1)
+          LATEST=${LATEST:-0}
+          echo "This build: versionCode=$VC versionName=$VN | latest published=$LATEST"
+          echo "version_code=$VC" >> "$GITHUB_OUTPUT"
+          echo "version_name=$VN" >> "$GITHUB_OUTPUT"
+          if [ -n "$VC" ] && [ "$VC" -gt "$LATEST" ]; then
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+            echo "✅ versionCode $VC > $LATEST — will build & publish."
+          else
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+            echo "⏭️  versionCode not increased — nothing to deliver. Bump versionCode to publish an update."
+          fi
+
       - name: Set up JDK 17
+        if: steps.gate.outputs.publish == 'true'
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: "17"
 
       - name: Set up Android SDK
+        if: steps.gate.outputs.publish == 'true'
         uses: android-actions/setup-android@v3
 
       - name: Decode signing keystore
+        if: steps.gate.outputs.publish == 'true'
         run: echo "${{ secrets.SIGNING_KEYSTORE_BASE64 }}" | base64 -d > source/thabthaba.jks
 
       - name: Build signed standalone release APK
+        if: steps.gate.outputs.publish == 'true'
         working-directory: source
         env:
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
@@ -61,54 +81,48 @@ jobs:
           chmod +x gradlew
           ./gradlew :app:assembleStandaloneRelease --no-daemon --console=plain
 
-      - name: Resolve version + tag
-        id: meta
+      - name: Upload APK to Supabase storage
+        if: steps.gate.outputs.publish == 'true'
+        id: upload
         run: |
-          VC=$(grep -oE 'versionCode[[:space:]]+[0-9]+' source/app/build.gradle | grep -oE '[0-9]+' | head -1)
-          VN=$(grep -oE 'versionName[[:space:]]+"[^"]+"' source/app/build.gradle | sed -E 's/.*"([^"]+)".*/\1/' | head -1)
-          if [ "${{ github.event_name }}" = "release" ]; then
-            TAG="${{ github.event.release.tag_name }}"
-            NOTES="${{ github.event.release.body }}"
-          else
-            TAG="${{ github.event.inputs.tag }}"
-            NOTES="Update to $VN"
-          fi
-          echo "version_code=$VC" >> "$GITHUB_OUTPUT"
-          echo "version_name=$VN" >> "$GITHUB_OUTPUT"
-          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
-          # multiline changelog -> keep single line to stay JSON-safe
-          echo "changelog=$(echo "$NOTES" | tr '\n' ' ' | sed 's/"/\\"/g')" >> "$GITHUB_OUTPUT"
-          echo "Building versionCode=$VC versionName=$VN tag=$TAG"
-
-      - name: Rename APK asset
-        run: cp "source/app/build/outputs/apk/standalone/release/TS Wallpapers.apk" TS-Wallpapers.apk
-
-      - name: Upload APK to the Release
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh release upload "${{ steps.meta.outputs.tag }}" TS-Wallpapers.apk --clobber -R "${{ github.repository }}"
-
-      - name: Publish version row to Supabase (app_versions)
-        run: |
-          APK_URL="https://github.com/${{ github.repository }}/releases/download/${{ steps.meta.outputs.tag }}/TS-Wallpapers.apk"
-          # remove any existing row with the same version_code to avoid duplicates
-          curl -s -X DELETE \
-            "${SUPABASE_URL}/rest/v1/app_versions?version_code=eq.${{ steps.meta.outputs.version_code }}" \
+          VN="${{ steps.gate.outputs.version_name }}"
+          VC="${{ steps.gate.outputs.version_code }}"
+          SAFE_VN=$(echo "$VN" | sed 's/[^a-zA-Z0-9._-]/_/g')
+          NAME="ts-wallpapers-${SAFE_VN}-${VC}.apk"
+          SRC="source/app/build/outputs/apk/standalone/release/TS Wallpapers.apk"
+          HTTP=$(curl -s -o /tmp/up.json -w "%{http_code}" -X POST \
+            "${SUPABASE_URL}/storage/v1/object/apk/${NAME}" \
             -H "apikey: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
-            -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}"
-          # insert the fresh row
-          HTTP=$(curl -s -o /tmp/resp.json -w "%{http_code}" -X POST \
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
+            -H "Content-Type: application/vnd.android.package-archive" \
+            -H "x-upsert: true" \
+            --data-binary @"$SRC")
+          echo "Storage upload HTTP $HTTP"; cat /tmp/up.json; echo
+          if [ "$HTTP" -lt 200 ] || [ "$HTTP" -ge 300 ]; then exit 1; fi
+          echo "apk_url=${SUPABASE_URL}/storage/v1/object/public/apk/${NAME}" >> "$GITHUB_OUTPUT"
+
+      - name: Publish version row to app_versions
+        if: steps.gate.outputs.publish == 'true'
+        run: |
+          VC="${{ steps.gate.outputs.version_code }}"
+          CL=$(git log -1 --pretty=%s | tr '\n' ' ' | sed 's/"/\\"/g')
+          # remove any existing row with the same version_code, then insert fresh
+          curl -s -X DELETE "${SUPABASE_URL}/rest/v1/app_versions?version_code=eq.${VC}" \
+            -H "apikey: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" >/dev/null
+          HTTP=$(curl -s -o /tmp/ins.json -w "%{http_code}" -X POST \
             "${SUPABASE_URL}/rest/v1/app_versions" \
             -H "apikey: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
             -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
             -H "Content-Type: application/json" \
             -H "Prefer: return=representation" \
-            -d "{\"version_code\": ${{ steps.meta.outputs.version_code }}, \"version_name\": \"${{ steps.meta.outputs.version_name }}\", \"apk_url\": \"${APK_URL}\", \"changelog\": \"${{ steps.meta.outputs.changelog }}\"}")
-          echo "Supabase insert HTTP $HTTP"
-          cat /tmp/resp.json
+            -d "{\"version_code\": ${VC}, \"version_name\": \"${{ steps.gate.outputs.version_name }}\", \"apk_url\": \"${{ steps.upload.outputs.apk_url }}\", \"changelog\": \"${CL}\"}")
+          echo "app_versions insert HTTP $HTTP"; cat /tmp/ins.json; echo
           if [ "$HTTP" -lt 200 ] || [ "$HTTP" -ge 300 ]; then exit 1; fi
 
       - name: Summary
+        if: steps.gate.outputs.publish == 'true'
         run: |
-          echo "### ✅ Published v${{ steps.meta.outputs.version_name }} (code ${{ steps.meta.outputs.version_code }})" >> "$GITHUB_STEP_SUMMARY"
-          echo "Users on older builds will now be offered the update in-app." >> "$GITHUB_STEP_SUMMARY"
+          echo "### ✅ Published v${{ steps.gate.outputs.version_name }} (code ${{ steps.gate.outputs.version_code }})" >> "$GITHUB_STEP_SUMMARY"
+          echo "APK: ${{ steps.upload.outputs.apk_url }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "Devices on older versionCodes will be offered the update in-app." >> "$GITHUB_STEP_SUMMARY"
