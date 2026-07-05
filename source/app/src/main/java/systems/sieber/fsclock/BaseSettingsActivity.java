@@ -156,6 +156,7 @@ public class BaseSettingsActivity extends AppCompatActivity {
     boolean mBackStretch;
     CheckBox mCheckBoxShowAlarms;
     CheckBox mCheckBoxShowWeather;
+    EditText mEditTextWeatherCity;
     Button mButtonNewEvent;
     int mDarkModeStart = 0;
     int mDarkModeEnd = 0;
@@ -288,6 +289,7 @@ public class BaseSettingsActivity extends AppCompatActivity {
         mColorPreviewBack = findViewById(R.id.viewColorPreviewBack);
         mCheckBoxShowAlarms = findViewById(R.id.checkBoxShowAlarms);
         mCheckBoxShowWeather = findViewById(R.id.checkBoxShowWeather);
+        mEditTextWeatherCity = findViewById(R.id.editTextWeatherCity);
         mButtonNewEvent = findViewById(R.id.buttonNewEvent);
         mCheckBoxWallpaperEnabled = findViewById(R.id.checkBoxWallpaperEnabled);
         mCheckBoxWallpaperAutoSwitch = findViewById(R.id.checkBoxWallpaperAutoSwitch);
@@ -348,6 +350,7 @@ public class BaseSettingsActivity extends AppCompatActivity {
         mBackStretch = mSharedPref.getBoolean("back-stretch", false);
         mCheckBoxShowAlarms.setChecked(mSharedPref.getBoolean("show-alarms", false));
         mCheckBoxShowWeather.setChecked(mSharedPref.getBoolean("show-weather", true));
+        mEditTextWeatherCity.setText(mSharedPref.getString("weather-city", "Doha"));
 
         // wallpaper + clock layout settings
         mCheckBoxWallpaperEnabled.setChecked(mSharedPref.getBoolean(WallpaperRepo.PREF_ENABLED, true));
@@ -596,20 +599,18 @@ public class BaseSettingsActivity extends AppCompatActivity {
             String status = mWallpaperRepo.isActive() ? "نشط (Activated)" : "غير نشط (Pending Activation)";
             mTextViewSettingsDeviceId.setText("كود الجهاز (Device ID): " + mWallpaperRepo.getDeviceId() + "\nالحالة (Status): " + status);
         }
-        if(mTextViewSettingsMacAddress != null) {
-            String mac = WallpaperRepo.getMacAddress();
-            if(mac == null || mac.isEmpty() || mac.equals("02:00:00:00:00:00")) {
-                mTextViewSettingsMacAddress.setText("MAC: " + getString(R.string.mac_unavailable));
-            } else {
-                mTextViewSettingsMacAddress.setText("عنوان الجهاز (MAC): " + mac);
-            }
+        if(mTextViewSettingsMacAddress != null && mWallpaperRepo != null) {
+            // Show the actual identifier used to match wallpapers (Device ID), not the
+            // MAC address, which is unavailable on Android 6+ for privacy reasons.
+            mTextViewSettingsMacAddress.setText("كود الربط (Linking Code): " + mWallpaperRepo.getDeviceId());
         }
     }
 
-    /** Show a dialog with a QR code that encodes the device MAC address. */
+    /** Show a dialog with a QR code that encodes the device linking code (Device ID). */
     public void onClickShowMacQr(View v) {
-        String mac = WallpaperRepo.getMacAddress();
-        if(mac == null || mac.isEmpty() || mac.equals("02:00:00:00:00:00")) {
+        if(mWallpaperRepo == null) return;
+        String mac = mWallpaperRepo.getDeviceId();
+        if(mac == null || mac.isEmpty() || mac.equals("UNKNOWN")) {
             Toast.makeText(this, getString(R.string.mac_unavailable), Toast.LENGTH_LONG).show();
             return;
         }
@@ -1107,6 +1108,7 @@ public class BaseSettingsActivity extends AppCompatActivity {
         editor.putBoolean("back-stretch", mBackStretch);
         editor.putBoolean("show-alarms", mCheckBoxShowAlarms.isChecked());
         editor.putBoolean("show-weather", mCheckBoxShowWeather.isChecked());
+        editor.putString("weather-city", mEditTextWeatherCity.getText().toString().trim());
         editor.putBoolean(WallpaperRepo.PREF_ENABLED, mCheckBoxWallpaperEnabled.isChecked());
         editor.putBoolean("wallpaper-auto-switch", mCheckBoxWallpaperAutoSwitch.isChecked());
         editor.putString(WallpaperRepo.PREF_URL, mEditTextWallpaperUrl.getText().toString().trim());

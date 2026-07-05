@@ -7,7 +7,7 @@
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&family=Tajawal:wght@300;500;700;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800&family=Rajdhani:wght@500;600;700&display=swap" rel="stylesheet">
     <!-- FontAwesome Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- SweetAlert2 -->
@@ -19,20 +19,20 @@
 
     <style>
         :root {
-            --bg-color: #0b0f19;
-            --panel-bg: rgba(255, 255, 255, 0.03);
-            --panel-border: rgba(255, 255, 255, 0.08);
-            --panel-border-hover: rgba(255, 255, 255, 0.15);
-            --primary: #6366f1;
-            --primary-glow: rgba(99, 102, 241, 0.35);
-            --success: #10b981;
-            --success-glow: rgba(16, 185, 129, 0.35);
+            --bg-color: #14100b;
+            --panel-bg: rgba(46, 36, 23, 0.5);
+            --panel-border: rgba(255, 214, 160, 0.14);
+            --panel-border-hover: rgba(255, 214, 160, 0.30);
+            --primary: #ff9a3d;
+            --primary-glow: rgba(255, 160, 60, 0.40);
+            --success: #34d399;
+            --success-glow: rgba(52, 211, 153, 0.35);
             --danger: #ef4444;
             --danger-glow: rgba(239, 68, 68, 0.35);
-            --text-main: #f3f4f6;
-            --text-muted: #9ca3af;
-            --accent: #a855f7;
-            --font-family: 'Tajawal', 'Outfit', sans-serif;
+            --text-main: #f5eee4;
+            --text-muted: #b0a48f;
+            --accent: #ffd27a;
+            --font-family: 'Cairo', 'Rajdhani', sans-serif;
         }
 
         * {
@@ -86,7 +86,7 @@
         .orb-3 {
             width: 300px;
             height: 300px;
-            background: #3b82f6;
+            background: #ffd27a;
             top: 40%;
             left: 50%;
             transform: translate(-50%, -50%);
@@ -209,7 +209,7 @@
             font-size: 2.2rem;
             font-weight: 800;
             color: var(--text-main);
-            font-family: 'Outfit', sans-serif;
+            font-family: 'Rajdhani', sans-serif;
         }
 
         .stat-icon {
@@ -435,7 +435,7 @@
         }
 
         .qr-result .qr-mac {
-            font-family: 'Outfit', monospace;
+            font-family: 'Rajdhani', monospace;
             font-weight: 700;
             color: var(--text-main);
             word-break: break-all;
@@ -569,7 +569,7 @@
 
         .btn-primary {
             background: linear-gradient(135deg, var(--primary), var(--accent));
-            color: #ffffff;
+            color: #1a1204;
         }
 
         .btn-primary:hover {
@@ -583,7 +583,7 @@
         }
 
         .btn-primary:disabled {
-            background: #4b5563;
+            background: #4a4033;
             color: #9ca3af;
             cursor: not-allowed;
             box-shadow: none;
@@ -683,7 +683,7 @@
             position: relative;
             width: 100%;
             height: 150px;
-            background: #111827;
+            background: #1c160e;
             overflow: hidden;
         }
 
@@ -712,9 +712,9 @@
         }
 
         .wp-badge.private {
-            background: rgba(168, 85, 247, 0.2);
-            border: 1px solid rgba(168, 85, 247, 0.4);
-            color: #c084fc;
+            background: rgba(255, 210, 122, 0.18);
+            border: 1px solid rgba(255, 210, 122, 0.4);
+            color: var(--accent);
         }
 
         .wp-type-icon {
@@ -903,7 +903,7 @@
         }
 
         .modal-box {
-            background: #0f1421;
+            background: #14100b;
             border: 1px solid var(--panel-border);
             border-radius: 24px;
             width: 100%;
@@ -1040,8 +1040,8 @@
         }
 
         .device-group-count {
-            background: rgba(168, 85, 247, 0.15);
-            color: #c084fc;
+            background: rgba(255, 210, 122, 0.15);
+            color: var(--accent);
             font-size: 0.7rem;
             font-weight: 700;
             padding: 2px 9px;
@@ -1051,13 +1051,13 @@
         .device-group-mac {
             font-size: 0.78rem;
             color: var(--text-muted);
-            font-family: 'Outfit', monospace;
+            font-family: 'Rajdhani', monospace;
             word-break: break-all;
         }
 
         .device-group-add {
             background: linear-gradient(135deg, var(--primary), var(--accent));
-            color: #fff;
+            color: #1a1204;
             border: none;
             padding: 9px 16px;
             border-radius: 10px;
@@ -1095,7 +1095,7 @@
             width: 100%;
             height: 110px;
             object-fit: cover;
-            background: #111827;
+            background: #1c160e;
             display: block;
         }
 
@@ -1106,7 +1106,7 @@
             flex-direction: column;
             align-items: center;
             justify-content: center;
-            background: #1e293b;
+            background: #2e2417;
             color: var(--text-muted);
             font-size: 0.72rem;
             gap: 6px;
@@ -1171,7 +1171,7 @@
         .dev-row-info { flex: 1; min-width: 200px; }
         .dev-row-title { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 5px; }
         .dev-row-serial { font-weight: 700; color: var(--text-main); font-size: 0.98rem; }
-        .dev-row-mac { font-family: 'Outfit', monospace; font-size: 0.78rem; color: var(--text-muted); direction: ltr; }
+        .dev-row-mac { font-family: 'Rajdhani', monospace; font-size: 0.78rem; color: var(--text-muted); direction: ltr; }
         .dev-badge {
             font-size: 0.68rem; font-weight: 700; padding: 3px 9px; border-radius: 50px;
             display: inline-flex; align-items: center; gap: 4px;
@@ -1200,16 +1200,16 @@
     <div class="orb orb-3"></div>
 
     <!-- Login gate -->
-    <div id="login-overlay" style="position:fixed;inset:0;z-index:9999;display:none;align-items:center;justify-content:center;background:rgba(8,10,20,0.92);backdrop-filter:blur(8px);">
-        <form id="login-form" style="width:min(90vw,360px);background:rgba(20,24,40,0.95);border:1px solid rgba(255,255,255,0.08);border-radius:18px;padding:32px 28px;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,0.5);">
-            <i class="fa-solid fa-lock" style="font-size:32px;color:#7c9cff;margin-bottom:12px;"></i>
-            <h2 style="color:#fff;margin:0 0 6px;font-size:20px;">مدير خلفيات TS Wallpapers</h2>
-            <p style="color:#9aa4c0;margin:0 0 20px;font-size:14px;">أدخل كلمة المرور للدخول</p>
+    <div id="login-overlay" style="position:fixed;inset:0;z-index:9999;display:none;align-items:center;justify-content:center;background:rgba(20,16,11,0.92);backdrop-filter:blur(8px);">
+        <form id="login-form" style="width:min(90vw,360px);background:rgba(28,22,14,0.95);border:1px solid rgba(255,214,160,0.14);border-radius:18px;padding:32px 28px;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,0.5);">
+            <i class="fa-solid fa-lock" style="font-size:32px;color:#ffd27a;margin-bottom:12px;"></i>
+            <h2 style="color:#f5eee4;margin:0 0 6px;font-size:20px;">مدير خلفيات TS Wallpapers</h2>
+            <p style="color:#b0a48f;margin:0 0 20px;font-size:14px;">أدخل كلمة المرور للدخول</p>
             <input id="login-password" type="password" autocomplete="current-password" placeholder="كلمة المرور"
-                   style="width:100%;box-sizing:border-box;padding:12px 14px;border-radius:12px;border:1px solid rgba(255,255,255,0.12);background:rgba(0,0,0,0.3);color:#fff;font-size:16px;text-align:center;outline:none;" />
+                   style="width:100%;box-sizing:border-box;padding:12px 14px;border-radius:12px;border:1px solid rgba(255,214,160,0.18);background:rgba(0,0,0,0.3);color:#f5eee4;font-size:16px;text-align:center;outline:none;" />
             <div id="login-error" style="display:none;color:#ff6b6b;font-size:13px;margin-top:10px;">كلمة المرور غير صحيحة</div>
             <button type="submit" id="login-btn"
-                    style="width:100%;margin-top:18px;padding:12px;border:none;border-radius:12px;background:linear-gradient(135deg,#5b7cfa,#7c5bfa);color:#fff;font-size:16px;font-weight:600;cursor:pointer;">
+                    style="width:100%;margin-top:18px;padding:12px;border:none;border-radius:12px;background:linear-gradient(135deg,#ff9a3d,#ffd27a);color:#1a1204;font-size:16px;font-weight:700;cursor:pointer;">
                 دخول
             </button>
         </form>
@@ -2273,7 +2273,7 @@
                 if (wp.type === 'video') {
                     // Show a placeholder or icon for video
                     mediaWrapper.innerHTML = `
-                        <div style="width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;background:#1e293b;color:var(--text-muted);">
+                        <div style="width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;background:#2e2417;color:var(--text-muted);">
                             <i class="fa-regular fa-file-video" style="font-size:2rem;margin-bottom:8px;"></i>
                             <span style="font-size:0.75rem;">ملف فيديو / عتاد</span>
                         </div>
@@ -2361,10 +2361,10 @@
                 icon: 'warning',
                 showCancelButton: true,
                 confirmButtonColor: '#ef4444',
-                cancelButtonColor: '#374151',
+                cancelButtonColor: '#4a4033',
                 confirmButtonText: 'نعم، احذفه',
                 cancelButtonText: 'إلغاء',
-                background: '#1f2937',
+                background: '#1c160e',
                 color: '#ffffff'
             }).then((result) => {
                 if (result.isConfirmed) {
@@ -2376,7 +2376,7 @@
         // Perform delete operations
         async function performDelete(id, filename, url) {
             // Show a blocking loader while we delete from DB + Storage
-            Swal.fire({ title: 'جاري الحذف...', html: 'يتم إزالة الصورة من قاعدة البيانات والتخزين', allowOutsideClick: false, background: '#1f2937', color: '#ffffff', didOpen: () => Swal.showLoading() });
+            Swal.fire({ title: 'جاري الحذف...', html: 'يتم إزالة الصورة من قاعدة البيانات والتخزين', allowOutsideClick: false, background: '#1c160e', color: '#ffffff', didOpen: () => Swal.showLoading() });
 
             try {
                 // 1. Delete EVERY DB row that references this exact file, so it disappears
@@ -2430,7 +2430,7 @@
                     title: 'تم الحذف!',
                     html: `تمت إزالة الصورة نهائياً وستختفي من عند جميع الأجهزة.${storageWarning}`,
                     icon: 'success',
-                    background: '#1f2937',
+                    background: '#1c160e',
                     color: '#ffffff'
                 });
             } catch (err) {
@@ -2496,7 +2496,7 @@
         }
 
         function toast(icon, title) {
-            Swal.fire({ icon, title, timer: 1500, showConfirmButton: false, background: '#1f2937', color: '#fff' });
+            Swal.fire({ icon, title, timer: 1500, showConfirmButton: false, background: '#1c160e', color: '#fff' });
         }
 
         async function toggleDeviceBlock(hwId) {
@@ -2512,8 +2512,8 @@
                 showCancelButton: true,
                 confirmButtonText: willBlock ? 'نعم، احظره' : 'نعم، ارفع الحظر',
                 cancelButtonText: 'إلغاء',
-                confirmButtonColor: willBlock ? '#ef4444' : '#6366f1',
-                background: '#1f2937', color: '#fff'
+                confirmButtonColor: willBlock ? '#ef4444' : '#ff9a3d',
+                background: '#1c160e', color: '#fff'
             });
             if (!c.isConfirmed) return;
             try {
@@ -2521,7 +2521,7 @@
                 await afterDeviceChange();
                 toast('success', willBlock ? 'تم حظر الجهاز' : 'تم رفع الحظر');
             } catch (e) {
-                Swal.fire({ icon: 'error', title: 'تعذّر تنفيذ العملية', text: e.message, background: '#1f2937', color: '#fff' });
+                Swal.fire({ icon: 'error', title: 'تعذّر تنفيذ العملية', text: e.message, background: '#1c160e', color: '#fff' });
             }
         }
 
@@ -2529,7 +2529,7 @@
             const dev = devicesList.find(d => d.hardware_id === hwId);
             if (!dev) return;
             if (dev.is_blocked) {
-                Swal.fire({ icon: 'info', title: 'الجهاز محظور', text: 'ارفع الحظر أولاً ثم فعّله.', background: '#1f2937', color: '#fff' });
+                Swal.fire({ icon: 'info', title: 'الجهاز محظور', text: 'ارفع الحظر أولاً ثم فعّله.', background: '#1c160e', color: '#fff' });
                 return;
             }
             const willActivate = !dev.is_active;
@@ -2538,7 +2538,7 @@
                 await afterDeviceChange();
                 toast('success', willActivate ? 'تم تفعيل الجهاز' : 'تم إيقاف تفعيل الجهاز');
             } catch (e) {
-                Swal.fire({ icon: 'error', title: 'تعذّر تنفيذ العملية', text: e.message, background: '#1f2937', color: '#fff' });
+                Swal.fire({ icon: 'error', title: 'تعذّر تنفيذ العملية', text: e.message, background: '#1c160e', color: '#fff' });
             }
         }
 
@@ -2553,8 +2553,8 @@
                 showCancelButton: true,
                 confirmButtonText: 'حفظ',
                 cancelButtonText: 'إلغاء',
-                confirmButtonColor: '#6366f1',
-                background: '#1f2937', color: '#fff'
+                confirmButtonColor: '#ff9a3d',
+                background: '#1c160e', color: '#fff'
             });
             if (!c.isConfirmed) return;
             try {
@@ -2562,7 +2562,7 @@
                 await afterDeviceChange();
                 toast('success', 'تم حفظ الاسم');
             } catch (e) {
-                Swal.fire({ icon: 'error', title: 'تعذّر الحفظ', text: e.message, background: '#1f2937', color: '#fff' });
+                Swal.fire({ icon: 'error', title: 'تعذّر الحفظ', text: e.message, background: '#1c160e', color: '#fff' });
             }
         }
 
@@ -2577,7 +2577,7 @@
                 confirmButtonText: 'نعم، احذفه',
                 cancelButtonText: 'إلغاء',
                 confirmButtonColor: '#ef4444',
-                background: '#1f2937', color: '#fff'
+                background: '#1c160e', color: '#fff'
             });
             if (!c.isConfirmed) return;
             try {
@@ -2592,7 +2592,7 @@
                 await afterDeviceChange();
                 toast('success', 'تم حذف الجهاز');
             } catch (e) {
-                Swal.fire({ icon: 'error', title: 'تعذّر الحذف', text: e.message, background: '#1f2937', color: '#fff' });
+                Swal.fire({ icon: 'error', title: 'تعذّر الحذف', text: e.message, background: '#1c160e', color: '#fff' });
             }
         }
 

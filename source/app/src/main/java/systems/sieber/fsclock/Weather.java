@@ -3,15 +3,18 @@ package systems.sieber.fsclock;
 import android.os.Handler;
 import android.os.Looper;
 
+import org.json.JSONArray;
 import org.json.JSONObject;
 
 import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.net.URLEncoder;
 
 /**
  * Fetches the current weather without requiring location permission:
- * 1) approximate location from the device IP (ip-api.com, free, no key)
+ * 1) location either from a user-entered city name (Open-Meteo geocoding, free,
+ *    no key) or, if the city is empty, approximate from the device IP (ip-api.com)
  * 2) current temperature + weather code from Open-Meteo (free, no key)
  * The result (e.g. "☀ 28°") is delivered on the main thread.
  */
@@ -21,16 +24,29 @@ public class Weather {
         void onResult(String text); // null on failure
     }
 
-    public static void fetch(final boolean celsius, final WeatherCallback cb) {
+    public static void fetch(final boolean celsius, final String city, final WeatherCallback cb) {
         new Thread(new Runnable() {
             @Override
             public void run() {
                 String result = null;
                 try {
-                    // 1) geolocate by IP
-                    JSONObject loc = new JSONObject(httpGet("http://ip-api.com/json/?fields=lat,lon"));
-                    double lat = loc.getDouble("lat");
-                    double lon = loc.getDouble("lon");
+                    double lat, lon;
+                    if(city != null && !city.trim().isEmpty()) {
+                        // 1a) geocode the user-entered city name
+                        String geoUrl = "https://geocoding-api.open-meteo.com/v1/search?count=1&language=ar&name="
+                                + URLEncoder.encode(city.trim(), "UTF-8");
+                        JSONObject geo = new JSONObject(httpGet(geoUrl));
+                        JSONArray results = geo.optJSONArray("results");
+                        if(results == null || results.length() == 0) throw new Exception("city not found");
+                        JSONObject place = results.getJSONObject(0);
+                        lat = place.getDouble("latitude");
+                        lon = place.getDouble("longitude");
+                    } else {
+                        // 1b) geolocate by IP
+                        JSONObject loc = new JSONObject(httpGet("http://ip-api.com/json/?fields=lat,lon"));
+                        lat = loc.getDouble("lat");
+                        lon = loc.getDouble("lon");
+                    }
 
                     // 2) current weather
                     String unit = celsius ? "celsius" : "fahrenheit";

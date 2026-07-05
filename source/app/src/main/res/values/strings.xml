@@ -13,11 +13,12 @@
     <string name="wallpaper_count">تم تحميل %d خلفية ✓</string>
     <string name="wallpaper_failed">فشل التحديث: %s</string>
     <string name="wallpaper_need_url">من فضلك أدخل رابط القائمة أولاً</string>
-    <string name="mac_show_qr">عرض الـ MAC كـ QR (Show MAC QR)</string>
-    <string name="mac_qr_title">عنوان الجهاز MAC</string>
-    <string name="mac_qr_hint">امسح الكود ده بالكاميرا عشان يظهر عنوان الـ MAC بتاع الجهاز.</string>
-    <string name="mac_unavailable">عنوان الـ MAC غير متاح على هذا الجهاز</string>
+    <string name="mac_show_qr">عرض كود الربط كـ QR (Show Linking Code QR)</string>
+    <string name="mac_qr_title">كود ربط الجهاز (Device Linking Code)</string>
+    <string name="mac_qr_hint">امسح الكود ده أو انسخه، واربط بيه صورة الجهاز من لوحة التحكم.</string>
+    <string name="mac_unavailable">كود الجهاز غير متاح على هذا الجهاز</string>
     <string name="show_weather">إظهار الطقس الحالي</string>
+    <string name="weather_city_hint">المدينة (اتركها فارغة للتحديد التلقائي حسب الموقع)</string>
     <string name="arabic_digits">أرقام عربية (١٢٣) بدل (123)</string>
     <string name="show_hijri_date">إظهار التاريخ الهجري تحت الميلادي</string>
     <string name="auto_contrast">لون الساعة تلقائي عكس الخلفية (للوضوح)</string>

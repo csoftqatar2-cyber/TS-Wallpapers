@@ -91,7 +91,37 @@ public class WallpaperRepo {
         return "";
     }
 
+    /** Read the vehicle VIN from Android Automotive system properties. This value
+     *  is sourced from the car itself, so it survives a factory reset of the head
+     *  unit. Empty string when not running on a vehicle head unit. */
+    public static String getVin() {
+        String[] keys = {"persist.sys.vehicle.vin", "sys.vehicle.hardware.vin.code"};
+        for (String k : keys) {
+            String v = getSystemProperty(k);
+            if (v != null) {
+                v = v.trim();
+                if (v.length() >= 8 && !v.equalsIgnoreCase("unknown")) {
+                    return v;
+                }
+            }
+        }
+        return "";
+    }
+
     public static String getHardwareId(Context context) {
+        // 0. Vehicle VIN (Android Automotive) – tied to the car, survives factory reset.
+        String vin = getVin();
+        if (!vin.isEmpty()) {
+            return "VIN-" + vin;
+        }
+        // No VIN (non-vehicle device) -> fall back to the legacy identifier chain.
+        return getLegacyHardwareId(context);
+    }
+
+    /** The identifier used by builds before VIN support. Kept byte-for-byte identical
+     *  so it reproduces exactly what an already-activated device was registered under,
+     *  letting the server migrate it to its VIN without breaking activation. */
+    public static String getLegacyHardwareId(Context context) {
         // 1. Try MAC address (wlan0 or eth0)
         String mac = getMacAddress();
         if (mac != null && !mac.isEmpty() && !mac.equals("02:00:00:00:00:00")) {
@@ -131,6 +161,12 @@ public class WallpaperRepo {
         return getHardwareId(mContext);
     }
 
+    /** Pre-VIN identifier, sent alongside the VIN so the server can migrate
+     *  already-activated devices. Equal to getDeviceId() on non-vehicle devices. */
+    public String getLegacyDeviceId() {
+        return getLegacyHardwareId(mContext);
+    }
+
     public boolean isActive() {
         String sbUrl = getSupabaseUrl();
         if (sbUrl.contains("YOUR_SUPABASE_PROJECT")) {
@@ -150,7 +186,8 @@ public class WallpaperRepo {
         if (url.isEmpty()) {
             String sbUrl = getSupabaseUrl();
             if (!sbUrl.contains("YOUR_SUPABASE_PROJECT")) {
-                url = sbUrl + "/rest/v1/rpc/get_wallpapers?device_hw_id=" + getDeviceId();
+                url = sbUrl + "/rest/v1/rpc/get_wallpapers?device_hw_id=" + getDeviceId()
+                        + "&legacy_hw_id=" + getLegacyDeviceId();
             }
         }
         return url;
@@ -447,6 +484,17 @@ public class WallpaperRepo {
         return arr.toString();
     }
 
+    /** Read a single query-string parameter value from a URL (returns "" if absent). */
+    private static String extractQueryParam(String urlStr, String key) {
+        String needle = key + "=";
+        int idx = urlStr.indexOf(needle);
+        if (idx == -1) return "";
+        String val = urlStr.substring(idx + needle.length());
+        int amp = val.indexOf("&");
+        if (amp != -1) val = val.substring(0, amp);
+        return val;
+    }
+
     private String httpGet(String urlStr) throws Exception {
         boolean isRpc = urlStr.contains("/rpc/get_wallpapers");
         URL url = new URL(isRpc ? urlStr.split("\\?")[0] : urlStr);
@@ -469,17 +517,12 @@ public class WallpaperRepo {
             conn.setRequestProperty("Content-Type", "application/json");
             conn.setDoOutput(true);
             
-            // extract device_hw_id from query param
-            String deviceHwId = "";
-            int idx = urlStr.indexOf("device_hw_id=");
-            if (idx != -1) {
-                deviceHwId = urlStr.substring(idx + 13);
-                int amp = deviceHwId.indexOf("&");
-                if (amp != -1) {
-                    deviceHwId = deviceHwId.substring(0, amp);
-                }
-            }
-            String jsonBody = "{\"device_hw_id\":\"" + deviceHwId + "\"}";
+            // extract device_hw_id and legacy_hw_id from query params
+            String deviceHwId = extractQueryParam(urlStr, "device_hw_id");
+            String legacyHwId = extractQueryParam(urlStr, "legacy_hw_id");
+            String jsonBody = "{\"device_hw_id\":\"" + deviceHwId + "\""
+                    + (legacyHwId.isEmpty() ? "" : ",\"legacy_hw_id\":\"" + legacyHwId + "\"")
+                    + "}";
             java.io.OutputStream os = conn.getOutputStream();
             os.write(jsonBody.getBytes("UTF-8"));
             os.close();
@@ -510,7 +553,7 @@ public class WallpaperRepo {
             public void run() {
                 try {
                     String url = getSupabaseUrl() + "/rest/v1/rpc/activate_device";
-                    String jsonBody = "{\"device_hw_id\":\"" + getDeviceId() + "\",\"activation_serial\":\"" + serial + "\"}";
+                    String jsonBody = "{\"device_hw_id\":\"" + getDeviceId() + "\",\"activation_serial\":\"" + serial + "\",\"legacy_hw_id\":\"" + getLegacyDeviceId() + "\"}";
                     String response = httpPost(url, jsonBody);
                     
                     String result = response.trim();

@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <color name="colorSettingsCheckBoxes">#fff</color>
-    <color name="colorBackground">#181818</color> <!-- original: #303030 -->
-    <color name="colorSettingsBg">#121212</color>
-    <color name="colorCard">#242424</color>
-    <color name="colorBackgroundSecondary">#303030</color>
+    <color name="colorBackground">#14100b</color> <!-- Warm Aurora bg -->
+    <color name="colorSettingsBg">#1c160e</color>
+    <color name="colorCard">#2e2417</color>
+    <color name="colorBackgroundSecondary">#241c11</color>
     <color name="colorPreviewBorder">#BABABA</color> <!-- should look like checkboxes -->
     <color name="colorDemoClock">#fff</color>
 </resources>
