@@ -640,7 +640,7 @@ public class FsClockView extends FrameLayout {
         // current weather (outside, no permission) + inside/car temperature (device ambient sensor)
         if(mSharedPref.getBoolean("show-weather", true)) {
             registerTempSensor();
-            Weather.fetch(mSharedPref.getBoolean("weather-celsius", true), new Weather.WeatherCallback() {
+            Weather.fetch(mSharedPref.getBoolean("weather-celsius", true), mSharedPref.getString("weather-city", "Doha"), new Weather.WeatherCallback() {
                 @Override
                 public void onResult(String text) {
                     mOutsideWeather = text;

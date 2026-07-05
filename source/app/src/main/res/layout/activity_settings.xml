@@ -265,6 +265,13 @@
                                 android:layout_width="match_parent"
                                 android:layout_height="wrap_content"
                                 android:text="@string/show_weather" />
+                            <EditText
+                                android:id="@+id/editTextWeatherCity"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:hint="@string/weather_city_hint"
+                                android:inputType="textCapWords"
+                                android:maxLines="1" />
                             <CheckBox
                                 android:id="@+id/checkBoxBurnInPrevention"
                                 android:layout_width="match_parent"
@@ -585,7 +592,7 @@
                                 android:paddingTop="8dp"
                                 android:paddingBottom="8dp"
                                 android:textStyle="bold"
-                                android:textColor="#009688"
+                                android:textColor="@color/gold"
                                 android:textSize="15sp"
                                 android:text="Device ID: " />
 
@@ -595,7 +602,7 @@
                                 android:layout_height="wrap_content"
                                 android:paddingBottom="8dp"
                                 android:textStyle="bold"
-                                android:textColor="#009688"
+                                android:textColor="@color/gold"
                                 android:textSize="15sp"
                                 android:textIsSelectable="true"
                                 android:text="MAC: " />

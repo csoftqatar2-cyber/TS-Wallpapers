@@ -2,9 +2,9 @@
 <resources>
     <color name="ic_launcher_background">#000000</color>
 
-    <color name="colorPrimary">#000</color>
-    <color name="colorPrimaryDark">#000</color>
-    <color name="colorAccent">#d6575e</color>
+    <color name="colorPrimary">#14100b</color>
+    <color name="colorPrimaryDark">#14100b</color>
+    <color name="colorAccent">#ff9a3d</color>
     <color name="colorDefaultClock">#fff</color>
     <color name="colorSettingsCheckBoxes">#222</color>
     <color name="colorBackground">#FFFFFF</color>
@@ -15,9 +15,9 @@
     <color name="colorPreviewBorder">#757575</color> <!-- should look like checkboxes -->
     <color name="colorDemoClock">#222</color>
     
-    <!-- Custom Black and Gold Dialog Theme Colors -->
-    <color name="dialog_bg">#121212</color>
-    <color name="gold">#D4AF37</color>
-    <color name="gold_dim">#80D4AF37</color>
-    <color name="gold_dark">#996515</color>
+    <!-- Custom Warm Aurora Dialog Theme Colors -->
+    <color name="dialog_bg">#1c160e</color>
+    <color name="gold">#ffd27a</color>
+    <color name="gold_dim">#80ffd27a</color>
+    <color name="gold_dark">#ff9a3d</color>
 </resources>
