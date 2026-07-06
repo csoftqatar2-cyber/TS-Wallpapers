@@ -38,8 +38,11 @@ jobs:
       - name: Read version + decide whether to publish
         id: gate
         run: |
-          VC=$(grep -oE 'versionCode[[:space:]]+[0-9]+' source/app/build.gradle | grep -oE '[0-9]+' | head -1)
-          VN=$(grep -oE 'versionName[[:space:]]+"[^"]+"' source/app/build.gradle | sed -E 's/.*"([^"]+)".*/\1/' | head -1)
+          # Strip comment lines first so the "versionName \"1.0\" -> 114" example in the
+          # comments can't be picked up instead of the real values below it.
+          GRADLE=$(grep -vE '^[[:space:]]*//' source/app/build.gradle)
+          VC=$(echo "$GRADLE" | grep -oE 'versionCode[[:space:]]+[0-9]+' | grep -oE '[0-9]+' | head -1)
+          VN=$(echo "$GRADLE" | grep -oE 'versionName[[:space:]]+"[^"]+"' | sed -E 's/.*"([^"]+)".*/\1/' | head -1)
           LATEST=$(curl -s "${SUPABASE_URL}/rest/v1/app_versions?select=version_code&order=version_code.desc&limit=1" \
             -H "apikey: ${SUPABASE_ANON_KEY}" -H "Authorization: Bearer ${SUPABASE_ANON_KEY}" \
             | grep -oE '"version_code":[0-9]+' | grep -oE '[0-9]+' | head -1)
