@@ -207,23 +207,21 @@ public class FsClockView extends FrameLayout {
                                             imm.hideSoftInputFromWindow(mEditTextActivationSerial.getWindowToken(), 0);
                                         }
                                         mEditTextActivationSerial.clearFocus();
+
+                                        // Make sure the wallpaper slideshow is switched on so the
+                                        // shop owner never has to flip a toggle after activating.
+                                        mSharedPref.edit()
+                                                .putBoolean(WallpaperRepo.PREF_ENABLED, true)
+                                                .apply();
+
                                         postDelayed(new Runnable() {
                                             @Override
                                             public void run() {
                                                 loadSettings();
-                                                if (mWallpaperRepo != null) {
-                                                    mWallpaperRepo.sync(new WallpaperRepo.SyncCallback() {
-                                                        @Override
-                                                        public void done(boolean successSync, int count, String errorSync) {
-                                                            post(new Runnable() {
-                                                                @Override
-                                                                public void run() {
-                                                                    loadSettings();
-                                                                }
-                                                            });
-                                                        }
-                                                    });
-                                                }
+                                                // Automatically download the public wallpapers right
+                                                // after activation, retrying a few times so a brief
+                                                // network hiccup doesn't leave the screen empty.
+                                                autoDownloadWallpapers(3);
                                             }
                                         }, 1500);
                                     } else {
@@ -308,20 +306,41 @@ public class FsClockView extends FrameLayout {
         // Use isSyncEnabled() (not isEnabled()) so the very first download also runs on a
         // fresh install, when no wallpapers are cached locally yet.
         if(mWallpaperRepo != null && mWallpaperRepo.isSyncEnabled()) {
-            mWallpaperRepo.sync(new WallpaperRepo.SyncCallback() {
-                @Override
-                public void done(final boolean success, final int count, String error) {
-                    post(new Runnable() {
-                        @Override
-                        public void run() {
-                            if (success) {
-                                loadSettings();
-                            }
-                        }
-                    });
-                }
-            });
+            autoDownloadWallpapers(3);
         }
+    }
+
+    /**
+     * Download the wallpaper playlist (public/global + device-specific) from Supabase and
+     * refresh the screen when done. Retries a few times so a transient network failure right
+     * after install/activation doesn't leave the device with no wallpapers until the owner
+     * manually presses sync in the settings.
+     *
+     * @param attemptsLeft how many more tries to make on failure (pass e.g. 3)
+     */
+    private void autoDownloadWallpapers(final int attemptsLeft) {
+        if(mWallpaperRepo == null) return;
+        mWallpaperRepo.sync(new WallpaperRepo.SyncCallback() {
+            @Override
+            public void done(final boolean success, final int count, String error) {
+                post(new Runnable() {
+                    @Override
+                    public void run() {
+                        if (success) {
+                            loadSettings();
+                        } else if (attemptsLeft > 1) {
+                            // retry after a short back-off
+                            postDelayed(new Runnable() {
+                                @Override
+                                public void run() {
+                                    autoDownloadWallpapers(attemptsLeft - 1);
+                                }
+                            }, 5000);
+                        }
+                    }
+                });
+            }
+        });
     }
 
     @Override
