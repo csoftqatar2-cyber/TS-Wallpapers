@@ -95,6 +95,48 @@ public class FsClockView extends FrameLayout {
             }
         }
     };
+
+    // Periodic re-sync: pull the latest playlist from the server every few minutes so
+    // that additions AND deletions made in the manager reach devices that are already
+    // running, without waiting for the app to be restarted. Deleting a public wallpaper
+    // then removes it everywhere; deleting a device-specific one removes it on that device.
+    static final long PERIODIC_SYNC_INTERVAL_MS = 5 * 60_000;
+    private final Runnable mPeriodicSyncRunnable = new Runnable() {
+        @Override
+        public void run() {
+            if(mWallpaperRepo != null && mWallpaperRepo.isSyncEnabled()) {
+                WallpaperItem cur = mWallpaperRepo.current();
+                final String beforeUrl = (cur != null) ? cur.url : null;
+                final int beforeSize = mWallpaperRepo.size();
+                mWallpaperRepo.sync(new WallpaperRepo.SyncCallback() {
+                    @Override
+                    public void done(final boolean success, final int count, String error) {
+                        post(new Runnable() {
+                            @Override
+                            public void run() {
+                                if(!success) return;
+                                // Refresh what's on screen only when the playlist actually
+                                // changed, so a deleted wallpaper disappears immediately while
+                                // an unchanged list keeps playing without any flicker.
+                                WallpaperItem now = (mWallpaperRepo != null) ? mWallpaperRepo.current() : null;
+                                String afterUrl = (now != null) ? now.url : null;
+                                boolean changed = (count != beforeSize)
+                                        || (beforeUrl == null ? afterUrl != null : !beforeUrl.equals(afterUrl));
+                                if(changed) loadSettings();
+                            }
+                        });
+                    }
+                });
+            }
+            postDelayed(this, PERIODIC_SYNC_INTERVAL_MS);
+        }
+    };
+
+    /** (Re)start the periodic server re-sync timer, cancelling any previous schedule. */
+    private void startPeriodicSync() {
+        removeCallbacks(mPeriodicSyncRunnable);
+        postDelayed(mPeriodicSyncRunnable, PERIODIC_SYNC_INTERVAL_MS);
+    }
     View mLayoutActivation;
     TextView mTextViewActivationDeviceId;
     EditText mEditTextActivationSerial;
@@ -308,6 +350,8 @@ public class FsClockView extends FrameLayout {
         if(mWallpaperRepo != null && mWallpaperRepo.isSyncEnabled()) {
             autoDownloadWallpapers(3);
         }
+        // Keep pulling changes from the server while the app runs (see mPeriodicSyncRunnable).
+        startPeriodicSync();
     }
 
     /**
@@ -354,6 +398,7 @@ public class FsClockView extends FrameLayout {
         }
 
         getContext().unregisterReceiver(mNotificationBroadcastReceiver);
+        removeCallbacks(mPeriodicSyncRunnable);
     }
 
     private void initLayoutListener() {
@@ -1239,6 +1284,7 @@ public class FsClockView extends FrameLayout {
     protected void pause() {
         unregisterTempSensor();
         removeCallbacks(mAutoSwitchRunnable);
+        removeCallbacks(mPeriodicSyncRunnable);
         if(mWallpaper != null) mWallpaper.pauseVideo();
         mTimerAnalogClock.cancel();
         mTimerAnalogClock.purge();
@@ -1254,6 +1300,11 @@ public class FsClockView extends FrameLayout {
         loadSettings();
         initLayoutListener();
         startTimer();
+        // Pull a fresh playlist on resume and keep re-syncing while visible.
+        if(mWallpaperRepo != null && mWallpaperRepo.isSyncEnabled()) {
+            autoDownloadWallpapers(1);
+        }
+        startPeriodicSync();
     }
 
     int mReceivedNotificationCount = 0;
