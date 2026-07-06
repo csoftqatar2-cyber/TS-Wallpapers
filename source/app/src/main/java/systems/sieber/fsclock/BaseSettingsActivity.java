@@ -166,6 +166,7 @@ public class BaseSettingsActivity extends AppCompatActivity {
     CheckBox mCheckBoxWallpaperAutoSwitch;
     EditText mEditTextWallpaperUrl;
     Button mButtonSyncWallpapers;
+    Button mButtonRefreshWallpapers;
     TextView mTextViewWallpaperStatus;
     CheckBox mCheckBoxShowClockOverlay;
     Spinner mSpinnerClockPosition;
@@ -295,6 +296,7 @@ public class BaseSettingsActivity extends AppCompatActivity {
         mCheckBoxWallpaperAutoSwitch = findViewById(R.id.checkBoxWallpaperAutoSwitch);
         mEditTextWallpaperUrl = findViewById(R.id.editTextWallpaperUrl);
         mButtonSyncWallpapers = findViewById(R.id.buttonSyncWallpapers);
+        mButtonRefreshWallpapers = findViewById(R.id.buttonRefreshWallpapers);
         mTextViewWallpaperStatus = findViewById(R.id.textViewWallpaperStatus);
         mCheckBoxShowClockOverlay = findViewById(R.id.checkBoxShowClockOverlay);
         mSpinnerClockPosition = findViewById(R.id.spinnerClockPosition);
@@ -540,6 +542,7 @@ public class BaseSettingsActivity extends AppCompatActivity {
         mCheckBoxWallpaperAutoSwitch.setEnabled(state);
         mEditTextWallpaperUrl.setEnabled(state);
         mButtonSyncWallpapers.setEnabled(state);
+        mButtonRefreshWallpapers.setEnabled(state);
         mCheckBoxShowClockOverlay.setEnabled(state);
         mSpinnerClockPosition.setEnabled(state);
         mSpinnerClockSize.setEnabled(state);
@@ -586,6 +589,42 @@ public class BaseSettingsActivity extends AppCompatActivity {
                             String status = mWallpaperRepo.isActive() ? "نشط (Activated)" : "غير نشط (Pending Activation)";
                             mTextViewSettingsDeviceId.setText("كود الجهاز (Device ID): " + mWallpaperRepo.getDeviceId() + "\nالحالة (Status): " + status);
                         }
+                    }
+                });
+            }
+        });
+    }
+
+    /**
+     * Re-fetch the wallpaper playlist straight from Supabase (public/global + this device's
+     * own wallpapers), ignoring the manual manifest URL field, and report whether any new
+     * wallpapers were added since last time. This lets the shop owner pull newly-uploaded
+     * wallpapers on demand without waiting for the automatic sync.
+     */
+    public void onClickRefreshWallpapers(View v) {
+        if(mWallpaperRepo == null) return;
+        final int before = mWallpaperRepo.size();
+        mTextViewWallpaperStatus.setText(getString(R.string.wallpaper_checking));
+        mButtonRefreshWallpapers.setEnabled(false);
+        mWallpaperRepo.sync(new WallpaperRepo.SyncCallback() {
+            @Override
+            public void done(final boolean success, final int count, final String error) {
+                runOnUiThread(new Runnable() {
+                    @Override
+                    public void run() {
+                        mButtonRefreshWallpapers.setEnabled(true);
+                        if(success) {
+                            int after = mWallpaperRepo.size();
+                            int added = after - before;
+                            if(added > 0) {
+                                mTextViewWallpaperStatus.setText(getString(R.string.wallpaper_new_added, added, after));
+                            } else {
+                                mTextViewWallpaperStatus.setText(getString(R.string.wallpaper_up_to_date, after));
+                            }
+                        } else {
+                            mTextViewWallpaperStatus.setText(getString(R.string.wallpaper_failed, error == null ? "?" : error));
+                        }
+                        updateDeviceInfoViews();
                     }
                 });
             }

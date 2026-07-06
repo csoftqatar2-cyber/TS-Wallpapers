@@ -13,6 +13,10 @@
     <string name="wallpaper_count">تم تحميل %d خلفية ✓</string>
     <string name="wallpaper_failed">فشل التحديث: %s</string>
     <string name="wallpaper_need_url">من فضلك أدخل رابط القائمة أولاً</string>
+    <string name="wallpaper_refresh">🔄 التحقق من الخلفيات الجديدة (عامة/مخصوصة)</string>
+    <string name="wallpaper_checking">جارٍ التحقق من الخلفيات الجديدة…</string>
+    <string name="wallpaper_up_to_date">الخلفيات محدثة — لا يوجد جديد (%d خلفية)</string>
+    <string name="wallpaper_new_added">تمت إضافة %1$d خلفية جديدة ✓ (الإجمالي %2$d)</string>
     <string name="mac_show_qr">عرض كود الربط كـ QR (Show Linking Code QR)</string>
     <string name="mac_qr_title">كود ربط الجهاز (Device Linking Code)</string>
     <string name="mac_qr_hint">امسح الكود ده أو انسخه، واربط بيه صورة الجهاز من لوحة التحكم.</string>
