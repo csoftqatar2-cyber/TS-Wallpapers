@@ -2134,13 +2134,24 @@
         async function uploadViaFunction(file, isGlobal, hardwareId) {
             const fileType = file.name.endsWith('.mp4') || file.name.endsWith('.bin') ? 'video' : 'image';
 
+            // Give every upload a unique random name BEFORE sending it. Customers very
+            // often send files with identical names ("1.jpg", "IMG_0001.jpg"...); storing
+            // them under the same name used to let one customer's private wallpaper
+            // overwrite another's at the same URL and leak onto the wrong car. A random
+            // UUID name makes collisions impossible. (The server also enforces this.)
+            const dot = file.name.lastIndexOf('.');
+            const ext = dot >= 0 ? file.name.slice(dot) : '';
+            const uniqueName = ((crypto && crypto.randomUUID)
+                ? crypto.randomUUID()
+                : (Date.now() + '-' + Math.random().toString(36).slice(2))) + ext;
+
             const response = await fetch(`${FUNCTIONS_URL}/admin-upload`, {
                 method: "POST",
                 headers: {
                     "Authorization": `Bearer ${SESSION_TOKEN}`,
                     "apikey": ANON_KEY,
                     "Content-Type": file.type || "application/octet-stream",
-                    "x-file-name": encodeURIComponent(file.name),
+                    "x-file-name": encodeURIComponent(uniqueName),
                     "x-file-type": fileType,
                     "x-is-global": String(isGlobal),
                     "x-hardware-id": hardwareId || ""
