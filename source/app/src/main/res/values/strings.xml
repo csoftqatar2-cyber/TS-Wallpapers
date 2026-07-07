@@ -99,6 +99,9 @@ Roboto Font Copyright (c) Christian Robertson. Licensed under the Apache License
     <string name="background">Background</string>
     <string name="general">General</string>
     <string name="keep_screen_on">Keep Screen On</string>
+    <string name="auto_start_on_boot">Auto-start app when the car (device) turns on</string>
+    <string name="auto_start_overlay_title">Permission Required</string>
+    <string name="auto_start_overlay_message">To allow the app to open automatically when the car turns on, please enable the \"Display over other apps\" permission on the next screen.</string>
     <string name="use_own_images">Use Custom Images</string>
     <string name="clock_face_color">Clock Face Color</string>
     <string name="hour_hand_color">Hour Hand Color</string>
