@@ -97,6 +97,7 @@ public class BaseSettingsActivity extends AppCompatActivity {
     LinearLayout mLinearLayoutSettingsContainer;
     Button mButtonUnlockSettings;
     CheckBox mCheckBoxKeepScreenOn;
+    CheckBox mCheckBoxAutoStartOnBoot;
     CheckBox mCheckBoxShowBatteryInfo;
     CheckBox mCheckBoxShowBatteryInfoWhenCharging;
     CheckBox mCheckBoxBurnInPrevention;
@@ -244,6 +245,7 @@ public class BaseSettingsActivity extends AppCompatActivity {
         mLinearLayoutSettingsContainer = findViewById(R.id.linearLayoutSettings);
         mButtonUnlockSettings = findViewById(R.id.buttonUnlockSettings);
         mCheckBoxKeepScreenOn = findViewById(R.id.checkBoxKeepScreenOn);
+        mCheckBoxAutoStartOnBoot = findViewById(R.id.checkBoxAutoStartOnBoot);
         mCheckBoxShowBatteryInfo = findViewById(R.id.checkBoxShowBatteryInfo);
         mCheckBoxShowBatteryInfoWhenCharging = findViewById(R.id.checkBoxShowBatteryInfoWhenCharging);
         mCheckBoxBurnInPrevention = findViewById(R.id.checkBoxBurnInPrevention);
@@ -312,6 +314,15 @@ public class BaseSettingsActivity extends AppCompatActivity {
         // init settings
         mSharedPref = getSharedPreferences(SHARED_PREF_DOMAIN, Context.MODE_PRIVATE);
         mCheckBoxKeepScreenOn.setChecked( mSharedPref.getBoolean("keep-screen-on", true) );
+        mCheckBoxAutoStartOnBoot.setChecked( mSharedPref.getBoolean(BootReceiver.PREF_AUTO_START, false) );
+        mCheckBoxAutoStartOnBoot.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
+            @Override
+            public void onCheckedChanged(CompoundButton compoundButton, boolean checked) {
+                // save immediately so the setting survives even if the user leaves without pressing "done"
+                mSharedPref.edit().putBoolean(BootReceiver.PREF_AUTO_START, checked).apply();
+                if(checked) requestOverlayPermissionIfNeeded();
+            }
+        });
         mCheckBoxShowBatteryInfo.setChecked( mSharedPref.getBoolean("show-battery-info", true) );
         mCheckBoxShowBatteryInfoWhenCharging.setChecked( mSharedPref.getBoolean("show-battery-info-when-charging", false) );
         mCheckBoxBurnInPrevention.setChecked( mSharedPref.getBoolean("burn-in-prevention", false) );
@@ -497,8 +508,37 @@ public class BaseSettingsActivity extends AppCompatActivity {
         finish();
     }
 
+    /**
+     * Android 10+ blocks starting activities from a BroadcastReceiver unless the app
+     * holds the "Display over other apps" permission. Ask for it when the user enables
+     * auto-start so the app can actually open itself when the car (device) boots.
+     */
+    private void requestOverlayPermissionIfNeeded() {
+        if(Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return;
+        if(Settings.canDrawOverlays(this)) return;
+        new AlertDialog.Builder(this)
+                .setTitle(R.string.auto_start_overlay_title)
+                .setMessage(R.string.auto_start_overlay_message)
+                .setPositiveButton(R.string.ok, new DialogInterface.OnClickListener() {
+                    @Override
+                    public void onClick(DialogInterface dialogInterface, int i) {
+                        try {
+                            Intent intent = new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                                    Uri.parse("package:" + getPackageName()));
+                            startActivity(intent);
+                        } catch(ActivityNotFoundException e) {
+                            // some head units do not ship this settings screen; auto-start
+                            // via BOOT_COMPLETED usually still works there
+                        }
+                    }
+                })
+                .setNegativeButton(R.string.update_cancel, null)
+                .show();
+    }
+
     protected void enableDisableAllSettings(boolean state) {
         mCheckBoxKeepScreenOn.setEnabled(state);
+        mCheckBoxAutoStartOnBoot.setEnabled(state);
         mCheckBoxShowBatteryInfo.setEnabled(state);
         mCheckBoxShowBatteryInfoWhenCharging.setEnabled(state);
         mCheckBoxBurnInPrevention.setEnabled(state);
@@ -1105,6 +1145,7 @@ public class BaseSettingsActivity extends AppCompatActivity {
         SharedPreferences.Editor editor = mSharedPref.edit();
 
         editor.putBoolean("keep-screen-on", mCheckBoxKeepScreenOn.isChecked());
+        editor.putBoolean(BootReceiver.PREF_AUTO_START, mCheckBoxAutoStartOnBoot.isChecked());
         editor.putBoolean("show-battery-info", mCheckBoxShowBatteryInfo.isChecked());
         editor.putBoolean("show-battery-info-when-charging", mCheckBoxShowBatteryInfoWhenCharging.isChecked());
         editor.putBoolean("burn-in-prevention", mCheckBoxBurnInPrevention.isChecked());

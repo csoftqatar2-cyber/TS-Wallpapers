@@ -246,6 +246,11 @@
                                 android:layout_height="wrap_content"
                                 android:text="@string/keep_screen_on" />
                             <CheckBox
+                                android:id="@+id/checkBoxAutoStartOnBoot"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:text="@string/auto_start_on_boot" />
+                            <CheckBox
                                 android:id="@+id/checkBoxShowBatteryInfo"
                                 android:layout_width="match_parent"
                                 android:layout_height="wrap_content"

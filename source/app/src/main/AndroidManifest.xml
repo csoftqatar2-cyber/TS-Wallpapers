@@ -10,6 +10,11 @@
     <!-- required to install downloaded app updates (in-app self update) -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
+    <!-- auto-start when the car head unit boots (optional feature, off by default) -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <!-- allows launching the activity from the background on Android 10+ -->
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+
     <!-- do not remove - still necessary for older API levels <= 22 -->
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
 
@@ -80,6 +85,15 @@
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.ACTION_POWER_CONNECTED" />
+            </intent-filter>
+        </receiver>
+
+        <receiver android:name=".BootReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.QUICKBOOT_POWERON" />
+                <action android:name="com.htc.intent.action.QUICKBOOT_POWERON" />
             </intent-filter>
         </receiver>
 
