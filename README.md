@@ -3,17 +3,21 @@
 Android wallpapers/screensaver app (based on a fork of FsClock-Android) plus a
 web-based wallpapers manager and a Supabase-backed self-update system.
 
+> **Full system documentation:** see [AGENTS.md](AGENTS.md) — architecture, data flows,
+> editing invariants, and known issues. Each major directory also has its own README.
+
 ## Repository layout
 
 | Path                            | Description                                                        |
 | ------------------------------- | ------------------------------------------------------------------ |
+| `AGENTS.md`                     | System map: subsystems, data flows, invariants, known issues       |
 | `source/`                       | Android app source (Gradle / Java) — the active working copy       |
-| `wallpapers_manager.html`       | Standalone web tool to manage the wallpapers manifest              |
-| `wallpapers-manifest-example.json` | Example manifest format consumed by the app                     |
+| `wallpapers_manager.html`       | Admin web dashboard (wallpapers, devices, app updates) — deployed to Vercel |
+| `wallpapers-manifest-example.json` | Example static-manifest format the app can also consume         |
 | `supabase_app_update_setup.sql` | One-time Supabase SQL to enable in-app self-update                 |
 | `Wallpapers/`                   | Wallpaper image assets                                             |
-| `tools/`                        | Helper utilities (manifest server, hashing, samples)              |
-| `shots/`                        | Screenshots                                                        |
+| `tools/`                        | Dev-only test utilities (local manifest server, samples)           |
+| `shots/`                        | Historical dev screenshots                                         |
 | `دليل-ذبذبة-ستور.md`            | Store publishing guide (Arabic)                                    |
 
 ## Building the app
@@ -46,5 +50,8 @@ new versions into the `app_versions` table.
 
 ## Notes
 
-- `src/` (a stale upstream clone with its own `.git`) is excluded from this repo.
+- `src/` (a stale upstream clone with its own `.git`) is excluded from this repo —
+  the active app lives in `source/`.
+- `source/README.upstream.md` is the original FsClock-Android README, kept for
+  attribution; fork documentation lives in `source/README.md` and `AGENTS.md`.
 - Build outputs (`build/`, `.gradle/`) are git-ignored.

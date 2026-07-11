@@ -282,7 +282,7 @@
             android:textSize="20sp"
             android:gravity="center"
             android:padding="12dp"
-            android:inputType="number"
+            android:inputType="numberPassword"
             android:hint="******"
             android:textColorHint="#66FFFFFF" />
 

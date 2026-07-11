@@ -4,6 +4,10 @@
 
     <uses-permission android:name="android.permission.READ_CALENDAR" />
     <uses-permission android:name="android.permission.INTERNET" />
+
+    <!-- optional: use the real GPS/network location so the weather follows the car (falls back to typed city / IP when unavailable) -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
@@ -97,14 +101,9 @@
             </intent-filter>
         </receiver>
 
-        <receiver android:name="com.amazon.device.iap.ResponseReceiver"
-            android:permission="com.amazon.inapp.purchasing.Permission.NOTIFY"
-            android:exported="true"
-            tools:ignore="MissingClass">
-            <intent-filter>
-                <action android:name="com.amazon.inapp.purchasing.NOTIFY" />
-            </intent-filter>
-        </receiver>
+        <!-- Amazon IAP ResponseReceiver lives in src/amazon/AndroidManifest.xml so
+             standalone/google builds no longer declare a receiver whose class
+             doesn't exist in their flavor. -->
 
         <activity
             android:name=".SettingsActivity"

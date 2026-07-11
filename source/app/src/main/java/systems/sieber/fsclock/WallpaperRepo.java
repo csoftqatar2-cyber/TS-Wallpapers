@@ -200,8 +200,11 @@ public class WallpaperRepo {
     private final SharedPreferences mPref;
     private final SecurePrefs mSecurePref;
 
-    private List<WallpaperItem> mItems = new ArrayList<>();
-    private int mIndex = 0;
+    // Written by load() (which sync() calls from a background thread) and read by the
+    // UI thread (current/next/prev). volatile + read-side snapshots keep the two safe
+    // without locking; the list itself is never mutated after assignment.
+    private volatile List<WallpaperItem> mItems = new ArrayList<>();
+    private volatile int mIndex = 0;
 
     public WallpaperRepo(Context c) {
         mContext = c.getApplicationContext();
@@ -217,20 +220,23 @@ public class WallpaperRepo {
             merged.addAll(scanLocalFolder());
         }
         merged.addAll(parse(mPref.getString(PREF_CACHE, "")));
-        mItems = merged;
-        mIndex = mPref.getInt(PREF_INDEX, 0);
-        if(mItems.isEmpty()) {
-            mIndex = 0;
+        int index = mPref.getInt(PREF_INDEX, 0);
+        if(merged.isEmpty()) {
+            index = 0;
         } else {
-            mIndex = ((mIndex % mItems.size()) + mItems.size()) % mItems.size();
+            index = ((index % merged.size()) + merged.size()) % merged.size();
         }
         // if a default wallpaper (e.g. uploaded via QR) is set and present, show it first
         String def = mPref.getString(PREF_DEFAULT, "");
         if(!def.isEmpty()) {
-            for(int i = 0; i < mItems.size(); i++) {
-                if(def.equals(mItems.get(i).url)) { mIndex = i; break; }
+            for(int i = 0; i < merged.size(); i++) {
+                if(def.equals(merged.get(i).url)) { index = i; break; }
             }
         }
+        // publish fully-built state; readers snapshot mItems so they never see a
+        // list/index pair from two different loads
+        mItems = merged;
+        mIndex = index;
     }
 
     /** The on-device folder where the shop can drop images/GIFs/videos (no permission needed). */
@@ -288,22 +294,27 @@ public class WallpaperRepo {
     }
 
     public WallpaperItem current() {
-        if(mItems.isEmpty()) return null;
-        return mItems.get(mIndex % mItems.size());
+        List<WallpaperItem> items = mItems;
+        if(items.isEmpty()) return null;
+        return items.get(((mIndex % items.size()) + items.size()) % items.size());
     }
 
     public WallpaperItem next() {
-        if(mItems.isEmpty()) return null;
-        mIndex = (mIndex + 1) % mItems.size();
+        List<WallpaperItem> items = mItems;
+        if(items.isEmpty()) return null;
+        int index = (((mIndex % items.size()) + items.size()) + 1) % items.size();
+        mIndex = index;
         saveIndex();
-        return current();
+        return items.get(index);
     }
 
     public WallpaperItem prev() {
-        if(mItems.isEmpty()) return null;
-        mIndex = (mIndex - 1 + mItems.size()) % mItems.size();
+        List<WallpaperItem> items = mItems;
+        if(items.isEmpty()) return null;
+        int index = (((mIndex % items.size()) + items.size()) - 1) % items.size();
+        mIndex = index;
         saveIndex();
-        return current();
+        return items.get(index);
     }
 
     private void saveIndex() {
@@ -520,9 +531,10 @@ public class WallpaperRepo {
             // extract device_hw_id and legacy_hw_id from query params
             String deviceHwId = extractQueryParam(urlStr, "device_hw_id");
             String legacyHwId = extractQueryParam(urlStr, "legacy_hw_id");
-            String jsonBody = "{\"device_hw_id\":\"" + deviceHwId + "\""
-                    + (legacyHwId.isEmpty() ? "" : ",\"legacy_hw_id\":\"" + legacyHwId + "\"")
-                    + "}";
+            JSONObject body = new JSONObject();
+            body.put("device_hw_id", deviceHwId);
+            if(!legacyHwId.isEmpty()) body.put("legacy_hw_id", legacyHwId);
+            String jsonBody = body.toString();
             java.io.OutputStream os = conn.getOutputStream();
             os.write(jsonBody.getBytes("UTF-8"));
             os.close();
@@ -553,8 +565,11 @@ public class WallpaperRepo {
             public void run() {
                 try {
                     String url = getSupabaseUrl() + "/rest/v1/rpc/activate_device";
-                    String jsonBody = "{\"device_hw_id\":\"" + getDeviceId() + "\",\"activation_serial\":\"" + serial + "\",\"legacy_hw_id\":\"" + getLegacyDeviceId() + "\"}";
-                    String response = httpPost(url, jsonBody);
+                    JSONObject body = new JSONObject();
+                    body.put("device_hw_id", getDeviceId());
+                    body.put("activation_serial", serial);
+                    body.put("legacy_hw_id", getLegacyDeviceId());
+                    String response = httpPost(url, body.toString());
                     
                     String result = response.trim();
                     if (result.startsWith("\"") && result.endsWith("\"") && result.length() >= 2) {

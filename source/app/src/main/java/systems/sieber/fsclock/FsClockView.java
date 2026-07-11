@@ -23,6 +23,9 @@ import android.hardware.Sensor;
 import android.hardware.SensorEvent;
 import android.hardware.SensorEventListener;
 import android.hardware.SensorManager;
+import android.location.Location;
+import android.location.LocationListener;
+import android.location.LocationManager;
 import android.media.Ringtone;
 import android.media.RingtoneManager;
 import android.net.Uri;
@@ -96,6 +99,19 @@ public class FsClockView extends FrameLayout {
         }
     };
 
+    // Periodic weather refresh: re-query the API every 15 min so the temperature and the
+    // day/night icon stay current even while parked (location changes trigger their own refresh).
+    static final long WEATHER_REFRESH_INTERVAL_MS = 15 * 60_000;
+    private final Runnable mWeatherRefreshRunnable = new Runnable() {
+        @Override
+        public void run() {
+            if(mSharedPref.getBoolean("show-weather", true)) {
+                refreshWeather();
+                postDelayed(this, WEATHER_REFRESH_INTERVAL_MS);
+            }
+        }
+    };
+
     // Periodic re-sync: pull the latest playlist from the server every few minutes so
     // that additions AND deletions made in the manager reach devices that are already
     // running, without waiting for the app to be restarted. Deleting a public wallpaper
@@ -157,6 +173,8 @@ public class FsClockView extends FrameLayout {
     Float mInsideTemp;
     SensorManager mSensorManager;
     Sensor mTempSensor;
+    LocationManager mLocationManager;
+    Location mLastLocation;
     DigitalClockView mDigitalClock;
     DateView mDateText;
     TextView mTextViewEvents;
@@ -399,6 +417,9 @@ public class FsClockView extends FrameLayout {
 
         getContext().unregisterReceiver(mNotificationBroadcastReceiver);
         removeCallbacks(mPeriodicSyncRunnable);
+        removeCallbacks(mWeatherRefreshRunnable);
+        unregisterTempSensor();
+        unregisterLocation();
     }
 
     private void initLayoutListener() {
@@ -701,19 +722,18 @@ public class FsClockView extends FrameLayout {
         mNotificationsImage.setColorFilter(colorEvents, PorterDuff.Mode.SRC_ATOP);
         mWeatherText.setTextColor(colorEvents);
 
-        // current weather (outside, no permission) + inside/car temperature (device ambient sensor)
+        // current weather (outside) + inside/car temperature (device ambient sensor)
         if(mSharedPref.getBoolean("show-weather", true)) {
             registerTempSensor();
-            Weather.fetch(mSharedPref.getBoolean("weather-celsius", true), mSharedPref.getString("weather-city", "Doha"), new Weather.WeatherCallback() {
-                @Override
-                public void onResult(String text) {
-                    mOutsideWeather = text;
-                    updateWeatherText();
-                }
-            });
+            registerLocation();   // start listening to GPS so the weather follows the car
+            refreshWeather();
             updateWeatherText();
+            removeCallbacks(mWeatherRefreshRunnable);
+            postDelayed(mWeatherRefreshRunnable, WEATHER_REFRESH_INTERVAL_MS);
         } else {
             unregisterTempSensor();
+            unregisterLocation();
+            removeCallbacks(mWeatherRefreshRunnable);
             mOutsideWeather = null;
             mWeatherView.setVisibility(View.GONE);
         }
@@ -890,6 +910,76 @@ public class FsClockView extends FrameLayout {
         if(mSensorManager != null && mTempSensor != null) {
             mSensorManager.unregisterListener(mTempListener);
         }
+    }
+
+    private boolean hasLocationPermission() {
+        return ContextCompat.checkSelfPermission(getContext(), Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+                || ContextCompat.checkSelfPermission(getContext(), Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED;
+    }
+
+    private final LocationListener mLocationListener = new LocationListener() {
+        @Override
+        public void onLocationChanged(Location location) {
+            if(location == null) return;
+            // only re-query the weather API once the car has moved a meaningful distance
+            boolean moved = mLastLocation == null || mLastLocation.distanceTo(location) > 3000; // > 3 km
+            mLastLocation = location;
+            if(moved) refreshWeather();
+        }
+        @Override public void onStatusChanged(String provider, int status, android.os.Bundle extras) { }
+        @Override public void onProviderEnabled(String provider) { }
+        @Override public void onProviderDisabled(String provider) { }
+    };
+
+    @SuppressLint("MissingPermission")
+    private void registerLocation() {
+        if(!hasLocationPermission()) return; // fall back silently to city/IP
+        if(mLocationManager == null) {
+            mLocationManager = (LocationManager) getContext().getSystemService(Context.LOCATION_SERVICE);
+        }
+        if(mLocationManager == null) return;
+        // seed with the best last-known fix so we don't wait for the first update
+        try {
+            Location gps = mLocationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER);
+            Location net = mLocationManager.getLastKnownLocation(LocationManager.NETWORK_PROVIDER);
+            if(gps != null) mLastLocation = gps;
+            if(net != null && (mLastLocation == null || net.getTime() > mLastLocation.getTime())) mLastLocation = net;
+        } catch(Exception ignored) { }
+        // subscribe to updates from whichever providers exist on this device / head unit
+        try {
+            if(mLocationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
+                mLocationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 60000, 3000, mLocationListener);
+            }
+        } catch(Exception ignored) { }
+        try {
+            if(mLocationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)) {
+                mLocationManager.requestLocationUpdates(LocationManager.NETWORK_PROVIDER, 60000, 3000, mLocationListener);
+            }
+        } catch(Exception ignored) { }
+    }
+
+    private void unregisterLocation() {
+        if(mLocationManager != null) {
+            try { mLocationManager.removeUpdates(mLocationListener); } catch(Exception ignored) { }
+        }
+    }
+
+    /** Fetch outside weather using the real GPS location when available, else the typed city / IP. */
+    private void refreshWeather() {
+        if(!mSharedPref.getBoolean("show-weather", true)) return;
+        Double lat = null, lon = null;
+        if(hasLocationPermission() && mLastLocation != null) {
+            lat = mLastLocation.getLatitude();
+            lon = mLastLocation.getLongitude();
+        }
+        Weather.fetch(mSharedPref.getBoolean("weather-celsius", true), lat, lon,
+                mSharedPref.getString("weather-city", "Doha"), new Weather.WeatherCallback() {
+            @Override
+            public void onResult(String text) {
+                mOutsideWeather = text;
+                updateWeatherText();
+            }
+        });
     }
 
     /** Compose the weather line: outside weather (API) + inside/car temperature (device sensor). */
@@ -1311,7 +1401,10 @@ public class FsClockView extends FrameLayout {
     public class NotificationBroadcastReceiver extends BroadcastReceiver {
         @Override
         public void onReceive(Context context, Intent intent) {
-            mReceivedNotificationCount += intent.getIntExtra("count", -1);
+            // NotificationListener always sends count=1; ignore malformed or
+            // spoofed broadcasts so the counter can never go backwards.
+            int count = intent.getIntExtra("count", 0);
+            if(count > 0) mReceivedNotificationCount += count;
         }
     }
     public void resetNotificationCount() {
