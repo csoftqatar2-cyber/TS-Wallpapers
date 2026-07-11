@@ -1,10 +1,24 @@
-This app displays a simple fullscreen clock which can be used screensaver and widget.
+TS Wallpapers turns a car head unit, tablet or TV into a live wallpaper display
+with an elegant fullscreen clock overlay.
 
-- choose between various pre-defined clock hands and faces or use custom images
-- analog and digital clock can be activated or deactivated individually
-- optional date and weekday view with custom format option
-- displays alarms and appointments from Android calendar or internal event database
-- adjustable background and clock color
-- can be set as Android system screensaver ("DayDream") on smartphones and tablets
-- compatible with Android TV devices
-- content can be moved slightly to prevent burn-in on OLED displays
+Wallpapers
+- slideshow of photos, animated GIFs and videos (MP4 and more)
+- swipe or use the remote's left/right keys to switch; auto-switch every minute
+- wallpapers are managed remotely: add or remove an image once and every
+  activated device receives the change automatically
+- per-device wallpapers: assign private images to a single car while global
+  images reach all cars
+- add local media from the device, or pair a phone by QR code and upload
+  over Wi-Fi
+- videos are pre-downloaded so playback loops smoothly and works offline
+
+Clock
+- analog and digital clock, individually configurable (position, size, fonts,
+  colors, show/hide)
+- date view with Hijri calendar and Arabic digit support
+- weather, battery, alarms, calendar events and notification count overlays
+- burn-in protection for OLED screens
+- usable as Android screensaver (DayDream) and as home-screen widgets
+- compatible with Android TV / car head units (16:9, remote-friendly)
+
+The app self-updates: new versions are offered in-app, no store needed.

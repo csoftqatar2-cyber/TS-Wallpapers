@@ -89,8 +89,13 @@ applicationId is `store.thabthaba.clock`). Read this before editing any class.
 5. Release JSON in `WallpaperRepo` is built by string concatenation (`:523`, `:556`) —
    inputs are not escaped; be careful what reaches those strings.
 
-## Known bugs in this package (flagged, deliberately not fixed — see root AGENTS.md §8)
+## Bug status (see root AGENTS.md §8 for the full log)
 
-Unsynchronized `mItems`/`mIndex` in `WallpaperRepo`; widget 24h default mismatch;
-`checkCode()` reads error stream after disconnect and treats HTTP 999 as success;
-notification count `+= -1` when extra missing; dead review-dialog code in `FullscreenActivity`.
+Fixed 2026-07: `WallpaperRepo` thread safety (volatile + snapshots), RPC bodies via
+`JSONObject`, widget 24h default aligned to the clock, `checkCode()` stream-order,
+notification-count guard, Amazon receiver moved to the amazon flavor manifest.
+Still present by choice: dead review-dialog code in `FullscreenActivity` (R8 strips it),
+self-trusting IntegrityGuard (baking a hash could brick fielded activations).
+Robustness guarantee worth knowing: `sync()` failure paths never touch the cached
+playlist — wallpapers only leave a device when the server explicitly returns
+`"inactive"` or the admin deletes rows. Keep it that way.
