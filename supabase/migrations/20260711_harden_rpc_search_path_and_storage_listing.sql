@@ -1,6 +1,7 @@
 -- ============================================================================
--- PENDING HARDENING MIGRATION — not yet applied to the live project.
--- Apply in the Supabase SQL Editor (or ask the agent to apply it via MCP).
+-- APPLIED to the live project 2026-07-11 (with user approval) as migration
+-- "harden_rpc_search_path_and_storage_listing". Verified after apply:
+-- get_wallpapers returns full playlists for active devices; advisors 0011/0025 cleared.
 --
 -- Fixes two security-advisor findings WITHOUT any effect on installed devices:
 --
