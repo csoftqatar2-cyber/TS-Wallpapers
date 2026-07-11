@@ -68,7 +68,8 @@ public class FsClockWidgetDigitalProvider extends AppWidgetProvider {
     @SuppressLint("SimpleDateFormat")
     static void updateAllWidgets(Context context, AppWidgetManager manager, int[] ids) {
         SharedPreferences prefs = context.getSharedPreferences(BaseSettingsActivity.SHARED_PREF_DOMAIN, Context.MODE_PRIVATE);
-        boolean format24hrs = prefs.getBoolean("24hrs", true);
+        // default must match the main clock (FsClockView/BaseSettingsActivity use false)
+        boolean format24hrs = prefs.getBoolean("24hrs", false);
         boolean showDate = prefs.getBoolean("show-date", true);
         int colorClock = prefs.getInt("color-digital-clock", 0xffffffff);
         int colorDate = prefs.getInt("color-digital-date", 0xffffffff);

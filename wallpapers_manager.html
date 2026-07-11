@@ -2132,7 +2132,12 @@
         // storage write with the service role, which sidesteps the fact that the
         // Storage service does not accept this project's user JWTs directly.
         async function uploadViaFunction(file, isGlobal, hardwareId) {
-            const fileType = file.name.endsWith('.mp4') || file.name.endsWith('.bin') ? 'video' : 'image';
+            // Classify every video container the app can play (case-insensitive);
+            // previously .mkv / uppercase .MP4 were stored as type "image" and the
+            // device tried to render them with the image pipeline.
+            const videoExts = ['.mp4', '.mkv', '.webm', '.3gp', '.m4v', '.mov', '.bin'];
+            const lowerName = file.name.toLowerCase();
+            const fileType = videoExts.some(ext => lowerName.endsWith(ext)) ? 'video' : 'image';
 
             // Give every upload a unique random name BEFORE sending it. Customers very
             // often send files with identical names ("1.jpg", "IMG_0001.jpg"...); storing

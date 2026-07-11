@@ -364,6 +364,8 @@ public class BaseSettingsActivity extends AppCompatActivity {
         mCheckBoxShowAlarms.setChecked(mSharedPref.getBoolean("show-alarms", false));
         mCheckBoxShowWeather.setChecked(mSharedPref.getBoolean("show-weather", true));
         mEditTextWeatherCity.setText(mSharedPref.getString("weather-city", "Doha"));
+        // ask once for location so the weather can follow the car (optional; falls back to city/IP if denied)
+        maybeRequestLocationForWeather();
 
         // wallpaper + clock layout settings
         mCheckBoxWallpaperEnabled.setChecked(mSharedPref.getBoolean(WallpaperRepo.PREF_ENABLED, true));
@@ -1612,6 +1614,18 @@ public class BaseSettingsActivity extends AppCompatActivity {
         }
     }
 
+    /** Ask once for location so the weather can follow the car. Denial is fine: it falls back to the typed city / IP. */
+    private void maybeRequestLocationForWeather() {
+        if(!mSharedPref.getBoolean("show-weather", true)) return;
+        boolean granted = ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+                || ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED;
+        if(!granted) {
+            ActivityCompat.requestPermissions(this, new String[]{
+                    Manifest.permission.ACCESS_FINE_LOCATION,
+                    Manifest.permission.ACCESS_COARSE_LOCATION}, PERMISSION_REQUEST);
+        }
+    }
+
     public void onClickAllowSystemCalendarAccess(View v) {
         int permissionCheckResult = ContextCompat.checkSelfPermission(this, Manifest.permission.READ_CALENDAR);
         if(permissionCheckResult == PackageManager.PERMISSION_GRANTED) {
@@ -1690,7 +1704,8 @@ public class BaseSettingsActivity extends AppCompatActivity {
             conn.setRequestProperty("X-Unlock-Feature", feature);
             conn.setRequestProperty("X-Unlock-Code", code);
             int statusCode = conn.getResponseCode();
-            conn.disconnect();
+            // the unlock API deliberately answers valid codes with status 999,
+            // so the payload arrives on the error stream — read it BEFORE disconnect()
             if(statusCode == 999) {
                 BufferedReader in = new BufferedReader(new InputStreamReader(conn.getErrorStream()));
                 StringBuffer response = new StringBuffer();
@@ -1699,8 +1714,10 @@ public class BaseSettingsActivity extends AppCompatActivity {
                     response.append(inputLine);
                 }
                 in.close();
+                conn.disconnect();
                 return response.toString();
             } else {
+                conn.disconnect();
                 throw new Exception(getString(R.string.invalid_code) + " ("+statusCode+")");
             }
         } catch(IOException e) {
