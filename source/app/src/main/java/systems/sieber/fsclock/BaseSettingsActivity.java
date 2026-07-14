@@ -42,6 +42,7 @@ import android.widget.CheckBox;
 import android.widget.CompoundButton;
 import android.widget.EditText;
 import android.widget.LinearLayout;
+import android.widget.ListView;
 import android.widget.NumberPicker;
 import android.widget.RadioButton;
 import android.widget.SeekBar;
@@ -165,6 +166,8 @@ public class BaseSettingsActivity extends AppCompatActivity {
     // wallpaper slideshow + clock layout
     CheckBox mCheckBoxWallpaperEnabled;
     CheckBox mCheckBoxWallpaperAutoSwitch;
+    Spinner mSpinnerWallpaperInterval;
+    Button mButtonManageWallpapers;
     EditText mEditTextWallpaperUrl;
     Button mButtonSyncWallpapers;
     Button mButtonRefreshWallpapers;
@@ -182,6 +185,14 @@ public class BaseSettingsActivity extends AppCompatActivity {
     TextView mPairStatus;
     static final String[] CLOCK_POSITION_VALUES = {"center", "bottom_left", "bottom_right", "top_left", "top_right"};
     static final String[] CLOCK_SIZE_VALUES = {"small", "medium", "large", "full"};
+
+    // There is no "apply" button any more: every change is written to the preferences the
+    // moment it is made. The flag keeps the initial setChecked/setSelection calls in
+    // onCreate from saving before all views are filled in.
+    private boolean mAutoSaveReady = false;
+    // views that already carry a listener of their own (autoSave() is called from inside it),
+    // so the generic listener below must not overwrite it
+    private final java.util.HashSet<View> mAutoSaveExcluded = new java.util.HashSet<>();
 
     @SuppressLint("SetTextI18n")
     @Override
@@ -296,6 +307,8 @@ public class BaseSettingsActivity extends AppCompatActivity {
         mButtonNewEvent = findViewById(R.id.buttonNewEvent);
         mCheckBoxWallpaperEnabled = findViewById(R.id.checkBoxWallpaperEnabled);
         mCheckBoxWallpaperAutoSwitch = findViewById(R.id.checkBoxWallpaperAutoSwitch);
+        mSpinnerWallpaperInterval = findViewById(R.id.spinnerWallpaperInterval);
+        mButtonManageWallpapers = findViewById(R.id.buttonManageWallpapers);
         mEditTextWallpaperUrl = findViewById(R.id.editTextWallpaperUrl);
         mButtonSyncWallpapers = findViewById(R.id.buttonSyncWallpapers);
         mButtonRefreshWallpapers = findViewById(R.id.buttonRefreshWallpapers);
@@ -321,8 +334,10 @@ public class BaseSettingsActivity extends AppCompatActivity {
                 // save immediately so the setting survives even if the user leaves without pressing "done"
                 mSharedPref.edit().putBoolean(BootReceiver.PREF_AUTO_START, checked).apply();
                 if(checked) requestOverlayPermissionIfNeeded();
+                autoSave();
             }
         });
+        mAutoSaveExcluded.add(mCheckBoxAutoStartOnBoot);
         mCheckBoxShowBatteryInfo.setChecked( mSharedPref.getBoolean("show-battery-info", true) );
         mCheckBoxShowBatteryInfoWhenCharging.setChecked( mSharedPref.getBoolean("show-battery-info-when-charging", false) );
         mCheckBoxBurnInPrevention.setChecked( mSharedPref.getBoolean("burn-in-prevention", false) );
@@ -369,7 +384,12 @@ public class BaseSettingsActivity extends AppCompatActivity {
 
         // wallpaper + clock layout settings
         mCheckBoxWallpaperEnabled.setChecked(mSharedPref.getBoolean(WallpaperRepo.PREF_ENABLED, true));
-        mCheckBoxWallpaperAutoSwitch.setChecked(mSharedPref.getBoolean("wallpaper-auto-switch", false));
+        mCheckBoxWallpaperAutoSwitch.setChecked(mSharedPref.getBoolean(WallpaperRepo.PREF_AUTO_SWITCH, false));
+        ArrayAdapter<CharSequence> intervalAdapter = ArrayAdapter.createFromResource(this, R.array.wallpaper_interval_labels, android.R.layout.simple_spinner_item);
+        intervalAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+        mSpinnerWallpaperInterval.setAdapter(intervalAdapter);
+        mSpinnerWallpaperInterval.setSelection(indexOf(WallpaperRepo.AUTO_SWITCH_INTERVAL_VALUES,
+                mSharedPref.getInt(WallpaperRepo.PREF_AUTO_SWITCH_INTERVAL, WallpaperRepo.AUTO_SWITCH_INTERVAL_DEFAULT)), false);
         mEditTextWallpaperUrl.setText(mSharedPref.getString(WallpaperRepo.PREF_URL, ""));
         mCheckBoxShowClockOverlay.setChecked(mSharedPref.getBoolean("clock-overlay", true));
         ArrayAdapter<CharSequence> posAdapter = ArrayAdapter.createFromResource(this, R.array.clock_position_labels, android.R.layout.simple_spinner_item);
@@ -395,14 +415,19 @@ public class BaseSettingsActivity extends AppCompatActivity {
             @Override
             public void onClick(View view) {
                 mRadioButtonHijriCalendar.setChecked(false);
+                autoSave();
             }
         });
         mRadioButtonHijriCalendar.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
                 mRadioButtonGregorianCalendar.setChecked(false);
+                autoSave();
             }
         });
+        // the radios drive each other through the click listeners above
+        mAutoSaveExcluded.add(mRadioButtonGregorianCalendar);
+        mAutoSaveExcluded.add(mRadioButtonHijriCalendar);
 
         // load events
         Event[] eventsArray = mGson.fromJson(mSharedPref.getString("events",""), Event[].class);
@@ -415,18 +440,72 @@ public class BaseSettingsActivity extends AppCompatActivity {
         initColorPreview();
         initImageSpinner();
         initFontSpinner();
+
+        // from here on, every change to any setting saves itself immediately
+        attachAutoSave(mLinearLayoutSettingsContainer);
+        mAutoSaveReady = true;
+    }
+
+    /**
+     * Persist the settings right away and tell the caller (FullscreenActivity) to reload,
+     * so leaving the screen with the back arrow applies everything — no apply button needed.
+     */
+    private void autoSave() {
+        if(!mAutoSaveReady) return;
+        save();
+        setResult(RESULT_OK);
+    }
+
+    /** Hook a "save now" listener onto every checkbox, spinner and text field in the tree. */
+    private void attachAutoSave(View view) {
+        if(view == null || mAutoSaveExcluded.contains(view)) return;
+
+        if(view instanceof CompoundButton) {
+            ((CompoundButton) view).setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
+                @Override
+                public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
+                    autoSave();
+                }
+            });
+        } else if(view instanceof Spinner) {
+            ((Spinner) view).setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+                @Override
+                public void onItemSelected(AdapterView<?> parent, View v, int position, long id) {
+                    autoSave();
+                }
+                @Override
+                public void onNothingSelected(AdapterView<?> parent) { }
+            });
+        } else if(view instanceof EditText) {
+            ((EditText) view).addTextChangedListener(new TextWatcher() {
+                @Override
+                public void beforeTextChanged(CharSequence s, int start, int count, int after) { }
+                @Override
+                public void onTextChanged(CharSequence s, int start, int before, int count) { }
+                @Override
+                public void afterTextChanged(Editable s) {
+                    autoSave();
+                }
+            });
+        } else if(view instanceof ViewGroup) {
+            ViewGroup group = (ViewGroup) view;
+            for(int i = 0; i < group.getChildCount(); i++) {
+                attachAutoSave(group.getChildAt(i));
+            }
+        }
+    }
+
+    @Override
+    protected void onPause() {
+        super.onPause();
+        // safety net for anything that changed without going through a listener
+        autoSave();
     }
 
     @Override
     public boolean onCreateOptionsMenu(Menu menu) {
-        getMenuInflater().inflate(R.menu.menu_settings, menu);
-
-        // display play/pause icon on TV devices for saving settings
-        UiModeManager uiModeManager = (UiModeManager) getSystemService(UI_MODE_SERVICE);
-        if(uiModeManager.getCurrentModeType() == Configuration.UI_MODE_TYPE_TELEVISION) {
-            menu.findItem(R.id.action_settings_done).setIcon(R.drawable.ic_play_pause_white);
-        }
-
+        // no "apply" item: the settings save themselves as they are changed
+        // (the widget config screens still inflate menu_settings on their own)
         return true;
     }
 
@@ -434,9 +513,6 @@ public class BaseSettingsActivity extends AppCompatActivity {
     public boolean onOptionsItemSelected(MenuItem item) {
         switch(item.getItemId()) {
             case android.R.id.home:
-                finish();
-                return true;
-            case R.id.action_settings_done:
                 saveAndFinish();
                 return true;
             default:
@@ -502,6 +578,7 @@ public class BaseSettingsActivity extends AppCompatActivity {
                 }
                 break;
         }
+        autoSave();
     }
 
     private void saveAndFinish() {
@@ -582,6 +659,8 @@ public class BaseSettingsActivity extends AppCompatActivity {
         mButtonNewEvent.setEnabled(state);
         mCheckBoxWallpaperEnabled.setEnabled(state);
         mCheckBoxWallpaperAutoSwitch.setEnabled(state);
+        mSpinnerWallpaperInterval.setEnabled(state);
+        mButtonManageWallpapers.setEnabled(state);
         mEditTextWallpaperUrl.setEnabled(state);
         mButtonSyncWallpapers.setEnabled(state);
         mButtonRefreshWallpapers.setEnabled(state);
@@ -594,6 +673,11 @@ public class BaseSettingsActivity extends AppCompatActivity {
 
     private static int indexOf(String[] arr, String value) {
         for(int i = 0; i < arr.length; i++) if(arr[i].equals(value)) return i;
+        return 0;
+    }
+
+    private static int indexOf(int[] arr, int value) {
+        for(int i = 0; i < arr.length; i++) if(arr[i] == value) return i;
         return 0;
     }
 
@@ -671,6 +755,78 @@ public class BaseSettingsActivity extends AppCompatActivity {
                 });
             }
         });
+    }
+
+    /**
+     * Show every wallpaper this device can play — public/global ones and the ones assigned
+     * privately to this car alike — each with a checkbox. Unchecking one hides it from the
+     * slideshow on THIS device only; nothing is sent to the server, so the same public
+     * wallpaper keeps playing on every other car.
+     */
+    public void onClickManageWallpapers(View v) {
+        if(mWallpaperRepo == null) return;
+        mWallpaperRepo.load();
+        final List<WallpaperItem> items = mWallpaperRepo.allItems();
+        if(items.isEmpty()) {
+            Toast.makeText(this, getString(R.string.wallpaper_manage_empty), Toast.LENGTH_LONG).show();
+            return;
+        }
+
+        final WallpaperSelectAdapter adapter = new WallpaperSelectAdapter(
+                this, mWallpaperRepo, items, mWallpaperRepo.getHiddenUrls());
+
+        float d = getResources().getDisplayMetrics().density;
+        int pad = (int) (16 * d);
+
+        LinearLayout ll = new LinearLayout(this);
+        ll.setOrientation(LinearLayout.VERTICAL);
+
+        TextView hint = new TextView(this);
+        hint.setText(getString(R.string.wallpaper_manage_hint));
+        hint.setPadding(pad, pad, pad, pad / 2);
+        hint.setTextSize(12);
+
+        ListView list = new ListView(this);
+        list.setAdapter(adapter);
+        list.setLayoutParams(new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
+        list.setOnItemClickListener(new AdapterView.OnItemClickListener() {
+            @Override
+            public void onItemClick(AdapterView<?> parent, View view, int position, long id) {
+                adapter.toggle(position);
+            }
+        });
+
+        ll.addView(hint);
+        ll.addView(list);
+
+        final AlertDialog dialog = new AlertDialog.Builder(this)
+                .setTitle(R.string.wallpaper_manage_title)
+                .setView(ll)
+                .setPositiveButton(R.string.save, new DialogInterface.OnClickListener() {
+                    @Override
+                    public void onClick(DialogInterface d2, int which) {
+                        List<String> hidden = adapter.getHiddenUrls();
+                        mWallpaperRepo.setHiddenUrls(hidden);
+                        mTextViewWallpaperStatus.setText(getString(R.string.wallpaper_manage_saved,
+                                items.size() - hidden.size(), hidden.size()));
+                        autoSave(); // makes the clock screen reload the playlist on return
+                    }
+                })
+                .setNegativeButton(R.string.update_cancel, null)
+                .setNeutralButton(R.string.wallpaper_manage_select_all, null)
+                .show();
+
+        // keep the dialog open when "select all" is pressed (it toggles all rows instead)
+        Button selectAll = dialog.getButton(DialogInterface.BUTTON_NEUTRAL);
+        if(selectAll != null) {
+            selectAll.setOnClickListener(new View.OnClickListener() {
+                @Override
+                public void onClick(View button) {
+                    adapter.setAllVisible(!adapter.areAllVisible());
+                }
+            });
+        }
     }
 
     /** Fill the Device ID and MAC address text views shown in the wallpapers section. */
@@ -842,6 +998,7 @@ public class BaseSettingsActivity extends AppCompatActivity {
                     else
                         mStorage.removeImage(StorageControl.FILENAME_SECONDS_HAND);
                 }
+                autoSave();
             }
             @Override
             public void onNothingSelected(AdapterView<?> adapterView) { }
@@ -858,11 +1015,20 @@ public class BaseSettingsActivity extends AppCompatActivity {
                     chooseImage(PICK_BACKGROUND_REQUEST);
                 else
                     mStorage.removeImage(StorageControl.FILENAME_BACKGROUND_IMAGE);
+                autoSave();
             }
             @Override
             public void onNothingSelected(AdapterView<?> adapterView) { }
         };
         mSpinnerDesignBack.setOnItemSelectedListener(listener2);
+
+        // these five carry their own listeners (image picker), so the generic auto-save
+        // listener must not replace them
+        mAutoSaveExcluded.add(mSpinnerDesignAnalogFace);
+        mAutoSaveExcluded.add(mSpinnerDesignAnalogHours);
+        mAutoSaveExcluded.add(mSpinnerDesignAnalogMinutes);
+        mAutoSaveExcluded.add(mSpinnerDesignAnalogSeconds);
+        mAutoSaveExcluded.add(mSpinnerDesignBack);
     }
     private void initColorPreview() {
         // analog color
@@ -1031,7 +1197,13 @@ public class BaseSettingsActivity extends AppCompatActivity {
     }
     private void updateColorPreview(int color, View previewView, EditText hexTextBox) {
         previewView.setBackgroundColor(Color.argb(0xff, Color.red(color), Color.green(color), Color.blue(color)));
-        if(hexTextBox != null) hexTextBox.setText(String.format("#%06X", (0xFFFFFF & color)));
+        if(hexTextBox != null) {
+            hexTextBox.setText(String.format("#%06X", (0xFFFFFF & color)));
+        } else {
+            // no hex box = one of the previews on the settings screen, i.e. a colour was
+            // just confirmed in the picker; the live preview inside the dialog passes one
+            autoSave();
+        }
     }
     interface ColorDialogCallback {
         void ok(boolean customColor, int red, int green, int blue, boolean applyForAll);
@@ -1192,7 +1364,9 @@ public class BaseSettingsActivity extends AppCompatActivity {
         editor.putBoolean("show-weather", mCheckBoxShowWeather.isChecked());
         editor.putString("weather-city", mEditTextWeatherCity.getText().toString().trim());
         editor.putBoolean(WallpaperRepo.PREF_ENABLED, mCheckBoxWallpaperEnabled.isChecked());
-        editor.putBoolean("wallpaper-auto-switch", mCheckBoxWallpaperAutoSwitch.isChecked());
+        editor.putBoolean(WallpaperRepo.PREF_AUTO_SWITCH, mCheckBoxWallpaperAutoSwitch.isChecked());
+        editor.putInt(WallpaperRepo.PREF_AUTO_SWITCH_INTERVAL,
+                WallpaperRepo.AUTO_SWITCH_INTERVAL_VALUES[clampSelection(mSpinnerWallpaperInterval, WallpaperRepo.AUTO_SWITCH_INTERVAL_VALUES.length)]);
         editor.putString(WallpaperRepo.PREF_URL, mEditTextWallpaperUrl.getText().toString().trim());
         editor.putBoolean("clock-overlay", mCheckBoxShowClockOverlay.isChecked());
         editor.putString("clock-position", CLOCK_POSITION_VALUES[clampSelection(mSpinnerClockPosition, CLOCK_POSITION_VALUES.length)]);
@@ -1267,7 +1441,7 @@ public class BaseSettingsActivity extends AppCompatActivity {
         stopUploadServer();
         final String url;
         try {
-            mUploadServer = new UploadServer(this, mWallpaperRepo, new UploadServer.UploadListener() {
+            mUploadServer = UploadServer.startNew(this, mWallpaperRepo, new UploadServer.UploadListener() {
                 @Override
                 public void onUploaded(String savedPath) {
                     setResult(RESULT_OK); // so the clock reloads and shows the uploaded wallpaper
@@ -1275,7 +1449,6 @@ public class BaseSettingsActivity extends AppCompatActivity {
                     Toast.makeText(BaseSettingsActivity.this, getString(R.string.pair_uploaded), Toast.LENGTH_LONG).show();
                 }
             });
-            mUploadServer.start();
             url = mUploadServer.getUrl();
         } catch(Exception e) {
             Toast.makeText(this, "Server error: " + e.getMessage(), Toast.LENGTH_LONG).show();
@@ -1374,6 +1547,8 @@ public class BaseSettingsActivity extends AppCompatActivity {
             });
             llEvents.addView(b);
         }
+        // called after every add/edit/remove, so the event list persists itself too
+        autoSave();
     }
     public void onClickNewEvent(View v) {
         final Dialog ad = new Dialog(this);
@@ -1460,6 +1635,7 @@ public class BaseSettingsActivity extends AppCompatActivity {
                     public void onTimeSet(TimePicker timePicker, int selectedHour, int selectedMinute) {
                         mDarkModeStart = selectedHour * 60 + selectedMinute;
                         ((Button) findViewById(R.id.buttonDarkModeStart)).setText( timeFormat(selectedHour, selectedMinute) );
+                        autoSave();
                     }
                 },
                 (int) Math.floor((double)mDarkModeStart / 60),
@@ -1477,6 +1653,7 @@ public class BaseSettingsActivity extends AppCompatActivity {
                     public void onTimeSet(TimePicker timePicker, int selectedHour, int selectedMinute) {
                         mDarkModeEnd = selectedHour * 60 + selectedMinute;
                         ((Button) findViewById(R.id.buttonDarkModeEnd)).setText( timeFormat(selectedHour, selectedMinute) );
+                        autoSave();
                     }
                 },
                 (int) Math.floor((double)mDarkModeEnd / 60),
