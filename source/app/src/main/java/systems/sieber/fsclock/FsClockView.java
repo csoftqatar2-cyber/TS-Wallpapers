@@ -87,14 +87,14 @@ public class FsClockView extends FrameLayout {
     WallpaperView mWallpaper;
     WallpaperRepo mWallpaperRepo;
 
-    // auto-switch: change the wallpaper automatically every minute when enabled
-    static final long AUTO_SWITCH_INTERVAL_MS = 60_000;
+    // auto-switch: change the wallpaper automatically when enabled; the period is chosen
+    // in the settings (30s / 1min / 5min / 10min / 1h — WallpaperRepo.AUTO_SWITCH_INTERVAL_VALUES)
     private final Runnable mAutoSwitchRunnable = new Runnable() {
         @Override
         public void run() {
             if(isAutoSwitchActive()) {
                 nextWallpaper();
-                postDelayed(this, AUTO_SWITCH_INTERVAL_MS);
+                postDelayed(this, autoSwitchIntervalMs());
             }
         }
     };
@@ -788,7 +788,10 @@ public class FsClockView extends FrameLayout {
                 if(mWallpaperRepo.isEnabled()) {
                     mWallpaper.setVisibility(View.VISIBLE);
                     mBackgroundImage.setVisibility(View.GONE);
-                    mWallpaper.showItem(mWallpaperRepo.current(), 0);
+                    WallpaperItem current = mWallpaperRepo.current();
+                    mWallpaper.showItem(current, 0);
+                    // record it, so restarting the car comes back to this very wallpaper
+                    mWallpaperRepo.savePosition(current);
                 } else {
                     mWallpaper.setVisibility(View.GONE);
                     mWallpaper.clearAll();
@@ -1128,15 +1131,20 @@ public class FsClockView extends FrameLayout {
 
     /** Whether the automatic wallpaper switching should currently be running. */
     private boolean isAutoSwitchActive() {
-        return mSharedPref != null && mSharedPref.getBoolean("wallpaper-auto-switch", false)
+        return mSharedPref != null && mSharedPref.getBoolean(WallpaperRepo.PREF_AUTO_SWITCH, false)
                 && mWallpaperRepo != null && mWallpaperRepo.isEnabled() && mWallpaperRepo.isActive();
+    }
+
+    /** How long the current wallpaper stays on screen, as picked in the settings. */
+    private long autoSwitchIntervalMs() {
+        return WallpaperRepo.getAutoSwitchIntervalMs(mSharedPref);
     }
 
     /** (Re)start or stop the auto-switch timer based on the current settings. */
     private void updateAutoSwitch() {
         removeCallbacks(mAutoSwitchRunnable);
         if(isAutoSwitchActive()) {
-            postDelayed(mAutoSwitchRunnable, AUTO_SWITCH_INTERVAL_MS);
+            postDelayed(mAutoSwitchRunnable, autoSwitchIntervalMs());
         }
     }
 

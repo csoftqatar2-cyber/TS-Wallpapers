@@ -811,6 +811,51 @@
             border-color: var(--text-muted);
         }
 
+        /* "hide this global wallpaper on certain cars" button */
+        .wp-btn-hide {
+            background: rgba(230, 190, 106, 0.08);
+            color: var(--gold, #E6BE6A);
+            border: 1px solid rgba(230, 190, 106, 0.25);
+        }
+
+        .wp-btn-hide:hover {
+            background: rgba(230, 190, 106, 0.2);
+            border-color: rgba(230, 190, 106, 0.5);
+        }
+
+        .wp-badge.hidden-for {
+            background: rgba(239, 68, 68, 0.85);
+            color: #fff;
+            top: auto;
+            bottom: 10px;
+        }
+
+        /* rows inside the hide-for-cars modal */
+        .hide-row {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 10px 12px;
+            border: 1px solid var(--panel-border);
+            border-radius: 10px;
+            margin-bottom: 8px;
+            cursor: pointer;
+        }
+
+        .hide-row:hover { background: rgba(255,255,255,0.04); }
+        .hide-row.is-hidden { border-color: rgba(239,68,68,0.45); background: rgba(239,68,68,0.07); }
+        .hide-row input[type="checkbox"] { width: 20px; height: 20px; cursor: pointer; }
+        .hide-row-info { flex: 1; min-width: 0; }
+        .hide-row-serial { font-weight: 700; }
+        .hide-row-mac { font-size: 0.75rem; color: var(--text-muted); word-break: break-all; }
+
+        .modal-footer {
+            display: flex;
+            gap: 10px;
+            padding: 14px 18px;
+            border-top: 1px solid var(--panel-border);
+        }
+
         /* Empty State */
         .empty-state {
             grid-column: 1 / -1;
@@ -1514,6 +1559,38 @@
         </div>
     </div>
 
+    <!-- Hide one global wallpaper on specific cars -->
+    <div id="hide-modal" class="modal-overlay" style="display: none;" onclick="if(event.target === this) closeHideModal()">
+        <div class="modal-box">
+            <div class="modal-header">
+                <h2><i class="fa-solid fa-eye-slash"></i> إخفاء الخلفية عن سيارات معينة</h2>
+                <button class="modal-close" onclick="closeHideModal()" title="إغلاق">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+            <div class="modal-toolbar">
+                <div class="modal-toolbar-row">
+                    <div class="search-box modal-search-box" style="flex:1;">
+                        <i class="fa-solid fa-magnifying-glass"></i>
+                        <input type="text" id="hide-search" class="form-control" placeholder="ابحث بالكود أو الماك أو اسم العميل..." oninput="renderHideModal()">
+                    </div>
+                </div>
+                <div id="hide-modal-note" style="padding:8px 4px;font-size:0.85rem;color:var(--text-muted);">
+                    علّم السيارات اللي <b>مش عايز</b> الخلفية دي تظهر عندها. باقي السيارات هتفضل شايفاها عادي.
+                </div>
+            </div>
+            <div class="modal-body" id="hide-modal-body">
+                <!-- Device rows injected here -->
+            </div>
+            <div class="modal-footer">
+                <button class="wp-btn wp-btn-view" onclick="closeHideModal()">إلغاء</button>
+                <button class="wp-btn wp-btn-hide" id="hide-save-btn" onclick="saveHides()">
+                    <i class="fa-solid fa-floppy-disk"></i> حفظ
+                </button>
+            </div>
+        </div>
+    </div>
+
     <script>
         // Supabase Settings (Linked directly to your project)
         const PROJECT_REF = "ihgmqwzdpugdzddobhbc";
@@ -1524,6 +1601,7 @@
         const PUBLIC_URL_PREFIX = `${SUPABASE_URL}/storage/v1/object/public/wallpapers`;
         const REST_WALLPAPERS = `${SUPABASE_URL}/rest/v1/wallpapers`;
         const REST_DEVICES = `${SUPABASE_URL}/rest/v1/devices`;
+        const REST_WP_HIDES = `${SUPABASE_URL}/rest/v1/wallpaper_hides`;
         const REST_APP_VERSIONS = `${SUPABASE_URL}/rest/v1/app_versions`;
         const APK_STORAGE_API = `${SUPABASE_URL}/storage/v1/object/apk`;
         const APK_PUBLIC_PREFIX = `${SUPABASE_URL}/storage/v1/object/public/apk`;
@@ -1589,6 +1667,10 @@
         // App States
         let devicesList = [];
         let wallpapersList = [];
+        // wallpaper_id -> Set of hardware_ids the wallpaper is hidden on (per-car exceptions)
+        let wallpaperHides = {};
+        let hideModalWpId = null;      // wallpaper currently open in the hide modal
+        let hideModalSelection = null; // Set of hardware_ids ticked in that modal
         let selectedFiles = [];
         let targetType = 'global'; // global or private
         let inputMode = 'files'; // files or folder
@@ -1649,6 +1731,7 @@
                 // Fetch stats, wallpapers, devices
                 await Promise.all([
                     loadDevices(),
+                    loadWallpaperHides(),
                     loadWallpapers(),
                     loadLatestVersion()
                 ]);
@@ -1705,6 +1788,32 @@
 
             // Respect the currently active filter + search query
             filterWallpapers();
+        }
+
+        // Fetch the per-car hide exceptions ("this wallpaper is hidden on that car")
+        async function loadWallpaperHides() {
+            const response = await fetch(`${REST_WP_HIDES}?select=wallpaper_id,hardware_id`, {
+                headers: {
+                    "apikey": ANON_KEY,
+                    "Authorization": `Bearer ${SESSION_TOKEN}`
+                }
+            });
+            if (!response.ok) throw new Error("Failed to load wallpaper hides");
+            const rows = await response.json();
+
+            wallpaperHides = {};
+            rows.forEach(r => {
+                if (!wallpaperHides[r.wallpaper_id]) wallpaperHides[r.wallpaper_id] = new Set();
+                wallpaperHides[r.wallpaper_id].add(r.hardware_id);
+            });
+
+            // the grid may already be on screen (both loaders run in parallel)
+            if (wallpapersList.length) filterWallpapers();
+        }
+
+        function hiddenCountFor(wpId) {
+            const set = wallpaperHides[wpId];
+            return set ? set.size : 0;
         }
 
         // Render devices into selection dropdown
@@ -2313,6 +2422,15 @@
                 }
                 mediaWrapper.appendChild(badge);
 
+                // "hidden on N cars" badge (global wallpapers with per-car exceptions)
+                const hiddenCount = hiddenCountFor(wp.id);
+                if (wp.is_global && hiddenCount > 0) {
+                    const hiddenBadge = document.createElement("span");
+                    hiddenBadge.className = "wp-badge hidden-for";
+                    hiddenBadge.innerHTML = `<i class="fa-solid fa-eye-slash"></i> مخفية عن ${hiddenCount} سيارة`;
+                    mediaWrapper.appendChild(hiddenBadge);
+                }
+
                 // Type Icon
                 const typeIcon = document.createElement("div");
                 typeIcon.className = "wp-type-icon";
@@ -2334,7 +2452,9 @@
                 const target = document.createElement("div");
                 target.className = "wp-target";
                 if (wp.is_global) {
-                    target.innerHTML = '<i class="fa-solid fa-users"></i> متاح لجميع الأجهزة النشطة';
+                    target.innerHTML = hiddenCount > 0
+                        ? `<i class="fa-solid fa-users"></i> متاح لجميع الأجهزة النشطة ما عدا ${hiddenCount} سيارة`
+                        : '<i class="fa-solid fa-users"></i> متاح لجميع الأجهزة النشطة';
                 } else {
                     // Try to find device serial
                     const device = devicesList.find(d => d.hardware_id === wp.hardware_id);
@@ -2361,6 +2481,17 @@
                 deleteBtn.onclick = () => confirmDelete(wp.id, filename, wp.url);
 
                 actions.appendChild(viewBtn);
+                // only global wallpapers need per-car exceptions: a private one already
+                // belongs to a single car, and deleting it is the way to remove it
+                if (wp.is_global) {
+                    const hideBtn = document.createElement("button");
+                    hideBtn.className = "wp-btn wp-btn-hide";
+                    hideBtn.innerHTML = hiddenCount > 0
+                        ? `<i class="fa-solid fa-eye-slash"></i> إخفاء (${hiddenCount})`
+                        : '<i class="fa-solid fa-eye-slash"></i> إخفاء عن سيارات';
+                    hideBtn.onclick = () => openHideModal(wp.id, filename);
+                    actions.appendChild(hideBtn);
+                }
                 actions.appendChild(deleteBtn);
                 details.appendChild(actions);
 
@@ -2460,9 +2591,127 @@
             }
         }
 
-        // ============ Private Wallpapers (per-device) Modal ============
+        // ============ Hide a global wallpaper on specific cars ============
+        // The wallpaper stays global; each ticked car gets an exception row in
+        // `wallpaper_hides`, and get_wallpapers subtracts those from its playlist.
+        // The car picks the change up at its next sync (within ~5 minutes).
 
-        // Open the modal and render the per-device private wallpapers
+        function openHideModal(wpId, filename) {
+            hideModalWpId = wpId;
+            hideModalSelection = new Set(wallpaperHides[wpId] || []);
+            document.getElementById("hide-search").value = "";
+            document.getElementById("hide-modal-note").innerHTML =
+                `علّم السيارات اللي <b>مش عايز</b> الخلفية (<b>${escapeHtml(filename)}</b>) تظهر عندها. باقي السيارات هتفضل شايفاها عادي.`;
+            document.getElementById("hide-modal").style.display = "flex";
+            renderHideModal();
+        }
+
+        function closeHideModal() {
+            document.getElementById("hide-modal").style.display = "none";
+            hideModalWpId = null;
+            hideModalSelection = null;
+        }
+
+        function toggleHideSelection(hwId) {
+            if (!hideModalSelection) return;
+            if (hideModalSelection.has(hwId)) hideModalSelection.delete(hwId);
+            else hideModalSelection.add(hwId);
+            renderHideModal();
+        }
+
+        function renderHideModal() {
+            const body = document.getElementById("hide-modal-body");
+            const q = (document.getElementById("hide-search").value || "").toLowerCase().trim();
+
+            let list = devicesList;
+            if (q) {
+                list = list.filter(d =>
+                    (d.hardware_id || '').toLowerCase().includes(q) ||
+                    (d.serial_number || '').toLowerCase().includes(q) ||
+                    (d.client_name || '').toLowerCase().includes(q));
+            }
+
+            if (list.length === 0) {
+                body.innerHTML = `
+                    <div class="empty-state">
+                        <i class="fa-solid fa-mobile-screen-button"></i>
+                        <p>${q ? 'لا توجد أجهزة تطابق البحث.' : 'لا توجد أجهزة مسجّلة بعد.'}</p>
+                    </div>`;
+                return;
+            }
+
+            body.innerHTML = "";
+            list.forEach(d => {
+                const hwId = d.hardware_id;
+                const isHidden = hideModalSelection.has(hwId);
+
+                const row = document.createElement("div");
+                row.className = "hide-row" + (isHidden ? " is-hidden" : "");
+                row.onclick = () => toggleHideSelection(hwId);
+
+                const nameBit = d.client_name ? ` · ${escapeHtml(d.client_name)}` : '';
+                row.innerHTML = `
+                    <input type="checkbox" ${isHidden ? 'checked' : ''} onclick="event.stopPropagation(); toggleHideSelection('${hwId.replace(/'/g, "\\'")}')">
+                    <div class="hide-row-info">
+                        <div class="hide-row-serial">${escapeHtml(d.serial_number || 'بدون كود')}${nameBit}</div>
+                        <div class="hide-row-mac">${escapeHtml(hwId)}</div>
+                    </div>
+                    ${isHidden ? '<span class="dev-badge blk"><i class="fa-solid fa-eye-slash"></i> مخفية</span>' : ''}`;
+
+                body.appendChild(row);
+            });
+        }
+
+        // Replace the exception rows of this wallpaper with the ticked ones
+        async function saveHides() {
+            if (hideModalWpId === null) return;
+            const wpId = hideModalWpId;
+            const selection = Array.from(hideModalSelection);
+            const btn = document.getElementById("hide-save-btn");
+            btn.disabled = true;
+
+            try {
+                // 1. drop the current exceptions for this wallpaper
+                const delRes = await fetch(`${REST_WP_HIDES}?wallpaper_id=eq.${encodeURIComponent(wpId)}`, {
+                    method: "DELETE",
+                    headers: {
+                        "apikey": ANON_KEY,
+                        "Authorization": `Bearer ${SESSION_TOKEN}`
+                    }
+                });
+                if (!delRes.ok) throw new Error(await delRes.text());
+
+                // 2. write the new set (empty selection = visible everywhere again)
+                if (selection.length > 0) {
+                    const insRes = await fetch(REST_WP_HIDES, {
+                        method: "POST",
+                        headers: {
+                            "apikey": ANON_KEY,
+                            "Authorization": `Bearer ${SESSION_TOKEN}`,
+                            "Content-Type": "application/json",
+                            "Prefer": "return=minimal"
+                        },
+                        body: JSON.stringify(selection.map(hwId => ({ wallpaper_id: wpId, hardware_id: hwId })))
+                    });
+                    if (!insRes.ok) throw new Error(await insRes.text());
+                }
+
+                if (selection.length > 0) wallpaperHides[wpId] = new Set(selection);
+                else delete wallpaperHides[wpId];
+
+                closeHideModal();
+                filterWallpapers();
+                toast('success', selection.length > 0
+                    ? `تم إخفاء الخلفية عن ${selection.length} سيارة`
+                    : 'الخلفية ظاهرة الآن لجميع السيارات');
+            } catch (e) {
+                console.error("save hides error:", e);
+                Swal.fire({ icon: 'error', title: 'تعذّر الحفظ', text: e.message, background: '#1c160e', color: '#fff' });
+            } finally {
+                btn.disabled = false;
+            }
+        }
+
         // ============ Devices / Users management ============
         let devicesModalFilter = 'all';
 

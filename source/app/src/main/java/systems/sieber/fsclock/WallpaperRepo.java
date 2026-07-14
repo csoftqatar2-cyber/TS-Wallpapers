@@ -43,8 +43,32 @@ public class WallpaperRepo {
     static final String PREF_INDEX = "wallpaper-index";
     static final String PREF_CACHE = "wallpaper-cache-json";
     static final String PREF_DEFAULT = "wallpaper-default-path";
+    /** url of the wallpaper that was on screen last, so a restart of the car resumes on it
+     *  even when the playlist order changed in the meantime (an index alone would drift). */
+    static final String PREF_LAST_URL = "wallpaper-last-url";
     static final String PREF_DEVICE_ID = "device-id";
     static final String PREF_ACTIVE = "device-active";
+    static final String PREF_AUTO_SWITCH = "wallpaper-auto-switch";
+
+    /** How long one wallpaper stays on screen before the slideshow moves on, in seconds. */
+    static final String PREF_AUTO_SWITCH_INTERVAL = "wallpaper-auto-switch-interval";
+    static final int[] AUTO_SWITCH_INTERVAL_VALUES = {30, 60, 5 * 60, 10 * 60, 60 * 60};
+    static final int AUTO_SWITCH_INTERVAL_DEFAULT = 60;
+
+    /** JSON array of wallpaper urls the owner of THIS device chose to hide from the
+     *  slideshow. Purely local: it never touches the server, so a global wallpaper can be
+     *  hidden on one car while every other car keeps showing it. */
+    static final String PREF_HIDDEN = "wallpaper-hidden-urls";
+
+    /** The auto-switch period in ms, clamped to a value the UI can actually produce. */
+    public static long getAutoSwitchIntervalMs(SharedPreferences pref) {
+        int seconds = (pref == null) ? AUTO_SWITCH_INTERVAL_DEFAULT
+                : pref.getInt(PREF_AUTO_SWITCH_INTERVAL, AUTO_SWITCH_INTERVAL_DEFAULT);
+        boolean known = false;
+        for(int v : AUTO_SWITCH_INTERVAL_VALUES) if(v == seconds) known = true;
+        if(!known) seconds = AUTO_SWITCH_INTERVAL_DEFAULT;
+        return seconds * 1000L;
+    }
 
     public static String getMacAddress() {
         try {
@@ -203,7 +227,8 @@ public class WallpaperRepo {
     // Written by load() (which sync() calls from a background thread) and read by the
     // UI thread (current/next/prev). volatile + read-side snapshots keep the two safe
     // without locking; the list itself is never mutated after assignment.
-    private volatile List<WallpaperItem> mItems = new ArrayList<>();
+    private volatile List<WallpaperItem> mItems = new ArrayList<>();   // what the slideshow plays (hidden ones removed)
+    private volatile List<WallpaperItem> mAllItems = new ArrayList<>(); // everything available, hidden included
     private volatile int mIndex = 0;
 
     public WallpaperRepo(Context c) {
@@ -215,28 +240,81 @@ public class WallpaperRepo {
 
     /** (Re)read the playlist (local folder + cached remote manifest) and current position. */
     public void load() {
-        List<WallpaperItem> merged = new ArrayList<>();
+        List<WallpaperItem> all = new ArrayList<>();
         if(mPref.getBoolean(PREF_LOCAL_ENABLED, true)) {
-            merged.addAll(scanLocalFolder());
+            all.addAll(scanLocalFolder());
         }
-        merged.addAll(parse(mPref.getString(PREF_CACHE, "")));
+        all.addAll(parse(mPref.getString(PREF_CACHE, "")));
+
+        // drop the wallpapers this device was told to hide (see PREF_HIDDEN)
+        java.util.Set<String> hidden = getHiddenUrls();
+        List<WallpaperItem> merged = new ArrayList<>();
+        for(WallpaperItem it : all) {
+            if(it.url == null || !hidden.contains(it.url)) merged.add(it);
+        }
+
         int index = mPref.getInt(PREF_INDEX, 0);
         if(merged.isEmpty()) {
             index = 0;
         } else {
             index = ((index % merged.size()) + merged.size()) % merged.size();
         }
-        // if a default wallpaper (e.g. uploaded via QR) is set and present, show it first
-        String def = mPref.getString(PREF_DEFAULT, "");
-        if(!def.isEmpty()) {
+        // resume on the wallpaper that was on screen last (survives a restart of the car
+        // and stays right even if the playlist grew/shrank since then)
+        String last = mPref.getString(PREF_LAST_URL, "");
+        boolean resumed = false;
+        if(!last.isEmpty()) {
             for(int i = 0; i < merged.size(); i++) {
-                if(def.equals(merged.get(i).url)) { index = i; break; }
+                if(last.equals(merged.get(i).url)) { index = i; resumed = true; break; }
+            }
+        }
+        // nothing to resume (first run, or that wallpaper is gone/hidden now): fall back to
+        // the default wallpaper (e.g. the one the customer uploaded via QR), if it is there
+        if(!resumed) {
+            String def = mPref.getString(PREF_DEFAULT, "");
+            if(!def.isEmpty()) {
+                for(int i = 0; i < merged.size(); i++) {
+                    if(def.equals(merged.get(i).url)) { index = i; break; }
+                }
             }
         }
         // publish fully-built state; readers snapshot mItems so they never see a
         // list/index pair from two different loads
+        mAllItems = all;
         mItems = merged;
         mIndex = index;
+    }
+
+    /** Every wallpaper available to this device, hidden ones included (settings UI). */
+    public List<WallpaperItem> allItems() {
+        return new ArrayList<>(mAllItems);
+    }
+
+    /** Urls the owner hid on this device. */
+    public java.util.Set<String> getHiddenUrls() {
+        java.util.Set<String> set = new java.util.HashSet<>();
+        String json = mPref.getString(PREF_HIDDEN, "");
+        if(json.trim().isEmpty()) return set;
+        try {
+            JSONArray arr = new JSONArray(json);
+            for(int i = 0; i < arr.length(); i++) {
+                String u = arr.optString(i, "");
+                if(!u.isEmpty()) set.add(u);
+            }
+        } catch(Exception e) {
+            Log.w(TAG, "hidden list parse failed", e);
+        }
+        return set;
+    }
+
+    /** Replace the hidden list and rebuild the playlist immediately. */
+    public void setHiddenUrls(java.util.Collection<String> urls) {
+        JSONArray arr = new JSONArray();
+        for(String u : urls) {
+            if(u != null && !u.trim().isEmpty()) arr.put(u);
+        }
+        mPref.edit().putString(PREF_HIDDEN, arr.toString()).apply();
+        load();
     }
 
     /** The on-device folder where the shop can drop images/GIFs/videos (no permission needed). */
@@ -304,7 +382,7 @@ public class WallpaperRepo {
         if(items.isEmpty()) return null;
         int index = (((mIndex % items.size()) + items.size()) + 1) % items.size();
         mIndex = index;
-        saveIndex();
+        savePosition(items.get(index));
         return items.get(index);
     }
 
@@ -313,12 +391,15 @@ public class WallpaperRepo {
         if(items.isEmpty()) return null;
         int index = (((mIndex % items.size()) + items.size()) - 1) % items.size();
         mIndex = index;
-        saveIndex();
+        savePosition(items.get(index));
         return items.get(index);
     }
 
-    private void saveIndex() {
-        mPref.edit().putInt(PREF_INDEX, mIndex).apply();
+    /** Remember where the slideshow stands, so the next app start resumes on this wallpaper. */
+    public void savePosition(WallpaperItem item) {
+        SharedPreferences.Editor e = mPref.edit().putInt(PREF_INDEX, mIndex);
+        if(item != null && item.url != null) e.putString(PREF_LAST_URL, item.url);
+        e.apply();
     }
 
     /** Copy a picked file (image/gif/video) from the system picker into the local wallpaper folder. */
@@ -402,13 +483,45 @@ public class WallpaperRepo {
                             try { ensureVideoCached(it); } catch(Exception ignored) {}
                         }
                     }
+                    // report the playlist as soon as it is known; the images keep
+                    // downloading in the background
                     if(cb != null) cb.done(true, parsed.size(), null);
+
+                    // Pull every image/GIF into Glide's disk cache right away. Without this
+                    // each wallpaper is only fetched the first time it is actually shown, so
+                    // a freshly activated car had to be swiped through picture by picture
+                    // before they were all available offline.
+                    prefetchImages(parsed);
                 } catch(Exception e) {
                     Log.w(TAG, "sync failed", e);
                     if(cb != null) cb.done(false, 0, e.getMessage());
                 }
             }
         }).start();
+    }
+
+    // ---- image caching -------------------------------------------------------
+
+    /**
+     * Download every remote image/GIF of the playlist into Glide's disk cache (same cache
+     * WallpaperView loads from, so a prefetched wallpaper appears instantly and keeps
+     * working with no network). Runs on the sync thread, one file after the other, and
+     * simply skips whatever fails — the wallpaper still loads on demand in that case.
+     */
+    private void prefetchImages(List<WallpaperItem> items) {
+        for(WallpaperItem it : items) {
+            if(it == null || it.isVideo() || it.url == null) continue;
+            String url = it.url.trim();
+            if(!url.startsWith("http://") && !url.startsWith("https://")) continue; // local file
+            try {
+                com.bumptech.glide.Glide.with(mContext)
+                        .download(url)
+                        .submit()
+                        .get();
+            } catch(Exception e) {
+                Log.w(TAG, "prefetch failed: " + url, e);
+            }
+        }
     }
 
     // ---- video caching -------------------------------------------------------

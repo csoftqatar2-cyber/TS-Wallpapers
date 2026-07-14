@@ -5,7 +5,27 @@
     <!-- wallpaper slideshow + clock layout (added by THABTHABA STORE build) -->
     <string name="wallpapers_section">الخلفيات (Wallpapers)</string>
     <string name="wallpaper_enable">تفعيل عرض الخلفيات والتبديل بينها</string>
-    <string name="wallpaper_auto_switch">التبديل التلقائي (تغيير الصورة كل دقيقة)</string>
+    <string name="wallpaper_auto_switch">التبديل التلقائي بين الصور</string>
+    <string name="wallpaper_auto_switch_interval">مدة عرض الصورة قبل التبديل</string>
+    <string name="wallpaper_manage">🖼️ إدارة الصور (إظهار / إخفاء)</string>
+    <string name="wallpaper_manage_title">الصور المتاحة على هذا الجهاز</string>
+    <string name="wallpaper_manage_hint">شيل علامة الصح من أي صورة عشان تختفي من العرض على هذه السيارة فقط (سواء كانت صورة عامة أو خاصة). الإخفاء محلي ومش بيأثر على باقي الأجهزة.</string>
+    <string name="wallpaper_manage_empty">لا توجد صور بعد — اضغط «التحقق من الخلفيات الجديدة» أولاً.</string>
+    <string name="wallpaper_manage_saved">تم الحفظ ✓ — %1$d ظاهرة، %2$d مخفية</string>
+    <string name="wallpaper_manage_select_all">تحديد الكل</string>
+    <string name="wallpaper_type_image">صورة</string>
+    <string name="wallpaper_type_gif">صورة متحركة</string>
+    <string name="wallpaper_type_video">فيديو</string>
+    <string name="wallpaper_source_local">من الجهاز</string>
+    <string name="wallpaper_source_remote">من السيرفر</string>
+
+    <string-array name="wallpaper_interval_labels">
+        <item>30 ثانية</item>
+        <item>دقيقة واحدة</item>
+        <item>5 دقائق</item>
+        <item>10 دقائق</item>
+        <item>ساعة</item>
+    </string-array>
     <string name="wallpaper_url_hint">رابط قائمة الخلفيات (JSON manifest URL)</string>
     <string name="wallpaper_sync">تحديث الخلفيات من الرابط الآن</string>
     <string name="wallpaper_help">اسحب يمين/شمال على الشاشة للتبديل بين الخلفيات. ادعم: صور JPG/PNG، GIF متحرك، وفيديو MP4. الرابط بيرجّع قائمة JSON بالشكل: {\"wallpapers\":[{\"type\":\"image\",\"url\":\"...\"},{\"type\":\"video\",\"url\":\"...\"}]}</string>
