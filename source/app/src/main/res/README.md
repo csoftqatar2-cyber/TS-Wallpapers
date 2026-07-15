@@ -15,8 +15,8 @@ Shared ID set includes: `fsclockRootView`, `wallpaperView`, `imageViewBackground
 `textViewEvents`, `analogClockContainer` + face/hour/minute/second ImageViews,
 `digitalClock`, `textViewDate`, `textViewHijriDate`, the bottom bar
 (`linearLayoutWeather/Notifications/Alarm/Battery` + children), and the activation
-overlay (`layoutActivation`, `editTextActivationSerial`, `buttonActivate`,
-`textViewActivationStatus`, `textViewActivationDeviceId`).
+overlay (`layoutActivation`, `editTextActivationSerial`, `checkBoxFse`,
+`buttonActivate`, `textViewActivationStatus`, `textViewActivationDeviceId`).
 
 What legitimately differs: orientation-specific nesting (portrait stacks analog above
 digital; landscape puts them side-by-side), weights, autoSize minimums, margins/padding.

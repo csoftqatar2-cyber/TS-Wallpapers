@@ -241,6 +241,11 @@
                                 android:text="@string/general" />
 
                             <CheckBox
+                                android:id="@+id/checkBoxFseSettings"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:text="FSE (1920×720)" />
+                            <CheckBox
                                 android:id="@+id/checkBoxKeepScreenOn"
                                 android:layout_width="match_parent"
                                 android:layout_height="wrap_content"
@@ -250,21 +255,6 @@
                                 android:layout_width="match_parent"
                                 android:layout_height="wrap_content"
                                 android:text="@string/auto_start_on_boot" />
-                            <CheckBox
-                                android:id="@+id/checkBoxShowBatteryInfo"
-                                android:layout_width="match_parent"
-                                android:layout_height="wrap_content"
-                                android:text="@string/show_battery_status_when_power_supply_is_not_plugged_in" />
-                            <CheckBox
-                                android:id="@+id/checkBoxShowBatteryInfoWhenCharging"
-                                android:layout_width="match_parent"
-                                android:layout_height="wrap_content"
-                                android:text="@string/show_battery_status_when_power_supply_is_plugged_in" />
-                            <CheckBox
-                                android:id="@+id/checkBoxShowAlarms"
-                                android:layout_width="match_parent"
-                                android:layout_height="wrap_content"
-                                android:text="@string/show_alarms" />
                             <CheckBox
                                 android:id="@+id/checkBoxShowWeather"
                                 android:layout_width="match_parent"
@@ -277,44 +267,6 @@
                                 android:hint="@string/weather_city_hint"
                                 android:inputType="textCapWords"
                                 android:maxLines="1" />
-                            <CheckBox
-                                android:id="@+id/checkBoxBurnInPrevention"
-                                android:layout_width="match_parent"
-                                android:layout_height="wrap_content"
-                                android:text="@string/burn_in_prevention" />
-                            <CheckBox
-                                android:id="@+id/checkBoxForceLandscape"
-                                android:layout_width="match_parent"
-                                android:layout_height="wrap_content"
-                                android:text="@string/force_landscape_view_only_when_started_manually" />
-                            <CheckBox
-                                android:id="@+id/checkBoxDarkMode"
-                                android:layout_width="match_parent"
-                                android:layout_height="wrap_content"
-                                android:text="@string/night_mode_for_dark_rooms" />
-                            <LinearLayout
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:layout_gravity="center">
-                                <TextView
-                                    android:layout_width="wrap_content"
-                                    android:layout_height="wrap_content"
-                                    android:text="@string/start" />
-                                <Button
-                                    android:id="@+id/buttonDarkModeStart"
-                                    android:layout_width="wrap_content"
-                                    android:layout_height="wrap_content"
-                                    android:onClick="onClickDarkModeStart" />
-                                <TextView
-                                    android:layout_width="wrap_content"
-                                    android:layout_height="wrap_content"
-                                    android:text="@string/end" />
-                                <Button
-                                    android:id="@+id/buttonDarkModeEnd"
-                                    android:layout_width="wrap_content"
-                                    android:layout_height="wrap_content"
-                                    android:onClick="onClickDarkModeEnd" />
-                            </LinearLayout>
                         </LinearLayout>
                     </com.google.android.material.card.MaterialCardView>
 
@@ -667,23 +619,6 @@
                                 android:textAllCaps="false"
                                 android:onClick="onClickRefreshWallpapers"
                                 android:text="@string/wallpaper_refresh" />
-
-                            <EditText
-                                android:id="@+id/editTextWallpaperUrl"
-                                android:layout_width="match_parent"
-                                android:layout_height="wrap_content"
-                                android:hint="@string/wallpaper_url_hint"
-                                android:inputType="textUri"
-                                android:maxLines="2" />
-
-                            <Button
-                                android:id="@+id/buttonSyncWallpapers"
-                                style="@style/Widget.AppCompat.Button.Colored"
-                                android:layout_width="match_parent"
-                                android:layout_height="wrap_content"
-                                android:textAllCaps="false"
-                                android:onClick="onClickSyncWallpapers"
-                                android:text="@string/wallpaper_sync" />
 
                             <TextView
                                 android:id="@+id/textViewWallpaperStatus"
@@ -1138,60 +1073,6 @@
                                         android:layout_width="match_parent"
                                         android:layout_height="match_parent" />
                                 </FrameLayout>
-                            </LinearLayout>
-                        </LinearLayout>
-                    </com.google.android.material.card.MaterialCardView>
-
-                    <!-- Events -->
-                    <com.google.android.material.card.MaterialCardView style="@style/SettingsCard">
-                        <LinearLayout
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:orientation="vertical">
-
-                            <TextView
-                                style="@style/SectionHeader"
-                                android:text="@string/events" />
-
-                            <Button
-                                android:id="@+id/buttonAllowSystemCalendarAccess"
-                                style="@style/Widget.AppCompat.Button.Borderless.Colored"
-                                android:textAllCaps="false"
-                                android:layout_width="match_parent"
-                                android:layout_height="wrap_content"
-                                android:onClick="onClickAllowSystemCalendarAccess"
-                                android:text="@string/allow_system_calendar_access" />
-                            <Button
-                                android:id="@+id/buttonAllowNotificationAccess"
-                                style="@style/Widget.AppCompat.Button.Borderless.Colored"
-                                android:textAllCaps="false"
-                                android:layout_width="match_parent"
-                                android:layout_height="wrap_content"
-                                android:onClick="onClickAllowNotificationAccess"
-                                android:text="@string/allow_notification_access" />
-
-                            <Space
-                                android:layout_width="match_parent"
-                                android:layout_height="10dp" />
-                            <TextView
-                                android:layout_width="match_parent"
-                                android:layout_height="wrap_content"
-                                android:textAppearance="@style/TextAppearance.AppCompat.Body1"
-                                android:text="@string/events_define_description" />
-
-                            <Button
-                                android:id="@+id/buttonNewEvent"
-                                style="@style/Widget.AppCompat.Button.Colored"
-                                android:layout_width="match_parent"
-                                android:layout_height="wrap_content"
-                                android:onClick="onClickNewEvent"
-                                android:text="@string/new_event" />
-
-                            <LinearLayout
-                                android:id="@+id/linearLayoutSettingsEvents"
-                                android:layout_width="match_parent"
-                                android:layout_height="wrap_content"
-                                android:orientation="vertical">
                             </LinearLayout>
                         </LinearLayout>
                     </com.google.android.material.card.MaterialCardView>

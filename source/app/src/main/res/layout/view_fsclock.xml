@@ -274,6 +274,17 @@
             android:hint="******"
             android:textColorHint="#66FFFFFF" />
 
+        <CheckBox
+            android:id="@+id/checkBoxFse"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:checked="false"
+            android:text="FSE"
+            android:textColor="#FFFFFF"
+            android:textSize="16sp"
+            android:buttonTint="#00FFCC" />
+
         <Button
             android:id="@+id/buttonActivate"
             android:layout_width="260dp"

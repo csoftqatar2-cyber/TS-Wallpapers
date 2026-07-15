@@ -6,6 +6,7 @@ import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Matrix;
 import android.graphics.SurfaceTexture;
+import android.graphics.drawable.Drawable;
 import android.media.MediaPlayer;
 import android.util.AttributeSet;
 import java.io.File;
@@ -15,7 +16,13 @@ import android.view.animation.DecelerateInterpolator;
 import android.widget.FrameLayout;
 import android.widget.ImageView;
 
+import androidx.annotation.Nullable;
+
 import com.bumptech.glide.Glide;
+import com.bumptech.glide.load.DataSource;
+import com.bumptech.glide.load.engine.GlideException;
+import com.bumptech.glide.request.RequestListener;
+import com.bumptech.glide.request.target.Target;
 
 /**
  * Background layer that shows the current wallpaper (static image, animated GIF or
@@ -38,12 +45,20 @@ public class WallpaperView extends FrameLayout {
         TextureView texture;
         MediaPlayer player;
         WallpaperItem pendingVideo; // set while waiting for the surface to become available
+        WallpaperItem item;         // content currently shown in this slot
+        int contentW, contentH;     // natural pixel size of the image/video (0 until known)
+        float focalX = 0.5f;        // 0..1 pan position (0.5 = center-crop, the default)
+        float focalY = 0.5f;
     }
 
     private Slot mSlotA;
     private Slot mSlotB;
     private Slot mFront;
     private WallpaperRepo mRepo;
+
+    // FSE mode: when on, each wallpaper uses its saved focal point and can be panned;
+    // when off, everything stays centered (identical to the old center-crop behavior).
+    private boolean mFseMode = false;
 
     public WallpaperView(Context c, AttributeSet attrs) {
         super(c, attrs);
@@ -91,7 +106,8 @@ public class WallpaperView extends FrameLayout {
 
         s.image = new ImageView(c);
         s.image.setLayoutParams(new LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT));
-        s.image.setScaleType(ImageView.ScaleType.CENTER_CROP);
+        // MATRIX so we control the crop/pan ourselves (center-crop by default, see applyImageMatrix)
+        s.image.setScaleType(ImageView.ScaleType.MATRIX);
         s.root.addView(s.image);
 
         return s;
@@ -101,12 +117,18 @@ public class WallpaperView extends FrameLayout {
         mRepo = repo;
     }
 
+    /** Turn FSE per-wallpaper positioning on/off. Off = classic centered crop. */
+    public void setFseMode(boolean on) {
+        mFseMode = on;
+    }
+
     /** Remove any content (used when the slideshow is disabled). */
     public void clearAll() {
         releaseVideo(mSlotA);
         releaseVideo(mSlotB);
         mSlotA.image.setImageDrawable(null);
         mSlotB.image.setImageDrawable(null);
+        mSlotA.item = mSlotB.item = null;
     }
 
     /**
@@ -163,8 +185,19 @@ public class WallpaperView extends FrameLayout {
         mFront = incoming;
     }
 
-    private void populate(Slot slot, WallpaperItem item) {
+    private void populate(final Slot slot, WallpaperItem item) {
         releaseVideo(slot);
+        slot.item = item;
+        slot.contentW = slot.contentH = 0;
+        // load the saved focal point for this wallpaper (center when FSE is off)
+        if(mFseMode && mRepo != null && item.url != null) {
+            float[] f = mRepo.getFocal(item.url);
+            slot.focalX = f[0];
+            slot.focalY = f[1];
+        } else {
+            slot.focalX = 0.5f;
+            slot.focalY = 0.5f;
+        }
         if(item.isVideo()) {
             slot.image.setImageDrawable(null);
             slot.texture.setVisibility(VISIBLE);
@@ -186,12 +219,91 @@ public class WallpaperView extends FrameLayout {
             } else {
                 model = new File(u);
             }
-            // Glide animates GIFs automatically and handles network + disk caching
+            // Glide animates GIFs automatically and handles network + disk caching.
+            // No .centerCrop() here: we keep the full image and crop/pan it ourselves
+            // with a matrix so the wallpaper can be repositioned in FSE mode.
             Glide.with(getContext().getApplicationContext())
                     .load(model)
-                    .centerCrop()
+                    .listener(new RequestListener<Drawable>() {
+                        @Override
+                        public boolean onLoadFailed(@Nullable GlideException e, Object model,
+                                                    Target<Drawable> target, boolean isFirstResource) {
+                            return false;
+                        }
+                        @Override
+                        public boolean onResourceReady(Drawable resource, Object model,
+                                                       Target<Drawable> target, DataSource dataSource,
+                                                       boolean isFirstResource) {
+                            slot.contentW = resource.getIntrinsicWidth();
+                            slot.contentH = resource.getIntrinsicHeight();
+                            slot.image.post(new Runnable() {
+                                @Override public void run() { applyImageMatrix(slot); }
+                            });
+                            return false; // let Glide set the drawable on the ImageView
+                        }
+                    })
                     .into(slot.image);
         }
+    }
+
+    /** Center-crop the image into its ImageView, offset by the slot's focal point. */
+    private void applyImageMatrix(Slot slot) {
+        int vw = slot.image.getWidth(), vh = slot.image.getHeight();
+        int cw = slot.contentW, ch = slot.contentH;
+        if(vw <= 0 || vh <= 0 || cw <= 0 || ch <= 0) return;
+        float scale = Math.max((float) vw / cw, (float) vh / ch);
+        float sw = cw * scale, sh = ch * scale;
+        float overflowX = sw - vw, overflowY = sh - vh;
+        Matrix m = new Matrix();
+        m.setScale(scale, scale);
+        m.postTranslate(-overflowX * clamp01(slot.focalX), -overflowY * clamp01(slot.focalY));
+        slot.image.setImageMatrix(m);
+    }
+
+    /** Overflow (scaled content size minus view size) in view pixels, per axis. */
+    private float[] overflow(Slot slot) {
+        float vw = getWidth(), vh = getHeight();
+        if(slot.contentW <= 0 || slot.contentH <= 0 || vw <= 0 || vh <= 0) return new float[]{0f, 0f};
+        float scale = Math.max(vw / slot.contentW, vh / slot.contentH);
+        return new float[]{ slot.contentW * scale - vw, slot.contentH * scale - vh };
+    }
+
+    private void reapply(Slot slot) {
+        if(slot.item == null) return;
+        if(slot.item.isVideo()) {
+            if(slot.player != null) applyVideoScale(slot, slot.player.getVideoWidth(), slot.player.getVideoHeight());
+        } else {
+            applyImageMatrix(slot);
+        }
+    }
+
+    /** Pan the front wallpaper by a finger delta (pixels); clamps to the image edges. */
+    public void panFront(float dxPx, float dyPx) {
+        Slot s = mFront;
+        if(s == null || s.item == null) return;
+        float[] o = overflow(s);
+        if(o[0] > 0) s.focalX = clamp01(s.focalX - dxPx / o[0]);
+        if(o[1] > 0) s.focalY = clamp01(s.focalY - dyPx / o[1]);
+        reapply(s);
+    }
+
+    /** Persist the front wallpaper's current position so it reopens the same way. */
+    public void saveFrontFocal() {
+        Slot s = mFront;
+        if(s == null || s.item == null || mRepo == null) return;
+        mRepo.setFocal(s.item.url, s.focalX, s.focalY);
+    }
+
+    private static float clamp01(float v) {
+        return v < 0f ? 0f : (v > 1f ? 1f : v);
+    }
+
+    @Override
+    protected void onSizeChanged(int w, int h, int oldw, int oldh) {
+        super.onSizeChanged(w, h, oldw, oldh);
+        // the fixed FSE size is applied after the view already exists — reposition both slots
+        reapply(mSlotA);
+        reapply(mSlotB);
     }
 
     private void startPlayer(final Slot slot, WallpaperItem item, Surface surface) {
@@ -223,16 +335,20 @@ public class WallpaperView extends FrameLayout {
         }
     }
 
-    /** Center-crop the video into the texture view. */
+    /** Center-crop the video into the texture view, offset by the slot's focal point. */
     private void applyVideoScale(Slot slot, int vw, int vh) {
         int tw = slot.texture.getWidth();
         int th = slot.texture.getHeight();
         if(vw <= 0 || vh <= 0 || tw <= 0 || th <= 0) return;
+        slot.contentW = vw;
+        slot.contentH = vh;
         float maxScale = Math.max((float) tw / vw, (float) th / vh);
-        float sx = (maxScale * vw) / tw;
+        float sx = (maxScale * vw) / tw;   // texture box is tw x th; sx*tw = scaled content width
         float sy = (maxScale * vh) / th;
+        float overflowX = sx * tw - tw, overflowY = sy * th - th;
         Matrix m = new Matrix();
-        m.setScale(sx, sy, tw / 2f, th / 2f);
+        m.setScale(sx, sy);                // scale about origin
+        m.postTranslate(-overflowX * clamp01(slot.focalX), -overflowY * clamp01(slot.focalY));
         slot.texture.setTransform(m);
     }
 

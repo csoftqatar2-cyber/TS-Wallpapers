@@ -42,6 +42,7 @@ import android.view.ViewTreeObserver;
 import android.view.WindowManager;
 import android.view.inputmethod.InputMethodManager;
 import android.widget.Button;
+import android.widget.CheckBox;
 import android.widget.EditText;
 import android.widget.FrameLayout;
 import android.widget.ImageView;
@@ -73,6 +74,9 @@ public class FsClockView extends FrameLayout {
     Random mRand = new Random();
     AppCompatActivity mActivity;
     SharedPreferences mSharedPref;
+    // FSE "adjust position" mode: while on, a finger drag pans the current wallpaper
+    // instead of switching it, and the clock is hidden so the whole image is visible.
+    boolean mAdjustMode = false;
     NotificationBroadcastReceiver mNotificationBroadcastReceiver;
 
     View mRootView;
@@ -157,6 +161,7 @@ public class FsClockView extends FrameLayout {
     TextView mTextViewActivationDeviceId;
     EditText mEditTextActivationSerial;
     Button mButtonActivate;
+    CheckBox mCheckBoxFse;
     TextView mTextViewActivationStatus;
     View mBatteryView;
     TextView mBatteryText;
@@ -227,6 +232,7 @@ public class FsClockView extends FrameLayout {
         mTextViewActivationDeviceId = findViewById(R.id.textViewActivationDeviceId);
         mEditTextActivationSerial = findViewById(R.id.editTextActivationSerial);
         mButtonActivate = findViewById(R.id.buttonActivate);
+        mCheckBoxFse = findViewById(R.id.checkBoxFse);
         mTextViewActivationStatus = findViewById(R.id.textViewActivationStatus);
 
         if (mButtonActivate != null && mEditTextActivationSerial != null && mTextViewActivationStatus != null) {
@@ -270,9 +276,16 @@ public class FsClockView extends FrameLayout {
 
                                         // Make sure the wallpaper slideshow is switched on so the
                                         // shop owner never has to flip a toggle after activating.
+                                        // FSE checked at activation time = run the app in a fixed
+                                        // 1920x720 window from now on (special head-unit panels).
+                                        boolean fse = mCheckBoxFse != null && mCheckBoxFse.isChecked();
                                         mSharedPref.edit()
                                                 .putBoolean(WallpaperRepo.PREF_ENABLED, true)
+                                                .putBoolean(FullscreenActivity.PREF_FSE_SCREEN, fse)
                                                 .apply();
+                                        if(mActivity instanceof FullscreenActivity) {
+                                            ((FullscreenActivity) mActivity).applyFseScreenSize();
+                                        }
 
                                         postDelayed(new Runnable() {
                                             @Override
@@ -637,11 +650,16 @@ public class FsClockView extends FrameLayout {
 
         refreshNightMode();
 
-        mBurnInPrevention = mSharedPref.getBoolean("burn-in-prevention", mBurnInPrevention);
+        // FSE screen: let the wallpaper layer use each image's saved position and be pannable
+        if(mWallpaper != null) {
+            mWallpaper.setFseMode(mSharedPref.getBoolean(FullscreenActivity.PREF_FSE_SCREEN, false));
+        }
 
-        Gson gson = new Gson();
-        mEvents = gson.fromJson(mSharedPref.getString("events",""), Event[].class);
-        mShowAlarms = mSharedPref.getBoolean("show-alarms", false);
+        // burn-in prevention, calendar/app events and system-alarm display were removed
+        // from the app — force them off regardless of any previously stored preference.
+        mBurnInPrevention = false;
+        mEvents = null;
+        mShowAlarms = false;
 
         mFormat24hrs = mSharedPref.getBoolean("24hrs", false);
         mArabicDigits = mSharedPref.getBoolean("arabic-digits", false);
@@ -1075,6 +1093,38 @@ public class FsClockView extends FrameLayout {
         }
     }
 
+    /** Whether the FSE fixed-screen mode is on (only then is wallpaper repositioning offered). */
+    public boolean isFseMode() {
+        return mSharedPref != null && mSharedPref.getBoolean(FullscreenActivity.PREF_FSE_SCREEN, false);
+    }
+
+    public boolean isAdjustMode() {
+        return mAdjustMode;
+    }
+
+    /** Enter wallpaper "adjust position" mode: hide the clock and let drags pan the image. */
+    public void enterAdjustMode() {
+        if(mAdjustMode || !isFseMode()) return;
+        if(mWallpaperRepo == null || !mWallpaperRepo.isEnabled()) return;
+        mAdjustMode = true;
+        setClockHidden(true);
+        Toast.makeText(getContext(), "وضع تحريك الصورة: اسحب لضبط مكان الصورة، ثم اضغط للحفظ", Toast.LENGTH_LONG).show();
+    }
+
+    /** Save the current wallpaper position and leave adjust mode. */
+    public void exitAdjustModeAndSave() {
+        if(!mAdjustMode) return;
+        mAdjustMode = false;
+        if(mWallpaper != null) mWallpaper.saveFrontFocal();
+        setClockHidden(false);
+        Toast.makeText(getContext(), "تم حفظ مكان الصورة", Toast.LENGTH_SHORT).show();
+    }
+
+    /** Move the current wallpaper by a finger delta while in adjust mode. */
+    public void panWallpaper(float dx, float dy) {
+        if(mAdjustMode && mWallpaper != null) mWallpaper.panFront(dx, dy);
+    }
+
     /** Position/size the clock overlay according to the user settings. */
     void applyClockLayout() {
         boolean overlay = mSharedPref.getBoolean("clock-overlay", true);
@@ -1168,16 +1218,8 @@ public class FsClockView extends FrameLayout {
         WindowManager.LayoutParams layout = null;
         if(mActivity != null) layout = mActivity.getWindow().getAttributes();
 
-        Calendar c = Calendar.getInstance();
-        int time = c.get(Calendar.HOUR_OF_DAY) * 60 + c.get(Calendar.MINUTE);
-        int timeStart = mSharedPref.getInt("dark-mode-start", 0);
-        int timeEnd = mSharedPref.getInt("dark-mode-end", 0);
-        if(mSharedPref.getBoolean("dark-mode", false)
-                && ((timeStart == timeEnd)
-                    || (timeStart < timeEnd && timeStart <= time && timeEnd >= time)
-                    || (timeStart > timeEnd && (time < 12*60 || timeStart <= time) && (time > 12*60 || timeEnd >= time))
-                )
-        ) {
+        // night mode was removed from the app — always run in the normal (undimmed) state
+        if(false) {
             // in normal mode, we can set the display brightness to lowest (not possible in screensaver mode)
             if(layout != null) {
                 layout.screenBrightness = 0;
@@ -1258,8 +1300,8 @@ public class FsClockView extends FrameLayout {
 
     @SuppressLint("SetTextI18n")
     void updateBattery(int plugged, int level) {
-        if((plugged == 0 && mSharedPref.getBoolean("show-battery-info", true))
-        || (plugged != 0 && mSharedPref.getBoolean("show-battery-info-when-charging", false))) {
+        // battery status display was removed from the app — never show it
+        if(false) {
             mBatteryText.setText(localizeDigits(level + "%"));
             mBatteryView.setVisibility(View.VISIBLE);
             if(plugged == 0) {
@@ -1292,13 +1334,15 @@ public class FsClockView extends FrameLayout {
 
     @SuppressLint("SetTextI18n")
     void updateEventView() {
-        SimpleDateFormat sdfDisplay = new SimpleDateFormat(mFormat24hrs ? "HH:mm" : "h:mm", Locale.getDefault());
-        SimpleDateFormat sdfDisplayWithDay = new SimpleDateFormat(mFormat24hrs ? "E HH:mm" : "E h:mm", Locale.getDefault());
-
-        // clear previous event
+        // The events section (app/calendar events), system-alarm display and the
+        // notification badge were removed from the app. Keep all three hidden.
         mTextViewEvents.setVisibility(View.GONE);
         mAlarmView.setVisibility(View.GONE);
         mNotificationsView.setVisibility(View.GONE);
+        if(true) return;
+
+        SimpleDateFormat sdfDisplay = new SimpleDateFormat(mFormat24hrs ? "HH:mm" : "h:mm", Locale.getDefault());
+        SimpleDateFormat sdfDisplayWithDay = new SimpleDateFormat(mFormat24hrs ? "E HH:mm" : "E h:mm", Locale.getDefault());
 
         // 1. check app internal events
         if(mEvents != null) {
