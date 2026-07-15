@@ -148,6 +148,7 @@ Roboto Font Copyright (c) Christian Robertson. Licensed under the Apache License
     <string name="update_check_failed">Could not check for updates.</string>
     <string name="update_failed">Update download failed.</string>
     <string name="update_allow_unknown_sources">To install the update, please allow installing apps from this source, then tap \"Update now\" again.</string>
+    <string name="update_signature_mismatch">Update failed: this update was signed with a different key than the installed app. Please uninstall the current app first, then install the new version.</string>
     <string name="update_cancel">Cancel</string>
     <string name="more_apps">More Apps</string>
     <string name="customer_database_for_android">Customer Database for Android</string>
