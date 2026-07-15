@@ -357,6 +357,34 @@ public class WallpaperRepo {
         return mPref.getBoolean(PREF_ENABLED, true) && !mItems.isEmpty();
     }
 
+    // --- FSE per-wallpaper focal point (where in the image should be centered on the
+    //     fixed 1920x720 screen). Stored as "fx,fy" fractions (0..1) keyed by the
+    //     wallpaper url, so it works the same for global and per-car private images.
+    private static final String FOCAL_PREFIX = "wp-focal:";
+
+    /** Saved focal point for a wallpaper, or the image center (0.5,0.5) if none. */
+    public float[] getFocal(String url) {
+        if(url != null) {
+            String v = mPref.getString(FOCAL_PREFIX + url, "");
+            if(!v.isEmpty()) {
+                try {
+                    String[] p = v.split(",");
+                    return new float[]{ clamp01(Float.parseFloat(p[0])), clamp01(Float.parseFloat(p[1])) };
+                } catch(Exception ignored) {}
+            }
+        }
+        return new float[]{0.5f, 0.5f};
+    }
+
+    public void setFocal(String url, float fx, float fy) {
+        if(url == null || url.isEmpty()) return;
+        mPref.edit().putString(FOCAL_PREFIX + url, clamp01(fx) + "," + clamp01(fy)).apply();
+    }
+
+    private static float clamp01(float v) {
+        return v < 0f ? 0f : (v > 1f ? 1f : v);
+    }
+
     /** Whether wallpaper syncing is turned on, regardless of whether any items are cached yet.
      *  Used to trigger the very first automatic download right after install/activation. */
     public boolean isSyncEnabled() {

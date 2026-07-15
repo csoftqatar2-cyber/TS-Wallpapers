@@ -33,6 +33,7 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.util.Log;
 import android.view.GestureDetector;
+import android.view.Gravity;
 import android.view.KeyEvent;
 import android.view.MotionEvent;
 import android.view.View;
@@ -48,6 +49,12 @@ import com.google.android.material.floatingactionbutton.FloatingActionButton;
 public class FullscreenActivity extends AppCompatActivity {
 
     private final FullscreenActivity me = this;
+
+    // FSE: chosen on the activation screen — run the app in a fixed-size window
+    // for head-unit panels whose real resolution differs from what Android reports.
+    static final String PREF_FSE_SCREEN = "fse-1920x720";
+    static final int FSE_SCREEN_WIDTH = 1920;
+    static final int FSE_SCREEN_HEIGHT = 720;
 
     SharedPreferences mSharedPref;
 
@@ -133,6 +140,13 @@ public class FullscreenActivity extends AppCompatActivity {
                     new GestureDetector.SimpleOnGestureListener() {
                         @Override
                         public boolean onSingleTapConfirmed(MotionEvent e) {
+                            // in adjust mode a tap saves the wallpaper position and exits
+                            if(mContentView.isAdjustMode()) {
+                                mContentView.exitAdjustModeAndSave();
+                                mClockHidden = false;
+                                show();
+                                return true;
+                            }
                             // single tap hides the clock (pure wallpaper); tap again brings it back
                             mClockHidden = !mClockHidden;
                             mContentView.setClockHidden(mClockHidden);
@@ -141,8 +155,29 @@ public class FullscreenActivity extends AppCompatActivity {
                             return true;
                         }
                         @Override
+                        public void onLongPress(MotionEvent e) {
+                            // long press on an FSE screen starts wallpaper "adjust position" mode
+                            if(mContentView.isFseMode() && !mContentView.isAdjustMode()) {
+                                mContentView.enterAdjustMode();
+                                mClockHidden = true;
+                                hide();
+                            }
+                        }
+                        @Override
+                        public boolean onScroll(MotionEvent e1, MotionEvent e2, float distanceX, float distanceY) {
+                            // while adjusting, a drag pans the current wallpaper (distanceX/Y are
+                            // the negated finger movement, so flip the sign to follow the finger)
+                            if(mContentView.isAdjustMode()) {
+                                mContentView.panWallpaper(-distanceX, -distanceY);
+                                return true;
+                            }
+                            return false;
+                        }
+                        @Override
                         public boolean onFling(MotionEvent e1, MotionEvent e2, float velocityX, float velocityY) {
                             if(e1 == null || e2 == null) return false;
+                            // don't switch wallpapers while repositioning one
+                            if(mContentView.isAdjustMode()) return true;
                             float dx = e2.getX() - e1.getX();
                             float dy = e2.getY() - e1.getY();
                             if(Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 120 && Math.abs(velocityX) > 200) {
@@ -195,6 +230,9 @@ public class FullscreenActivity extends AppCompatActivity {
             getWindow().getAttributes().layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES;
         }
 
+        // force the fixed FSE screen size when it was selected at activation time
+        applyFseScreenSize();
+
         // initial event state update
         mContentView.updateEventView();
     }
@@ -241,12 +279,11 @@ public class FullscreenActivity extends AppCompatActivity {
             }
         }
 
-        // force landscape if requested
-        if(mSharedPref.getBoolean("force-landscape", false)) {
-            setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE);
-        } else {
-            setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED);
-        }
+        // re-apply the FSE fixed screen size (the toggle may have changed in settings)
+        applyFseScreenSize();
+
+        // the "force landscape" option was removed — always follow the device orientation
+        setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED);
 
         // enter fullscreen mode (again)
         if(mSharedPref.getBoolean("opened-settings", false) || mSharedPref.getBoolean("purchased-settings", false)) {
@@ -342,6 +379,20 @@ public class FullscreenActivity extends AppCompatActivity {
     public void openSettings(View v) {
         Intent i = new Intent(this, SettingsActivity.class);
         settingsActivityResultLauncher.launch(i);
+    }
+
+    /** Resize the activity window to the fixed FSE resolution (1920x720) if the
+     *  FSE checkbox was ticked on the activation screen; otherwise keep fullscreen.
+     *  FLAG_LAYOUT_NO_LIMITS is already set in onCreate, so the window may extend
+     *  beyond what the system reports as the display size. */
+    void applyFseScreenSize() {
+        if(mSharedPref.getBoolean(PREF_FSE_SCREEN, false)) {
+            getWindow().setLayout(FSE_SCREEN_WIDTH, FSE_SCREEN_HEIGHT);
+            getWindow().setGravity(Gravity.TOP | Gravity.START);
+        } else {
+            getWindow().setLayout(WindowManager.LayoutParams.MATCH_PARENT,
+                    WindowManager.LayoutParams.MATCH_PARENT);
+        }
     }
 
     /** Silently ask Supabase for a newer version and toggle the red update dot. */

@@ -91,21 +91,14 @@ public class BaseSettingsActivity extends AppCompatActivity {
 
     StorageControl mStorage = new StorageControl(this);
     Gson mGson = new Gson();
-    ArrayList<Event> mEvents = new ArrayList<>();
     SharedPreferences mSharedPref;
 
     LinearLayout mLinearLayoutPurchaseContainer;
     LinearLayout mLinearLayoutSettingsContainer;
     Button mButtonUnlockSettings;
+    CheckBox mCheckBoxFse;
     CheckBox mCheckBoxKeepScreenOn;
     CheckBox mCheckBoxAutoStartOnBoot;
-    CheckBox mCheckBoxShowBatteryInfo;
-    CheckBox mCheckBoxShowBatteryInfoWhenCharging;
-    CheckBox mCheckBoxBurnInPrevention;
-    CheckBox mCheckBoxForceLandscape;
-    CheckBox mCheckBoxDarkMode;
-    Button mButtonDarkModeStart;
-    Button mButtonDarkModeEnd;
     CheckBox mCheckBoxAnalogClockShow;
     CheckBox mCheckBoxAnalogClockShowSeconds;
     CheckBox mCheckBoxAnalogClockSmoothHands;
@@ -156,20 +149,14 @@ public class BaseSettingsActivity extends AppCompatActivity {
     int mColorBack;
     Spinner mSpinnerDesignBack;
     boolean mBackStretch;
-    CheckBox mCheckBoxShowAlarms;
     CheckBox mCheckBoxShowWeather;
     EditText mEditTextWeatherCity;
-    Button mButtonNewEvent;
-    int mDarkModeStart = 0;
-    int mDarkModeEnd = 0;
 
     // wallpaper slideshow + clock layout
     CheckBox mCheckBoxWallpaperEnabled;
     CheckBox mCheckBoxWallpaperAutoSwitch;
     Spinner mSpinnerWallpaperInterval;
     Button mButtonManageWallpapers;
-    EditText mEditTextWallpaperUrl;
-    Button mButtonSyncWallpapers;
     Button mButtonRefreshWallpapers;
     TextView mTextViewWallpaperStatus;
     CheckBox mCheckBoxShowClockOverlay;
@@ -255,15 +242,9 @@ public class BaseSettingsActivity extends AppCompatActivity {
         mLinearLayoutPurchaseContainer = findViewById(R.id.linearLayoutInAppPurchase);
         mLinearLayoutSettingsContainer = findViewById(R.id.linearLayoutSettings);
         mButtonUnlockSettings = findViewById(R.id.buttonUnlockSettings);
+        mCheckBoxFse = findViewById(R.id.checkBoxFseSettings);
         mCheckBoxKeepScreenOn = findViewById(R.id.checkBoxKeepScreenOn);
         mCheckBoxAutoStartOnBoot = findViewById(R.id.checkBoxAutoStartOnBoot);
-        mCheckBoxShowBatteryInfo = findViewById(R.id.checkBoxShowBatteryInfo);
-        mCheckBoxShowBatteryInfoWhenCharging = findViewById(R.id.checkBoxShowBatteryInfoWhenCharging);
-        mCheckBoxBurnInPrevention = findViewById(R.id.checkBoxBurnInPrevention);
-        mCheckBoxForceLandscape = findViewById(R.id.checkBoxForceLandscape);
-        mCheckBoxDarkMode = findViewById(R.id.checkBoxDarkMode);
-        mButtonDarkModeStart = findViewById(R.id.buttonDarkModeStart);
-        mButtonDarkModeEnd = findViewById(R.id.buttonDarkModeEnd);
         mCheckBoxAnalogClockShow = findViewById(R.id.checkBoxShowAnalogClock);
         mCheckBoxAnalogClockShowSeconds = findViewById(R.id.checkBoxSecondsAnalog);
         mCheckBoxAnalogClockSmoothHands = findViewById(R.id.checkBoxAnalogSmoothHands);
@@ -301,16 +282,12 @@ public class BaseSettingsActivity extends AppCompatActivity {
         mSpinnerDesignBack = findViewById(R.id.spinnerDesignBack);
         mColorChangerBack = findViewById(R.id.viewColorChangerBack);
         mColorPreviewBack = findViewById(R.id.viewColorPreviewBack);
-        mCheckBoxShowAlarms = findViewById(R.id.checkBoxShowAlarms);
         mCheckBoxShowWeather = findViewById(R.id.checkBoxShowWeather);
         mEditTextWeatherCity = findViewById(R.id.editTextWeatherCity);
-        mButtonNewEvent = findViewById(R.id.buttonNewEvent);
         mCheckBoxWallpaperEnabled = findViewById(R.id.checkBoxWallpaperEnabled);
         mCheckBoxWallpaperAutoSwitch = findViewById(R.id.checkBoxWallpaperAutoSwitch);
         mSpinnerWallpaperInterval = findViewById(R.id.spinnerWallpaperInterval);
         mButtonManageWallpapers = findViewById(R.id.buttonManageWallpapers);
-        mEditTextWallpaperUrl = findViewById(R.id.editTextWallpaperUrl);
-        mButtonSyncWallpapers = findViewById(R.id.buttonSyncWallpapers);
         mButtonRefreshWallpapers = findViewById(R.id.buttonRefreshWallpapers);
         mTextViewWallpaperStatus = findViewById(R.id.textViewWallpaperStatus);
         mCheckBoxShowClockOverlay = findViewById(R.id.checkBoxShowClockOverlay);
@@ -326,6 +303,7 @@ public class BaseSettingsActivity extends AppCompatActivity {
 
         // init settings
         mSharedPref = getSharedPreferences(SHARED_PREF_DOMAIN, Context.MODE_PRIVATE);
+        mCheckBoxFse.setChecked( mSharedPref.getBoolean(FullscreenActivity.PREF_FSE_SCREEN, false) );
         mCheckBoxKeepScreenOn.setChecked( mSharedPref.getBoolean("keep-screen-on", true) );
         mCheckBoxAutoStartOnBoot.setChecked( mSharedPref.getBoolean(BootReceiver.PREF_AUTO_START, false) );
         mCheckBoxAutoStartOnBoot.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
@@ -338,15 +316,6 @@ public class BaseSettingsActivity extends AppCompatActivity {
             }
         });
         mAutoSaveExcluded.add(mCheckBoxAutoStartOnBoot);
-        mCheckBoxShowBatteryInfo.setChecked( mSharedPref.getBoolean("show-battery-info", true) );
-        mCheckBoxShowBatteryInfoWhenCharging.setChecked( mSharedPref.getBoolean("show-battery-info-when-charging", false) );
-        mCheckBoxBurnInPrevention.setChecked( mSharedPref.getBoolean("burn-in-prevention", false) );
-        mCheckBoxForceLandscape.setChecked( mSharedPref.getBoolean("force-landscape", false) );
-        mCheckBoxDarkMode.setChecked( mSharedPref.getBoolean("dark-mode", false) );
-        mDarkModeStart = mSharedPref.getInt("dark-mode-start", 0);
-        mDarkModeEnd = mSharedPref.getInt("dark-mode-end", 0);
-        mButtonDarkModeStart.setText( timeFormat((int) Math.floor((double)mDarkModeStart / 60), mDarkModeStart % 60) );
-        mButtonDarkModeEnd.setText( timeFormat((int) Math.floor((double)mDarkModeEnd / 60), mDarkModeEnd % 60) );
         mCheckBoxAnalogClockShow.setChecked( mSharedPref.getBoolean("show-analog", true) );
         mCheckBoxAnalogClockShowSeconds.setChecked( mSharedPref.getBoolean("show-seconds-analog", true) );
         mCheckBoxAnalogClockSmoothHands.setChecked( mSharedPref.getBoolean("smooth-hands", true) );
@@ -376,7 +345,6 @@ public class BaseSettingsActivity extends AppCompatActivity {
         mColorEvents = mSharedPref.getInt("color-events", mColorDigitalDate);
         mColorBack = mSharedPref.getInt("color-back", 0xff000000);
         mBackStretch = mSharedPref.getBoolean("back-stretch", false);
-        mCheckBoxShowAlarms.setChecked(mSharedPref.getBoolean("show-alarms", false));
         mCheckBoxShowWeather.setChecked(mSharedPref.getBoolean("show-weather", true));
         mEditTextWeatherCity.setText(mSharedPref.getString("weather-city", "Doha"));
         // ask once for location so the weather can follow the car (optional; falls back to city/IP if denied)
@@ -390,7 +358,6 @@ public class BaseSettingsActivity extends AppCompatActivity {
         mSpinnerWallpaperInterval.setAdapter(intervalAdapter);
         mSpinnerWallpaperInterval.setSelection(indexOf(WallpaperRepo.AUTO_SWITCH_INTERVAL_VALUES,
                 mSharedPref.getInt(WallpaperRepo.PREF_AUTO_SWITCH_INTERVAL, WallpaperRepo.AUTO_SWITCH_INTERVAL_DEFAULT)), false);
-        mEditTextWallpaperUrl.setText(mSharedPref.getString(WallpaperRepo.PREF_URL, ""));
         mCheckBoxShowClockOverlay.setChecked(mSharedPref.getBoolean("clock-overlay", true));
         ArrayAdapter<CharSequence> posAdapter = ArrayAdapter.createFromResource(this, R.array.clock_position_labels, android.R.layout.simple_spinner_item);
         posAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
@@ -428,13 +395,6 @@ public class BaseSettingsActivity extends AppCompatActivity {
         // the radios drive each other through the click listeners above
         mAutoSaveExcluded.add(mRadioButtonGregorianCalendar);
         mAutoSaveExcluded.add(mRadioButtonHijriCalendar);
-
-        // load events
-        Event[] eventsArray = mGson.fromJson(mSharedPref.getString("events",""), Event[].class);
-        if(eventsArray != null) {
-            mEvents = new ArrayList<>(Arrays.asList(eventsArray));
-        }
-        displayEvents();
 
         // init UI elements
         initColorPreview();
@@ -618,13 +578,6 @@ public class BaseSettingsActivity extends AppCompatActivity {
     protected void enableDisableAllSettings(boolean state) {
         mCheckBoxKeepScreenOn.setEnabled(state);
         mCheckBoxAutoStartOnBoot.setEnabled(state);
-        mCheckBoxShowBatteryInfo.setEnabled(state);
-        mCheckBoxShowBatteryInfoWhenCharging.setEnabled(state);
-        mCheckBoxBurnInPrevention.setEnabled(state);
-        mCheckBoxForceLandscape.setEnabled(state);
-        mCheckBoxDarkMode.setEnabled(state);
-        mButtonDarkModeStart.setEnabled(state);
-        mButtonDarkModeEnd.setEnabled(state);
         mCheckBoxAnalogClockShow.setEnabled(state);
         mCheckBoxAnalogClockShowSeconds.setEnabled(state);
         mCheckBoxAnalogClockSmoothHands.setEnabled(state);
@@ -654,15 +607,11 @@ public class BaseSettingsActivity extends AppCompatActivity {
         mSpinnerEventsFont.setEnabled(state);
         mColorChangerBack.setEnabled(state);
         mSpinnerDesignBack.setEnabled(state);
-        mCheckBoxShowAlarms.setEnabled(state);
         mCheckBoxShowWeather.setEnabled(state);
-        mButtonNewEvent.setEnabled(state);
         mCheckBoxWallpaperEnabled.setEnabled(state);
         mCheckBoxWallpaperAutoSwitch.setEnabled(state);
         mSpinnerWallpaperInterval.setEnabled(state);
         mButtonManageWallpapers.setEnabled(state);
-        mEditTextWallpaperUrl.setEnabled(state);
-        mButtonSyncWallpapers.setEnabled(state);
         mButtonRefreshWallpapers.setEnabled(state);
         mCheckBoxShowClockOverlay.setEnabled(state);
         mSpinnerClockPosition.setEnabled(state);
@@ -685,40 +634,6 @@ public class BaseSettingsActivity extends AppCompatActivity {
         int pos = spinner.getSelectedItemPosition();
         if(pos < 0 || pos >= max) return 0;
         return pos;
-    }
-
-    /** Save the entered URL, then fetch the manifest and report how many wallpapers were found. */
-    public void onClickSyncWallpapers(View v) {
-        final String url = mEditTextWallpaperUrl.getText().toString().trim();
-        SharedPreferences.Editor e = mSharedPref.edit();
-        e.putString(WallpaperRepo.PREF_URL, url);
-        e.apply();
-        if(url.isEmpty()) {
-            mTextViewWallpaperStatus.setText(getString(R.string.wallpaper_need_url));
-            return;
-        }
-        mTextViewWallpaperStatus.setText(getString(R.string.wallpaper_syncing));
-        mButtonSyncWallpapers.setEnabled(false);
-        mWallpaperRepo.sync(new WallpaperRepo.SyncCallback() {
-            @Override
-            public void done(final boolean success, final int count, final String error) {
-                runOnUiThread(new Runnable() {
-                    @Override
-                    public void run() {
-                        mButtonSyncWallpapers.setEnabled(true);
-                        if(success) {
-                            mTextViewWallpaperStatus.setText(getString(R.string.wallpaper_count, count));
-                        } else {
-                            mTextViewWallpaperStatus.setText(getString(R.string.wallpaper_failed, error == null ? "?" : error));
-                        }
-                        if (mTextViewSettingsDeviceId != null && mWallpaperRepo != null) {
-                            String status = mWallpaperRepo.isActive() ? "نشط (Activated)" : "غير نشط (Pending Activation)";
-                            mTextViewSettingsDeviceId.setText("كود الجهاز (Device ID): " + mWallpaperRepo.getDeviceId() + "\nالحالة (Status): " + status);
-                        }
-                    }
-                });
-            }
-        });
     }
 
     /**
@@ -1318,15 +1233,9 @@ public class BaseSettingsActivity extends AppCompatActivity {
     private void save() {
         SharedPreferences.Editor editor = mSharedPref.edit();
 
+        editor.putBoolean(FullscreenActivity.PREF_FSE_SCREEN, mCheckBoxFse.isChecked());
         editor.putBoolean("keep-screen-on", mCheckBoxKeepScreenOn.isChecked());
         editor.putBoolean(BootReceiver.PREF_AUTO_START, mCheckBoxAutoStartOnBoot.isChecked());
-        editor.putBoolean("show-battery-info", mCheckBoxShowBatteryInfo.isChecked());
-        editor.putBoolean("show-battery-info-when-charging", mCheckBoxShowBatteryInfoWhenCharging.isChecked());
-        editor.putBoolean("burn-in-prevention", mCheckBoxBurnInPrevention.isChecked());
-        editor.putBoolean("force-landscape", mCheckBoxForceLandscape.isChecked());
-        editor.putBoolean("dark-mode", mCheckBoxDarkMode.isChecked());
-        editor.putInt("dark-mode-start", mDarkModeStart);
-        editor.putInt("dark-mode-end", mDarkModeEnd);
         editor.putBoolean("show-analog", mCheckBoxAnalogClockShow.isChecked());
         editor.putBoolean("own-color-analog-clock-face", mCustomColorAnalogFace);
         editor.putBoolean("own-color-analog-hours", mCustomColorAnalogHours);
@@ -1343,7 +1252,6 @@ public class BaseSettingsActivity extends AppCompatActivity {
         editor.putBoolean("arabic-digits", mCheckBoxArabicDigits.isChecked());
         editor.putBoolean("show-hijri-date", mCheckBoxShowHijri.isChecked());
         editor.putBoolean("auto-contrast", mCheckBoxAutoContrast.isChecked());
-        editor.putString("events", mGson.toJson(mEvents.toArray()));
         editor.putInt("color-analog-face", mColorAnalogFace);
         editor.putInt("color-analog-hours", mColorAnalogHours);
         editor.putInt("color-analog-minutes", mColorAnalogMinutes);
@@ -1360,14 +1268,12 @@ public class BaseSettingsActivity extends AppCompatActivity {
         editor.putInt("font-events", ((FontOption) mSpinnerEventsFont.getSelectedItem()).mId);
         editor.putInt("color-back", mColorBack);
         editor.putBoolean("back-stretch", mBackStretch);
-        editor.putBoolean("show-alarms", mCheckBoxShowAlarms.isChecked());
         editor.putBoolean("show-weather", mCheckBoxShowWeather.isChecked());
         editor.putString("weather-city", mEditTextWeatherCity.getText().toString().trim());
         editor.putBoolean(WallpaperRepo.PREF_ENABLED, mCheckBoxWallpaperEnabled.isChecked());
         editor.putBoolean(WallpaperRepo.PREF_AUTO_SWITCH, mCheckBoxWallpaperAutoSwitch.isChecked());
         editor.putInt(WallpaperRepo.PREF_AUTO_SWITCH_INTERVAL,
                 WallpaperRepo.AUTO_SWITCH_INTERVAL_VALUES[clampSelection(mSpinnerWallpaperInterval, WallpaperRepo.AUTO_SWITCH_INTERVAL_VALUES.length)]);
-        editor.putString(WallpaperRepo.PREF_URL, mEditTextWallpaperUrl.getText().toString().trim());
         editor.putBoolean("clock-overlay", mCheckBoxShowClockOverlay.isChecked());
         editor.putString("clock-position", CLOCK_POSITION_VALUES[clampSelection(mSpinnerClockPosition, CLOCK_POSITION_VALUES.length)]);
         editor.putString("clock-size", CLOCK_SIZE_VALUES[clampSelection(mSpinnerClockSize, CLOCK_SIZE_VALUES.length)]);
@@ -1532,91 +1438,6 @@ public class BaseSettingsActivity extends AppCompatActivity {
         }
     }
 
-    private void displayEvents() {
-        LinearLayout llEvents = findViewById(R.id.linearLayoutSettingsEvents);
-        llEvents.removeAllViews();
-        for(final Event e : mEvents) {
-            Button b = new Button(this);
-            b.setAllCaps(false);
-            b.setText(e.toString());
-            b.setOnClickListener(new View.OnClickListener() {
-                @Override
-                public void onClick(View v) {
-                    onClickEditEvent(e);
-                }
-            });
-            llEvents.addView(b);
-        }
-        // called after every add/edit/remove, so the event list persists itself too
-        autoSave();
-    }
-    public void onClickNewEvent(View v) {
-        final Dialog ad = new Dialog(this);
-        ad.requestWindowFeature(Window.FEATURE_NO_TITLE);
-        ad.setContentView(R.layout.dialog_event);
-        //ad.getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_VISIBLE);
-        ((NumberPicker) ad.findViewById(R.id.numberPickerHour)).setMaxValue(23);
-        ((NumberPicker) ad.findViewById(R.id.numberPickerMinute)).setMaxValue(59);
-        ad.findViewById(R.id.buttonNewEventRemove).setVisibility(View.GONE);
-        ad.show();
-        ad.getWindow().setLayout(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-        ad.findViewById(R.id.buttonNewEventOK).setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                mEvents.add(new Event(
-                        ((NumberPicker) ad.findViewById(R.id.numberPickerHour)).getValue(),
-                        ((NumberPicker) ad.findViewById(R.id.numberPickerMinute)).getValue(),
-                        ((EditText) ad.findViewById(R.id.editTextTitleNewEvent)).getText().toString(),
-                        ((EditText) ad.findViewById(R.id.editTextSpeakNewEvent)).getText().toString(),
-                        ((CheckBox) ad.findViewById(R.id.checkBoxAlarmNewEvent)).isChecked(),
-                        ((CheckBox) ad.findViewById(R.id.checkBoxDisplayNewEvent)).isChecked(),
-                        ((CheckBox) ad.findViewById(R.id.checkBoxShowUntilConfirmed)).isChecked() ? 0 : 15
-                ));
-                ad.dismiss();
-                displayEvents();
-            }
-        });
-    }
-    public void onClickEditEvent(final Event e) {
-        final Dialog ad = new Dialog(this);
-        ad.requestWindowFeature(Window.FEATURE_NO_TITLE);
-        ad.setContentView(R.layout.dialog_event);
-        //ad.getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_VISIBLE);
-        ((NumberPicker) ad.findViewById(R.id.numberPickerHour)).setMaxValue(23);
-        ((NumberPicker) ad.findViewById(R.id.numberPickerMinute)).setMaxValue(59);
-        ((NumberPicker) ad.findViewById(R.id.numberPickerHour)).setValue(e.triggerHour);
-        ((NumberPicker) ad.findViewById(R.id.numberPickerMinute)).setValue(e.triggerMinute);
-        ((EditText) ad.findViewById(R.id.editTextTitleNewEvent)).setText(e.title);
-        ((EditText) ad.findViewById(R.id.editTextSpeakNewEvent)).setText(e.speakText);
-        ((CheckBox) ad.findViewById(R.id.checkBoxAlarmNewEvent)).setChecked(e.playAlarm);
-        ((CheckBox) ad.findViewById(R.id.checkBoxDisplayNewEvent)).setChecked(e.showOnScreen);
-        ((CheckBox) ad.findViewById(R.id.checkBoxShowUntilConfirmed)).setChecked(e.hideAfter == 0);
-        ad.show();
-        ad.getWindow().setLayout(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-        ad.findViewById(R.id.buttonNewEventOK).setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                e.triggerHour = ((NumberPicker) ad.findViewById(R.id.numberPickerHour)).getValue();
-                e.triggerMinute = ((NumberPicker) ad.findViewById(R.id.numberPickerMinute)).getValue();
-                e.title = ((EditText) ad.findViewById(R.id.editTextTitleNewEvent)).getText().toString();
-                e.speakText = ((EditText) ad.findViewById(R.id.editTextSpeakNewEvent)).getText().toString();
-                e.playAlarm = ((CheckBox) ad.findViewById(R.id.checkBoxAlarmNewEvent)).isChecked();
-                e.showOnScreen = ((CheckBox) ad.findViewById(R.id.checkBoxDisplayNewEvent)).isChecked();
-                e.hideAfter = ((CheckBox) ad.findViewById(R.id.checkBoxShowUntilConfirmed)).isChecked() ? 0 : 15;
-                ad.dismiss();
-                displayEvents();
-            }
-        });
-        ad.findViewById(R.id.buttonNewEventRemove).setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                mEvents.remove(e);
-                ad.dismiss();
-                displayEvents();
-            }
-        });
-    }
-
     public void onClickDreamSettings(View v) {
         if(Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN_MR2) {
             try {
@@ -1627,49 +1448,6 @@ public class BaseSettingsActivity extends AppCompatActivity {
         }
     }
 
-    public void onClickDarkModeStart(View v) {
-        TimePickerDialog mTimePicker = new TimePickerDialog(this,
-                new TimePickerDialog.OnTimeSetListener() {
-                    @SuppressLint("SimpleDateFormat")
-                    @Override
-                    public void onTimeSet(TimePicker timePicker, int selectedHour, int selectedMinute) {
-                        mDarkModeStart = selectedHour * 60 + selectedMinute;
-                        ((Button) findViewById(R.id.buttonDarkModeStart)).setText( timeFormat(selectedHour, selectedMinute) );
-                        autoSave();
-                    }
-                },
-                (int) Math.floor((double)mDarkModeStart / 60),
-                mDarkModeStart % 60,
-                android.text.format.DateFormat.is24HourFormat(this)
-        );
-        //mTimePicker.setTitle("Select Time");
-        mTimePicker.show();
-    }
-    public void onClickDarkModeEnd(View v) {
-        TimePickerDialog mTimePicker = new TimePickerDialog(this,
-                new TimePickerDialog.OnTimeSetListener() {
-                    @SuppressLint("SimpleDateFormat")
-                    @Override
-                    public void onTimeSet(TimePicker timePicker, int selectedHour, int selectedMinute) {
-                        mDarkModeEnd = selectedHour * 60 + selectedMinute;
-                        ((Button) findViewById(R.id.buttonDarkModeEnd)).setText( timeFormat(selectedHour, selectedMinute) );
-                        autoSave();
-                    }
-                },
-                (int) Math.floor((double)mDarkModeEnd / 60),
-                mDarkModeEnd % 60,
-                android.text.format.DateFormat.is24HourFormat(this)
-        );
-        //mTimePicker.setTitle("Select Time");
-        mTimePicker.show();
-    }
-    private String timeFormat(int selectedHour, int selectedMinute) {
-        Calendar time = Calendar.getInstance();
-        time.set(Calendar.HOUR_OF_DAY, selectedHour);
-        time.set(Calendar.MINUTE, selectedMinute);
-        DateFormat sdf = SimpleDateFormat.getTimeInstance(DateFormat.SHORT);
-        return sdf.format(time.getTime());
-    }
 
     public void onClickDateFormatHelp(View v) {
         StringBuilder sb = new StringBuilder();
@@ -1801,21 +1579,6 @@ public class BaseSettingsActivity extends AppCompatActivity {
                     Manifest.permission.ACCESS_FINE_LOCATION,
                     Manifest.permission.ACCESS_COARSE_LOCATION}, PERMISSION_REQUEST);
         }
-    }
-
-    public void onClickAllowSystemCalendarAccess(View v) {
-        int permissionCheckResult = ContextCompat.checkSelfPermission(this, Manifest.permission.READ_CALENDAR);
-        if(permissionCheckResult == PackageManager.PERMISSION_GRANTED) {
-            infoDialog(null, getString(R.string.access_already_granted));
-        } else {
-            ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.READ_CALENDAR}, PERMISSION_REQUEST);
-        }
-    }
-    public void onClickAllowNotificationAccess(View v) {
-        try {
-            Intent settingsIntent = new Intent("android.settings.ACTION_NOTIFICATION_LISTENER_SETTINGS");
-            startActivity(settingsIntent);
-        } catch (ActivityNotFoundException ignored) { }
     }
 
     void infoDialog(String title, String text) {
