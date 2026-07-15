@@ -16,8 +16,8 @@ android {
         // shipped build (113 = "2.3-ts") so installed users can update in place.
         // Scheme: versionName "1.0" -> 114, "1.1" -> 115, "1.2" -> 116, ...
         // (just +1 on versionCode for every new release you publish)
-        versionCode 122
-        versionName "1.8"
+        versionCode 123
+        versionName "1.9"
         multiDexEnabled true
         testInstrumentationRunner 'androidx.test.runner.AndroidJUnitRunner'
         vectorDrawables.useSupportLibrary = true

@@ -240,7 +240,7 @@ public class FsClockView extends FrameLayout {
                         return;
                     }
                     if (!serial.startsWith("7078")) {
-                        mTextViewActivationStatus.setText("الرقم التسلسلي يجب أن يبدأ بـ 7078");
+                        mTextViewActivationStatus.setText("الرقم التسلسلي غير صحيح");
                         mTextViewActivationStatus.setVisibility(View.VISIBLE);
                         return;
                     }
@@ -289,7 +289,7 @@ public class FsClockView extends FrameLayout {
                                         if ("serial_already_used".equals(result)) {
                                             mTextViewActivationStatus.setText("هذا الرقم التسلسلي مستخدم بالفعل على جهاز آخر");
                                         } else if ("invalid_format".equals(result)) {
-                                            mTextViewActivationStatus.setText("الرقم التسلسلي غير صالح (يجب أن يبدأ بـ 7078)");
+                                            mTextViewActivationStatus.setText("الرقم التسلسلي غير صحيح");
                                         } else if ("blocked".equals(result)) {
                                             mTextViewActivationStatus.setText("تم حظر هذا الجهاز. يرجى التواصل مع الدعم.");
                                         } else {
