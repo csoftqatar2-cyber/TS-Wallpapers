@@ -20,4 +20,12 @@
     <color name="gold">#ffd27a</color>
     <color name="gold_dim">#80ffd27a</color>
     <color name="gold_dark">#ff9a3d</color>
+
+    <!-- Warm Aurora identity tokens (dark-only: the app forces MODE_NIGHT_YES).
+         These carry the same value in both modes, so they live here and not in values-night. -->
+    <color name="aurora_text">#f5eee4</color>       <!-- primary text -->
+    <color name="aurora_muted">#b0a48f</color>      <!-- secondary / helper text -->
+    <color name="aurora_border">#24ffd6a0</color>   <!-- 14% gold: card + control outlines -->
+    <color name="aurora_ok">#34d399</color>         <!-- success status lines -->
+    <color name="aurora_danger">#ff6b5b</color>     <!-- errors + destructive actions -->
 </resources>

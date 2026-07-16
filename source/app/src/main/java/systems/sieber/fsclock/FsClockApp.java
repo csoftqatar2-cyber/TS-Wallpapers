@@ -26,7 +26,8 @@ public class FsClockApp extends Application {
     public static int getAppTheme(Context context) {
         //SharedPreferences prefs = context.getSharedPreferences(MainActivity.PREFS_NAME, 0);
         //return prefs.getInt("dark-mode-native", AppCompatDelegate.MODE_NIGHT_FOLLOW_SYSTEM);
-        return AppCompatDelegate.MODE_NIGHT_FOLLOW_SYSTEM;
+        // Warm Aurora is a dark-only identity: the head unit's system theme must not flip us to light.
+        return AppCompatDelegate.MODE_NIGHT_YES;
     }
 
     public static boolean isDarkThemeActive(Context context, int setting) {
