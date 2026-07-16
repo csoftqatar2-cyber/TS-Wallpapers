@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="colorSettingsCheckBoxes">#fff</color>
+    <color name="colorSettingsCheckBoxes">@color/aurora_text</color> <!-- warm off-white, not pure #fff -->
     <color name="colorBackground">#14100b</color> <!-- Warm Aurora bg -->
     <color name="colorSettingsBg">#1c160e</color>
     <color name="colorCard">#2e2417</color>
