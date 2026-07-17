@@ -21,4 +21,348 @@
     <string name="auto_start_on_boot">فتح التطبيق تلقائياً عند تشغيل السيارة</string>
     <string name="auto_start_overlay_title">إذن مطلوب</string>
     <string name="auto_start_overlay_message">حتى يفتح التطبيق تلقائياً عند تشغيل السيارة، فعّل إذن \"الظهور فوق التطبيقات الأخرى\" في الشاشة التالية.</string>
+
+    <!-- Moved out of values/ so the default locale is genuinely English.
+         These shipped as Arabic-in-the-EN-locale, which left the app half-translated. -->
+    <string name="wallpapers_section">الخلفيات (Wallpapers)</string>
+    <string name="wallpaper_enable">تفعيل عرض الخلفيات والتبديل بينها</string>
+    <string name="wallpaper_auto_switch">التبديل التلقائي بين الصور</string>
+    <string name="wallpaper_auto_switch_interval">مدة عرض الصورة قبل التبديل</string>
+    <string name="wallpaper_manage">إدارة الصور</string>
+    <string name="wallpaper_edit">تعديل</string>
+    <string name="wallpaper_copying">جارٍ نسخ الصورة على الجهاز…</string>
+    <string name="wallpaper_copy_failed">تعذّر نسخ الصورة — تأكد من الاتصال</string>
+    <string name="wallpaper_now_local">الصورة اتحفظت على الجهاز والتعديل هيفضل على العربية دي بس ✓</string>
+    <string name="wallpaper_manage_title">الصور المتاحة على هذا الجهاز</string>
+    <string name="wallpaper_manage_hint">شيل علامة الصح من أي صورة عشان تختفي من العرض على هذه السيارة فقط (سواء كانت صورة عامة أو خاصة). الإخفاء محلي ومش بيأثر على باقي الأجهزة.</string>
+    <string name="wallpaper_manage_empty">لا توجد صور بعد — اضغط «التحقق من الخلفيات الجديدة» أولاً.</string>
+    <string name="wallpaper_manage_saved">تم الحفظ ✓ — %1$d ظاهرة، %2$d مخفية</string>
+    <string name="wallpaper_manage_select_all">تحديد الكل</string>
+    <string name="wallpaper_type_image">صورة</string>
+    <string name="wallpaper_type_gif">صورة متحركة</string>
+    <string name="wallpaper_type_video">فيديو</string>
+    <string name="wallpaper_source_local">من الجهاز</string>
+    <string name="wallpaper_source_remote">من السيرفر</string>
+    <string name="wallpaper_url_hint">رابط قائمة الخلفيات (JSON manifest URL)</string>
+    <string name="wallpaper_sync">تحديث الخلفيات من الرابط الآن</string>
+    <string name="wallpaper_help">اسحب يمين/شمال على الشاشة للتبديل بين الخلفيات. ادعم: صور JPG/PNG، GIF متحرك، وفيديو MP4. الرابط بيرجّع قائمة JSON بالشكل: {\"wallpapers\":[{\"type\":\"image\",\"url\":\"...\"},{\"type\":\"video\",\"url\":\"...\"}]}</string>
+    <string name="wallpaper_syncing">جارٍ التحديث…</string>
+    <string name="wallpaper_count">تم تحميل %d خلفية ✓</string>
+    <string name="wallpaper_failed">فشل التحديث: %s</string>
+    <string name="wallpaper_need_url">من فضلك أدخل رابط القائمة أولاً</string>
+    <string name="wallpaper_refresh">التحقق من الخلفيات الجديدة</string>
+    <string name="wallpaper_checking">جارٍ التحقق من الخلفيات الجديدة…</string>
+    <string name="wallpaper_up_to_date">الخلفيات محدثة — لا يوجد جديد (%d خلفية)</string>
+    <string name="wallpaper_new_added">تمت إضافة %1$d خلفية جديدة ✓ (الإجمالي %2$d)</string>
+    <string name="mac_show_qr">عرض QR Code لكود الجهاز</string>
+    <string name="mac_qr_title">كود ربط الجهاز (Device Linking Code)</string>
+    <string name="mac_qr_hint">امسح الكود ده أو انسخه، واربط بيه صورة الجهاز من لوحة التحكم.</string>
+    <string name="mac_unavailable">كود الجهاز غير متاح على هذا الجهاز</string>
+    <string name="show_weather">إظهار الطقس الحالي</string>
+    <string name="weather_city_hint">المدينة (اتركها فارغة للتحديد التلقائي حسب الموقع)</string>
+    <string name="arabic_digits">أرقام عربية (١٢٣) بدل (123)</string>
+    <string name="show_hijri_date">إظهار التاريخ الهجري تحت الميلادي</string>
+    <string name="auto_contrast">لون الساعة تلقائي عكس الخلفية (للوضوح)</string>
+    <string name="wallpaper_local_enable">عرض الصور/الفيديو من مجلد الجهاز كمان</string>
+    <string name="wallpaper_add_local">إضافة من الجهاز</string>
+    <string name="wallpaper_pair_phone">رفع صورة من الهاتف عن طريق QR Code</string>
+    <string name="pair_scan_hint">الزبون يصوّر الكود ده بكاميرا موبايله (لازم نفس شبكة الواي‑فاي) ويرفع الصورة.\nلو الصفحة فضلت بيضا أو مفتحتش: اقفل بيانات الموبايل (الداتا) من الهاتف — الشبكة دي محلية من غير إنترنت، فالموبايل بيحاول يفتح اللينك على الداتا ومبيوصلش.\nولو لسه: تأكد إن الراوتر مش مفعّل فيه عزل الأجهزة (AP isolation).</string>
+    <string name="pair_waiting">في انتظار صورة من الهاتف…</string>
+    <string name="pair_uploaded">تم استلام الصورة ✓ وأصبحت الخلفية الافتراضية</string>
+    <string name="pair_no_wifi">تأكد من اتصال الجهاز بشبكة واي‑فاي</string>
+    <string name="wallpaper_local_folder">مجلد الخلفيات على الجهاز:\n%s</string>
+    <string name="wallpaper_added">تمت إضافة %d ملف ✓</string>
+    <string name="clock_layout_section">شكل الساعة (Clock layout)</string>
+    <string name="show_clock_overlay">إظهار الساعة فوق الخلفية</string>
+    <string name="clock_position">مكان الساعة</string>
+    <string name="clock_size">حجم الساعة</string>
+    <string name="nav_updates">التحديثات</string>
+    <string name="update_current_version">النسخة الحالية</string>
+    <string name="nav_general">عام</string>
+    <string name="nav_analog">الساعة التناظرية</string>
+    <string name="nav_digital">الساعة الرقمية</string>
+    <string name="nav_wallpapers">الخلفيات</string>
+    <string name="nav_clock_layout">شكل الساعة</string>
+    <string-array name="wallpaper_interval_labels">
+        <item>30 ثانية</item>
+        <item>دقيقة واحدة</item>
+        <item>5 دقائق</item>
+        <item>10 دقائق</item>
+        <item>ساعة</item>
+    </string-array>
+    <string-array name="clock_position_labels">
+        <item>المنتصف</item>
+        <item>أسفل يسار</item>
+        <item>أسفل يمين</item>
+        <item>أعلى يسار</item>
+        <item>أعلى يمين</item>
+    </string-array>
+    <string-array name="clock_size_labels">
+        <item>صغير</item>
+        <item>متوسط</item>
+        <item>كبير</item>
+        <item>كامل الشاشة</item>
+    </string-array>
+
+    <!-- Remaining strings ported from the upstream FsClock base (general settings, analog/digital
+         clock options, events, unlock/purchase flow, more-apps list, calendar & date-format help). -->
+    <string name="version">الإصدار</string>
+    <string name="analog_clock">الساعة التناظرية</string>
+    <string name="show_seconds_hand">إظهار عقرب الثواني (عطّله لتوفير الطاقة)</string>
+    <string name="use_smooth_hands">حركة ساعة ناعمة (عطّلها لتوفير الطاقة)</string>
+    <string name="digital_clock">الساعة الرقمية</string>
+    <string name="show_seconds">إظهار الثواني</string>
+    <string name="format_24hrs">استخدام نظام 24 ساعة</string>
+    <string name="events">الأحداث</string>
+    <string name="events_define_description">حدّد تذكيرات متكررة وتنبيهات صوتية ونغمات إشعار.</string>
+    <string name="apply">تطبيق</string>
+    <string name="save">حفظ</string>
+    <string name="display_event">إظهار على الشاشة</string>
+    <string name="play_alarm">تشغيل صوت التنبيه</string>
+    <string name="read_text">نطق النص</string>
+    <string name="title">العنوان</string>
+    <string name="remove">حذف</string>
+    <string name="show_analog_clock">إظهار الساعة التناظرية</string>
+    <string name="show_digital_clock">إظهار الساعة الرقمية</string>
+    <string name="show_date">إظهار التاريخ</string>
+    <string name="new_event">حدث جديد</string>
+    <string name="unlock_settings">فتح الإعدادات</string>
+    <string name="ok">موافق</string>
+    <string name="activation_failed">فشل التفعيل</string>
+    <string name="invalid_code">كود غير صحيح</string>
+    <string name="red">أحمر</string>
+    <string name="green">أخضر</string>
+    <string name="blue">أزرق</string>
+    <string name="review_app_title">عجبك التطبيق؟ قيّمنا من فضلك.</string>
+    <string name="review_now">قيّم التطبيق الآن على المتجر (Play Store)</string>
+    <string name="purchase_support_note">بفتح الإعدادات عبر الشراء لمرة واحدة داخل التطبيق، هتقدر كمان تستخدم أشكال وعقارب ساعة جديدة، وتدعم تطوير التطبيق أكتر ♥</string>
+    <string name="background">الخلفية</string>
+    <string name="general">عام</string>
+    <string name="use_own_images">استخدام صور مخصصة</string>
+    <string name="clock_face_color">لون وجه الساعة</string>
+    <string name="hour_hand_color">لون عقرب الساعات</string>
+    <string name="minute_hand_color">لون عقرب الدقائق</string>
+    <string name="seconds_hand_color">لون عقرب الثواني</string>
+    <string name="own_images_note">الصور المخصصة لازم تكون مربعة (نفس العرض والارتفاع) وما تتعدّاش 1000 بكسل. الخلفية لازم تكون شفافة وعقارب الساعة في النص متجهة لأعلى.</string>
+    <string name="use_own_image">استخدام صورة مخصصة</string>
+    <string name="use_own_color_for_seconds_hand">استخدام لون مخصص لعقرب الثواني</string>
+    <string name="use_own_color_for_hour_and_minutes_hand">استخدام لون مخصص لعقربي الساعات والدقائق</string>
+    <string name="use_own_color_for_clock_face">استخدام لون مخصص لوجه الساعة</string>
+    <string name="show_battery_status_when_power_supply_is_not_plugged_in">إظهار حالة البطارية عند عدم الشحن</string>
+    <string name="show_battery_status_when_power_supply_is_plugged_in">إظهار حالة البطارية أثناء الشحن</string>
+    <string name="open_settings">فتح الإعدادات</string>
+    <string name="tv_settings_note">تلميح: اضغط زر OK أو MENU للدخول إلى الإعدادات.</string>
+    <string name="more_apps">تطبيقات أخرى</string>
+    <string name="customer_database_for_android">قاعدة بيانات العملاء لأندرويد (Customer Database)</string>
+    <string name="remote_pointer_for_android">RemotePointer لأندرويد</string>
+    <string name="ballbreak_for_android">BallBreak لأندرويد</string>
+    <string name="video_screensaver_for_android">شاشة توقف الفيديو لأندرويد (Video Screensaver)</string>
+    <string name="clock_desklet_for_cinnamon">أداة ساعة تناظرية لسطح مكتب Cinnamon</string>
+    <string name="allow_system_calendar_access">السماح بالوصول إلى تقويم النظام</string>
+    <string name="access_already_granted">تم منح الإذن مسبقاً</string>
+    <string name="access_denied_by_user">لقد رفضت الوصول للتقويم من قبل. من فضلك اذهب لإعدادات أندرويد وامنح إذن التقويم لهذا التطبيق يدوياً.</string>
+    <string name="fire_tv_notes">ملاحظة مهمة لأجهزة FireTV: نظام Amazon FireOS لا يسمح رسمياً بتغيير شاشة توقف النظام لتطبيق من طرف ثالث، لكن يوجد حل بديل باستخدام أدوات المطورين. التفاصيل موضحة في مستودع Github (بالأسفل). بدون هذا الحل، لا يزال بإمكان تشغيل الساعة على أجهزة FireTV كتطبيق عادي.</string>
+    <string name="no_web_browser_found">لا يوجد متصفح ويب لفتح هذا الرابط</string>
+    <string name="set_as_screensaver_in_android_settings">تعيينها كشاشة توقف من إعدادات أندرويد</string>
+    <string name="screensaver_not_supported">هذا الجهاز لا يدعم شاشات توقف أندرويد.</string>
+    <string name="check_internet_conn">من فضلك تأكد من اتصال الإنترنت وحاول مرة أخرى.</string>
+    <string name="play_store_not_avail">متجر Google Play غير متاح</string>
+    <string name="amazon_store_not_avail">متجر Amazon App Store غير متاح</string>
+    <string name="huawei_store_not_avail">متجر Huawei App Gallery غير متاح</string>
+    <string name="could_not_fetch_prices">تعذّر جلب الأسعار الحالية للشراء داخل التطبيق.</string>
+    <string name="use_custom_color">استخدام لون مخصص</string>
+    <string name="apply_for_all">تطبيق على الكل</string>
+    <string name="buy_a_code">شراء كود</string>
+    <string name="unlock_code">كود الفتح (Unlock Code)</string>
+    <string name="classic_design">كلاسيكي</string>
+    <string name="rounded_design">مدوّر</string>
+    <string name="elegant_design">أنيق</string>
+    <string name="rustic_design">ريفي</string>
+    <string name="outlined_design">محدد بخطوط (Outlined)</string>
+    <string name="dot_design">نقاط</string>
+    <string name="number_design">أرقام</string>
+    <string name="square_design">مربع</string>
+    <string name="vinyl_design">فينيل (Vinyl)</string>
+    <string name="custom_image">صورة مخصصة</string>
+    <string name="force_landscape_view_only_when_started_manually">فرض العرض بالوضع الأفقي (فقط عند التشغيل يدوياً)</string>
+    <string name="date_format">صيغة التاريخ</string>
+    <string name="burn_in_prevention">منع احتراق الشاشة (لشاشات OLED؛ يحرّك المحتوى قليلاً)</string>
+    <string name="night_mode_for_dark_rooms">الوضع الليلي (للغرف المظلمة)</string>
+    <string name="show_alarms">إظهار التنبيهات</string>
+    <string name="reset_default">إعادة الضبط الافتراضي</string>
+    <string name="date_format_placeholders_help_title">تقدر تستخدم الرموز التالية (المثال بين قوسين)</string>
+    <string name="date_format_placeholders_help">
+    G - رمز العصر (AD)\n
+    yyyy أو yy - السنة (2024 أو 24)\n
+    MM أو MMM أو MMMM - الشهر (12 أو Dec أو December)\n
+    ww - رقم الأسبوع في السنة (27)\n
+    W - رقم الأسبوع في الشهر (2)\n
+    DDD - رقم اليوم في السنة (189)\n
+    d أو dd - رقم اليوم في الشهر (1 أو 01)\n
+    F - يوم الأسبوع في الشهر (2)\n
+    EEEE أو E - اسم يوم الأسبوع (Monday أو Mon.)\n
+    u - رقم يوم الأسبوع (1-7)\n
+    a - علامة AM/PM\n
+    HH - الساعة في اليوم (0-23)\n
+    hh - الساعة بنظام AM/PM (1-12)\n
+    mm - الدقيقة في الساعة\n
+    ss - الثانية في الدقيقة\n
+    zzzz أو z - اسم المنطقة الزمنية (Pacific Standard Time أو PST)\n
+    Z - المنطقة الزمنية RFC 822 (-0800)\n
+    XXX أو X - المنطقة الزمنية RFC 8601 (-08:00 أو -08)\n\n
+    يمكن إضافة نص مخصص بين علامتي اقتباس مفردة، مثال: \'نص مخصص\'.
+    </string>
+    <string name="high_contrast_text_notes">تنبيه: خاصية \'High Contrast Text\' مفعّلة في إعدادات إمكانية الوصول بنظام أندرويد. هذا هيخرب شكل الساعة الرقمية. من فضلك عطّل هذه الخاصية للحصول على تجربة استخدام سليمة.</string>
+    <string name="show_until_confirmed">إظهار حتى التأكيد</string>
+    <string name="gregorian_calendar">التقويم الميلادي</string>
+    <string name="hijri_calendar">التقويم الهجري</string>
+    <string name="digital_clock_color">لون الساعة الرقمية</string>
+    <string name="date_color">لون التاريخ</string>
+    <string name="event_color">لون الحدث</string>
+    <string name="start">البداية:</string>
+    <string name="end">النهاية:</string>
+    <string name="allow_notification_access">السماح بالوصول إلى الإشعارات</string>
+    <string name="widget_digital_name">ودجت الساعة الرقمية</string>
+    <string name="widget_analog_name">ودجت الساعة التناظرية</string>
+    <string name="widget_draw_background">رسم لون الخلفية</string>
+
+    <!-- Settings header: title + the three status chips. -->
+    <string name="settings_header_title">إعدادات ذبذبة خلفيات</string>
+    <string name="chip_auto_save">حفظ تلقائي</string>
+    <string name="chip_mode_normal">الوضع: عادي</string>
+    <string name="chip_mode_fse">الوضع: FSE</string>
+    <string name="chip_activated">الجهاز مُفعّل</string>
+    <string name="chip_not_activated">غير مُفعّل</string>
+
+    <!-- Device identity block; was concatenated in Java and so never localised. -->
+    <string name="device_id_status">كود الجهاز (Device ID): %1$s\nالحالة (Status): %2$s</string>
+    <string name="device_status_active">نشط (Activated)</string>
+    <string name="device_status_pending">غير نشط (Pending Activation)</string>
+    <string name="device_linking_code">كود الربط (Linking Code): %1$s</string>
+
+    <!-- Weather condition names shown next to the temperature (Weather.java). -->
+    <string name="weather_sunny">مشمس</string>
+    <string name="weather_clear_night">صافٍ</string>
+    <string name="weather_partly_cloudy">غيوم جزئية</string>
+    <string name="weather_fog">ضباب</string>
+    <string name="weather_rainy">ممطر</string>
+    <string name="weather_snowy">ثلوج</string>
+    <string name="weather_showers">زخات مطر</string>
+    <string name="weather_storm">عاصفة</string>
+    <string name="weather_cloudy">غائم</string>
+
+    <!-- FSE activation overlay (view_fsclock.xml / layout-land/view_fsclock.xml). -->
+    <string name="activation_overlay_title">تفعيل البرنامج</string>
+    <string name="activation_overlay_subtitle">يرجى إدخال الرقم التسلسلي لتفعيل البرنامج:</string>
+    <string name="activation_button">تفعيل الآن</string>
+    <string name="activation_device_id_label">معرف الجهاز: </string>
+    <string name="activation_dialog_title">تفعيل الإعدادات (Activation)</string>
+
+    <!-- Activation overlay status messages (FsClockView.java). -->
+    <string name="activation_error_empty_serial">يرجى إدخال الرقم التسلسلي</string>
+    <string name="activation_error_invalid_serial">الرقم التسلسلي غير صحيح</string>
+    <string name="activation_checking">جاري التحقق من التفعيل...</string>
+    <string name="activation_success">تم التفعيل بنجاح!</string>
+    <string name="activation_error_already_used">هذا الرقم التسلسلي مستخدم بالفعل على جهاز آخر</string>
+    <string name="activation_error_blocked">تم حظر هذا الجهاز. يرجى التواصل مع الدعم.</string>
+    <string name="activation_error_failed">فشل التفعيل: %1$s</string>
+    <string name="activation_error_unknown">خطأ غير معروف</string>
+
+    <!-- FSE wallpaper "adjust position" mode toasts (FsClockView.java). -->
+    <string name="wallpaper_adjust_mode_hint">وضع تحريك الصورة: اسحب لضبط مكان الصورة، ثم اضغط للحفظ</string>
+    <string name="wallpaper_position_saved">تم حفظ مكان الصورة</string>
+
+    <!-- Fit Editor: how an imported image is fitted to the very wide screen. -->
+    <string name="fit_mode_fill">ملء الشاشة (قص)</string>
+    <string name="fit_mode_blur">خلفية ضبابية</string>
+    <string name="fit_mode_color">لون ثابت</string>
+    <string name="fit_mode_auto">تلقائي (مُوصى به)</string>
+    <string name="fit_blur_strength">قوة الضبابية</string>
+    <string name="fit_zoom">تكبير</string>
+    <string name="fit_fade">تدرّج الأطراف</string>
+    <string name="fit_percent">%1$d%%</string>
+    <string name="fit_bar_color">لون الجانبين</string>
+    <string name="fit_reposition">تحديد الجزء الظاهر</string>
+    <string name="fit_reposition_hint">اسحب الصورة لتحديد الجزء الظاهر.</string>
+    <string name="fit_reposition_dpad">اضبط بأزرار الاتجاهات</string>
+    <string name="fit_dpad_hint">أزرار الاتجاهات: يمين/يسار للضبط</string>
+    <string name="fit_done">تم</string>
+    <string name="fit_reset">إعادة الضبط</string>
+    <string name="fit_delete">حذف الصورة</string>
+    <string name="fit_delete_confirm">تحذف الصورة دي من الجهاز؟ مش هينفع ترجع فيها.</string>
+    <string name="fit_apply_all">تطبيق على كل الصور</string>
+    <string name="fit_apply_all_confirm">تطبّق نفس الإعدادات دي على كل الصور؟</string>
+    <string name="fit_apply_all_done">تم التطبيق على %1$d صورة ✓</string>
+    <string name="fit_hint_blur">↔ الجانبان مملوءان بنسخة ضبابية</string>
+    <string name="fit_hint_color">↔ الجانبان مملوءان بلون ثابت</string>
+    <string name="fit_hint_fill">الأطراف بتتقص — اسحب لتحديد الظاهر</string>
+    <string name="fit_hint_bars_negligible">الصورة دي عريضة كفاية، الجانبان بالكاد بيبانوا</string>
+    <string name="fit_target">%1$d × %2$d · معاينة حيّة</string>
+    <string name="fit_blur_unavailable_video">الضبابية غير متاحة للفيديو — لون ثابت فقط</string>
+    <string name="fit_load_failed">تعذّر فتح الصورة دي</string>
+    <string name="fit_color_black">أسود</string>
+    <string name="fit_color_white">أبيض</string>
+    <string name="fit_color_grey">رمادي غامق</string>
+    <string name="fit_color_sampled">من الصورة</string>
+    <string name="fit_defaults_header">إعدادات استيراد الصور</string>
+    <string name="fit_defaults_subtitle">تنطبق على الصور المرفوعة من الجهاز أو من الهاتف عبر QR — تتظبط مرة واحدة.</string>
+    <string name="fit_default_mode">الوضع الافتراضي</string>
+    <string name="fit_default_blur">قوة الضبابية الافتراضية</string>
+    <string name="fit_default_color">لون الجانبين الافتراضي</string>
+    <string name="fit_edit_on_import">افتح شاشة التعديل بعد كل استيراد</string>
+
+    <!-- Leopard: the app hands the wallpaper to Android and steps out of the way. -->
+    <string name="leopard_wallpaper_description">ذبذبة خلفيات — الصورة أو الفيديو اللي اخترته</string>
+    <string name="leopard_title">اختر خلفية الجهاز</string>
+    <string name="leopard_chip">وضع Leopard</string>
+    <string name="leopard_source_cloud">الخلفيات المتاحة</string>
+    <string name="leopard_source_cloud_sub">المزامنة السحابية</string>
+    <string name="leopard_source_local">من الجهاز</string>
+    <string name="leopard_source_local_sub">تخزين الشاشة</string>
+    <string name="leopard_set">تعيين الخلفية</string>
+    <string name="leopard_badge_current">الحالية</string>
+    <string name="leopard_badge_video">فيديو</string>
+    <string name="leopard_loading">جارٍ التحميل…</string>
+    <string name="leopard_empty">لسه مفيش خلفيات مخصّصة للسيارة دي.</string>
+    <string name="leopard_empty_action">التحقق من الخلفيات الجديدة</string>
+    <string name="leopard_offline_cached">غير متصل — بنعرض آخر خلفيات اتزامنت.</string>
+    <string name="leopard_offline_empty">غير متصل، ولسه مفيش حاجة اتزامنت على السيارة دي.</string>
+    <string name="leopard_retry">حاول تاني</string>
+    <string name="leopard_pick_first">اختر خلفية الأول</string>
+    <string name="leopard_applying">جارٍ التطبيق…</string>
+    <string name="leopard_applied_image">تم التعيين ✓ — الشاشة الرئيسية واللوك</string>
+    <string name="leopard_applied_video">تم التعيين ✓ — الشاشة الرئيسية</string>
+    <string name="leopard_apply_failed">تعذّر تعيين الخلفية دي</string>
+    <string name="leopard_local_none">مفيش ملف متختار</string>
+    <string name="leopard_video_first_title">إعداد لمرة واحدة</string>
+    <string name="leopard_video_first_message">هتفتح شاشة أندرويد لتأكيد الخلفية الحيّة — اضغط زر «Set wallpaper» بتاعها.\n\nده بيحصل مرة واحدة بس. أي فيديو بعد كده بيتطبّق فوراً.</string>
+    <string name="leopard_video_first_ok">فهمت، متابعة</string>
+    <string name="leopard_unsupported">الشاشة دي مش بتدعم وضع Leopard.</string>
+    <string name="leopard_gif_static_note">الجهاز ده بيعرض الصور المتحركة كصورة ثابتة.</string>
+    <string name="mode_title">وضع التشغيل</string>
+    <string name="mode_exclusive_note">FSE و Leopard لا يجتمعان — الاختيار واحد.</string>
+    <string name="mode_normal">عادي</string>
+    <string name="mode_normal_desc">التطبيق يعرض الخلفيات والساعة على شاشته الخاصة.</string>
+    <string name="mode_fse">FSE</string>
+    <string name="mode_fse_desc">يفرض نافذة ثابتة 1920×720 للشاشات العريضة جداً.</string>
+    <string name="mode_leopard">Leopard</string>
+    <string name="mode_leopard_desc">التطبيق يسلّم الخلفية لنظام أندرويد ويختفي — بلا ساعة أو تبديل.</string>
+    <string name="mode_leopard_unsupported_note">بعض الشاشات لا تدعم Leopard — الخيار بيظهر مُعطّلاً تلقائياً عليها.</string>
+    <string name="mode_new_badge">جديد</string>
+    <string name="leopard_settings_banner_title">وضع Leopard مُفعّل</string>
+    <string name="leopard_settings_banner_body">أندرويد بيعرض الخلفية على الشاشة الرئيسية — التطبيق مجرّد أداة اختيار. افتحه، اختر، أغلقه.</string>
+    <string name="leopard_settings_hidden_note">أُخفيت: الساعة التناظرية والرقمية، شكل الساعة، الطقس، والتبديل التلقائي — لا معنى لها وأندرويد هو اللي بيرسم الخلفية.</string>
+    <string name="leopard_open_picker">افتح المنتقي</string>
+    <string name="leopard_default_source">المصدر الافتراضي عند الفتح</string>
+    <string name="leopard_close_after_set">إغلاق التطبيق بعد التعيين</string>
+    <string name="leopard_close_after_set_desc">مناسب لطبيعة «افتح، اختر، أغلق».</string>
+    <string name="leopard_back_to_normal">العودة إلى الوضع العادي</string>
+    <string name="leopard_back_to_normal_desc">يعيد الساعة والخلفيات داخل التطبيق.</string>
+    <string name="nav_clock">الساعة</string>
+    <string name="leopard_change">تغيير</string>
+    <string name="leopard_preparing">جارٍ التجهيز…</string>
+    <string name="leopard_download_failed">تعذّر تنزيل الخلفية دي</string>
+    <string name="leopard_source_phone">من الهاتف</string>
+    <string name="leopard_phone_hint">امسح الكود ده بموبايل على نفس شبكة الواي‑فاي، وبعدين ارفع الصورة.</string>
+    <string name="chip_mode_leopard">الوضع: Leopard</string>
 </resources>

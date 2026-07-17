@@ -25,6 +25,7 @@
          These carry the same value in both modes, so they live here and not in values-night. -->
     <color name="aurora_text">#f5eee4</color>       <!-- primary text -->
     <color name="aurora_muted">#b0a48f</color>      <!-- secondary / helper text -->
+    <color name="aurora_card">#2e2417</color>       <!-- raised surface: cards, dialogs -->
     <color name="aurora_border">#24ffd6a0</color>   <!-- 14% gold: card + control outlines -->
     <color name="aurora_ok">#34d399</color>         <!-- success status lines -->
     <color name="aurora_danger">#ff6b5b</color>     <!-- errors + destructive actions -->

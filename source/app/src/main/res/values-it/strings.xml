@@ -34,7 +34,6 @@
     <string name="purchase_support_note">Sbloccando le impostazioni tramite l\'acquisto una tantum in-app, ottieni anche l\'accesso ai nuovi quadranti e alle nuove lancette, oltre a sostenere l\'ulteriore sviluppo di questa app ♥</string>
     <string name="background">Sfondo</string>
     <string name="general">Generale</string>
-    <string name="keep_screen_on">Tieni lo schermo acceso</string>
     <string name="use_own_images">Usa immagini personalizzate</string>
     <string name="clock_face_color">Colore del quadrante dell\'orologio</string>
     <string name="hour_hand_color">Colore lancetta delle ore</string>
@@ -55,8 +54,6 @@
     <string name="ballbreak_for_android">Ball Break per Android</string>
     <string name="video_screensaver_for_android">Salvaschermo video per Android</string>
     <string name="clock_desklet_for_cinnamon">Desklet Analog Clock per l\'ambiente desktop Cinnamon</string>
-    <string name="open_source_text">Questa app &#232; Open Source. Se vuoi migliorare l\'app o le sue traduzioni, controlla il repository su Github.</string>
-    <string name="open_source">forchettami</string>
     <string name="allow_system_calendar_access">Consenti accesso al calendario di sistema&#8230;</string>
     <string name="access_already_granted">Accesso gi&#224; concesso</string>
     <string name="access_denied_by_user">Hai precedentemente negato l\'accesso al calendario. Vai alle impostazioni di Android e concedi manualmente l\'accesso al calendario per questa app.</string>
@@ -69,7 +66,6 @@
     <string name="amazon_store_not_avail">Amazon App Store non disponibile</string>
     <string name="huawei_store_not_avail">Huawei App Gallery non disponibile</string>
     <string name="could_not_fetch_prices">Impossibile recuperare i prezzi correnti per gli acquisti in-app.</string>
-    <string name="choose_color">Scegli il colore</string>
     <string name="use_custom_color">Usa il tuo colore</string>
     <string name="apply_for_all">Candidati per tutti</string>
     <string name="buy_a_code">Acquista un codice</string>
@@ -84,9 +80,6 @@
     <string name="square_design">Piazza</string>
     <string name="vinyl_design">Vinile</string>
     <string name="custom_image">Immagine personalizzata</string>
-    <string name="custom_image_stretch">Immagine personalizzata (allungata)</string>
-    <string name="custom_image_zoom">Immagine personalizzata (Zoom)</string>
-    <string name="no_image">Nessuna immagine</string>
     <string name="force_landscape_view_only_when_started_manually">Forza il formato orizzontale (solo quando si avvia manualmente l\'app)</string>
     <string name="date_format">Formato data</string>
     <string name="burn_in_prevention">Prevenzione burn-in (per schermi OLED; sposta leggermente il contenuto)</string>

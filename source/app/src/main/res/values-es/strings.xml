@@ -34,7 +34,6 @@
     <string name="purchase_support_note">Al desbloquear la configuración mediante la compra única dentro de la aplicación, también obtienes acceso a las nuevas esferas y manecillas del reloj, y apoyas el desarrollo continuo de esta aplicación ♥</string>
     <string name="background">Fondo</string>
     <string name="general">General</string>
-    <string name="keep_screen_on">Mantener la pantalla encendida</string>
     <string name="use_own_images">Usar im&#225;genes personalizadas</string>
     <string name="clock_face_color">Color de la esfera del reloj</string>
     <string name="hour_hand_color">Color de la manecilla de la hora</string>
@@ -55,8 +54,6 @@
     <string name="ballbreak_for_android">BallBreak para Android</string>
     <string name="video_screensaver_for_android">Protector de pantalla de vídeo para Android</string>
     <string name="clock_desklet_for_cinnamon">Desklet de reloj analógico para el escritorio Cinnamon</string>
-    <string name="open_source_text">Esta aplicaci&#243;n es de c&#243;digo abierto. Si desea mejorar la aplicaci&#243;n o sus traducciones, consulte el repositorio en Github.</string>
-    <string name="open_source">Bifurcarme</string>
     <string name="allow_system_calendar_access">Permitir el acceso al calendario del sistema</string>
     <string name="access_already_granted">Acceso ya concedido</string>
     <string name="access_denied_by_user">Has denegado previamente el acceso al calendario. Vaya a la configuración de Android y otorgue manualmente acceso al calendario para esta aplicación.</string>
@@ -69,7 +66,6 @@
     <string name="amazon_store_not_avail">Tienda de aplicaciones de Amazon no disponible</string>
     <string name="huawei_store_not_avail">Galería de aplicaciones de Huawei no disponible</string>
     <string name="could_not_fetch_prices">No se pudieron obtener los precios actuales para las compras dentro de la aplicación.</string>
-    <string name="choose_color">Elige el color</string>
     <string name="use_custom_color">Usa tu propio color</string>
     <string name="apply_for_all">Aplicar para todos</string>
     <string name="buy_a_code">comprar un codigo</string>
@@ -84,9 +80,6 @@
     <string name="square_design">Cuadrado</string>
     <string name="vinyl_design">Vinilo</string>
     <string name="custom_image">Imagen personalizada</string>
-    <string name="custom_image_stretch">Imagen personalizada (estirada)</string>
-    <string name="custom_image_zoom">Imagen personalizada (zoom)</string>
-    <string name="no_image">Sin imagen</string>
     <string name="force_landscape_view_only_when_started_manually">Forzar formato horizontal (solo al iniciar la aplicación manualmente)</string>
     <string name="date_format">Formato de fecha</string>
     <string name="burn_in_prevention">Prevención de quemaduras (para pantallas OLED; mueve ligeramente el contenido)</string>

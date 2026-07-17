@@ -43,8 +43,34 @@ public class FsClockApp extends Application {
         return (uiMode & Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES;
     }
 
+    /**
+     * Park every install that predates the operating-mode picker on an explicit mode.
+     *
+     * Leopard is new, so nobody can already be in it — but the flag defaults to absent rather
+     * than false, and an install updating into this version has never made the choice. This
+     * writes the decision down once so the picker opens on the truth instead of a guess.
+     *
+     * A car already running FSE keeps FSE. Flipping it would unpin the 1920x720 window and
+     * strand the per-image positions the owner set, on every car in the field, silently.
+     */
+    private void migrateOperatingMode(SharedPreferences prefs) {
+        final String MIGRATED = "operating-mode-migrated";
+        if(prefs.contains(MIGRATED)) return;
+
+        // An empty prefs file is a fresh install, which has no history to preserve and will
+        // make its own choice on the activation screen.
+        boolean existingInstall = !prefs.getAll().isEmpty();
+        if(existingInstall) {
+            boolean fse = prefs.getBoolean(FullscreenActivity.PREF_FSE_SCREEN, false);
+            OperatingMode.set(prefs, fse ? OperatingMode.FSE : OperatingMode.NORMAL);
+            Log.i("migrate", "operating mode PINNED to " + (fse ? "FSE" : "NORMAL"));
+        }
+        prefs.edit().putBoolean(MIGRATED, true).apply();
+    }
+
     private void migrateSettings() {
         SharedPreferences sharedPref = getSharedPreferences(BaseSettingsActivity.SHARED_PREF_DOMAIN, Context.MODE_PRIVATE);
+        migrateOperatingMode(sharedPref);
         if(sharedPref.contains("color-red-analog") && sharedPref.contains("color-green-analog") && sharedPref.contains("color-blue-analog")) {
             SharedPreferences.Editor editor = sharedPref.edit();
             int oldColor = Color.argb(255, sharedPref.getInt("color-red-analog", 255), sharedPref.getInt("color-green-analog", 255), sharedPref.getInt("color-blue-analog", 255));

@@ -80,6 +80,10 @@ public class FullscreenActivity extends AppCompatActivity {
                     | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION);
         }
     };
+    /** How long the gear stays on screen after a tap before fading itself out. */
+    private static final int CONTROLS_LINGER = 5000;
+    private static final int CONTROLS_FADE = 600;
+
     private final Runnable mShowPart2Runnable = new Runnable() {
         @Override
         public void run() {
@@ -87,9 +91,49 @@ public class FullscreenActivity extends AppCompatActivity {
             if(actionBar != null) {
                 actionBar.show();
             }
-            mControlsView.setVisibility(View.VISIBLE);
+            showControls();
         }
     };
+
+    /**
+     * The gear is a visitor, not furniture.
+     *
+     * It used to sit there permanently at 25% alpha over a translucent white circle, which made
+     * it invisible on a light wallpaper and a smudge on a dark one — the worst of both. Now it
+     * arrives solid gold when you touch the screen, and takes itself away after five seconds so
+     * the wallpaper is left alone. This is a wallpaper screen; nothing should be on it forever.
+     */
+    private final Runnable mFadeControlsRunnable = new Runnable() {
+        @Override
+        public void run() {
+            if(mControlsView == null) return;
+            mControlsView.animate().alpha(0f).setDuration(CONTROLS_FADE)
+                    .withEndAction(new Runnable() {
+                        @Override
+                        public void run() {
+                            mControlsView.setVisibility(View.GONE);
+                        }
+                    }).start();
+        }
+    };
+
+    private void showControls() {
+        if(mControlsView == null) return;
+        mHideHandler.removeCallbacks(mFadeControlsRunnable);
+        mControlsView.animate().cancel();
+        mControlsView.setAlpha(1f);
+        mControlsView.setVisibility(View.VISIBLE);
+        mHideHandler.postDelayed(mFadeControlsRunnable, CONTROLS_LINGER);
+    }
+
+    private void hideControls() {
+        if(mControlsView == null) return;
+        mHideHandler.removeCallbacks(mFadeControlsRunnable);
+        mControlsView.animate().cancel();
+        mControlsView.setVisibility(View.GONE);
+        // Reset, or the next show() would fade in from whatever the interrupted animation left.
+        mControlsView.setAlpha(1f);
+    }
     private boolean mVisible;
     private boolean mClockHidden = false;
     private final Runnable mHideRunnable = new Runnable() {
@@ -105,19 +149,48 @@ public class FullscreenActivity extends AppCompatActivity {
                 @Override
                 public void onActivityResult(ActivityResult result) {
                     if(result.getResultCode() == Activity.RESULT_OK) {
+                        // The operating mode is decided in onCreate, which does not run again on
+                        // the way back from Settings — so switching mode there used to write the
+                        // pref and change nothing until the app was killed and reopened.
+                        if(OperatingMode.isLeopard(mSharedPref) && new WallpaperRepo(FullscreenActivity.this).isActive()) {
+                            startActivity(new Intent(FullscreenActivity.this, LeopardPickerActivity.class));
+                            finish();
+                            return;
+                        }
+                        // Same for FSE: the window size is applied at create time, so a toggle
+                        // has to be re-applied by hand here.
+                        applyFseScreenSize();
                         mContentView.loadSettings();
                     }
                 }
             });
 
     @Override
+    protected void attachBaseContext(Context newBase) {
+        // Follow the in-app language switch, not just the head unit's system locale.
+        super.attachBaseContext(LocaleHelper.wrap(newBase));
+    }
+
+    @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+
+        // In Leopard this activity has nothing to draw — Android owns the wallpaper and there
+        // is no clock. Launching straight into the picker is the only honest thing to do: the
+        // app is a tool you open, use for fifteen seconds, and close.
+        //
+        // Not before activation, though. The activation overlay is baked into this screen, so
+        // skipping to the picker on an unactivated device would hand a technician a wallpaper
+        // library with no way to enter the serial.
+        mSharedPref = getSharedPreferences(SettingsActivity.SHARED_PREF_DOMAIN, Context.MODE_PRIVATE);
+        if(OperatingMode.isLeopard(mSharedPref) && new WallpaperRepo(this).isActive()) {
+            startActivity(new Intent(this, LeopardPickerActivity.class));
+            finish();
+            return;
+        }
+
         setContentView(R.layout.activity_fullscreen);
         uiModeManager = (UiModeManager) getSystemService(UI_MODE_SERVICE);
-
-        // init settings
-        mSharedPref = getSharedPreferences(SettingsActivity.SHARED_PREF_DOMAIN, Context.MODE_PRIVATE);
 
         // find views
         mControlsView = findViewById(R.id.linearLayoutControls);
@@ -351,7 +424,7 @@ public class FullscreenActivity extends AppCompatActivity {
         if(actionBar != null) {
             actionBar.hide();
         }
-        mControlsView.setVisibility(View.GONE);
+        hideControls();
         mVisible = false;
 
         // Schedule a runnable to remove the status and navigation bar after a delay

@@ -2,4 +2,10 @@
 <paths xmlns:android="http://schemas.android.com/apk/res/android">
     <!-- folder where the downloaded update APK is stored: getExternalFilesDir("apk") -->
     <external-files-path name="apk" path="apk/" />
+
+    <!-- Leopard: cloud wallpapers are materialised as real files here so the wallpaper engine
+         can be handed a content:// URI with a resolvable MIME type — exactly the shape it gets
+         from the system file picker. It reads the type from the resolver, and an https:// URL
+         has none, which is why the cloud source needs this detour and the local one does not. -->
+    <cache-path name="leopard" path="leopard/" />
 </paths>

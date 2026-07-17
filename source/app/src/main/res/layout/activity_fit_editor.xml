@@ -1,0 +1,437 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Fit Editor.
+
+     Deliberately unscrollable. It is one screen: a box at the top showing exactly what the car
+     will render, every control underneath it, and Done at the bottom. If a control needed
+     scrolling to reach, the layout would be wrong — you cannot judge a preview you have scrolled
+     off the screen, and a technician in a car should never have to hunt for the way out.
+
+     So the preview takes weight and the controls take a fixed height. Everything below is sized
+     to fit that height on the shortest screen this ships to (720px tall at density 1).
+
+     The happy path is "look at it, press Done": auto-detection has usually already picked the
+     right mode, so this is a confirmation surface first and an editor second. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/fitEditorRoot"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="#0b0906"
+    android:paddingStart="24dp"
+    android:paddingEnd="24dp"
+    android:paddingTop="12dp"
+    android:paddingBottom="12dp">
+
+    <!-- ===================== preview ===================== -->
+    <FrameLayout
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:layout_marginBottom="12dp">
+
+        <FrameLayout
+            android:id="@+id/previewFrame"
+            android:layout_width="wrap_content"
+            android:layout_height="match_parent"
+            android:layout_gravity="center">
+
+            <systems.sieber.fsclock.FitPreviewView
+                android:id="@+id/fitPreview"
+                android:layout_width="wrap_content"
+                android:layout_height="match_parent"
+                android:layout_gravity="center" />
+
+            <TextView
+                android:id="@+id/textViewFitHint"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="top|end"
+                android:layout_margin="10dp"
+                android:background="@drawable/fit_badge_bg"
+                android:paddingStart="10dp"
+                android:paddingEnd="10dp"
+                android:paddingTop="4dp"
+                android:paddingBottom="4dp"
+                android:textColor="@color/gold"
+                android:textSize="11sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/textViewFitTarget"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="bottom|start"
+                android:layout_margin="10dp"
+                android:background="@drawable/fit_badge_bg"
+                android:paddingStart="10dp"
+                android:paddingEnd="10dp"
+                android:paddingTop="4dp"
+                android:paddingBottom="4dp"
+                android:textColor="@color/aurora_text"
+                android:textSize="11sp" />
+
+            <ProgressBar
+                android:id="@+id/progressFit"
+                android:layout_width="44dp"
+                android:layout_height="44dp"
+                android:layout_gravity="center"
+                android:indeterminateTint="@color/colorAccent"
+                android:visibility="gone" />
+
+        </FrameLayout>
+    </FrameLayout>
+
+    <!-- ===================== controls =====================
+         Fixed height. Two rows of controls, then the actions. -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:baselineAligned="false">
+
+        <!-- LEFT: the three modes, side by side and short. They are a choice you make once.
+             Each tile used to reserve 34dp for a thumbnail preview of the mode — but nothing in
+             the app ever drew one, so every tile carried a block of empty space above its label
+             and the row was twice the height it needed. The label is the whole button now. -->
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_weight="1"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:baselineAligned="false">
+
+            <LinearLayout
+                android:id="@+id/tileFill"
+                style="@style/FitModeTile">
+                <TextView
+                    android:id="@+id/tileFillLabel"
+                    style="@style/FitModeLabel"
+                    android:text="@string/fit_mode_fill" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:id="@+id/tileBlur"
+                style="@style/FitModeTile"
+                android:layout_marginStart="8dp">
+                <TextView
+                    android:id="@+id/tileBlurLabel"
+                    style="@style/FitModeLabel"
+                    android:text="@string/fit_mode_blur" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:id="@+id/tileColor"
+                style="@style/FitModeTile"
+                android:layout_marginStart="8dp">
+                <TextView
+                    android:id="@+id/tileColorLabel"
+                    style="@style/FitModeLabel"
+                    android:text="@string/fit_mode_color" />
+            </LinearLayout>
+
+        </LinearLayout>
+
+        <!-- RIGHT: the way out, and the two things next to it you might want first. Done is no
+             bigger than the work it ends. -->
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="14dp"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:baselineAligned="false">
+
+            <TextView
+                android:id="@+id/buttonFitApplyAll"
+                android:layout_width="wrap_content"
+                android:layout_height="44dp"
+                android:background="@drawable/fit_secondary_btn"
+                android:gravity="center"
+                android:paddingStart="12dp"
+                android:paddingEnd="12dp"
+                android:focusable="true"
+                android:clickable="true"
+                android:textColor="@color/aurora_muted"
+                android:textSize="11sp"
+                android:textStyle="bold"
+                android:text="@string/fit_apply_all" />
+
+            <TextView
+                android:id="@+id/buttonFitReset"
+                android:layout_width="wrap_content"
+                android:layout_height="44dp"
+                android:layout_marginStart="8dp"
+                android:background="@drawable/fit_secondary_btn"
+                android:gravity="center"
+                android:paddingStart="14dp"
+                android:paddingEnd="14dp"
+                android:focusable="true"
+                android:clickable="true"
+                android:textColor="@color/aurora_text"
+                android:textSize="12sp"
+                android:textStyle="bold"
+                android:text="@string/fit_reset" />
+
+            <ImageView
+                android:id="@+id/buttonFitDelete"
+                android:layout_width="44dp"
+                android:layout_height="44dp"
+                android:layout_marginStart="8dp"
+                android:background="@drawable/fit_danger_btn"
+                android:padding="11dp"
+                android:focusable="true"
+                android:clickable="true"
+                android:src="@drawable/ic_delete_24dp"
+                android:contentDescription="@string/fit_delete" />
+
+            <TextView
+                android:id="@+id/buttonFitDone"
+                android:layout_width="wrap_content"
+                android:layout_height="44dp"
+                android:layout_marginStart="12dp"
+                android:background="@drawable/fit_primary_btn"
+                android:gravity="center"
+                android:minWidth="120dp"
+                android:paddingStart="20dp"
+                android:paddingEnd="20dp"
+                android:focusable="true"
+                android:clickable="true"
+                android:textColor="#1a1204"
+                android:textSize="15sp"
+                android:textStyle="bold"
+                android:text="@string/fit_done" />
+
+        </LinearLayout>
+
+    </LinearLayout>
+
+    <!-- ===================== sliders =====================
+         Zoom and fade apply in every mode, so they never move. The third slot is
+         mode-dependent: blur strength, or the bar colour, or the reposition hint. -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="10dp"
+        android:orientation="horizontal"
+        android:background="@drawable/fit_panel_bg"
+        android:paddingStart="16dp"
+        android:paddingEnd="16dp"
+        android:paddingTop="10dp"
+        android:paddingBottom="10dp"
+        android:baselineAligned="false">
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_weight="1"
+            android:layout_height="wrap_content"
+            android:orientation="vertical">
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:baselineAligned="false">
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_weight="1"
+                    android:layout_height="wrap_content"
+                    android:textColor="@color/aurora_text"
+                    android:textSize="13sp"
+                    android:textStyle="bold"
+                    android:text="@string/fit_zoom" />
+                <TextView
+                    android:id="@+id/textViewZoomValue"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:textColor="@color/gold"
+                    android:textSize="14sp"
+                    android:textStyle="bold" />
+            </LinearLayout>
+            <SeekBar
+                android:id="@+id/seekBarZoom"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="2dp"
+                android:max="450"
+                android:progressDrawable="@drawable/seekbar_track"
+                android:thumb="@drawable/seekbar_thumb"
+                android:splitTrack="false" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_weight="1"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="16dp"
+            android:orientation="vertical">
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:baselineAligned="false">
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_weight="1"
+                    android:layout_height="wrap_content"
+                    android:textColor="@color/aurora_text"
+                    android:textSize="13sp"
+                    android:textStyle="bold"
+                    android:text="@string/fit_fade" />
+                <TextView
+                    android:id="@+id/textViewFadeValue"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:textColor="@color/gold"
+                    android:textSize="14sp"
+                    android:textStyle="bold" />
+            </LinearLayout>
+            <SeekBar
+                android:id="@+id/seekBarFade"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="2dp"
+                android:max="100"
+                android:progressDrawable="@drawable/seekbar_track"
+                android:thumb="@drawable/seekbar_thumb"
+                android:splitTrack="false" />
+        </LinearLayout>
+
+        <!-- Exactly one of these three is ever visible — the parent brief calls "every
+             sub-setting always visible" an existing defect, so this does not repeat it. -->
+        <FrameLayout
+            android:layout_width="0dp"
+            android:layout_weight="1"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="16dp">
+
+            <!-- BLUR -->
+            <LinearLayout
+                android:id="@+id/panelBlur"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical">
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:baselineAligned="false">
+                    <TextView
+                        android:layout_width="0dp"
+                        android:layout_weight="1"
+                        android:layout_height="wrap_content"
+                        android:textColor="@color/aurora_text"
+                        android:textSize="13sp"
+                        android:textStyle="bold"
+                        android:text="@string/fit_blur_strength" />
+                    <TextView
+                        android:id="@+id/textViewBlurValue"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:textColor="@color/gold"
+                        android:textSize="14sp"
+                        android:textStyle="bold" />
+                </LinearLayout>
+                <SeekBar
+                    android:id="@+id/seekBarBlur"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="2dp"
+                    android:max="100"
+                    android:progressDrawable="@drawable/seekbar_track"
+                    android:thumb="@drawable/seekbar_thumb"
+                    android:splitTrack="false" />
+            </LinearLayout>
+
+            <!-- COLOR: presets for the neutrals, one slider for everything else. -->
+            <LinearLayout
+                android:id="@+id/panelColor"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:visibility="gone">
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical"
+                    android:baselineAligned="false">
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:textColor="@color/aurora_text"
+                        android:textSize="13sp"
+                        android:textStyle="bold"
+                        android:text="@string/fit_bar_color" />
+                    <LinearLayout
+                        android:id="@+id/colorPresets"
+                        android:layout_width="0dp"
+                        android:layout_weight="1"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="10dp"
+                        android:gravity="end"
+                        android:orientation="horizontal" />
+                </LinearLayout>
+                <SeekBar
+                    android:id="@+id/seekBarHue"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="2dp"
+                    android:max="360"
+                    android:thumb="@drawable/seekbar_thumb"
+                    android:splitTrack="false" />
+            </LinearLayout>
+
+            <!-- FILL -->
+            <LinearLayout
+                android:id="@+id/panelFill"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:visibility="gone">
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:textColor="@color/aurora_text"
+                    android:textSize="13sp"
+                    android:textStyle="bold"
+                    android:text="@string/fit_reposition" />
+                <!-- a d-pad path for the pan, which the touch gesture alone would not give -->
+                <LinearLayout
+                    android:id="@+id/repositionPad"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="6dp"
+                    android:orientation="horizontal"
+                    android:gravity="center"
+                    android:background="@drawable/fit_secondary_btn"
+                    android:paddingTop="7dp"
+                    android:paddingBottom="7dp"
+                    android:focusable="true"
+                    android:clickable="true">
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:textColor="@color/aurora_text"
+                        android:textSize="11sp"
+                        android:textStyle="bold"
+                        android:text="@string/fit_reposition_dpad" />
+                </LinearLayout>
+            </LinearLayout>
+
+        </FrameLayout>
+
+    </LinearLayout>
+
+    <!-- Mode-specific note, last so it can never push a control off the screen. -->
+    <TextView
+        android:id="@+id/textViewBlurNote"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="6dp"
+        android:gravity="center"
+        android:maxLines="1"
+        android:ellipsize="end"
+        android:textColor="@color/aurora_muted"
+        android:textSize="10sp"
+        android:text="@string/fit_dpad_hint" />
+
+</LinearLayout>

@@ -33,6 +33,15 @@ public class WallpaperSelectAdapter extends BaseAdapter {
     private final List<WallpaperItem> mItems;
     private final Set<String> mVisibleUrls = new HashSet<>();
 
+    /** Told which row's edit button was pressed. */
+    interface OnEditListener {
+        void onEdit(WallpaperItem item);
+    }
+
+    private OnEditListener mEditListener;
+
+    void setOnEditListener(OnEditListener l) { mEditListener = l; }
+
     WallpaperSelectAdapter(Context context, WallpaperRepo repo, List<WallpaperItem> items, Set<String> hiddenUrls) {
         mContext = context;
         mInflater = LayoutInflater.from(context);
@@ -93,7 +102,7 @@ public class WallpaperSelectAdapter extends BaseAdapter {
     }
 
     @Override
-    public View getView(int position, View convertView, @NonNull ViewGroup parent) {
+    public View getView(final int position, View convertView, @NonNull ViewGroup parent) {
         ViewHolder holder;
         if(convertView == null) {
             convertView = mInflater.inflate(R.layout.item_wallpaper_select, parent, false);
@@ -101,15 +110,37 @@ public class WallpaperSelectAdapter extends BaseAdapter {
             holder.check = convertView.findViewById(R.id.checkBoxWallpaperVisible);
             holder.thumb = convertView.findViewById(R.id.imageViewWallpaperThumb);
             holder.title = convertView.findViewById(R.id.textViewWallpaperName);
+            holder.edit = convertView.findViewById(R.id.buttonWallpaperEdit);
             convertView.setTag(holder);
         } else {
             holder = (ViewHolder) convertView.getTag();
         }
 
-        WallpaperItem item = getItem(position);
-        holder.check.setChecked(item.url != null && mVisibleUrls.contains(item.url));
+        final WallpaperItem item = getItem(position);
+        boolean visible = item.url != null && mVisibleUrls.contains(item.url);
+        holder.check.setChecked(visible);
         holder.title.setText(describe(item));
         loadThumb(holder.thumb, item);
+        // Drives the cell outline through the state list, so a ticked cell is readable from
+        // across the cabin and not just by a 20px box in its corner.
+        convertView.setActivated(visible);
+
+        // Both wired here rather than through the GridView's own item click.
+        //
+        // An AdapterView only delivers a row click when NOTHING in the row is focusable, so the
+        // moment this cell grew an edit button the tick stopped working entirely. Per-cell
+        // listeners have no such rule, and they also let the two targets differ: the cell
+        // toggles, the pencil edits.
+        //
+        // The listener goes on the cell, not on the thumbnail: the scrim and the name sit on top
+        // of the image, so a tap near the top or bottom edge would miss a thumbnail listener.
+        //
+        // Rebound every getView, because cells are recycled — a listener that captured the old
+        // item would act on whatever used to be in this cell.
+        convertView.setOnClickListener(v -> toggle(position));
+        holder.edit.setOnClickListener(v -> {
+            if(mEditListener != null) mEditListener.onEdit(item);
+        });
         return convertView;
     }
 
@@ -172,9 +203,17 @@ public class WallpaperSelectAdapter extends BaseAdapter {
                 .into(view);
     }
 
+    /**
+     * Types here must match item_wallpaper_select.xml exactly. findViewById infers its return
+     * type from the field, so a mismatch compiles cleanly and throws ClassCastException at the
+     * first inflate — which is to say, on the device, in front of the customer. `edit` was left
+     * as a TextView when the button became a pencil ImageView, and that is precisely what
+     * happened.
+     */
     private static class ViewHolder {
         CheckBox check;
         ImageView thumb;
         TextView title;
+        ImageView edit;
     }
 }

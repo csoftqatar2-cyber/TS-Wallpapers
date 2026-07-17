@@ -38,6 +38,34 @@
         android:theme="@style/AppTheme"
         tools:ignore="UnusedAttribute">
 
+        <activity
+            android:name=".FitEditorActivity"
+            android:exported="false"
+            android:configChanges="orientation|screenSize|keyboardHidden"
+            android:theme="@style/AppTheme" />
+
+        <activity
+            android:name=".LeopardPickerActivity"
+            android:exported="false"
+            android:configChanges="orientation|screenSize|keyboardHidden"
+            android:theme="@style/AppTheme" />
+
+        <!-- Leopard: the live wallpaper Android offers in its own picker. Only ever used for
+             moving content — still images go straight through WallpaperManager and never
+             involve this service. -->
+        <service
+            android:name=".MediaWallpaperService"
+            android:exported="true"
+            android:label="@string/app_name"
+            android:permission="android.permission.BIND_WALLPAPER">
+            <intent-filter>
+                <action android:name="android.service.wallpaper.WallpaperService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.service.wallpaper"
+                android:resource="@xml/wallpaper" />
+        </service>
+
         <service
             android:name=".FullscreenDream"
             android:exported="true"

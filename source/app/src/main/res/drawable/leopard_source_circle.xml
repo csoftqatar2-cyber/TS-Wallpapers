@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Source circle. The active source wears the gradient; the idle one is a flat outline, so
+     which library you are looking at is readable in one glance from the driver's seat. -->
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:state_focused="true">
+        <shape android:shape="oval">
+            <gradient android:angle="315" android:startColor="@color/colorAccent" android:endColor="@color/gold" />
+            <stroke android:width="3dp" android:color="@color/aurora_text" />
+        </shape>
+    </item>
+    <item android:state_selected="true">
+        <shape android:shape="oval">
+            <gradient android:angle="315" android:startColor="@color/colorAccent" android:endColor="@color/gold" />
+            <stroke android:width="3dp" android:color="#80ffd27a" />
+        </shape>
+    </item>
+    <item>
+        <shape android:shape="oval">
+            <solid android:color="#14ffffff" />
+            <stroke android:width="2dp" android:color="@color/aurora_border" />
+        </shape>
+    </item>
+</selector>

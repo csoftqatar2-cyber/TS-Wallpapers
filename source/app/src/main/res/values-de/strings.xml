@@ -34,7 +34,6 @@
     <string name="purchase_support_note">Durch das Freischalten der Einstellungen mittels des einmaligen In-App-Kaufs erhalten Sie zudem Zugriff auf die neuen Zifferblätter und Zeiger und unterstützen die Weiterentwicklung dieser App ♥</string>
     <string name="background">Hintergrund</string>
     <string name="general">Allgemein</string>
-    <string name="keep_screen_on">Bildschirm eingeschaltet lassen</string>
     <string name="use_own_images">Eigene Bilder verwenden</string>
     <string name="clock_face_color">Zifferblatt-Farbe</string>
     <string name="hour_hand_color">Stundenzeiger-Farbe</string>
@@ -55,8 +54,6 @@
     <string name="ballbreak_for_android">BallBreak für Android</string>
     <string name="video_screensaver_for_android">Video-Bildschirmschoner für Android</string>
     <string name="clock_desklet_for_cinnamon">Analoguhr-Desklet für den Cinnamon Desktop</string>
-    <string name="open_source_text">Diese App ist Open Source. Wenn Sie die App oder die Übersetzungen verbessern möchten, besuchen Sie bitte das Repository auf Github.</string>
-    <string name="open_source">Gabel mich</string>
     <string name="allow_system_calendar_access">Zugriff auf System-Kalender erlauben</string>
     <string name="access_already_granted">Zugriff wurde bereits erlaubt</string>
     <string name="access_denied_by_user">Sie haben den Kalenderzugriff zuvor abgelehnt. Bitte gehen Sie in die Android-Einstellungen und gewähren Sie den Kalenderzugriff manuell für diese App.</string>
@@ -69,7 +66,6 @@
     <string name="amazon_store_not_avail">Amazon App Store nicht verfügbar</string>
     <string name="huawei_store_not_avail">Huawei App Gallery nicht verfügbar</string>
     <string name="could_not_fetch_prices">Die aktuellen Preise für In-App-Einkäufe konnten nicht geladen werden.</string>
-    <string name="choose_color">Farbe auswählen</string>
     <string name="use_custom_color">Eigene Farbe verwenden</string>
     <string name="apply_for_all">Für alle übernehmen</string>
     <string name="buy_a_code">Code kaufen</string>
@@ -84,9 +80,6 @@
     <string name="square_design">Quatratisch</string>
     <string name="vinyl_design">Vinyl</string>
     <string name="custom_image">Eigenes Bild</string>
-    <string name="custom_image_stretch">Eigenes Bild (strecken)</string>
-    <string name="custom_image_zoom">Eigenes Bild (zoomen)</string>
-    <string name="no_image">Kein Bild</string>
     <string name="force_landscape_view_only_when_started_manually">Querformat erzwingen (nur bei manuellem Start der App)</string>
     <string name="date_format">Datumsformat</string>
     <string name="burn_in_prevention">Einbrennschutz (für OLED-Bildschirme, verschiebt den Inhalt leicht)</string>

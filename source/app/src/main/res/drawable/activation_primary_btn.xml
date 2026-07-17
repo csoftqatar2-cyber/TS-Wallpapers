@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Primary action. Flat accent fill rather than fit_primary_btn's accent->gold gradient:
+     this button sits alone on a dark card with nothing to compete with, and the flat fill
+     keeps the dark label at full contrast across the whole width. -->
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <item android:state_focused="true">
+        <shape android:shape="rectangle">
+            <solid android:color="@color/gold" />
+            <stroke android:width="2dp" android:color="@color/aurora_text" />
+            <corners android:radius="14dp" />
+        </shape>
+    </item>
+
+    <item android:state_pressed="true">
+        <shape android:shape="rectangle">
+            <solid android:color="@color/gold" />
+            <corners android:radius="14dp" />
+        </shape>
+    </item>
+
+    <item>
+        <shape android:shape="rectangle">
+            <solid android:color="@color/colorAccent" />
+            <corners android:radius="14dp" />
+        </shape>
+    </item>
+
+</selector>

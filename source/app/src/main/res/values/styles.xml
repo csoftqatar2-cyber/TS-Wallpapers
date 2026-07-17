@@ -19,8 +19,58 @@
         <!-- no action bar -->
         <item name="windowActionBar">false</item>
         <item name="windowNoTitle">true</item>
+
+        <!-- Every dialog in the app is a framework android.app.AlertDialog, so pointing this one
+             attribute at our own theme restyles all of them at once — including the update
+             prompt, which is the one dialog a customer is most likely to ever see. Without it
+             they render in the platform's default grey, which looks like a different app
+             interrupting this one. -->
+        <item name="android:alertDialogTheme">@style/AppDialog</item>
+        <item name="alertDialogTheme">@style/AppDialog</item>
     </style>
     <style name="AppTheme" parent="BaseAppTheme" />
+
+    <!-- Warm Aurora dialog: card-coloured panel, gold title, accent buttons.
+         Every attribute is android:-prefixed on purpose. The app's dialogs are all framework
+         android.app.AlertDialogs, which resolve the PLATFORM attributes; the appcompat
+         equivalents (buttonBarPositiveButtonStyle, listChoiceIndicatorSingle, colorAccent
+         without a prefix) are simply never read here, and the unprefixed ones do not even
+         exist in this context. -->
+    <style name="AppDialog" parent="Theme.AppCompat.Dialog.Alert">
+        <item name="android:windowBackground">@drawable/dialog_panel_bg</item>
+        <item name="android:colorBackground">@color/aurora_card</item>
+        <item name="android:colorAccent">@color/colorAccent</item>
+        <item name="colorAccent">@color/colorAccent</item>
+        <item name="android:textColorPrimary">@color/aurora_text</item>
+        <item name="android:textColorSecondary">@color/aurora_muted</item>
+        <item name="android:textColor">@color/aurora_text</item>
+        <item name="android:windowTitleStyle">@style/AppDialog.Title</item>
+        <item name="android:buttonBarPositiveButtonStyle">@style/AppDialog.Button.Positive</item>
+        <item name="android:buttonBarNegativeButtonStyle">@style/AppDialog.Button</item>
+        <item name="android:buttonBarNeutralButtonStyle">@style/AppDialog.Button</item>
+        <!-- The mark on single-choice dialogs, e.g. the mode picker. -->
+        <item name="android:listChoiceIndicatorSingle">@drawable/dialog_radio</item>
+        <item name="android:windowMinWidthMajor">50%</item>
+        <item name="android:windowMinWidthMinor">70%</item>
+    </style>
+
+    <style name="AppDialog.Title" parent="TextAppearance.AppCompat.Title">
+        <item name="android:textColor">@color/gold</item>
+        <item name="android:textSize">19sp</item>
+        <item name="android:textStyle">bold</item>
+    </style>
+
+    <style name="AppDialog.Button" parent="Widget.AppCompat.Button.Borderless.Colored">
+        <item name="android:textColor">@color/aurora_muted</item>
+        <item name="android:textAllCaps">false</item>
+        <item name="android:textSize">15sp</item>
+        <item name="android:textStyle">bold</item>
+    </style>
+
+    <!-- The confirming action reads as the action, not as one of two equal words. -->
+    <style name="AppDialog.Button.Positive" parent="AppDialog.Button">
+        <item name="android:textColor">@color/gold</item>
+    </style>
 
     <style name="MyCheckBoxStyle" parent="Widget.AppCompat.CompoundButton.CheckBox">
         <!-- on Amazon Fire TV 4K, CheckBox label text is displayed in light gray on white, almost unreadable, so we set it manually to black -->
@@ -78,6 +128,227 @@
         <item name="android:textAppearance">@style/TextAppearance.AppCompat.Large</item>
         <item name="android:textColor">@color/colorAccent</item>
         <item name="android:textStyle">bold</item>
+        <item name="android:paddingBottom">8dp</item>
+    </style>
+
+    <!-- Warm Aurora: each setting is its own tile, not a row inside one big card. -->
+    <style name="SettingsRow">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:layout_marginBottom">10dp</item>
+        <item name="android:background">@drawable/settings_row_bg</item>
+        <item name="android:paddingStart">16dp</item>
+        <item name="android:paddingEnd">16dp</item>
+        <item name="android:paddingTop">14dp</item>
+        <item name="android:paddingBottom">14dp</item>
+        <item name="android:textColor">@color/aurora_text</item>
+        <item name="android:textSize">15sp</item>
+        <item name="android:textStyle">bold</item>
+    </style>
+
+    <!-- The switch flavour of a row. SwitchCompat draws its track at the end when the view is
+         match_parent, which is what puts the label at the start and the switch opposite it. -->
+    <style name="SettingsSwitch" parent="SettingsRow">
+        <item name="track">@drawable/switch_track</item>
+        <item name="android:thumb">@drawable/switch_thumb</item>
+        <item name="android:background">@drawable/settings_row_bg</item>
+        <item name="android:minHeight">58dp</item>
+        <item name="android:gravity">center_vertical</item>
+    </style>
+
+    <!-- Same choice, on the activation overlay. The overlay used to be black-and-cyan and
+         hardcoded a palette of its own; it is on-brand now, so this is just ModeRadio at the
+         overlay's sizing. -->
+    <style name="ActivationModeRadio">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:paddingTop">6dp</item>
+        <item name="android:paddingBottom">6dp</item>
+        <item name="android:textColor">@color/aurora_text</item>
+        <item name="android:textSize">15sp</item>
+        <item name="android:buttonTint">@color/colorAccent</item>
+    </style>
+
+    <!-- Operating mode choice. A radio group, not two checkboxes: FSE and Leopard are
+         mutually exclusive, and a UI that lets both be ticked owes the user an answer about
+         what that means. There isn't one. -->
+    <style name="ModeRadio">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:layout_marginBottom">6dp</item>
+        <item name="android:background">@drawable/settings_row_bg</item>
+        <item name="android:paddingStart">16dp</item>
+        <item name="android:paddingEnd">16dp</item>
+        <item name="android:paddingTop">12dp</item>
+        <item name="android:paddingBottom">12dp</item>
+        <item name="android:textColor">@color/aurora_text</item>
+        <item name="android:textSize">15sp</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:buttonTint">@color/colorAccent</item>
+    </style>
+
+    <!-- Big square action tile in the Wallpapers section: icon over label. Replaces the plain
+         coloured text buttons, which carried an emoji instead of an icon. -->
+    <!-- A tile in a paired row. The row splits its width, so the tile carries the weight.
+         Bottom margin matches SettingsRow, so tiles and switches share one vertical rhythm
+         instead of the 6dp/10dp mix they had. -->
+    <style name="WallpaperTile">
+        <item name="android:layout_width">0dp</item>
+        <item name="android:layout_weight">1</item>
+        <item name="android:layout_height">132dp</item>
+        <item name="android:orientation">vertical</item>
+        <item name="android:gravity">center</item>
+        <item name="android:padding">14dp</item>
+        <item name="android:background">@drawable/wp_tile_bg</item>
+        <item name="android:focusable">true</item>
+        <item name="android:clickable">true</item>
+    </style>
+
+    <!-- A tile that owns its row. Explicitly clears the weight: inherited from WallpaperTile it
+         would sit on a child of a vertical wrap_content column, where weight means nothing and
+         only ever confuses whoever reads it next. -->
+    <style name="WallpaperTileWide" parent="WallpaperTile">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_weight">0</item>
+        <item name="android:layout_marginBottom">10dp</item>
+    </style>
+
+    <!-- The row that holds a pair of tiles. -->
+    <style name="WallpaperTileRow">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:layout_marginBottom">10dp</item>
+        <item name="android:orientation">horizontal</item>
+        <item name="android:baselineAligned">false</item>
+    </style>
+
+    <style name="WallpaperTileIcon">
+        <item name="android:layout_width">40dp</item>
+        <item name="android:layout_height">40dp</item>
+        <item name="android:duplicateParentState">true</item>
+        <item name="android:importantForAccessibility">no</item>
+    </style>
+
+    <style name="WallpaperTileLabel">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:layout_marginTop">10dp</item>
+        <item name="android:gravity">center</item>
+        <item name="android:textColor">@color/aurora_text</item>
+        <item name="android:textSize">14sp</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:duplicateParentState">true</item>
+    </style>
+
+    <!-- Leopard picker: the two permanent source circles. -->
+    <style name="LeopardSource">
+        <item name="android:layout_width">210dp</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:orientation">vertical</item>
+        <item name="android:gravity">center</item>
+        <item name="android:focusable">true</item>
+        <item name="android:clickable">true</item>
+    </style>
+
+    <style name="LeopardSourceCircle">
+        <item name="android:layout_width">104dp</item>
+        <item name="android:layout_height">104dp</item>
+        <item name="android:background">@drawable/leopard_source_circle</item>
+        <item name="android:padding">28dp</item>
+        <item name="android:duplicateParentState">true</item>
+        <item name="android:tint">@color/leopard_source_icon_tint</item>
+        <item name="android:importantForAccessibility">no</item>
+    </style>
+
+    <!-- Labels, because iconography alone is not enough for a technician who has never seen
+         this screen and will not get a second chance to guess. -->
+    <style name="LeopardSourceLabel">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:layout_marginTop">12dp</item>
+        <item name="android:gravity">center</item>
+        <item name="android:textColor">@color/aurora_text</item>
+        <item name="android:textSize">15sp</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:duplicateParentState">true</item>
+    </style>
+
+    <!-- The two right-hand sources share a 210dp column, so they run at a smaller size than the
+         cloud circle opposite. That asymmetry is deliberate: the cloud library is the source a
+         car owner uses, and the other two are the technician's. -->
+    <style name="LeopardSourceCompact" parent="LeopardSource">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:padding">6dp</item>
+    </style>
+
+    <style name="LeopardSourceCircleCompact" parent="LeopardSourceCircle">
+        <item name="android:layout_width">76dp</item>
+        <item name="android:layout_height">76dp</item>
+        <item name="android:padding">20dp</item>
+    </style>
+
+    <style name="LeopardSourceSub">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:layout_marginTop">4dp</item>
+        <item name="android:gravity">center</item>
+        <item name="android:textColor">@color/aurora_muted</item>
+        <item name="android:textSize">11sp</item>
+    </style>
+
+    <!-- Fit Editor mode tile: a small preview of what the mode does, plus its name. -->
+    <!-- One of the three fit modes.
+         Height is fixed, NOT match_parent: these sit in a fixed-height controls strip, and
+         match_parent made each tile as tall as the whole strip, so three of them overflowed it
+         and got cut off with no way to scroll to them. A tile is as tall as its contents. -->
+    <style name="FitModeTile">
+        <item name="android:layout_width">0dp</item>
+        <item name="android:layout_weight">1</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:orientation">vertical</item>
+        <item name="android:gravity">center</item>
+        <item name="android:minHeight">46dp</item>
+        <item name="android:padding">10dp</item>
+        <item name="android:background">@drawable/fit_mode_tile_bg</item>
+        <item name="android:focusable">true</item>
+        <item name="android:clickable">true</item>
+    </style>
+
+    <style name="FitModeLabel">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:gravity">center</item>
+        <item name="android:maxLines">1</item>
+        <item name="android:ellipsize">end</item>
+        <item name="android:textSize">11sp</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:textColor">@color/fit_mode_label_tint</item>
+    </style>
+
+    <!-- Status chip in the settings header. -->
+    <style name="HeaderChip">
+        <item name="android:layout_width">wrap_content</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:paddingStart">14dp</item>
+        <item name="android:paddingEnd">14dp</item>
+        <item name="android:paddingTop">8dp</item>
+        <item name="android:paddingBottom">8dp</item>
+        <item name="android:textSize">12sp</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:gravity">center_vertical</item>
+        <item name="android:maxLines">1</item>
+    </style>
+
+    <!-- Small uppercase group label inside a section, e.g. "Colors & Fonts". -->
+    <style name="SettingsGroupLabel">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:textColor">@color/aurora_muted</item>
+        <item name="android:textSize">11sp</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:textAllCaps">true</item>
+        <item name="android:letterSpacing">0.12</item>
+        <item name="android:paddingTop">10dp</item>
         <item name="android:paddingBottom">8dp</item>
     </style>
 

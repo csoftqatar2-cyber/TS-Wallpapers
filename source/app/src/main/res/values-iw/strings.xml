@@ -35,7 +35,6 @@
     <string name="purchase_support_note">על ידי פתיחת ההגדרות באמצעות רכישה חד פעמית בתוך האפליקציה, תקבלו גם גישה ללוחות השעון ולמחוגים החדשים ותומכים בפיתוח נוסף של אפליקציה זו. ♥</string>
     <string name="background">רקע כללי</string>
     <string name="general">כללי</string>
-    <string name="keep_screen_on">השאר מסך דלוק</string>
     <string name="use_own_images">השתמש בתמונות מותאמות אישית</string>
     <string name="clock_face_color">צבע פני השעון</string>
     <string name="hour_hand_color">צבע יד שעה</string>
@@ -56,8 +55,6 @@
     <string name="ballbreak_for_android">BallBreak עבור אנדרואיד</string>
     <string name="video_screensaver_for_android">שומר מסך וידאו לאנדרואיד</string>
     <string name="clock_desklet_for_cinnamon">שעון אנלוגי לשולחן העבודה של קינמון</string>
-    <string name="open_source_text">אפליקציה זו היא קוד פתוח. אם אתה רוצה לשפר את האפליקציה או התרגומים שלה, בדוק את המאגר ב-Github.</string>
-    <string name="open_source">מזלג אותי</string>
     <string name="allow_system_calendar_access">אפשר גישה ליומן המערכת</string>
     <string name="access_already_granted">הגישה כבר ניתנה</string>
     <string name="access_denied_by_user">דחית בעבר גישה ליומן. נא עבור להגדרות אנדרואיד והענק ידנית גישה ליומן עבור אפליקציה זו.</string>
@@ -70,7 +67,6 @@
     <string name="amazon_store_not_avail">Amazon App Store לא זמין</string>
     <string name="huawei_store_not_avail">גלריית האפליקציות של Huawei אינה זמינה</string>
     <string name="could_not_fetch_prices">לא ניתן היה להביא מחירים נוכחיים עבור רכישות מתוך האפליקציה.</string>
-    <string name="choose_color">בחרי צבע</string>
     <string name="use_custom_color">השתמש בצבע משלך</string>
     <string name="apply_for_all">הגש בקשה על כולם</string>
     <string name="buy_a_code">קנה קוד</string>
@@ -85,9 +81,6 @@
     <string name="square_design">מְרוּבָּע</string>
     <string name="vinyl_design">ויניל</string>
     <string name="custom_image">תמונה מותאמת אישית</string>
-    <string name="custom_image_stretch">תמונה מותאמת אישית (מתיחה)</string>
-    <string name="custom_image_zoom">תמונה מותאמת אישית (זום)</string>
-    <string name="no_image">אין תמונה</string>
     <string name="force_landscape_view_only_when_started_manually">לכפות פורמט לרוחב (רק בעת הפעלת האפליקציה ידנית)</string>
     <string name="date_format">פורמט תאריך</string>
     <string name="burn_in_prevention">מניעת צריבה (עבור מסכי OLED; מזיז מעט את התוכן)</string>

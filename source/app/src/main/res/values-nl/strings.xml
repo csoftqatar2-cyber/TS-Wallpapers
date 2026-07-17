@@ -35,7 +35,6 @@
   <string name="purchase_support_note">Door de instellingen te ontgrendelen met de eenmalige in-app-aankoop, krijg je ook toegang tot de nieuwe wijzerplaten en wijzers en ondersteun je de verdere ontwikkeling van deze app ♥</string>
   <string name="background">Achtergrond</string>
   <string name="general">Algemeen</string>
-  <string name="keep_screen_on">Houd het scherm ingeschakeld</string>
   <string name="use_own_images">Gebruik aangepaste afbeeldingen</string>
   <string name="clock_face_color">Kleur wijzerplaat</string>
   <string name="hour_hand_color">Uurwijzerkleur</string>
@@ -56,8 +55,6 @@
   <string name="ballbreak_for_android">BallBreak voor Android</string>
   <string name="video_screensaver_for_android">Videoscreensaver voor Android</string>
   <string name="clock_desklet_for_cinnamon">Analoge klok desklet voor de Cinnamon-desktop</string>
-  <string name="open_source_text">Deze app is Open Source.  Als je de app of de vertalingen ervan wilt verbeteren, bekijk dan de repository op Github.</string>
-  <string name="open_source">Vork mij</string>
   <string name="allow_system_calendar_access">Toegang tot systeemagenda toestaan</string>
   <string name="access_already_granted">Toegang al verleend</string>
   <string name="access_denied_by_user">U heeft eerder de toegang tot de agenda geweigerd.  Ga naar de Android-instellingen en verleen handmatig agendatoegang voor deze app.</string>
@@ -70,7 +67,6 @@
   <string name="amazon_store_not_avail">Amazon App Store niet beschikbaar</string>
   <string name="huawei_store_not_avail">Huawei App Gallery niet beschikbaar</string>
   <string name="could_not_fetch_prices">Kan de huidige prijzen voor in-app-aankopen niet ophalen.</string>
-  <string name="choose_color">Kies een kleur</string>
   <string name="use_custom_color">Gebruik je eigen kleur</string>
   <string name="apply_for_all">Toepassen voor iedereen</string>
   <string name="buy_a_code">Koop een code</string>
@@ -85,9 +81,6 @@
   <string name="square_design">Vierkant</string>
   <string name="vinyl_design">Vinyl</string>
   <string name="custom_image">Aangepaste afbeelding</string>
-  <string name="custom_image_stretch">Aangepaste afbeelding (uitrekken)</string>
-  <string name="custom_image_zoom">Aangepaste afbeelding (zoom)</string>
-  <string name="no_image">Geen afbeelding</string>
   <string name="force_landscape_view_only_when_started_manually">Liggend formaat forceren (alleen bij handmatig starten van de app)</string>
   <string name="date_format">Datumnotatie</string>
   <string name="burn_in_prevention">Inbrandpreventie (voor OLED-schermen; inhoud iets verplaatst)</string>

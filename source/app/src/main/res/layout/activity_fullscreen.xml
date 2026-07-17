@@ -30,9 +30,9 @@
             android:layout_marginTop="@dimen/fab_margin"
             android:layout_marginBottom="@dimen/fab_margin"
             app:srcCompat="@drawable/ic_settings_white_24dp"
-            android:alpha="0.25"
-            app:backgroundTint="#80FFFFFF"
-            app:elevation="0dp"
+            app:tint="#1a1204"
+            app:backgroundTint="@color/gold"
+            app:elevation="6dp"
             android:contentDescription="@string/open_settings" />
         <!-- red dot: only visible when an app update is available -->
         <View

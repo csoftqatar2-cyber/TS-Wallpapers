@@ -34,7 +34,6 @@
     <string name="purchase_support_note">Разблокировав настройки с помощью разовой покупки внутри приложения, вы также получите доступ к новым циферблатам и стрелкам и поддержите дальнейшую разработку этого приложения ♥</string>
     <string name="background">Задний план</string>
     <string name="general">Общий</string>
-    <string name="keep_screen_on">Оставьте экран включенным</string>
     <string name="use_own_images">Использовать собственные изображения</string>
     <string name="clock_face_color">Цвет циферблата часов</string>
     <string name="hour_hand_color">Цвет часовой стрелки</string>
@@ -55,8 +54,6 @@
     <string name="ballbreak_for_android">BallBreak для Android</string>
     <string name="video_screensaver_for_android">Видеозаставка для Android</string>
     <string name="clock_desklet_for_cinnamon">Десклет «Аналоговые часы» для рабочего стола Cinnamon</string>
-    <string name="open_source_text">Это приложение с открытым исходным кодом. Если вы хотите улучшить приложение или его переводы, посетите репозиторий на Github.</string>
-    <string name="open_source">Вилка меня</string>
     <string name="allow_system_calendar_access">Разрешить доступ к системному календарю</string>
     <string name="access_already_granted">Доступ уже предоставлен</string>
     <string name="access_denied_by_user">Вы ранее запрещали доступ к календарю. Перейдите в настройки Android и вручную предоставьте доступ к календарю для этого приложения.</string>
@@ -69,7 +66,6 @@
     <string name="amazon_store_not_avail">Amazon App Store недоступен</string>
     <string name="huawei_store_not_avail">Галерея приложений Huawei недоступна</string>
     <string name="could_not_fetch_prices">Не удалось получить текущие цены для покупок в приложении.</string>
-    <string name="choose_color">Выберите цвет</string>
     <string name="use_custom_color">Используйте свой собственный цвет</string>
     <string name="apply_for_all">Подать заявку на все</string>
     <string name="buy_a_code">Купите код</string>
@@ -84,9 +80,6 @@
     <string name="square_design">Квадрат</string>
     <string name="vinyl_design">Винил</string>
     <string name="custom_image">Пользовательское изображение</string>
-    <string name="custom_image_stretch">Пользовательское изображение (Растянуть)</string>
-    <string name="custom_image_zoom">Пользовательское изображение (увеличение)</string>
-    <string name="no_image">Нет изображения</string>
     <string name="force_landscape_view_only_when_started_manually">Принудительно использовать альбомный формат (только при запуске приложения вручную)</string>
     <string name="date_format">Формат даты</string>
     <string name="burn_in_prevention">Предотвращение выгорания (для экранов OLED; слегка перемещает контент)</string>

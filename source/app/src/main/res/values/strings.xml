@@ -3,81 +3,85 @@
     <string name="app_name_long">TS Wallpapers</string>
 
     <!-- wallpaper slideshow + clock layout (added by THABTHABA STORE build) -->
-    <string name="wallpapers_section">الخلفيات (Wallpapers)</string>
-    <string name="wallpaper_enable">تفعيل عرض الخلفيات والتبديل بينها</string>
-    <string name="wallpaper_auto_switch">التبديل التلقائي بين الصور</string>
-    <string name="wallpaper_auto_switch_interval">مدة عرض الصورة قبل التبديل</string>
-    <string name="wallpaper_manage">🖼️ إدارة الصور (إظهار / إخفاء)</string>
-    <string name="wallpaper_manage_title">الصور المتاحة على هذا الجهاز</string>
-    <string name="wallpaper_manage_hint">شيل علامة الصح من أي صورة عشان تختفي من العرض على هذه السيارة فقط (سواء كانت صورة عامة أو خاصة). الإخفاء محلي ومش بيأثر على باقي الأجهزة.</string>
-    <string name="wallpaper_manage_empty">لا توجد صور بعد — اضغط «التحقق من الخلفيات الجديدة» أولاً.</string>
-    <string name="wallpaper_manage_saved">تم الحفظ ✓ — %1$d ظاهرة، %2$d مخفية</string>
-    <string name="wallpaper_manage_select_all">تحديد الكل</string>
-    <string name="wallpaper_type_image">صورة</string>
-    <string name="wallpaper_type_gif">صورة متحركة</string>
-    <string name="wallpaper_type_video">فيديو</string>
-    <string name="wallpaper_source_local">من الجهاز</string>
-    <string name="wallpaper_source_remote">من السيرفر</string>
+    <string name="wallpapers_section">Wallpapers</string>
+    <string name="wallpaper_enable">Enable wallpaper display and switching</string>
+    <string name="wallpaper_auto_switch">Automatically switch between images</string>
+    <string name="wallpaper_auto_switch_interval">How long each image shows before switching</string>
+    <string name="wallpaper_manage">Manage images</string>
+    <string name="wallpaper_edit">Edit</string>
+    <string name="wallpaper_copying">Copying the image to this device…</string>
+    <string name="wallpaper_copy_failed">Could not copy the image — check the connection</string>
+    <string name="wallpaper_now_local">The image is now saved on this device and edits stay on this car only ✓</string>
+    <string name="wallpaper_manage_title">Images available on this device</string>
+    <string name="wallpaper_manage_hint">Uncheck any image to hide it on this car only (whether it is a public or an assigned image). Hiding is local and does not affect other devices.</string>
+    <string name="wallpaper_manage_empty">No images yet — tap “Check for new wallpapers” first.</string>
+    <string name="wallpaper_manage_saved">Saved ✓ — %1$d shown, %2$d hidden</string>
+    <string name="wallpaper_manage_select_all">Select all</string>
+    <string name="wallpaper_type_image">Image</string>
+    <string name="wallpaper_type_gif">Animated image</string>
+    <string name="wallpaper_type_video">Video</string>
+    <string name="wallpaper_source_local">From this device</string>
+    <string name="wallpaper_source_remote">From the server</string>
 
     <string-array name="wallpaper_interval_labels">
-        <item>30 ثانية</item>
-        <item>دقيقة واحدة</item>
-        <item>5 دقائق</item>
-        <item>10 دقائق</item>
-        <item>ساعة</item>
+        <item>30 seconds</item>
+        <item>1 minute</item>
+        <item>5 minutes</item>
+        <item>10 minutes</item>
+        <item>1 hour</item>
     </string-array>
-    <string name="wallpaper_url_hint">رابط قائمة الخلفيات (JSON manifest URL)</string>
-    <string name="wallpaper_sync">تحديث الخلفيات من الرابط الآن</string>
-    <string name="wallpaper_help">اسحب يمين/شمال على الشاشة للتبديل بين الخلفيات. ادعم: صور JPG/PNG، GIF متحرك، وفيديو MP4. الرابط بيرجّع قائمة JSON بالشكل: {\"wallpapers\":[{\"type\":\"image\",\"url\":\"...\"},{\"type\":\"video\",\"url\":\"...\"}]}</string>
-    <string name="wallpaper_syncing">جارٍ التحديث…</string>
-    <string name="wallpaper_count">تم تحميل %d خلفية ✓</string>
-    <string name="wallpaper_failed">فشل التحديث: %s</string>
-    <string name="wallpaper_need_url">من فضلك أدخل رابط القائمة أولاً</string>
-    <string name="wallpaper_refresh">🔄 التحقق من الخلفيات الجديدة (عامة/مخصوصة)</string>
-    <string name="wallpaper_checking">جارٍ التحقق من الخلفيات الجديدة…</string>
-    <string name="wallpaper_up_to_date">الخلفيات محدثة — لا يوجد جديد (%d خلفية)</string>
-    <string name="wallpaper_new_added">تمت إضافة %1$d خلفية جديدة ✓ (الإجمالي %2$d)</string>
-    <string name="mac_show_qr">عرض كود الربط كـ QR (Show Linking Code QR)</string>
-    <string name="mac_qr_title">كود ربط الجهاز (Device Linking Code)</string>
-    <string name="mac_qr_hint">امسح الكود ده أو انسخه، واربط بيه صورة الجهاز من لوحة التحكم.</string>
-    <string name="mac_unavailable">كود الجهاز غير متاح على هذا الجهاز</string>
-    <string name="show_weather">إظهار الطقس الحالي</string>
-    <string name="weather_city_hint">المدينة (اتركها فارغة للتحديد التلقائي حسب الموقع)</string>
-    <string name="arabic_digits">أرقام عربية (١٢٣) بدل (123)</string>
-    <string name="show_hijri_date">إظهار التاريخ الهجري تحت الميلادي</string>
-    <string name="auto_contrast">لون الساعة تلقائي عكس الخلفية (للوضوح)</string>
-    <string name="wallpaper_local_enable">عرض الصور/الفيديو من مجلد الجهاز كمان</string>
-    <string name="wallpaper_add_local">إضافة صور/فيديو من الجهاز</string>
-    <string name="wallpaper_pair_phone">رفع صورة من هاتف العميل (QR / واي‑فاي)</string>
-    <string name="pair_scan_hint">الزبون يصوّر الكود ده بكاميرا موبايله (لازم نفس شبكة الواي‑فاي) ويرفع الصورة.\nلو الصفحة مفتحتش: تأكد إن الراوتر مش مفعّل فيه عزل الأجهزة (AP isolation)، أو وصّل الموبايلين على هوت‑سبوت واحد.</string>
-    <string name="pair_uploaded">تم استلام الصورة ✓ وأصبحت الخلفية الافتراضية</string>
-    <string name="pair_no_wifi">تأكد من اتصال الجهاز بشبكة واي‑فاي</string>
-    <string name="wallpaper_local_folder">مجلد الخلفيات على الجهاز:\n%s</string>
-    <string name="wallpaper_added">تمت إضافة %d ملف ✓</string>
-    <string name="clock_layout_section">شكل الساعة (Clock layout)</string>
-    <string name="show_clock_overlay">إظهار الساعة فوق الخلفية</string>
-    <string name="clock_position">مكان الساعة</string>
-    <string name="clock_size">حجم الساعة</string>
+    <string name="wallpaper_url_hint">Wallpaper list URL (JSON manifest URL)</string>
+    <string name="wallpaper_sync">Refresh wallpapers from the URL now</string>
+    <string name="wallpaper_help">Swipe left/right on the screen to switch wallpapers. Supported: JPG/PNG images, animated GIF, and MP4 video. The URL returns a JSON list shaped like: {\"wallpapers\":[{\"type\":\"image\",\"url\":\"...\"},{\"type\":\"video\",\"url\":\"...\"}]}</string>
+    <string name="wallpaper_syncing">Updating…</string>
+    <string name="wallpaper_count">%d wallpapers loaded ✓</string>
+    <string name="wallpaper_failed">Update failed: %s</string>
+    <string name="wallpaper_need_url">Please enter the list URL first</string>
+    <string name="wallpaper_refresh">Check for new wallpapers</string>
+    <string name="wallpaper_checking">Checking for new wallpapers…</string>
+    <string name="wallpaper_up_to_date">Wallpapers are up to date — nothing new (%d wallpapers)</string>
+    <string name="wallpaper_new_added">%1$d new wallpapers added ✓ (%2$d total)</string>
+    <string name="mac_show_qr">Show device QR Code</string>
+    <string name="mac_qr_title">Device Linking Code</string>
+    <string name="mac_qr_hint">Scan or copy this code, then assign an image to the device from the dashboard.</string>
+    <string name="mac_unavailable">The device code is not available on this device</string>
+    <string name="show_weather">Show current weather</string>
+    <string name="weather_city_hint">City (leave empty to detect automatically by location)</string>
+    <string name="arabic_digits">Arabic numerals (١٢٣) instead of (123)</string>
+    <string name="show_hijri_date">Show the Hijri date under the Gregorian one</string>
+    <string name="auto_contrast">Clock colour auto-inverts against the background (for legibility)</string>
+    <string name="wallpaper_local_enable">Also show images/video from the device folder</string>
+    <string name="wallpaper_add_local">Add from this device</string>
+    <string name="wallpaper_pair_phone">Upload from a phone via QR Code</string>
+    <string name="pair_scan_hint">The customer scans this code with their phone camera (both must be on the same Wi-Fi) and uploads the image.\nIf the page stays blank or does not open: turn mobile data off on the phone — this network is local with no internet, so the phone tries to open the link over mobile data and never reaches it.\nStill nothing: make sure AP isolation is turned off on the router.</string>
+    <string name="pair_waiting">Waiting for an image from the phone…</string>
+    <string name="pair_uploaded">Image received ✓ and set as the default wallpaper</string>
+    <string name="pair_no_wifi">Make sure the device is connected to a Wi-Fi network</string>
+    <string name="wallpaper_local_folder">Wallpaper folder on this device:\n%s</string>
+    <string name="wallpaper_added">%d files added ✓</string>
+    <string name="clock_layout_section">Clock layout</string>
+    <string name="show_clock_overlay">Show the clock over the wallpaper</string>
+    <string name="clock_position">Clock position</string>
+    <string name="clock_size">Clock size</string>
 
     <string-array name="clock_position_labels">
-        <item>المنتصف</item>
-        <item>أسفل يسار</item>
-        <item>أسفل يمين</item>
-        <item>أعلى يسار</item>
-        <item>أعلى يمين</item>
+        <item>Center</item>
+        <item>Bottom left</item>
+        <item>Bottom right</item>
+        <item>Top left</item>
+        <item>Top right</item>
     </string-array>
     <string-array name="clock_size_labels">
-        <item>صغير</item>
-        <item>متوسط</item>
-        <item>كبير</item>
-        <item>كامل الشاشة</item>
+        <item>Small</item>
+        <item>Medium</item>
+        <item>Large</item>
+        <item>Fullscreen</item>
     </string-array>
 
     <string name="clock_prefilled" translatable="false">00:00</string>
     <string name="clock_prefilled_seconds" translatable="false">00</string>
     <string name="battery_prefilled" translatable="false">100%</string>
 
-    <string name="project_website" translatable="false">https://github.com/schorschii/FsClock-Android</string>
     <string name="unlock_api" translatable="false">"https://apps.sieber.systems/activate"</string>
 
     <string name="dseg_font_note" translatable="false">
@@ -118,7 +122,6 @@ Roboto Font Copyright (c) Christian Robertson. Licensed under the Apache License
     <string name="purchase_support_note">By unlocking the settings with the one-time in-app purchase, you also get access to the new clock faces and hands and support the further development of this app ♥</string>
     <string name="background">Background</string>
     <string name="general">General</string>
-    <string name="keep_screen_on">Keep Screen On</string>
     <string name="auto_start_on_boot">Auto-start app when the car (device) turns on</string>
     <string name="auto_start_overlay_title">Permission Required</string>
     <string name="auto_start_overlay_message">To allow the app to open automatically when the car turns on, please enable the \"Display over other apps\" permission on the next screen.</string>
@@ -156,8 +159,6 @@ Roboto Font Copyright (c) Christian Robertson. Licensed under the Apache License
     <string name="ballbreak_for_android">BallBreak for Android</string>
     <string name="video_screensaver_for_android">Video Screensaver for Android</string>
     <string name="clock_desklet_for_cinnamon">Analog Clock Desklet for the Cinnamon Desktop</string>
-    <string name="open_source_text">This app is Open Source. If you want to improve the app or its translations, please check out the repository on Github.</string>
-    <string name="open_source">Fork Me</string>
     <string name="allow_system_calendar_access">Allow System Calendar Access</string>
     <string name="access_already_granted">Access already granted</string>
     <string name="access_denied_by_user">You have previously denied calendar access. Please go to the Android settings and manually grant calendar access for this app.</string>
@@ -170,7 +171,6 @@ Roboto Font Copyright (c) Christian Robertson. Licensed under the Apache License
     <string name="amazon_store_not_avail">Amazon App Store not available</string>
     <string name="huawei_store_not_avail">Huawei App Gallery not available</string>
     <string name="could_not_fetch_prices">Could not fetch current prices for in-app purchases.</string>
-    <string name="choose_color">Choose color</string>
     <string name="use_custom_color">Use Custom Color</string>
     <string name="apply_for_all">Apply for all</string>
     <string name="buy_a_code">Buy a code</string>
@@ -185,9 +185,6 @@ Roboto Font Copyright (c) Christian Robertson. Licensed under the Apache License
     <string name="square_design">Square</string>
     <string name="vinyl_design">Vinyl</string>
     <string name="custom_image">Custom Image</string>
-    <string name="custom_image_stretch">Custom Image (Stretch)</string>
-    <string name="custom_image_zoom">Custom Image (Zoom)</string>
-    <string name="no_image">No Image</string>
     <string name="force_landscape_view_only_when_started_manually">Force landscape view (only when started manually)</string>
     <string name="date_format">Date Format</string>
     <string name="burn_in_prevention">Burn-in prevention (for OLED screens; moves content slightly)</string>
@@ -229,4 +226,167 @@ Roboto Font Copyright (c) Christian Robertson. Licensed under the Apache License
     <string name="widget_digital_name">Digital Clock Widget</string>
     <string name="widget_analog_name">Analog Clock Widget</string>
     <string name="widget_draw_background">Draw Background Color</string>
+
+    <!-- Leopard: the app hands the wallpaper to Android and steps out of the way. -->
+    <string name="leopard_wallpaper_description">TS Wallpapers — the image or video you picked</string>
+    <string name="leopard_title">Choose device wallpaper</string>
+    <string name="leopard_chip">Leopard mode</string>
+    <string name="leopard_source_cloud">Available wallpapers</string>
+    <string name="leopard_source_cloud_sub">Cloud sync</string>
+    <string name="leopard_source_local">From the device</string>
+    <string name="leopard_source_local_sub">Head-unit storage</string>
+    <string name="leopard_set">Set as wallpaper</string>
+    <string name="leopard_badge_current">Current</string>
+    <string name="leopard_badge_video">Video</string>
+    <string name="leopard_loading">Loading…</string>
+    <string name="leopard_empty">No wallpapers assigned to this car yet.</string>
+    <string name="leopard_empty_action">Check for new wallpapers</string>
+    <string name="leopard_offline_cached">Offline — showing the last synced wallpapers.</string>
+    <string name="leopard_offline_empty">Offline, and nothing has been synced to this car yet.</string>
+    <string name="leopard_retry">Try again</string>
+    <string name="leopard_pick_first">Choose a wallpaper first</string>
+    <string name="leopard_applying">Applying…</string>
+    <!-- Honest copy: an image covers both surfaces, a video cannot cover the lock screen on
+         most Android versions. One string cannot claim both. -->
+    <string name="leopard_applied_image">Set ✓ — home and lock screen</string>
+    <string name="leopard_applied_video">Set ✓ — home screen</string>
+    <string name="leopard_apply_failed">Could not set this wallpaper</string>
+    <string name="leopard_local_none">No file chosen</string>
+    <string name="leopard_video_first_title">One-time setup</string>
+    <string name="leopard_video_first_message">An Android screen will open to confirm the live wallpaper — press its "Set wallpaper" button.\n\nThis happens only once. Every video after this is applied instantly.</string>
+    <string name="leopard_video_first_ok">Got it, continue</string>
+    <string name="leopard_unsupported">This screen does not support Leopard mode.</string>
+    <string name="leopard_gif_static_note">This device shows GIFs as a still image.</string>
+
+    <!-- Operating mode picker, on the activation screen and in Settings. -->
+    <string name="mode_title">Operating mode</string>
+    <string name="mode_exclusive_note">FSE and Leopard cannot be combined — pick one.</string>
+    <string name="mode_normal">Normal</string>
+    <string name="mode_normal_desc">The app shows wallpapers and the clock on its own screen.</string>
+    <string name="mode_fse">FSE</string>
+    <string name="mode_fse_desc">Forces a fixed 1920×720 window for very wide screens.</string>
+    <string name="mode_leopard">Leopard</string>
+    <string name="mode_leopard_desc">The app hands the wallpaper to Android and disappears — no clock, no switching.</string>
+    <string name="mode_leopard_unsupported_note">Some screens do not support Leopard — the option is disabled automatically on those.</string>
+    <string name="mode_new_badge">New</string>
+
+    <!-- Settings, in Leopard mode. -->
+    <string name="leopard_settings_banner_title">Leopard mode is on</string>
+    <string name="leopard_settings_banner_body">Android draws the wallpaper on the home screen — the app is just a picker. Open it, choose, close it.</string>
+    <string name="leopard_settings_hidden_note">Hidden: the analog and digital clocks, clock layout, weather and auto-switching — they have no meaning while Android draws the wallpaper.</string>
+    <string name="leopard_open_picker">Open the picker</string>
+    <string name="leopard_default_source">Default source when opening</string>
+    <string name="leopard_close_after_set">Close the app after setting</string>
+    <string name="leopard_close_after_set_desc">Suits the "open, choose, close" nature of this mode.</string>
+    <string name="leopard_back_to_normal">Back to normal mode</string>
+    <string name="leopard_back_to_normal_desc">Restores the clock and the in-app wallpapers.</string>
+
+    <!-- Fit Editor: how an imported image is fitted to the very wide screen. -->
+    <string name="fit_mode_fill">Fill (crop)</string>
+    <string name="fit_mode_blur">Blur</string>
+    <string name="fit_mode_color">Solid color</string>
+    <string name="fit_mode_auto">Automatic (recommended)</string>
+    <string name="fit_blur_strength">Blur strength</string>
+    <string name="fit_zoom">Zoom</string>
+    <string name="fit_fade">Fade edges</string>
+    <string name="fit_percent">%1$d%%</string>
+    <string name="fit_bar_color">Colour of the two sides</string>
+    <string name="fit_reposition">Reposition</string>
+    <string name="fit_reposition_hint">Drag the image to choose the visible part.</string>
+    <string name="fit_reposition_dpad">Adjust with the d-pad</string>
+    <string name="fit_dpad_hint">D-pad: left/right to adjust</string>
+    <string name="fit_done">Done</string>
+    <string name="fit_reset">Reset</string>
+    <string name="fit_delete">Delete image</string>
+    <string name="fit_delete_confirm">Delete this image from the device? This cannot be undone.</string>
+    <string name="fit_apply_all">Apply to all images</string>
+    <string name="fit_apply_all_confirm">Give every image these same settings?</string>
+    <string name="fit_apply_all_done">Applied to %1$d images ✓</string>
+    <string name="fit_hint_blur">↔ Sides filled with a blurred copy</string>
+    <string name="fit_hint_color">↔ Sides filled with a solid colour</string>
+    <string name="fit_hint_fill">Edges are cropped — drag to choose what stays</string>
+    <string name="fit_hint_bars_negligible">This image is wide enough that the sides barely show</string>
+    <string name="fit_target">%1$d × %2$d · live preview</string>
+    <string name="fit_blur_unavailable_video">Blur is not available for video — solid colour only</string>
+    <string name="fit_load_failed">Could not open this image</string>
+    <string name="fit_color_black">Black</string>
+    <string name="fit_color_white">White</string>
+    <string name="fit_color_grey">Dark grey</string>
+    <string name="fit_color_sampled">From the image</string>
+
+    <!-- Fit Editor defaults, inside the Wallpapers section. -->
+    <string name="fit_defaults_header">Image import settings</string>
+    <string name="fit_defaults_subtitle">Applies to images imported from the device or from a phone via QR — set once.</string>
+    <string name="fit_default_mode">Default mode</string>
+    <string name="fit_default_blur">Default blur strength</string>
+    <string name="fit_default_color">Default side colour</string>
+    <string name="fit_edit_on_import">Open the editor after every import</string>
+
+    <!-- Device identity block in the Wallpapers section. These were concatenated in Java, which
+         is why they stayed Arabic in every locale. -->
+    <string name="device_id_status">Device ID: %1$s\nStatus: %2$s</string>
+    <string name="device_status_active">Activated</string>
+    <string name="device_status_pending">Pending Activation</string>
+    <string name="device_linking_code">Linking Code: %1$s</string>
+
+    <!-- Settings header: title, and the three status chips on the trailing side. -->
+    <string name="settings_header_title">TS Wallpapers Settings</string>
+    <string name="chip_auto_save">Auto-save</string>
+    <string name="chip_mode_normal">Mode: Normal</string>
+    <string name="chip_mode_fse">Mode: FSE</string>
+    <string name="chip_activated">Device activated</string>
+    <string name="chip_not_activated">Not activated</string>
+
+    <!-- Language names are always written in their own language, so these carry no translation. -->
+    <string name="language_english" translatable="false">English</string>
+    <string name="language_arabic" translatable="false">العربية</string>
+
+    <!-- Settings nav rail. Short labels on purpose: the rail is narrow and these sit under a
+         24dp icon. The long forms stay on the section headers inside each pane. -->
+    <string name="nav_updates">Updates</string>
+    <string name="update_current_version">Current version</string>
+    <string name="nav_general">General</string>
+    <string name="nav_analog">Analog Clock</string>
+    <string name="nav_digital">Digital Clock</string>
+    <string name="nav_wallpapers">Wallpapers</string>
+    <string name="nav_clock_layout">Clock Layout</string>
+
+    <!-- Weather condition names shown next to the temperature (Weather.java). -->
+    <string name="weather_sunny">Sunny</string>
+    <string name="weather_clear_night">Clear</string>
+    <string name="weather_partly_cloudy">Partly cloudy</string>
+    <string name="weather_fog">Fog</string>
+    <string name="weather_rainy">Rainy</string>
+    <string name="weather_snowy">Snowy</string>
+    <string name="weather_showers">Showers</string>
+    <string name="weather_storm">Storm</string>
+    <string name="weather_cloudy">Cloudy</string>
+
+    <!-- FSE activation overlay (view_fsclock.xml / layout-land/view_fsclock.xml). -->
+    <string name="activation_overlay_title">Activate the App</string>
+    <string name="activation_overlay_subtitle">Please enter the serial number to activate the app:</string>
+    <string name="activation_button">Activate Now</string>
+    <string name="activation_device_id_label">Device ID: </string>
+    <string name="activation_dialog_title">Activation Settings (Activation)</string>
+
+    <!-- Activation overlay status messages (FsClockView.java). -->
+    <string name="activation_error_empty_serial">Please enter the serial number</string>
+    <string name="activation_error_invalid_serial">Invalid serial number</string>
+    <string name="activation_checking">Verifying activation…</string>
+    <string name="activation_success">Activated successfully!</string>
+    <string name="activation_error_already_used">This serial number is already used on another device</string>
+    <string name="activation_error_blocked">This device has been blocked. Please contact support.</string>
+    <string name="activation_error_failed">Activation failed: %1$s</string>
+    <string name="activation_error_unknown">Unknown error</string>
+
+    <!-- FSE wallpaper "adjust position" mode toasts (FsClockView.java). -->
+    <string name="wallpaper_adjust_mode_hint">Adjust image position: drag to reposition, then tap to save</string>
+    <string name="wallpaper_position_saved">Image position saved</string>
+    <string name="nav_clock">Clock</string>
+    <string name="leopard_change">Change</string>
+    <string name="leopard_preparing">Preparing…</string>
+    <string name="leopard_download_failed">Could not download this wallpaper</string>
+    <string name="leopard_source_phone">From a phone</string>
+    <string name="leopard_phone_hint">Scan this code with a phone on the same Wi-Fi, then upload the image.</string>
+    <string name="chip_mode_leopard">Mode: Leopard</string>
 </resources>

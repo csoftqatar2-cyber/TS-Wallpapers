@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Dark text on the selected accent fill, warm text on the unselected outlines. -->
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:state_selected="true" android:color="#1a1204" />
+    <item android:color="@color/aurora_text" />
+</selector>
