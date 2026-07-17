@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Head-unit storage. Deliberately a drive/SD glyph, not a phone: the phone in this product
+     only ever appears in the QR upload flow, which is a different screen entirely. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="46dp" android:height="46dp"
+    android:viewportWidth="24" android:viewportHeight="24"
+    android:tint="#1a1204">
+    <path android:fillColor="#FFFFFFFF"
+        android:pathData="M18 2h-8L4.02 8 4 20c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zM9 7h2v3H9V7zm3.5 0h2v3h-2V7zM16 7h2v3h-2V7z" />
+</vector>

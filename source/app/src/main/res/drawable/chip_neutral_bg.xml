@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Header status chip: the always-on "auto-save" reassurance. Deliberately the quietest of
+     the three — it never changes, so it must not compete with the two that do. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+    <solid android:color="#0dffffff" />
+    <stroke android:width="1dp" android:color="@color/aurora_border" />
+    <corners android:radius="12dp" />
+</shape>

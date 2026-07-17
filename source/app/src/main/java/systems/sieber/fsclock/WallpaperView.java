@@ -1,11 +1,14 @@
 package systems.sieber.fsclock;
 
+import android.graphics.drawable.BitmapDrawable;
+import com.bumptech.glide.load.resource.gif.GifDrawable;
 import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Matrix;
 import android.graphics.SurfaceTexture;
+import android.graphics.drawable.ColorDrawable;
 import android.graphics.drawable.Drawable;
 import android.media.MediaPlayer;
 import android.util.AttributeSet;
@@ -41,7 +44,8 @@ public class WallpaperView extends FrameLayout {
 
     private class Slot {
         FrameLayout root;
-        ImageView image;
+        FadingImageView image;
+        ImageView backdrop;         // blurred/flat fill behind the image, fit modes only
         TextureView texture;
         MediaPlayer player;
         WallpaperItem pendingVideo; // set while waiting for the surface to become available
@@ -49,6 +53,8 @@ public class WallpaperView extends FrameLayout {
         int contentW, contentH;     // natural pixel size of the image/video (0 until known)
         float focalX = 0.5f;        // 0..1 pan position (0.5 = center-crop, the default)
         float focalY = 0.5f;
+        FitSettings fit;            // how this wallpaper is fitted; null until the item loads
+        Bitmap sharp;               // decoded frame, kept so the backdrop can be rebuilt
     }
 
     private Slot mSlotA;
@@ -104,7 +110,15 @@ public class WallpaperView extends FrameLayout {
         });
         s.root.addView(s.texture);
 
-        s.image = new ImageView(c);
+        // Backdrop sits behind the sharp image and only shows in the fit modes, where the image
+        // does not cover the screen. Added first so it stays underneath.
+        s.backdrop = new ImageView(c);
+        s.backdrop.setLayoutParams(new LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT));
+        s.backdrop.setScaleType(ImageView.ScaleType.CENTER_CROP);
+        s.backdrop.setVisibility(GONE);
+        s.root.addView(s.backdrop);
+
+        s.image = new FadingImageView(c);
         s.image.setLayoutParams(new LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT));
         // MATRIX so we control the crop/pan ourselves (center-crop by default, see applyImageMatrix)
         s.image.setScaleType(ImageView.ScaleType.MATRIX);
@@ -189,6 +203,12 @@ public class WallpaperView extends FrameLayout {
         releaseVideo(slot);
         slot.item = item;
         slot.contentW = slot.contentH = 0;
+        slot.sharp = null;
+        slot.backdrop.setVisibility(GONE);
+        slot.backdrop.setImageDrawable(null);
+        // How this wallpaper is fitted. Unlike the focal point this applies whether or not FSE
+        // is on: a 9:16 photo is butchered by center-crop on any wide screen, not just 1920x720.
+        slot.fit = mRepo != null ? mRepo.getFit(item.url) : new FitSettings();
         // load the saved focal point for this wallpaper (center when FSE is off)
         if(mFseMode && mRepo != null && item.url != null) {
             float[] f = mRepo.getFocal(item.url);
@@ -236,6 +256,10 @@ public class WallpaperView extends FrameLayout {
                                                        boolean isFirstResource) {
                             slot.contentW = resource.getIntrinsicWidth();
                             slot.contentH = resource.getIntrinsicHeight();
+                            // Keep the pixels so the blurred backdrop can be built from them.
+                            // A GIF only yields its first frame here, which is all the backdrop
+                            // needs — an animated blur would cost far more than it is worth.
+                            slot.sharp = bitmapOf(resource);
                             slot.image.post(new Runnable() {
                                 @Override public void run() { applyImageMatrix(slot); }
                             });
@@ -246,25 +270,131 @@ public class WallpaperView extends FrameLayout {
         }
     }
 
-    /** Center-crop the image into its ImageView, offset by the slot's focal point. */
+    /**
+     * Lay the image into its ImageView.
+     *
+     * FILL scales to cover and pans by the focal point — the original behaviour. The fit modes
+     * scale to *contain* instead, so a 9:16 phone photo is shown whole rather than zoomed ~4.7x
+     * into a sliver, and the leftover side bars are filled by the backdrop.
+     */
     private void applyImageMatrix(Slot slot) {
         int vw = slot.image.getWidth(), vh = slot.image.getHeight();
         int cw = slot.contentW, ch = slot.contentH;
         if(vw <= 0 || vh <= 0 || cw <= 0 || ch <= 0) return;
-        float scale = Math.max((float) vw / cw, (float) vh / ch);
-        float sw = cw * scale, sh = ch * scale;
-        float overflowX = sw - vw, overflowY = sh - vh;
+
+        int mode = resolvedMode(slot, vw, vh);
+        float zoom = slot.fit != null ? FitSettings.clampZoom(slot.fit.zoom) : 1f;
         Matrix m = new Matrix();
-        m.setScale(scale, scale);
-        m.postTranslate(-overflowX * clamp01(slot.focalX), -overflowY * clamp01(slot.focalY));
+
+        if(FitSettings.isFitMode(mode)) {
+            float scale = Math.min((float) vw / cw, (float) vh / ch) * zoom;
+            float sw = cw * scale, sh = ch * scale;
+            m.setScale(scale, scale);
+            // Nothing is cropped at zoom 1, so centring is the whole story; past 1 the image
+            // starts overflowing and the focal point takes over, exactly as in FILL.
+            m.postTranslate(offset(sw, vw, slot.focalX), offset(sh, vh, slot.focalY));
+        } else {
+            float scale = Math.max((float) vw / cw, (float) vh / ch) * zoom;
+            float sw = cw * scale, sh = ch * scale;
+            m.setScale(scale, scale);
+            m.postTranslate(offset(sw, vw, slot.focalX), offset(sh, vh, slot.focalY));
+        }
         slot.image.setImageMatrix(m);
+        slot.image.setFade(slot.fit != null ? slot.fit.fade : 0);
+        applyBackdrop(slot, mode);
+    }
+
+    /**
+     * Where a scaled edge lands on one axis. Overflowing content pans by the focal point;
+     * content that fits (zoomed out, or fit-mode at zoom 1) is centred, because there is no
+     * crop for a focal point to choose between.
+     */
+    private static float offset(float scaled, float view, float focal) {
+        float overflow = scaled - view;
+        if(overflow <= 0f) return (view - scaled) / 2f;
+        return -overflow * clamp01(focal);
+    }
+
+    /** Pull pixels out of whatever Glide handed us, for the blurred backdrop. */
+    private static Bitmap bitmapOf(Drawable d) {
+        try {
+            if(d instanceof BitmapDrawable) return ((BitmapDrawable) d).getBitmap();
+            if(d instanceof GifDrawable) return ((GifDrawable) d).getFirstFrame();
+            int w = d.getIntrinsicWidth(), h = d.getIntrinsicHeight();
+            if(w <= 0 || h <= 0) return null;
+            // Anything else (rare): rasterise once, small — the backdrop is blurred anyway.
+            float scale = Math.min(1f, 320f / Math.max(w, h));
+            Bitmap bmp = Bitmap.createBitmap(Math.max(1, Math.round(w * scale)),
+                    Math.max(1, Math.round(h * scale)), Bitmap.Config.ARGB_8888);
+            Canvas c = new Canvas(bmp);
+            d.setBounds(0, 0, c.getWidth(), c.getHeight());
+            d.draw(c);
+            return bmp;
+        } catch(Throwable t) {
+            return null;
+        }
+    }
+
+    /** The fit mode to draw this slot with, with MODE_AUTO already resolved. */
+    private int resolvedMode(Slot slot, int vw, int vh) {
+        if(slot.fit == null || slot.contentW <= 0 || slot.contentH <= 0) return FitSettings.MODE_FILL;
+        int mode = slot.fit.resolved(slot.contentW, slot.contentH, vw, vh);
+        // Per-frame blur on a video is far past this hardware's budget; fall back to flat bars.
+        if(mode == FitSettings.MODE_BLUR && slot.item != null && slot.item.isVideo()) {
+            return FitSettings.MODE_COLOR;
+        }
+        return mode;
+    }
+
+    /**
+     * Paint the side bars onto the backdrop layer.
+     *
+     * Deliberately not slot.root's background: the crossfade in showItem() sets that to
+     * TRANSPARENT so the outgoing wallpaper can show through, so the two would fight over the
+     * same property and the bars would flicker on every switch.
+     */
+    private void applyBackdrop(Slot slot, int mode) {
+        slot.backdrop.setColorFilter(null);
+        slot.backdrop.setImageDrawable(null);
+
+        // Not just the fit modes: a zoomed-out or faded image also stops covering the screen, and
+        // without something behind it the gap would show the outgoing wallpaper mid-crossfade.
+        if(slot.fit == null || !slot.fit.needsBackdrop(mode)) {
+            slot.backdrop.setVisibility(GONE);
+            return;
+        }
+        slot.backdrop.setVisibility(VISIBLE);
+
+        // Only BLUR gets a blurred backdrop — it is that mode's entire feature.
+        //
+        // This used to blur for FILL too, which quietly defeated the edge fade: at zoom 1 a FILL
+        // image covers the screen, so the backdrop was a blurred copy of the SAME picture in the
+        // SAME place, and fading the edges into it changed almost nothing. Fading to the flat bar
+        // colour (black by default) is what makes the image visibly melt into the screen.
+        if(mode != FitSettings.MODE_BLUR || slot.sharp == null) {
+            slot.backdrop.setImageDrawable(new ColorDrawable(
+                    slot.fit != null ? slot.fit.barColor : Color.BLACK));
+            return;
+        }
+        slot.backdrop.setImageBitmap(ImageBlur.blur(slot.sharp, slot.fit.blur));
+        // Knock the backdrop back so the sharp image stays the subject and the seam where it
+        // meets the blur does not read as a rendering fault.
+        slot.backdrop.setColorFilter(0x59000000, android.graphics.PorterDuff.Mode.SRC_ATOP);
     }
 
     /** Overflow (scaled content size minus view size) in view pixels, per axis. */
     private float[] overflow(Slot slot) {
         float vw = getWidth(), vh = getHeight();
         if(slot.contentW <= 0 || slot.contentH <= 0 || vw <= 0 || vh <= 0) return new float[]{0f, 0f};
-        float scale = Math.max(vw / slot.contentW, vh / slot.contentH);
+        float zoom = slot.fit != null ? FitSettings.clampZoom(slot.fit.zoom) : 1f;
+        // Must pick the same base scale applyImageMatrix() did, or the pan disagrees with what
+        // is on screen: it used max unconditionally, so in a fit mode it reported an overflow
+        // that offset() then ignored — the drag did nothing but still wrote a focal point.
+        int mode = resolvedMode(slot, (int) vw, (int) vh);
+        float base = FitSettings.isFitMode(mode)
+                ? Math.min(vw / slot.contentW, vh / slot.contentH)
+                : Math.max(vw / slot.contentW, vh / slot.contentH);
+        float scale = base * zoom;
         return new float[]{ slot.contentW * scale - vw, slot.contentH * scale - vh };
     }
 

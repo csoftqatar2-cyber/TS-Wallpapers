@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Rail icon for Updates: a download arrow into a tray. Replaces the info "i" that labelled
+     this card while it was About. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24"
+    android:tint="@color/nav_rail_item_tint">
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M13,5v6h1.17L12,13.17 9.83,11H11V5h2M15,3H9v6H5l7,7 7,-7h-4V3zM19,18H5v2h14v-2z" />
+</vector>

@@ -362,10 +362,24 @@ public class WallpaperRepo {
     //     wallpaper url, so it works the same for global and per-car private images.
     private static final String FOCAL_PREFIX = "wp-focal:";
 
+    /**
+     * The key a wallpaper's fit and focal are stored under.
+     *
+     * The same local image reaches us under two spellings: the import and phone-upload paths
+     * open the editor with "file:///storage/…", while localItems() builds its WallpaperItems
+     * from File.getAbsolutePath(), which is bare "/storage/…". Unnormalised, the editor wrote
+     * one key and the renderer read the other, so every edit made on import was silently
+     * thrown away. Remote urls have no scheme to strip and pass through untouched.
+     */
+    private static String fitKey(String url) {
+        if(url == null) return null;
+        return url.startsWith("file://") ? url.substring("file://".length()) : url;
+    }
+
     /** Saved focal point for a wallpaper, or the image center (0.5,0.5) if none. */
     public float[] getFocal(String url) {
         if(url != null) {
-            String v = mPref.getString(FOCAL_PREFIX + url, "");
+            String v = mPref.getString(FOCAL_PREFIX + fitKey(url), "");
             if(!v.isEmpty()) {
                 try {
                     String[] p = v.split(",");
@@ -378,11 +392,72 @@ public class WallpaperRepo {
 
     public void setFocal(String url, float fx, float fy) {
         if(url == null || url.isEmpty()) return;
-        mPref.edit().putString(FOCAL_PREFIX + url, clamp01(fx) + "," + clamp01(fy)).apply();
+        mPref.edit().putString(FOCAL_PREFIX + fitKey(url), clamp01(fx) + "," + clamp01(fy)).apply();
     }
 
     private static float clamp01(float v) {
         return v < 0f ? 0f : (v > 1f ? 1f : v);
+    }
+
+    // --- Per-wallpaper fit settings (how a too-tall image is fitted to the very wide screen).
+    //     Keyed by url like the focal point above, so it survives a re-sync and works for both
+    //     global and per-car images. The defaults live under their own keys and are what the
+    //     editor opens with, so the technician sets them once.
+    private static final String FIT_PREFIX = "wp-fit:";
+    private static final String PREF_FIT_DEFAULT_MODE = "wallpaper-fit-default-mode";
+    private static final String PREF_FIT_DEFAULT_BLUR = "wallpaper-fit-default-blur";
+    private static final String PREF_FIT_DEFAULT_COLOR = "wallpaper-fit-default-color";
+    private static final String PREF_FIT_EDIT_ON_IMPORT = "wallpaper-fit-edit-on-import";
+
+    /** The defaults a freshly imported image starts from. */
+    public FitSettings getFitDefaults() {
+        return new FitSettings(
+                mPref.getInt(PREF_FIT_DEFAULT_MODE, FitSettings.MODE_AUTO),
+                mPref.getInt(PREF_FIT_DEFAULT_BLUR, 60),
+                mPref.getInt(PREF_FIT_DEFAULT_COLOR, android.graphics.Color.BLACK));
+    }
+
+    public void setFitDefaults(FitSettings s) {
+        mPref.edit()
+                .putInt(PREF_FIT_DEFAULT_MODE, s.mode)
+                .putInt(PREF_FIT_DEFAULT_BLUR, FitSettings.clampBlur(s.blur))
+                .putInt(PREF_FIT_DEFAULT_COLOR, s.barColor)
+                .apply();
+    }
+
+    /** Whether the editor opens after every import, or imports apply the defaults silently. */
+    public boolean isEditOnImport() {
+        return mPref.getBoolean(PREF_FIT_EDIT_ON_IMPORT, true);
+    }
+
+    public void setEditOnImport(boolean v) {
+        mPref.edit().putBoolean(PREF_FIT_EDIT_ON_IMPORT, v).apply();
+    }
+
+    /** This wallpaper's fit settings, falling back to the defaults when it has none of its own. */
+    public FitSettings getFit(String url) {
+        if(url == null || url.isEmpty()) return getFitDefaults();
+        return FitSettings.parse(mPref.getString(FIT_PREFIX + fitKey(url), ""), getFitDefaults());
+    }
+
+    public void setFit(String url, FitSettings s) {
+        if(url == null || url.isEmpty()) return;
+        mPref.edit().putString(FIT_PREFIX + fitKey(url), s.serialize()).apply();
+    }
+
+    /** Drop this wallpaper's override so it follows the defaults again. */
+    public void clearFit(String url) {
+        if(url == null || url.isEmpty()) return;
+        mPref.edit().remove(FIT_PREFIX + fitKey(url)).apply();
+    }
+
+    /** The technician's "40 images, all reels, same treatment" button. */
+    public void applyFitToAll(FitSettings s) {
+        SharedPreferences.Editor e = mPref.edit();
+        for(WallpaperItem item : mItems) {
+            if(item.url != null && !item.url.isEmpty()) e.putString(FIT_PREFIX + fitKey(item.url), s.serialize());
+        }
+        e.apply();
     }
 
     /** Whether wallpaper syncing is turned on, regardless of whether any items are cached yet.
@@ -432,6 +507,11 @@ public class WallpaperRepo {
 
     /** Copy a picked file (image/gif/video) from the system picker into the local wallpaper folder. */
     public boolean importLocalFile(InputStream in, String displayName) {
+        return importLocalFileReturningPath(in, displayName) != null;
+    }
+
+    /** Same import, but hands back the file so the caller can open the fit editor on it. */
+    public File importLocalFileReturningPath(InputStream in, String displayName) {
         try {
             String name = displayName;
             if(name == null || name.trim().isEmpty()) name = "wp_" + Math.abs(displayName == null ? 0 : displayName.hashCode());
@@ -444,9 +524,9 @@ public class WallpaperRepo {
             out.flush();
             out.close();
             in.close();
-            return true;
+            return dest;
         } catch(Exception e) {
-            return false;
+            return null;
         }
     }
 

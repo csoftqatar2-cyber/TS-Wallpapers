@@ -42,9 +42,11 @@ import android.widget.CheckBox;
 import android.widget.CompoundButton;
 import android.widget.EditText;
 import android.widget.LinearLayout;
-import android.widget.ListView;
+import android.widget.GridView;
 import android.widget.NumberPicker;
 import android.widget.RadioButton;
+import android.widget.RadioGroup;
+import android.widget.ScrollView;
 import android.widget.SeekBar;
 import android.widget.Spinner;
 import android.widget.TextView;
@@ -86,8 +88,8 @@ public class BaseSettingsActivity extends AppCompatActivity {
     static final int PICK_HOURS_HAND_REQUEST = 2;
     static final int PICK_MINUTES_HAND_REQUEST = 3;
     static final int PICK_SECONDS_HAND_REQUEST = 4;
-    static final int PICK_BACKGROUND_REQUEST = 5;
     static final int PICK_WALLPAPERS_REQUEST = 6;
+    static final int FIT_EDITOR_REQUEST = 7;
 
     StorageControl mStorage = new StorageControl(this);
     Gson mGson = new Gson();
@@ -96,26 +98,25 @@ public class BaseSettingsActivity extends AppCompatActivity {
     LinearLayout mLinearLayoutPurchaseContainer;
     LinearLayout mLinearLayoutSettingsContainer;
     Button mButtonUnlockSettings;
-    CheckBox mCheckBoxFse;
-    CheckBox mCheckBoxKeepScreenOn;
-    CheckBox mCheckBoxAutoStartOnBoot;
-    CheckBox mCheckBoxAnalogClockShow;
-    CheckBox mCheckBoxAnalogClockShowSeconds;
-    CheckBox mCheckBoxAnalogClockSmoothHands;
+    CompoundButton mCheckBoxFse;
+    CompoundButton mCheckBoxAutoStartOnBoot;
+    CompoundButton mCheckBoxAnalogClockShow;
+    CompoundButton mCheckBoxAnalogClockShowSeconds;
+    CompoundButton mCheckBoxAnalogClockSmoothHands;
     Spinner mSpinnerDesignAnalogFace;
     Spinner mSpinnerDesignAnalogHours;
     Spinner mSpinnerDesignAnalogMinutes;
     Spinner mSpinnerDesignAnalogSeconds;
-    CheckBox mCheckBoxDigitalClockShow;
-    CheckBox mCheckBoxDateShow;
+    CompoundButton mCheckBoxDigitalClockShow;
+    CompoundButton mCheckBoxDateShow;
     EditText mEditTextDateFormat;
     RadioButton mRadioButtonGregorianCalendar;
     RadioButton mRadioButtonHijriCalendar;
-    CheckBox mCheckBoxDigitalClockShowSeconds;
-    CheckBox mCheckBoxDigitalClock24Format;
-    CheckBox mCheckBoxArabicDigits;
-    CheckBox mCheckBoxShowHijri;
-    CheckBox mCheckBoxAutoContrast;
+    CompoundButton mCheckBoxDigitalClockShowSeconds;
+    CompoundButton mCheckBoxDigitalClock24Format;
+    CompoundButton mCheckBoxArabicDigits;
+    CompoundButton mCheckBoxShowHijri;
+    CompoundButton mCheckBoxAutoContrast;
     View mColorChangerAnalogFace;
     View mColorPreviewAnalogFace;
     View mColorChangerAnalogHours;
@@ -144,26 +145,20 @@ public class BaseSettingsActivity extends AppCompatActivity {
     View mColorPreviewEvents;
     int mColorEvents;
     Spinner mSpinnerEventsFont;
-    View mColorChangerBack;
-    View mColorPreviewBack;
-    int mColorBack;
-    Spinner mSpinnerDesignBack;
-    boolean mBackStretch;
-    CheckBox mCheckBoxShowWeather;
+    CompoundButton mCheckBoxShowWeather;
     EditText mEditTextWeatherCity;
 
     // wallpaper slideshow + clock layout
-    CheckBox mCheckBoxWallpaperEnabled;
-    CheckBox mCheckBoxWallpaperAutoSwitch;
-    Spinner mSpinnerWallpaperInterval;
-    Button mButtonManageWallpapers;
-    Button mButtonRefreshWallpapers;
+    CompoundButton mCheckBoxWallpaperEnabled;
+    CompoundButton mCheckBoxWallpaperAutoSwitch;
+    View mButtonManageWallpapers;
+    View mButtonRefreshWallpapers;
     TextView mTextViewWallpaperStatus;
-    CheckBox mCheckBoxShowClockOverlay;
+    CompoundButton mCheckBoxShowClockOverlay;
     Spinner mSpinnerClockPosition;
     Spinner mSpinnerClockSize;
-    CheckBox mCheckBoxWallpaperLocal;
-    Button mButtonAddLocalWallpapers;
+    CompoundButton mCheckBoxWallpaperLocal;
+    View mButtonAddLocalWallpapers;
     TextView mTextViewLocalFolder;
     WallpaperRepo mWallpaperRepo;
     UploadServer mUploadServer;
@@ -190,15 +185,13 @@ public class BaseSettingsActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_settings);
 
-        // apply the insets as a margin to the view, so that elements at the bottom
-        // of the ScrollView do not get hidden behind the navigation bar
-        ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.textViewBuildInfo), (v, windowInsets) -> {
+        // Inset the rail + content pane together. This used to hang off textViewBuildInfo and only
+        // handled the bottom, which was enough while everything was one centred scrolling column.
+        // The rail now runs to the screen edge, so on a device with side system bars (any car head
+        // unit in landscape) it would sit underneath them without the horizontal insets.
+        ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.linearLayoutSettingsRoot), (v, windowInsets) -> {
             Insets insets = windowInsets.getInsets(WindowInsetsCompat.Type.systemBars());
-            ViewGroup.MarginLayoutParams mlp = (ViewGroup.MarginLayoutParams) v.getLayoutParams();
-            //mlp.leftMargin = insets.left;
-            //mlp.rightMargin = insets.right;
-            mlp.bottomMargin = insets.bottom;
-            v.setLayoutParams(mlp);
+            v.setPadding(insets.left, 0, insets.right, insets.bottom);
             // Return CONSUMED if you don't want the window insets to keep passing down to descendant views.
             return WindowInsetsCompat.CONSUMED;
         });
@@ -206,12 +199,24 @@ public class BaseSettingsActivity extends AppCompatActivity {
         // init toolbar
         Toolbar toolbar = findViewById(R.id.toolbar);
         setSupportActionBar(toolbar);
-        if(getSupportActionBar() != null) getSupportActionBar().setDisplayHomeAsUpEnabled(true);
+        if(getSupportActionBar() != null) {
+            getSupportActionBar().setDisplayHomeAsUpEnabled(true);
+            // The header is a custom child of the Toolbar; the built-in title would draw on top.
+            getSupportActionBar().setDisplayShowTitleEnabled(false);
+        }
 
         // display version & flavor
+        ((TextView) findViewById(R.id.textViewHeaderTitle)).setText(R.string.settings_header_title);
         try {
             PackageInfo pInfo = this.getPackageManager().getPackageInfo(getPackageName(), 0);
             setTitle(getTitle() + " " + pInfo.versionName);
+            // Brand + version always reads left-to-right, even in Arabic — it is a product token.
+            TextView subtitle = findViewById(R.id.textViewHeaderSubtitle);
+            subtitle.setText("THABTHABA STORE · v" + pInfo.versionName);
+            ViewCompat.setLayoutDirection(subtitle, ViewCompat.LAYOUT_DIRECTION_LTR);
+            // The headline version on the Updates card: what you are running, said plainly,
+            // before the button asks whether you want something else.
+            ((TextView) findViewById(R.id.textViewCurrentVersion)).setText("v" + pInfo.versionName);
             ((TextView) findViewById(R.id.textViewBuildInfo)).setText(
                     getString(R.string.version) + " " + pInfo.versionName + " (" + pInfo.versionCode + ") " + BuildConfig.BUILD_TYPE + " " + BuildConfig.FLAVOR
             );
@@ -243,7 +248,6 @@ public class BaseSettingsActivity extends AppCompatActivity {
         mLinearLayoutSettingsContainer = findViewById(R.id.linearLayoutSettings);
         mButtonUnlockSettings = findViewById(R.id.buttonUnlockSettings);
         mCheckBoxFse = findViewById(R.id.checkBoxFseSettings);
-        mCheckBoxKeepScreenOn = findViewById(R.id.checkBoxKeepScreenOn);
         mCheckBoxAutoStartOnBoot = findViewById(R.id.checkBoxAutoStartOnBoot);
         mCheckBoxAnalogClockShow = findViewById(R.id.checkBoxShowAnalogClock);
         mCheckBoxAnalogClockShowSeconds = findViewById(R.id.checkBoxSecondsAnalog);
@@ -279,14 +283,10 @@ public class BaseSettingsActivity extends AppCompatActivity {
         mColorChangerDigitalDate = findViewById(R.id.viewColorChangerDigitalDate);
         mColorPreviewDigitalDate = findViewById(R.id.viewColorPreviewDigitalDate);
         mSpinnerDigitalDateFont = findViewById(R.id.spinnerDigitalDateFont);
-        mSpinnerDesignBack = findViewById(R.id.spinnerDesignBack);
-        mColorChangerBack = findViewById(R.id.viewColorChangerBack);
-        mColorPreviewBack = findViewById(R.id.viewColorPreviewBack);
         mCheckBoxShowWeather = findViewById(R.id.checkBoxShowWeather);
         mEditTextWeatherCity = findViewById(R.id.editTextWeatherCity);
         mCheckBoxWallpaperEnabled = findViewById(R.id.checkBoxWallpaperEnabled);
         mCheckBoxWallpaperAutoSwitch = findViewById(R.id.checkBoxWallpaperAutoSwitch);
-        mSpinnerWallpaperInterval = findViewById(R.id.spinnerWallpaperInterval);
         mButtonManageWallpapers = findViewById(R.id.buttonManageWallpapers);
         mButtonRefreshWallpapers = findViewById(R.id.buttonRefreshWallpapers);
         mTextViewWallpaperStatus = findViewById(R.id.textViewWallpaperStatus);
@@ -304,7 +304,6 @@ public class BaseSettingsActivity extends AppCompatActivity {
         // init settings
         mSharedPref = getSharedPreferences(SHARED_PREF_DOMAIN, Context.MODE_PRIVATE);
         mCheckBoxFse.setChecked( mSharedPref.getBoolean(FullscreenActivity.PREF_FSE_SCREEN, false) );
-        mCheckBoxKeepScreenOn.setChecked( mSharedPref.getBoolean("keep-screen-on", true) );
         mCheckBoxAutoStartOnBoot.setChecked( mSharedPref.getBoolean(BootReceiver.PREF_AUTO_START, false) );
         mCheckBoxAutoStartOnBoot.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
             @Override
@@ -343,8 +342,6 @@ public class BaseSettingsActivity extends AppCompatActivity {
         mColorDigitalClock = mSharedPref.getInt("color-digital-clock", 0xffffffff);
         mColorDigitalDate = mSharedPref.getInt("color-digital-date", 0xffffffff);
         mColorEvents = mSharedPref.getInt("color-events", mColorDigitalDate);
-        mColorBack = mSharedPref.getInt("color-back", 0xff000000);
-        mBackStretch = mSharedPref.getBoolean("back-stretch", false);
         mCheckBoxShowWeather.setChecked(mSharedPref.getBoolean("show-weather", true));
         mEditTextWeatherCity.setText(mSharedPref.getString("weather-city", "Doha"));
         // ask once for location so the weather can follow the car (optional; falls back to city/IP if denied)
@@ -353,11 +350,7 @@ public class BaseSettingsActivity extends AppCompatActivity {
         // wallpaper + clock layout settings
         mCheckBoxWallpaperEnabled.setChecked(mSharedPref.getBoolean(WallpaperRepo.PREF_ENABLED, true));
         mCheckBoxWallpaperAutoSwitch.setChecked(mSharedPref.getBoolean(WallpaperRepo.PREF_AUTO_SWITCH, false));
-        ArrayAdapter<CharSequence> intervalAdapter = ArrayAdapter.createFromResource(this, R.array.wallpaper_interval_labels, android.R.layout.simple_spinner_item);
-        intervalAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
-        mSpinnerWallpaperInterval.setAdapter(intervalAdapter);
-        mSpinnerWallpaperInterval.setSelection(indexOf(WallpaperRepo.AUTO_SWITCH_INTERVAL_VALUES,
-                mSharedPref.getInt(WallpaperRepo.PREF_AUTO_SWITCH_INTERVAL, WallpaperRepo.AUTO_SWITCH_INTERVAL_DEFAULT)), false);
+        buildIntervalButtons();
         mCheckBoxShowClockOverlay.setChecked(mSharedPref.getBoolean("clock-overlay", true));
         ArrayAdapter<CharSequence> posAdapter = ArrayAdapter.createFromResource(this, R.array.clock_position_labels, android.R.layout.simple_spinner_item);
         posAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
@@ -401,9 +394,151 @@ public class BaseSettingsActivity extends AppCompatActivity {
         initImageSpinner();
         initFontSpinner();
 
+        initNavRail();
+        initModePicker();
+        initFitDefaults();
+        refreshHeaderChips();
+        syncDependentRows();
+
         // from here on, every change to any setting saves itself immediately
+        // (this claims the OnCheckedChangeListener of every switch in the tree, so anything
+        //  that needs to react to a setting change has to hang off autoSave(), not its own
+        //  listener — attachAutoSave would silently replace it)
         attachAutoSave(mLinearLayoutSettingsContainer);
         mAutoSaveReady = true;
+    }
+
+    /**
+     * The header chips are status, not decoration — they have to track the real state or they
+     * are worse than nothing. Called on load, whenever FSE flips, and after activation.
+     */
+    protected void refreshHeaderChips() {
+        TextView mode = findViewById(R.id.chipMode);
+        if(mode != null) {
+            // Read the mode itself rather than the FSE mirror: that only knows FSE from
+            // not-FSE, so it called Leopard "Normal" while the radio right below it said
+            // Leopard — the chip was contradicting the setting it reports on.
+            switch(OperatingMode.get(mSharedPref)) {
+                case OperatingMode.LEOPARD: mode.setText(R.string.chip_mode_leopard); break;
+                case OperatingMode.FSE:     mode.setText(R.string.chip_mode_fse); break;
+                default:                    mode.setText(R.string.chip_mode_normal); break;
+            }
+            // The chip already names the mode; the caret is what says it can be changed here.
+            mode.setCompoundDrawablesRelativeWithIntrinsicBounds(0, 0, R.drawable.ic_chip_caret_12dp, 0);
+            mode.setOnClickListener(v -> showModeDialog());
+        }
+
+        TextView language = findViewById(R.id.chipLanguage);
+        if(language != null) {
+            // Label it with the language it switches TO, so it reads as an action not a status.
+            boolean arabicNow = LocaleHelper.LANG_ARABIC.equals(LocaleHelper.resolved(this));
+            language.setText(arabicNow ? R.string.language_english : R.string.language_arabic);
+            language.setCompoundDrawablesRelativeWithIntrinsicBounds(
+                    R.drawable.ic_chip_language_16dp, 0, 0, 0);
+            language.setOnClickListener(v -> toggleLanguage());
+        }
+
+        TextView activation = findViewById(R.id.chipActivation);
+        if(activation != null) {
+            boolean active = mWallpaperRepo != null && mWallpaperRepo.isActive();
+            activation.setText(active ? R.string.chip_activated : R.string.chip_not_activated);
+            activation.setBackgroundResource(active ? R.drawable.chip_ok_bg : R.drawable.chip_danger_bg);
+            activation.setTextColor(ContextCompat.getColor(this, active ? R.color.aurora_ok : R.color.aurora_danger));
+            activation.setCompoundDrawablesRelativeWithIntrinsicBounds(
+                    active ? R.drawable.chip_dot_ok : R.drawable.chip_dot_danger, 0, 0, 0);
+        }
+    }
+
+    /**
+     * Rail item i shows the cards in NAV_RAIL_SECTIONS[i] — the two arrays are index-matched
+     * and must stay that way.
+     *
+     * "Clock" is one subject, so it is one rail entry that reveals three cards: the analog
+     * clock, the digital clock, and where the clock sits. They were three entries only because
+     * they were three cards in the old scrolling screen — that is a fact about the old layout,
+     * not about how anyone thinks about a clock.
+     */
+    private static final int[] NAV_RAIL_ITEMS = {
+            R.id.navGeneral, R.id.navClock, R.id.navWallpapers, R.id.navAbout
+    };
+    private static final int[][] NAV_RAIL_SECTIONS = {
+            { R.id.sectionGeneral },
+            { R.id.sectionAnalog, R.id.sectionDigital, R.id.sectionClockLayout },
+            { R.id.sectionWallpapers },
+            { R.id.sectionAbout }
+    };
+
+    /**
+     * In Leopard, Android draws the wallpaper and we cannot draw on top of it, so the clocks,
+     * the clock layout and the background have nothing to act on.
+     *
+     * They are HIDDEN, not greyed out. Forty-odd disabled rows would be grim, and "everything
+     * visible but disabled" is the exact defect this redesign set out to remove — repeating it
+     * here would be going backwards. Leopard is not a setting, it is a different product, and
+     * the Settings screen should admit that.
+     */
+    private static final int[] LEOPARD_HIDDEN_CARDS = {
+            R.id.sectionAnalog, R.id.sectionDigital, R.id.sectionClockLayout
+    };
+
+    /** Rail entries with nothing left to show once their cards are hidden. */
+    private static final int[] NAV_RAIL_LEOPARD_HIDDEN = {
+            R.id.navClock
+    };
+
+    private static boolean isLeopardHiddenCard(int cardId) {
+        for(int id : LEOPARD_HIDDEN_CARDS) if(id == cardId) return true;
+        return false;
+    }
+
+    private void initNavRail() {
+        for(int i = 0; i < NAV_RAIL_ITEMS.length; i++) {
+            final int section = i;
+            findViewById(NAV_RAIL_ITEMS[i]).setOnClickListener(v -> showSection(section));
+        }
+        applyLeopardVisibility();
+        showSection(firstVisibleSection());
+    }
+
+    /** Strip the rail down to what Leopard can actually act on. */
+    private void applyLeopardVisibility() {
+        boolean leopard = OperatingMode.isLeopard(mSharedPref);
+        for(int id : NAV_RAIL_LEOPARD_HIDDEN) {
+            View v = findViewById(id);
+            if(v != null) v.setVisibility(leopard ? View.GONE : View.VISIBLE);
+        }
+        View banner = findViewById(R.id.leopardBanner);
+        if(banner != null) banner.setVisibility(leopard ? View.VISIBLE : View.GONE);
+        View leopardGroup = findViewById(R.id.groupLeopard);
+        if(leopardGroup != null) leopardGroup.setVisibility(leopard ? View.VISIBLE : View.GONE);
+    }
+
+    private int firstVisibleSection() {
+        for(int i = 0; i < NAV_RAIL_ITEMS.length; i++) {
+            View v = findViewById(NAV_RAIL_ITEMS[i]);
+            if(v != null && v.getVisibility() == View.VISIBLE) return i;
+        }
+        return 0;
+    }
+
+    /**
+     * Only one section is attached at a time. Note this runs before attachAutoSave(), and the
+     * rail lives outside mLinearLayoutSettingsContainer, so switching sections never counts as
+     * a settings change and never triggers a save.
+     */
+    private void showSection(int section) {
+        boolean leopard = OperatingMode.isLeopard(mSharedPref);
+        for(int i = 0; i < NAV_RAIL_ITEMS.length; i++) {
+            findViewById(NAV_RAIL_ITEMS[i]).setSelected(i == section);
+            for(int card : NAV_RAIL_SECTIONS[i]) {
+                // Belt and braces: in Leopard the whole Clock rail entry is gone anyway, but a
+                // card must never appear just because its group happens to be selected.
+                boolean show = i == section && !(leopard && isLeopardHiddenCard(card));
+                findViewById(card).setVisibility(show ? View.VISIBLE : View.GONE);
+            }
+        }
+        ScrollView content = findViewById(R.id.scrollViewSettingsContent);
+        content.scrollTo(0, 0);
     }
 
     /**
@@ -414,6 +549,76 @@ public class BaseSettingsActivity extends AppCompatActivity {
         if(!mAutoSaveReady) return;
         save();
         setResult(RESULT_OK);
+        // The mode chip mirrors the FSE switch, which lives in this tree.
+        refreshHeaderChips();
+        // Auto-switch is a switch that reveals a control. Hooked here rather than to its own
+        // OnCheckedChangeListener because attachAutoSave() claims that listener on every switch
+        // in the tree and would silently replace it.
+        syncDependentRows();
+    }
+
+    /** Sub-settings that only mean something while the setting above them is on. */
+    private void syncDependentRows() {
+        View intervalRow = findViewById(R.id.rowAutoSwitchInterval);
+        if(intervalRow != null && mCheckBoxWallpaperAutoSwitch != null) {
+            intervalRow.setVisibility(mCheckBoxWallpaperAutoSwitch.isChecked() ? View.VISIBLE : View.GONE);
+        }
+    }
+
+    /**
+     * The five intervals as buttons rather than a spinner.
+     *
+     * There are only five and they all fit on one row, so a spinner was two taps to reach an
+     * answer and hid the other four while you did it. Built here rather than in XML so the
+     * labels and the seconds behind them come from one array each and cannot fall out of step.
+     */
+    private void buildIntervalButtons() {
+        final LinearLayout row = findViewById(R.id.intervalButtons);
+        if(row == null) return;
+        row.removeAllViews();
+
+        String[] labels = getResources().getStringArray(R.array.wallpaper_interval_labels);
+        final int[] values = WallpaperRepo.AUTO_SWITCH_INTERVAL_VALUES;
+        if(labels.length != values.length) return;   // a mismatched array is a build-time mistake
+
+        int gap = Math.round(getResources().getDisplayMetrics().density * 8);
+        for(int i = 0; i < values.length; i++) {
+            final int seconds = values[i];
+            TextView b = new TextView(this);
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+            if(i > 0) lp.setMarginStart(gap);
+            b.setLayoutParams(lp);
+            b.setText(labels[i]);
+            b.setGravity(android.view.Gravity.CENTER);
+            b.setMaxLines(1);
+            b.setTextSize(13);
+            b.setTypeface(b.getTypeface(), android.graphics.Typeface.BOLD);
+            b.setTextColor(ContextCompat.getColorStateList(this, R.color.interval_btn_text));
+            b.setBackgroundResource(R.drawable.interval_btn_bg);
+            int padV = Math.round(getResources().getDisplayMetrics().density * 12);
+            b.setPadding(gap, padV, gap, padV);
+            b.setFocusable(true);
+            b.setClickable(true);
+            b.setOnClickListener(v -> {
+                mSharedPref.edit().putInt(WallpaperRepo.PREF_AUTO_SWITCH_INTERVAL, seconds).apply();
+                refreshIntervalSelection();
+                autoSave();
+            });
+            row.addView(b);
+        }
+        refreshIntervalSelection();
+    }
+
+    /** Selection is drawn by the state list, so this only has to say which one is on. */
+    private void refreshIntervalSelection() {
+        LinearLayout row = findViewById(R.id.intervalButtons);
+        if(row == null) return;
+        int current = mSharedPref.getInt(WallpaperRepo.PREF_AUTO_SWITCH_INTERVAL,
+                WallpaperRepo.AUTO_SWITCH_INTERVAL_DEFAULT);
+        int[] values = WallpaperRepo.AUTO_SWITCH_INTERVAL_VALUES;
+        for(int i = 0; i < row.getChildCount() && i < values.length; i++) {
+            row.getChildAt(i).setSelected(values[i] == current);
+        }
     }
 
     /** Hook a "save now" listener onto every checkbox, spinner and text field in the tree. */
@@ -462,22 +667,37 @@ public class BaseSettingsActivity extends AppCompatActivity {
         autoSave();
     }
 
-    @Override
-    public boolean onCreateOptionsMenu(Menu menu) {
-        // no "apply" item: the settings save themselves as they are changed
-        // (the widget config screens still inflate menu_settings on their own)
-        return true;
-    }
+    // No options menu: there is no "apply" item (settings save themselves as they change), and
+    // the language switch moved into the header row as a chip. As a menu item it was drawn by
+    // the system in the action-bar style, which is why it never lined up with the chips it sat
+    // beside — the fix is for it to BE one of them, not to nudge it.
+    // (The widget config screens still inflate menu_settings on their own.)
 
     @Override
     public boolean onOptionsItemSelected(MenuItem item) {
-        switch(item.getItemId()) {
-            case android.R.id.home:
-                saveAndFinish();
-                return true;
-            default:
-                return super.onOptionsItemSelected(item);
+        if(item.getItemId() == android.R.id.home) {
+            saveAndFinish();
+            return true;
         }
+        return super.onOptionsItemSelected(item);
+    }
+
+    /**
+     * Flip the app between Arabic and English. Persist first, then recreate() so the whole
+     * activity re-inflates against the new locale — that is what re-mirrors the layout, which
+     * setting the strings alone would not do.
+     */
+    private void toggleLanguage() {
+        boolean arabicNow = LocaleHelper.LANG_ARABIC.equals(LocaleHelper.resolved(this));
+        LocaleHelper.save(this, arabicNow ? LocaleHelper.LANG_ENGLISH : LocaleHelper.LANG_ARABIC);
+        // The clock screen reads its own strings, so tell it to reload when we hand back.
+        setResult(RESULT_OK);
+        recreate();
+    }
+
+    @Override
+    protected void attachBaseContext(Context newBase) {
+        super.attachBaseContext(LocaleHelper.wrap(newBase));
     }
 
     @Override
@@ -529,14 +749,6 @@ public class BaseSettingsActivity extends AppCompatActivity {
                     mSpinnerDesignAnalogSeconds.setSelection(mStorage.existsImage(StorageControl.FILENAME_SECONDS_HAND) ? 1 : 0, false);
                 }
                 break;
-            case(PICK_BACKGROUND_REQUEST):
-                if(resultCode == RESULT_OK) {
-                    mStorage.processImage(StorageControl.FILENAME_BACKGROUND_IMAGE, data);
-                    mBackStretch = mSpinnerDesignBack.getSelectedItemPosition() == 1;
-                } else {
-                    mSpinnerDesignBack.setSelection(mStorage.existsImage(StorageControl.FILENAME_BACKGROUND_IMAGE) ? 1 : 0, false);
-                }
-                break;
         }
         autoSave();
     }
@@ -576,7 +788,6 @@ public class BaseSettingsActivity extends AppCompatActivity {
     }
 
     protected void enableDisableAllSettings(boolean state) {
-        mCheckBoxKeepScreenOn.setEnabled(state);
         mCheckBoxAutoStartOnBoot.setEnabled(state);
         mCheckBoxAnalogClockShow.setEnabled(state);
         mCheckBoxAnalogClockShowSeconds.setEnabled(state);
@@ -605,12 +816,9 @@ public class BaseSettingsActivity extends AppCompatActivity {
         mSpinnerDigitalDateFont.setEnabled(state);
         mColorChangerEvents.setEnabled(state);
         mSpinnerEventsFont.setEnabled(state);
-        mColorChangerBack.setEnabled(state);
-        mSpinnerDesignBack.setEnabled(state);
         mCheckBoxShowWeather.setEnabled(state);
         mCheckBoxWallpaperEnabled.setEnabled(state);
         mCheckBoxWallpaperAutoSwitch.setEnabled(state);
-        mSpinnerWallpaperInterval.setEnabled(state);
         mButtonManageWallpapers.setEnabled(state);
         mButtonRefreshWallpapers.setEnabled(state);
         mCheckBoxShowClockOverlay.setEnabled(state);
@@ -618,15 +826,37 @@ public class BaseSettingsActivity extends AppCompatActivity {
         mSpinnerClockSize.setEnabled(state);
         mCheckBoxWallpaperLocal.setEnabled(state);
         mButtonAddLocalWallpapers.setEnabled(state);
+
+        // The interval buttons are built at runtime, so they are not one of the fields above and
+        // were silently left live when the interval was a Spinner's replacement.
+        LinearLayout intervals = findViewById(R.id.intervalButtons);
+        if(intervals != null) {
+            for(int i = 0; i < intervals.getChildCount(); i++) {
+                View b = intervals.getChildAt(i);
+                b.setEnabled(state);
+                b.setAlpha(state ? 1f : 0.4f);
+            }
+        }
+
+        // The operating mode was never gated, because the old FSE checkbox was easy to miss at
+        // the bottom of the screen. The header chip put it one tap from anywhere — including on
+        // a device that has not been activated, where picking FSE would also quietly switch on
+        // start-on-boot. Gate both routes.
+        int[] modeViews = { R.id.radioGroupMode, R.id.radioModeNormal, R.id.radioModeFse,
+                R.id.radioModeLeopard, R.id.chipMode };
+        for(int id : modeViews) {
+            View v = findViewById(id);
+            if(v == null) continue;
+            // Leopard has its own reason to be off; do not overrule it back on here.
+            if(id == R.id.radioModeLeopard && !OperatingMode.isSupported(this)) continue;
+            v.setEnabled(state);
+        }
+        View chip = findViewById(R.id.chipMode);
+        if(chip != null) chip.setAlpha(state ? 1f : 0.5f);
     }
 
     private static int indexOf(String[] arr, String value) {
         for(int i = 0; i < arr.length; i++) if(arr[i].equals(value)) return i;
-        return 0;
-    }
-
-    private static int indexOf(int[] arr, int value) {
-        for(int i = 0; i < arr.length; i++) if(arr[i] == value) return i;
         return 0;
     }
 
@@ -701,19 +931,22 @@ public class BaseSettingsActivity extends AppCompatActivity {
         hint.setPadding(pad, pad, pad, pad / 2);
         hint.setTextSize(12);
 
-        ListView list = new ListView(this);
-        list.setAdapter(adapter);
-        list.setLayoutParams(new LinearLayout.LayoutParams(
+        // A grid, two wide: you are choosing between pictures, so show the pictures. As a list
+        // of 88x56 thumbnails the image was the smallest thing in its own row.
+        //
+        // No setOnItemClickListener here on purpose — the cells carry their own (see
+        // WallpaperSelectAdapter.getView), because a cell with a button in it never receives the
+        // AdapterView's row click.
+        GridView grid = new GridView(this);
+        grid.setAdapter(adapter);
+        grid.setNumColumns(2);
+        grid.setLayoutParams(new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
-        list.setOnItemClickListener(new AdapterView.OnItemClickListener() {
-            @Override
-            public void onItemClick(AdapterView<?> parent, View view, int position, long id) {
-                adapter.toggle(position);
-            }
-        });
+        grid.setPadding(pad / 2, 0, pad / 2, 0);
+        grid.setClipToPadding(false);
 
         ll.addView(hint);
-        ll.addView(list);
+        ll.addView(grid);
 
         final AlertDialog dialog = new AlertDialog.Builder(this)
                 .setTitle(R.string.wallpaper_manage_title)
@@ -732,6 +965,22 @@ public class BaseSettingsActivity extends AppCompatActivity {
                 .setNeutralButton(R.string.wallpaper_manage_select_all, null)
                 .show();
 
+        // The grid is the content, so give it the glass. The default dialog width wraps its view
+        // and left two columns of pictures squeezed into half the screen.
+        if(dialog.getWindow() != null) {
+            android.util.DisplayMetrics dm = getResources().getDisplayMetrics();
+            dialog.getWindow().setLayout(Math.round(dm.widthPixels * 0.92f),
+                    Math.round(dm.heightPixels * 0.9f));
+        }
+
+        // Editing closes this dialog: the editor is a full screen, and leaving a dialog behind it
+        // would mean coming back to a list built from a playlist the edit just changed.
+        adapter.setOnEditListener(item -> {
+            mWallpaperRepo.setHiddenUrls(adapter.getHiddenUrls());   // don't lose the ticks
+            dialog.dismiss();
+            editWallpaper(item);
+        });
+
         // keep the dialog open when "select all" is pressed (it toggles all rows instead)
         Button selectAll = dialog.getButton(DialogInterface.BUTTON_NEUTRAL);
         if(selectAll != null) {
@@ -744,17 +993,97 @@ public class BaseSettingsActivity extends AppCompatActivity {
         }
     }
 
+    /**
+     * Edit how one wallpaper is fitted, from anywhere in the manage list.
+     *
+     * A cloud wallpaper is copied to this device first and edited as the copy, and the cloud
+     * original is hidden here. That is a deliberate product rule, not a workaround: the fit
+     * settings are per-url, and the same url plays on every other car. Editing the cloud image
+     * in place would either do nothing visible or — worse, if it were ever synced — push one
+     * technician's crop onto everybody. A local copy makes the blast radius exactly one car.
+     */
+    private void editWallpaper(final WallpaperItem item) {
+        if(item == null || item.url == null || item.url.isEmpty()) return;
+
+        if(!isRemoteUrl(item.url)) {
+            openFitEditor(item.url);
+            return;
+        }
+
+        mTextViewWallpaperStatus.setText(getString(R.string.wallpaper_copying));
+        new Thread(() -> {
+            java.io.File file = null;
+            try {
+                java.net.HttpURLConnection c =
+                        (java.net.HttpURLConnection) new java.net.URL(item.url).openConnection();
+                c.setConnectTimeout(15000);
+                c.setReadTimeout(30000);
+                c.setInstanceFollowRedirects(true);
+                java.io.InputStream in = c.getInputStream();
+                try {
+                    file = mWallpaperRepo.importLocalFileReturningPath(in, fileNameOf(item.url));
+                } finally {
+                    try { in.close(); } catch(Exception ignored) {}
+                    c.disconnect();
+                }
+            } catch(Exception ignored) {
+                // falls through to the null check below
+            }
+            final String saved = file == null ? null : file.getAbsolutePath();
+            runOnUiThread(() -> {
+                if(isFinishing()) return;
+                if(saved == null) {
+                    mTextViewWallpaperStatus.setText(getString(R.string.wallpaper_copy_failed));
+                    Toast.makeText(this, R.string.wallpaper_copy_failed, Toast.LENGTH_LONG).show();
+                    return;
+                }
+                // The copy carries the original's fit as a starting point, so the technician
+                // edits from where it was rather than from the defaults.
+                mWallpaperRepo.setFit("file://" + saved, mWallpaperRepo.getFit(item.url));
+                hideUrlLocally(item.url);
+                mTextViewWallpaperStatus.setText(getString(R.string.wallpaper_now_local));
+                autoSave();
+                openFitEditor("file://" + saved);
+            });
+        }).start();
+    }
+
+    /** Add one url to this device's hidden list, leaving every other car untouched. */
+    private void hideUrlLocally(String url) {
+        java.util.Set<String> hidden = mWallpaperRepo.getHiddenUrls();
+        java.util.List<String> next = new java.util.ArrayList<>(hidden);
+        if(!next.contains(url)) next.add(url);
+        mWallpaperRepo.setHiddenUrls(next);
+    }
+
+    private static boolean isRemoteUrl(String url) {
+        return url != null && (url.startsWith("http://") || url.startsWith("https://"));
+    }
+
+    /** Last path segment, query stripped — the name the local copy is saved under. */
+    private static String fileNameOf(String url) {
+        String u = url;
+        int q = u.indexOf('?');
+        if(q >= 0) u = u.substring(0, q);
+        int slash = u.lastIndexOf('/');
+        if(slash >= 0 && slash < u.length() - 1) u = u.substring(slash + 1);
+        return u.isEmpty() ? "wallpaper.jpg" : u;
+    }
+
     /** Fill the Device ID and MAC address text views shown in the wallpapers section. */
     @SuppressLint("SetTextI18n")
     private void updateDeviceInfoViews() {
         if(mTextViewSettingsDeviceId != null && mWallpaperRepo != null) {
-            String status = mWallpaperRepo.isActive() ? "نشط (Activated)" : "غير نشط (Pending Activation)";
-            mTextViewSettingsDeviceId.setText("كود الجهاز (Device ID): " + mWallpaperRepo.getDeviceId() + "\nالحالة (Status): " + status);
+            String status = getString(mWallpaperRepo.isActive()
+                    ? R.string.device_status_active : R.string.device_status_pending);
+            mTextViewSettingsDeviceId.setText(
+                    getString(R.string.device_id_status, mWallpaperRepo.getDeviceId(), status));
         }
         if(mTextViewSettingsMacAddress != null && mWallpaperRepo != null) {
             // Show the actual identifier used to match wallpapers (Device ID), not the
             // MAC address, which is unavailable on Android 6+ for privacy reasons.
-            mTextViewSettingsMacAddress.setText("كود الربط (Linking Code): " + mWallpaperRepo.getDeviceId());
+            mTextViewSettingsMacAddress.setText(
+                    getString(R.string.device_linking_code, mWallpaperRepo.getDeviceId()));
         }
     }
 
@@ -874,16 +1203,6 @@ public class BaseSettingsActivity extends AppCompatActivity {
                 false
         );
 
-        String[] optionsBack = {
-                getString(R.string.no_image),
-                getString(R.string.custom_image_stretch),
-                getString(R.string.custom_image_zoom)
-        };
-        ArrayAdapter dataAdapterBack = new ArrayAdapter(this, android.R.layout.simple_spinner_item, optionsBack);
-        dataAdapterBack.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
-        mSpinnerDesignBack.setAdapter(dataAdapterBack);
-        mSpinnerDesignBack.setSelection(mStorage.existsImage(StorageControl.FILENAME_BACKGROUND_IMAGE) ? (mBackStretch ? 1 : 2) : 0, false);
-
         AdapterView.OnItemSelectedListener listener = new AdapterView.OnItemSelectedListener() {
             @Override
             public void onItemSelected(AdapterView<?> adapterView, View view, int i, long l) {
@@ -923,27 +1242,12 @@ public class BaseSettingsActivity extends AppCompatActivity {
         mSpinnerDesignAnalogMinutes.setOnItemSelectedListener(listener);
         mSpinnerDesignAnalogSeconds.setOnItemSelectedListener(listener);
 
-        AdapterView.OnItemSelectedListener listener2 = new AdapterView.OnItemSelectedListener() {
-            @Override
-            public void onItemSelected(AdapterView<?> adapterView, View view, int i, long l) {
-                if(i != 0)
-                    chooseImage(PICK_BACKGROUND_REQUEST);
-                else
-                    mStorage.removeImage(StorageControl.FILENAME_BACKGROUND_IMAGE);
-                autoSave();
-            }
-            @Override
-            public void onNothingSelected(AdapterView<?> adapterView) { }
-        };
-        mSpinnerDesignBack.setOnItemSelectedListener(listener2);
-
-        // these five carry their own listeners (image picker), so the generic auto-save
+        // these four carry their own listeners (image picker), so the generic auto-save
         // listener must not replace them
         mAutoSaveExcluded.add(mSpinnerDesignAnalogFace);
         mAutoSaveExcluded.add(mSpinnerDesignAnalogHours);
         mAutoSaveExcluded.add(mSpinnerDesignAnalogMinutes);
         mAutoSaveExcluded.add(mSpinnerDesignAnalogSeconds);
-        mAutoSaveExcluded.add(mSpinnerDesignBack);
     }
     private void initColorPreview() {
         // analog color
@@ -1080,21 +1384,6 @@ public class BaseSettingsActivity extends AppCompatActivity {
                 });
             }
         });
-
-        // background color
-        updateColorPreview(mColorBack, mColorPreviewBack, null);
-        mColorChangerBack.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View view) {
-                showColorDialog(null, mColorBack, false, new ColorDialogCallback() {
-                    @Override
-                    public void ok(boolean customColor, int red, int green, int blue, boolean applyForAll) {
-                        mColorBack = Color.argb(0xff, red, green, blue);
-                        updateColorPreview(mColorBack, mColorPreviewBack, null);
-                    }
-                });
-            }
-        });
     }
     private void applyColorForAllAnalog(boolean customColor, int color) {
         mColorAnalogFace = color;
@@ -1111,20 +1400,34 @@ public class BaseSettingsActivity extends AppCompatActivity {
         updateColorPreview(mColorAnalogSeconds, mColorPreviewAnalogSeconds, null);
     }
     private void updateColorPreview(int color, View previewView, EditText hexTextBox) {
-        previewView.setBackgroundColor(Color.argb(0xff, Color.red(color), Color.green(color), Color.blue(color)));
-        if(hexTextBox != null) {
-            hexTextBox.setText(String.format("#%06X", (0xFFFFFF & color)));
-        } else {
+        paintColorPreview(color, previewView, hexTextBox);
+        if(hexTextBox == null) {
             // no hex box = one of the previews on the settings screen, i.e. a colour was
             // just confirmed in the picker; the live preview inside the dialog passes one
             autoSave();
         }
     }
+
+    /** The drawing half, without the autoSave — static so the shared colour dialog can run
+     *  from any Activity, including the Fit Editor. */
+    private static void paintColorPreview(int color, View previewView, EditText hexTextBox) {
+        previewView.setBackgroundColor(Color.argb(0xff, Color.red(color), Color.green(color), Color.blue(color)));
+        if(hexTextBox != null) {
+            hexTextBox.setText(String.format("#%06X", (0xFFFFFF & color)));
+        }
+    }
     interface ColorDialogCallback {
         void ok(boolean customColor, int red, int green, int blue, boolean applyForAll);
     }
+
     private void showColorDialog(Boolean customColor, int initialColor, boolean showApplyForAll, final ColorDialogCallback colorDialogFinished) {
-        final Dialog ad = new Dialog(this);
+        showColorDialog(this, customColor, initialColor, showApplyForAll, colorDialogFinished);
+    }
+
+    /** Static so the Fit Editor can reuse this exact dialog instead of growing a second one.
+     *  It never touched instance state — only the Context. */
+    static void showColorDialog(Context ctx, Boolean customColor, int initialColor, boolean showApplyForAll, final ColorDialogCallback colorDialogFinished) {
+        final Dialog ad = new Dialog(ctx);
         ad.requestWindowFeature(Window.FEATURE_NO_TITLE);
         ad.setContentView(R.layout.dialog_color);
         final CheckBox checkBoxCustomColor = ad.findViewById(R.id.checkBoxCustomColor);
@@ -1164,7 +1467,7 @@ public class BaseSettingsActivity extends AppCompatActivity {
         seekBarRed.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
             @Override
             public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
-                updateColorPreview(Color.argb(0xff, seekBarRed.getProgress(), seekBarGreen.getProgress(), seekBarBlue.getProgress()), colorPreview, editTextColorHex);
+                paintColorPreview(Color.argb(0xff, seekBarRed.getProgress(), seekBarGreen.getProgress(), seekBarBlue.getProgress()), colorPreview, editTextColorHex);
             }
             @Override
             public void onStartTrackingTouch(SeekBar seekBar) { }
@@ -1174,7 +1477,7 @@ public class BaseSettingsActivity extends AppCompatActivity {
         seekBarGreen.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
             @Override
             public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
-                updateColorPreview(Color.argb(0xff, seekBarRed.getProgress(), seekBarGreen.getProgress(), seekBarBlue.getProgress()), colorPreview, editTextColorHex);
+                paintColorPreview(Color.argb(0xff, seekBarRed.getProgress(), seekBarGreen.getProgress(), seekBarBlue.getProgress()), colorPreview, editTextColorHex);
             }
             @Override
             public void onStartTrackingTouch(SeekBar seekBar) { }
@@ -1184,7 +1487,7 @@ public class BaseSettingsActivity extends AppCompatActivity {
         seekBarBlue.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
             @Override
             public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
-                updateColorPreview(Color.argb(0xff, seekBarRed.getProgress(), seekBarGreen.getProgress(), seekBarBlue.getProgress()), colorPreview, editTextColorHex);
+                paintColorPreview(Color.argb(0xff, seekBarRed.getProgress(), seekBarGreen.getProgress(), seekBarBlue.getProgress()), colorPreview, editTextColorHex);
             }
             @Override
             public void onStartTrackingTouch(SeekBar seekBar) { }
@@ -1201,13 +1504,13 @@ public class BaseSettingsActivity extends AppCompatActivity {
                     seekBarRed.setProgress(Color.red(newColor));
                     seekBarGreen.setProgress(Color.green(newColor));
                     seekBarBlue.setProgress(Color.blue(newColor));
-                    //updateColorPreview(Color.argb(0xff, seekBarRed.getProgress(), seekBarGreen.getProgress(), seekBarBlue.getProgress()), colorPreview, null);
+                    //paintColorPreview(Color.argb(0xff, seekBarRed.getProgress(), seekBarGreen.getProgress(), seekBarBlue.getProgress()), colorPreview, null);
                 } catch(Exception ignored) { }
             }
             @Override
             public void afterTextChanged(Editable editable) { }
         });
-        updateColorPreview(Color.argb(0xff, seekBarRed.getProgress(), seekBarGreen.getProgress(), seekBarBlue.getProgress()), colorPreview, editTextColorHex);
+        paintColorPreview(Color.argb(0xff, seekBarRed.getProgress(), seekBarGreen.getProgress(), seekBarBlue.getProgress()), colorPreview, editTextColorHex);
         ad.show();
         ad.getWindow().setLayout(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
         buttonOK.setOnClickListener(new View.OnClickListener() {
@@ -1234,7 +1537,6 @@ public class BaseSettingsActivity extends AppCompatActivity {
         SharedPreferences.Editor editor = mSharedPref.edit();
 
         editor.putBoolean(FullscreenActivity.PREF_FSE_SCREEN, mCheckBoxFse.isChecked());
-        editor.putBoolean("keep-screen-on", mCheckBoxKeepScreenOn.isChecked());
         editor.putBoolean(BootReceiver.PREF_AUTO_START, mCheckBoxAutoStartOnBoot.isChecked());
         editor.putBoolean("show-analog", mCheckBoxAnalogClockShow.isChecked());
         editor.putBoolean("own-color-analog-clock-face", mCustomColorAnalogFace);
@@ -1266,14 +1568,10 @@ public class BaseSettingsActivity extends AppCompatActivity {
         editor.putInt("font-digital-date", ((FontOption) mSpinnerDigitalDateFont.getSelectedItem()).mId);
         editor.putInt("color-events", mColorEvents);
         editor.putInt("font-events", ((FontOption) mSpinnerEventsFont.getSelectedItem()).mId);
-        editor.putInt("color-back", mColorBack);
-        editor.putBoolean("back-stretch", mBackStretch);
         editor.putBoolean("show-weather", mCheckBoxShowWeather.isChecked());
         editor.putString("weather-city", mEditTextWeatherCity.getText().toString().trim());
         editor.putBoolean(WallpaperRepo.PREF_ENABLED, mCheckBoxWallpaperEnabled.isChecked());
         editor.putBoolean(WallpaperRepo.PREF_AUTO_SWITCH, mCheckBoxWallpaperAutoSwitch.isChecked());
-        editor.putInt(WallpaperRepo.PREF_AUTO_SWITCH_INTERVAL,
-                WallpaperRepo.AUTO_SWITCH_INTERVAL_VALUES[clampSelection(mSpinnerWallpaperInterval, WallpaperRepo.AUTO_SWITCH_INTERVAL_VALUES.length)]);
         editor.putBoolean("clock-overlay", mCheckBoxShowClockOverlay.isChecked());
         editor.putString("clock-position", CLOCK_POSITION_VALUES[clampSelection(mSpinnerClockPosition, CLOCK_POSITION_VALUES.length)]);
         editor.putString("clock-size", CLOCK_SIZE_VALUES[clampSelection(mSpinnerClockSize, CLOCK_SIZE_VALUES.length)]);
@@ -1317,17 +1615,266 @@ public class BaseSettingsActivity extends AppCompatActivity {
             uris.add(data.getData());
         }
         int ok = 0;
+        java.io.File lastImported = null;
         for(Uri uri : uris) {
             try {
                 String name = queryDisplayName(uri);
                 if(name == null || name.trim().isEmpty()) name = "wp_" + uri.hashCode() + ".jpg";
                 java.io.InputStream in = getContentResolver().openInputStream(uri);
-                if(in != null && mWallpaperRepo.importLocalFile(in, name)) ok++;
+                if(in == null) continue;
+                java.io.File f = mWallpaperRepo.importLocalFileReturningPath(in, name);
+                if(f != null) { ok++; lastImported = f; }
             } catch(Exception ignored) { }
         }
         mWallpaperRepo.load();
         mTextViewLocalFolder.setText(getString(R.string.wallpaper_local_folder, mWallpaperRepo.getLocalFolder().getAbsolutePath()));
         Toast.makeText(this, getString(R.string.wallpaper_added, ok), Toast.LENGTH_LONG).show();
+
+        // A single import lands in the editor — auto-detection has usually already picked the
+        // right mode, so this is a one-glance confirmation, not homework.
+        // A bulk import does NOT: opening a queue of 10 editors punishes the exact case (a
+        // technician loading a customer's 40 reels) that most needs to be fast. Those get the
+        // defaults applied silently and can be edited one by one from the list later.
+        if(ok == 1 && lastImported != null && mWallpaperRepo.isEditOnImport()) {
+            openFitEditor("file://" + lastImported.getAbsolutePath());
+        }
+    }
+
+    /**
+     * The three-way operating mode: Normal / FSE / Leopard.
+     *
+     * This replaces the old standalone FSE checkbox as the thing the technician touches. The
+     * checkbox itself stays in the tree but hidden, because save() and half a dozen other
+     * places still read it — the radio drives it, so the two can never disagree the way the
+     * activation-screen and settings FSE checkboxes historically did.
+     */
+    private void initModePicker() {
+        final RadioGroup group = findViewById(R.id.radioGroupMode);
+        if(group == null) return;
+
+        // The FSE switch is now a mirror, not a control.
+        View fseRow = findViewById(R.id.checkBoxFseSettings);
+        if(fseRow != null) fseRow.setVisibility(View.GONE);
+
+        final RadioButton leopard = findViewById(R.id.radioModeLeopard);
+        boolean supported = OperatingMode.isSupported(this);
+        if(!supported) {
+            // A runtime check with a real state, not a crash and not a silent no-op: some
+            // cheap ROMs ship without the live wallpaper picker at all.
+            leopard.setEnabled(false);
+            leopard.setAlpha(0.4f);
+        }
+
+        int mode = OperatingMode.get(mSharedPref);
+        if(mode == OperatingMode.LEOPARD && !supported) mode = OperatingMode.NORMAL;
+        group.check(radioFor(mode));
+        updateModeDescription(mode, supported);
+
+        group.setOnCheckedChangeListener((g, checkedId) -> {
+            int m = checkedId == R.id.radioModeLeopard ? OperatingMode.LEOPARD
+                    : checkedId == R.id.radioModeFse ? OperatingMode.FSE : OperatingMode.NORMAL;
+            applyMode(m);
+        });
+
+        View openPicker = findViewById(R.id.buttonOpenPicker);
+        if(openPicker != null) {
+            openPicker.setOnClickListener(v -> startActivity(new Intent(this, LeopardPickerActivity.class)));
+        }
+        CompoundButton closeAfter = findViewById(R.id.checkBoxLeopardCloseAfterSet);
+        if(closeAfter != null) {
+            closeAfter.setChecked(mSharedPref.getBoolean("leopard-close-after-set", false));
+            mAutoSaveExcluded.add(closeAfter);
+            closeAfter.setOnCheckedChangeListener((b, checked) ->
+                    mSharedPref.edit().putBoolean("leopard-close-after-set", checked).apply());
+        }
+    }
+
+    private static int radioFor(int mode) {
+        return mode == OperatingMode.LEOPARD ? R.id.radioModeLeopard
+                : mode == OperatingMode.FSE ? R.id.radioModeFse : R.id.radioModeNormal;
+    }
+
+    /**
+     * The one place a mode change happens. Both routes in — the radio group at the bottom of
+     * General, and the header chip — land here, so neither can drift from the other.
+     */
+    private void applyMode(int mode) {
+        OperatingMode.set(mSharedPref, mode);
+
+        // Keep the hidden mirror honest, so save() writes the same thing we just did.
+        if(mCheckBoxFse != null) mCheckBoxFse.setChecked(mode == OperatingMode.FSE);
+
+        // FSE is a car that boots straight into this screen — that is what the mode IS. Leaving
+        // start-on-boot off would mean picking FSE and getting the launcher, which reads as the
+        // mode not working. So the switch follows the mode in both directions: leaving FSE takes
+        // it back off, because the setting belongs to FSE rather than to the car.
+        boolean wantAutoStart = mode == OperatingMode.FSE;
+        if(mCheckBoxAutoStartOnBoot != null && mCheckBoxAutoStartOnBoot.isChecked() != wantAutoStart) {
+            // setChecked fires the listener, which persists it and (when turning on) asks for the
+            // overlay permission — exactly what a manual tap would have done.
+            mCheckBoxAutoStartOnBoot.setChecked(wantAutoStart);
+        }
+
+        updateModeDescription(mode, OperatingMode.isSupported(this));
+        applyLeopardVisibility();
+        showSection(firstVisibleSection());
+        refreshHeaderChips();
+        setResult(RESULT_OK);
+    }
+
+    /**
+     * The header chip is a control, not just a badge (it carries a caret to say so). Same three
+     * choices as the radio group, reachable without scrolling to the bottom of General.
+     */
+    private void showModeDialog() {
+        final boolean supported = OperatingMode.isSupported(this);
+        final int[] modes = { OperatingMode.NORMAL, OperatingMode.FSE, OperatingMode.LEOPARD };
+        CharSequence[] labels = {
+                getString(R.string.mode_normal),
+                getString(R.string.mode_fse),
+                supported ? getString(R.string.mode_leopard)
+                        : getString(R.string.mode_leopard) + " — " + getString(R.string.leopard_unsupported)
+        };
+        int current = OperatingMode.get(mSharedPref);
+        int checked = current == OperatingMode.LEOPARD ? 2 : current == OperatingMode.FSE ? 1 : 0;
+
+        new AlertDialog.Builder(this)
+                .setTitle(R.string.mode_title)
+                .setSingleChoiceItems(labels, checked, (d, which) -> {
+                    if(modes[which] == OperatingMode.LEOPARD && !supported) {
+                        // Some cheap ROMs ship no live wallpaper picker at all. Say so rather
+                        // than accepting a mode that cannot start.
+                        Toast.makeText(this, R.string.leopard_unsupported, Toast.LENGTH_LONG).show();
+                        return;
+                    }
+                    d.dismiss();
+                    // Drive the radio group, whose listener is what actually applies the mode —
+                    // setting it here as well would apply everything twice.
+                    RadioGroup group = findViewById(R.id.radioGroupMode);
+                    if(group != null) group.check(radioFor(modes[which]));
+                    else applyMode(modes[which]);
+                })
+                .setNegativeButton(R.string.update_cancel, null)
+                .show();
+    }
+
+    private void updateModeDescription(int mode, boolean leopardSupported) {
+        TextView desc = findViewById(R.id.textViewModeDesc);
+        if(desc == null) return;
+        int res = mode == OperatingMode.LEOPARD ? R.string.mode_leopard_desc
+                : mode == OperatingMode.FSE ? R.string.mode_fse_desc : R.string.mode_normal_desc;
+        String text = getString(res);
+        if(!leopardSupported) text += "\n" + getString(R.string.leopard_unsupported);
+        desc.setText(text);
+    }
+
+    /**
+     * "Image import settings" — the defaults the Fit Editor opens with.
+     *
+     * Wired by hand rather than through attachAutoSave: these live in WallpaperRepo's own keys,
+     * not in the big save()/load() blob, so the generic auto-save has nothing to write for them.
+     */
+    private void initFitDefaults() {
+        final Spinner mode = findViewById(R.id.spinnerFitDefaultMode);
+        final SeekBar blur = findViewById(R.id.seekBarFitDefaultBlur);
+        final TextView blurValue = findViewById(R.id.textViewFitDefaultBlurValue);
+        final View colorRow = findViewById(R.id.rowFitDefaultColor);
+        final View colorPreview = findViewById(R.id.viewFitDefaultColorPreview);
+        final CompoundButton editOnImport = findViewById(R.id.checkBoxFitEditOnImport);
+        if(mode == null) return;
+
+        // Spinner order must match FIT_MODE_ORDER below.
+        ArrayAdapter<String> adapter = new ArrayAdapter<>(this, android.R.layout.simple_spinner_item,
+                new String[]{
+                        getString(R.string.fit_mode_auto),
+                        getString(R.string.fit_mode_fill),
+                        getString(R.string.fit_mode_blur),
+                        getString(R.string.fit_mode_color)
+                });
+        adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+        mode.setAdapter(adapter);
+
+        FitSettings d = mWallpaperRepo.getFitDefaults();
+        mode.setSelection(indexOfMode(d.mode), false);
+        blur.setProgress(d.blur);
+        blurValue.setText(String.valueOf(d.blur));
+        colorPreview.setBackgroundColor(d.barColor);
+        editOnImport.setChecked(mWallpaperRepo.isEditOnImport());
+
+        mAutoSaveExcluded.add(mode);
+        mAutoSaveExcluded.add(blur);
+        mAutoSaveExcluded.add(editOnImport);
+
+        mode.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+            @Override public void onItemSelected(AdapterView<?> p, View v, int pos, long id) {
+                FitSettings s = mWallpaperRepo.getFitDefaults();
+                s.mode = FIT_MODE_ORDER[pos];
+                mWallpaperRepo.setFitDefaults(s);
+                syncFitDefaultRows();
+            }
+            @Override public void onNothingSelected(AdapterView<?> p) {}
+        });
+
+        blur.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            @Override public void onProgressChanged(SeekBar s, int value, boolean fromUser) {
+                blurValue.setText(String.valueOf(value));
+                if(!fromUser) return;
+                FitSettings f = mWallpaperRepo.getFitDefaults();
+                f.blur = value;
+                mWallpaperRepo.setFitDefaults(f);
+            }
+            @Override public void onStartTrackingTouch(SeekBar s) {}
+            @Override public void onStopTrackingTouch(SeekBar s) {}
+        });
+
+        colorRow.setOnClickListener(v -> showColorDialog(this, true, mWallpaperRepo.getFitDefaults().barColor, false,
+                (custom, r, g, b, all) -> {
+                    FitSettings f = mWallpaperRepo.getFitDefaults();
+                    f.barColor = Color.rgb(r, g, b);
+                    mWallpaperRepo.setFitDefaults(f);
+                    colorPreview.setBackgroundColor(f.barColor);
+                }));
+
+        editOnImport.setOnCheckedChangeListener((b, checked) -> mWallpaperRepo.setEditOnImport(checked));
+
+        syncFitDefaultRows();
+    }
+
+    /** Spinner position -> FitSettings mode. */
+    private static final int[] FIT_MODE_ORDER = {
+            FitSettings.MODE_AUTO, FitSettings.MODE_FILL, FitSettings.MODE_BLUR, FitSettings.MODE_COLOR
+    };
+
+    private static int indexOfMode(int mode) {
+        for(int i = 0; i < FIT_MODE_ORDER.length; i++) if(FIT_MODE_ORDER[i] == mode) return i;
+        return 0;
+    }
+
+    /** Hide the defaults that the chosen mode cannot use. */
+    private void syncFitDefaultRows() {
+        View blurRow = findViewById(R.id.rowFitDefaultBlur);
+        View colorRow = findViewById(R.id.rowFitDefaultColor);
+        if(blurRow == null || colorRow == null) return;
+        int mode = mWallpaperRepo.getFitDefaults().mode;
+        // Automatic resolves to blur for tall images, so both stay meaningful there. Only an
+        // explicit Fill has no bars at all and therefore nothing to fill them with.
+        boolean bars = mode != FitSettings.MODE_FILL;
+        blurRow.setVisibility(bars && mode != FitSettings.MODE_COLOR ? View.VISIBLE : View.GONE);
+        colorRow.setVisibility(bars && mode != FitSettings.MODE_BLUR ? View.VISIBLE : View.GONE);
+    }
+
+    /** Open the fit editor against the screen the wallpaper will actually be shown on. */
+    protected void openFitEditor(String url) {
+        int w, h;
+        if(mCheckBoxFse != null && mCheckBoxFse.isChecked()) {
+            // FSE pins the wallpaper window to 1920x720 regardless of the panel's real size.
+            w = 1920; h = 720;
+        } else {
+            android.util.DisplayMetrics dm = getResources().getDisplayMetrics();
+            w = dm.widthPixels; h = dm.heightPixels;
+            if(w < h) { int t = w; w = h; h = t; }   // the clock screen is always landscape
+        }
+        startActivityForResult(FitEditorActivity.intent(this, url, w, h), FIT_EDITOR_REQUEST);
     }
 
     private String queryDisplayName(Uri uri) {
@@ -1345,14 +1892,25 @@ public class BaseSettingsActivity extends AppCompatActivity {
     /** Show a QR code that the customer scans to upload an image over the local Wi-Fi. */
     public void onClickPairPhone(View v) {
         stopUploadServer();
+        // Assigned below; the upload listener can fire before the local would be in scope.
+        final AlertDialog[] holder = new AlertDialog[1];
         final String url;
         try {
             mUploadServer = UploadServer.startNew(this, mWallpaperRepo, new UploadServer.UploadListener() {
                 @Override
                 public void onUploaded(String savedPath) {
                     setResult(RESULT_OK); // so the clock reloads and shows the uploaded wallpaper
-                    if(mPairStatus != null) mPairStatus.setText(getString(R.string.pair_uploaded));
                     Toast.makeText(BaseSettingsActivity.this, getString(R.string.pair_uploaded), Toast.LENGTH_LONG).show();
+
+                    // The image has landed, so the QR has done its job: close it and go straight
+                    // to the editor. Dismissing also stops the server (see setOnDismissListener),
+                    // which is what we want — a second upload arriving while the first is being
+                    // edited would be two images and one editor.
+                    if(holder[0] != null && holder[0].isShowing()) holder[0].dismiss();
+
+                    if(savedPath != null && mWallpaperRepo.isEditOnImport()) {
+                        openFitEditor("file://" + savedPath);
+                    }
                 }
             });
             url = mUploadServer.getUrl();
@@ -1395,6 +1953,8 @@ public class BaseSettingsActivity extends AppCompatActivity {
         mPairStatus = new TextView(this);
         mPairStatus.setGravity(android.view.Gravity.CENTER);
         mPairStatus.setPadding(0, pad, 0, 0);
+        mPairStatus.setTextColor(ContextCompat.getColor(this, R.color.aurora_muted));
+        mPairStatus.setText(R.string.pair_waiting);
 
         ll.addView(hint);
         ll.addView(qr);
@@ -1412,6 +1972,7 @@ public class BaseSettingsActivity extends AppCompatActivity {
                     }
                 })
                 .create();
+        holder[0] = dlg;
         dlg.show();
     }
 
@@ -1433,9 +1994,9 @@ public class BaseSettingsActivity extends AppCompatActivity {
         intent.setType("image/*");
         intent.setAction(Intent.ACTION_GET_CONTENT);
         startActivityForResult(Intent.createChooser(intent, "Select Image"), requestId);
-        if(requestId != PICK_BACKGROUND_REQUEST) {
-            Toast.makeText(this, getString(R.string.own_images_note), Toast.LENGTH_LONG).show();
-        }
+        // The background image was the one caller this note did not apply to, and it is gone.
+        // Every remaining caller is a clock graphic, which the note is about.
+        Toast.makeText(this, getString(R.string.own_images_note), Toast.LENGTH_LONG).show();
     }
 
     public void onClickDreamSettings(View v) {
@@ -1488,10 +2049,6 @@ public class BaseSettingsActivity extends AppCompatActivity {
     public void onClickVideoScreensaver(View v) {
         openPlayStore(APPID_VSCREENSAVER);
     }
-    public void onClickGithub(View v) {
-        openBrowser(getString(R.string.project_website));
-    }
-
     public void onClickCheckUpdate(View v) {
         // manual check: also notify the user when already up to date / on error
         checkForUpdate(false);

@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Selected sits on the accent gradient, so it flips to near-black rather than staying light.
+     Must be listed before state_focused, or a focused+selected item would take the accent
+     colour and vanish into its own background. -->
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:color="#1a1204" android:state_selected="true" />
+    <item android:color="@color/colorAccent" android:state_focused="true" />
+    <item android:color="@color/aurora_muted" />
+</selector>

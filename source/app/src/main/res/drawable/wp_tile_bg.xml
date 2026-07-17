@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Big square action tile. The old buttons were plain text rows with an emoji standing in
+     for artwork, which read as weak next to everything else on this screen. -->
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:state_focused="true">
+        <shape android:shape="rectangle">
+            <solid android:color="#33ff9a3d" />
+            <stroke android:width="2dp" android:color="@color/aurora_text" />
+            <corners android:radius="16dp" />
+        </shape>
+    </item>
+    <item android:state_pressed="true">
+        <shape android:shape="rectangle">
+            <solid android:color="#26ff9a3d" />
+            <stroke android:width="2dp" android:color="@color/colorAccent" />
+            <corners android:radius="16dp" />
+        </shape>
+    </item>
+    <item>
+        <shape android:shape="rectangle">
+            <solid android:color="#0dffffff" />
+            <stroke android:width="1dp" android:color="@color/aurora_border" />
+            <corners android:radius="16dp" />
+        </shape>
+    </item>
+</selector>

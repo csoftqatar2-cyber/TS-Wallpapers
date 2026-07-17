@@ -96,6 +96,8 @@ public class UploadServer extends NanoHTTPD {
             if(Method.POST.equals(session.getMethod())) {
                 Map<String, String> files = new HashMap<>();
                 session.parseBody(files);
+                // NOTE: the POST contract is deliberately path-agnostic and unchanged —
+                // the page posts to "/" with the field name "image".
                 String tmpPath = files.get("image");
                 String originalName = "upload.jpg";
                 List<String> names = session.getParameters().get("image");
@@ -126,7 +128,24 @@ public class UploadServer extends NanoHTTPD {
                 return newFixedLengthResponse(Response.Status.BAD_REQUEST, "text/plain; charset=utf-8",
                         "لم يتم اختيار ملف");
             }
-            return newFixedLengthResponse(Response.Status.OK, "text/html; charset=utf-8", uploadPage());
+
+            // Route on the path. This used to return the whole upload page for *every* URI,
+            // so a phone asking for /favicon.ico got ~4.7 KB of Arabic HTML labelled
+            // "text/html" and tried to decode it as an icon on every single page load.
+            String uri = session.getUri();
+            if(uri == null) uri = "/";
+            int q = uri.indexOf('?');
+            if(q >= 0) uri = uri.substring(0, q);
+
+            if("/".equals(uri) || uri.isEmpty()) {
+                return newFixedLengthResponse(Response.Status.OK, "text/html; charset=utf-8", uploadPage());
+            }
+            if("/favicon.ico".equals(uri)) {
+                // 204 rather than an icon: nothing to ship, and it stops the browser re-asking.
+                return newFixedLengthResponse(Response.Status.NO_CONTENT, "image/x-icon", "");
+            }
+            return newFixedLengthResponse(Response.Status.NOT_FOUND, "text/plain; charset=utf-8",
+                    "الصفحة غير موجودة");
         } catch(Exception e) {
             // the phone shows this text, so say what actually went wrong instead of a
             // bare "upload failed"
@@ -163,66 +182,149 @@ public class UploadServer extends NanoHTTPD {
     }
 
     /**
+     * Shared "Warm Aurora" styling for both pages.
+     *
+     * Everything here is inline on purpose: the head unit's Wi-Fi is usually a LAN with no
+     * internet at all, so a single reference to a CDN font/CSS would block rendering until
+     * the phone's DNS/connect timeout expires. No external CSS/JS/font/image — ever.
+     */
+    private static final String PAGE_CSS =
+            "*{box-sizing:border-box}"
+            + "body{margin:0;padding:20px 16px 40px;background:#14100b;color:#f5eee4;"
+            + "font-family:system-ui,-apple-system,'Segoe UI',Roboto,'Noto Naskh Arabic',sans-serif;"
+            + "font-size:17px;line-height:1.75;-webkit-text-size-adjust:100%}"
+            + ".wrap{max-width:520px;margin:0 auto}"
+            + ".brand{color:#ffd27a;font-size:23px;font-weight:700;text-align:center;margin:6px 0 2px;letter-spacing:.5px}"
+            + ".sub{color:#b0a48f;font-size:16px;text-align:center;margin:0 0 20px}"
+            + ".card{background:#2e2417;border:1px solid rgba(255,214,160,0.14);border-radius:16px;padding:20px;margin-bottom:16px}"
+            // The privacy notice is the first thing under the title and carries the accent
+            // bar — this is a promise to the customer, not fine print.
+            + ".privacy{background:#2e2417;border:1px solid rgba(255,214,160,0.14);"
+            + "border-right:5px solid #ff9a3d;border-radius:14px;padding:16px 18px;margin-bottom:18px}"
+            + ".privacy b{display:block;color:#ffd27a;font-size:18px;margin-bottom:6px}"
+            + ".privacy p{margin:0;font-size:16px;color:#f5eee4}"
+            + ".pick{display:block;width:100%;min-height:60px;padding:18px;border-radius:14px;"
+            + "background:#14100b;border:1.5px dashed rgba(255,214,160,0.35);color:#b0a48f;"
+            + "font-size:17px;text-align:center;cursor:pointer}"
+            + ".pick.has{border-style:solid;border-color:#ff9a3d;color:#f5eee4}"
+            + "#file{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}"
+            + "#btn{display:block;width:100%;min-height:60px;margin-top:14px;border:0;border-radius:14px;"
+            + "background:#ff9a3d;color:#14100b;font-size:19px;font-weight:700;cursor:pointer;"
+            + "font-family:inherit}"
+            + "#btn:disabled{background:#5a4a33;color:#b0a48f;cursor:default}"
+            + "#bar{display:none;height:10px;margin-top:16px;border-radius:99px;background:#14100b;"
+            + "border:1px solid rgba(255,214,160,0.14);overflow:hidden}"
+            + "#fill{height:100%;width:0;background:#ffd27a;transition:width .2s}"
+            + "#msg{margin:14px 0 0;font-size:16px;min-height:24px;text-align:center;color:#b0a48f}"
+            + ".err{color:#ff8f6b}.ok{color:#ffd27a}"
+            + "a{color:#ffd27a}";
+
+    /**
      * The upload page. It posts with XMLHttpRequest instead of a plain form submit so the
      * customer sees the progress and, if something does go wrong, the reason the device
      * reported — a plain form just showed a blank browser error.
+     *
+     * The Arabic below stays hardcoded on purpose: this page is served to the *customer's*
+     * phone, and getString() would answer in the head unit's locale, not theirs.
      */
     private String uploadPage() {
-        return "<!doctype html><html dir=\"rtl\" lang=\"ar\"><head>"
-                + "<meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">"
-                + "<title>TS WALLPAPERS</title></head>"
-                + "<body style=\"font-family:sans-serif;background:#15171e;color:#fff;text-align:center;padding:24px\">"
-                + "<h2 style=\"color:#E6BE6A\">TS WALLPAPERS</h2>"
-                + "<p>اختر صورة أو فيديو من هاتفك ليظهر على الشاشة كخلفية</p>"
-                + "<form id=\"f\" method=\"post\" action=\"/\" enctype=\"multipart/form-data\">"
-                + "<input id=\"file\" type=\"file\" name=\"image\" accept=\"image/*,video/*\" required "
-                + "style=\"margin:16px 0;color:#fff\"><br>"
-                + "<button id=\"btn\" type=\"submit\" style=\"background:#E6BE6A;color:#15171e;border:0;"
-                + "padding:14px 28px;border-radius:10px;font-size:18px;font-weight:bold\">رفع الصورة</button>"
+        return "<!doctype html><html dir='rtl' lang='ar'><head>"
+                + "<meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'>"
+                + "<meta name='theme-color' content='#14100b'>"
+                + "<title>ذبذبة خلفيات</title>"
+                + "<style>" + PAGE_CSS + "</style></head>"
+                + "<body><div class='wrap'>"
+                + "<div class='brand'>ذبذبة خلفيات</div>"
+                + "<p class='sub'>THABTHABA STORE</p>"
+
+                + "<div class='privacy'>"
+                + "<b>صورك تبقى في سيارتك وحدها</b>"
+                + "<p>الصور التي ترفعها من هنا تُحفَظ داخل شاشة هذه السيارة فقط، ولا تُرسَل إلى"
+                + " منصتنا السحابية ولا إلى أي جهاز آخر، ولا يمكن لأحد غيرك الاطّلاع عليها.</p>"
+                + "</div>"
+
+                + "<div class='card'>"
+                + "<p style='margin:0 0 14px'>اختر صورة أو فيديو من هاتفك ليظهر على الشاشة كخلفية</p>"
+                + "<form id='f' method='post' action='/' enctype='multipart/form-data'>"
+                + "<input id='file' type='file' name='image' accept='image/*,video/*' required>"
+                + "<label id='pick' class='pick' for='file'>اضغط هنا لاختيار صورة أو فيديو</label>"
+                + "<button id='btn' type='submit'>رفع الصورة</button>"
                 + "</form>"
-                + "<p id=\"msg\" style=\"margin-top:18px\"></p>"
-                + "<script>"
-                + "var f=document.getElementById('f'),b=document.getElementById('btn'),m=document.getElementById('msg');"
+                + "<div id='bar'><div id='fill'></div></div>"
+                + "<p id='msg'></p>"
+                + "</div>"
+
+                + "</div><script>"
+                + "var f=document.getElementById('f'),b=document.getElementById('btn'),"
+                + "m=document.getElementById('msg'),fi=document.getElementById('file'),"
+                + "pick=document.getElementById('pick'),bar=document.getElementById('bar'),"
+                + "fill=document.getElementById('fill');"
+                // Immediate feedback on choosing a file, so the page never looks inert.
+                + "fi.onchange=function(){if(fi.files.length){pick.className='pick has';"
+                + "pick.textContent=fi.files[0].name;m.className='';m.textContent='';}};"
+                + "function reset(t){b.disabled=false;b.textContent='رفع الصورة';bar.style.display='none';"
+                + "fill.style.width='0';m.className='err';m.textContent=t;}"
                 + "f.onsubmit=function(e){e.preventDefault();"
-                + "var fi=document.getElementById('file');"
-                + "if(!fi.files.length){m.innerHTML='اختر ملف أولاً';return;}"
+                + "if(!fi.files.length){m.className='err';m.textContent='اختر ملف أولاً';return;}"
                 + "var fd=new FormData();fd.append('image',fi.files[0]);"
                 + "var x=new XMLHttpRequest();x.open('POST','/',true);x.timeout=180000;"
-                + "b.disabled=true;b.textContent='جارٍ الرفع…';"
+                // in-progress state: button locks, bar appears, percentage counts up
+                + "b.disabled=true;b.textContent='جارٍ الرفع…';bar.style.display='block';"
+                + "m.className='';m.textContent='جارٍ تجهيز الملف…';"
                 + "x.upload.onprogress=function(ev){if(ev.lengthComputable){"
-                + "m.innerHTML='جارٍ الرفع… '+Math.round(ev.loaded*100/ev.total)+'%';}};"
-                + "x.onload=function(){b.disabled=false;b.textContent='رفع الصورة';"
+                + "var p=Math.round(ev.loaded*100/ev.total);fill.style.width=p+'%';"
+                + "m.textContent='جارٍ الرفع… '+p+'%';}};"
+                + "x.upload.onload=function(){fill.style.width='100%';"
+                + "m.textContent='جارٍ الحفظ على الشاشة…';};"
+                + "x.onload=function(){"
                 + "if(x.status===200){document.open();document.write(x.responseText);document.close();}"
-                + "else{m.innerHTML='<span style=\\\"color:#ff8080\\\">'+(x.responseText||('خطأ '+x.status))+'</span>';}};"
-                + "x.onerror=function(){b.disabled=false;b.textContent='رفع الصورة';"
-                + "m.innerHTML='<span style=\\\"color:#ff8080\\\">انقطع الاتصال بالجهاز — تأكد إن الموبايل والشاشة على نفس شبكة الواي‑فاي وحاول تاني</span>';};"
-                + "x.ontimeout=function(){b.disabled=false;b.textContent='رفع الصورة';"
-                + "m.innerHTML='<span style=\\\"color:#ff8080\\\">الرفع أخذ وقتاً طويلاً — جرّب ملفاً أصغر أو قرّب من الراوتر</span>';};"
+                + "else{reset(x.responseText||('خطأ '+x.status));}};"
+                + "x.onerror=function(){reset('انقطع الاتصال بالجهاز — تأكد إن الموبايل والشاشة على نفس شبكة الواي‑فاي وحاول تاني');};"
+                + "x.ontimeout=function(){reset('الرفع أخذ وقتاً طويلاً — جرّب ملفاً أصغر أو قرّب من الراوتر');};"
                 + "x.send(fd);};"
-                + "</" + "script>"
-                + "</body></html>";
+                + "</" + "script></body></html>";
     }
 
     private String successPage() {
-        return "<!doctype html><html dir=\"rtl\" lang=\"ar\"><head><meta charset=\"utf-8\">"
-                + "<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"></head>"
-                + "<body style=\"font-family:sans-serif;background:#15171e;color:#fff;text-align:center;padding:40px\">"
-                + "<h2 style=\"color:#E6BE6A\">تم الرفع بنجاح ✓</h2>"
-                + "<p>الصورة ظهرت على الشاشة كخلفية.</p>"
-                + "<a href=\"/\" style=\"color:#E6BE6A\">رفع صورة أخرى</a>"
-                + "</body></html>";
+        return "<!doctype html><html dir='rtl' lang='ar'><head><meta charset='utf-8'>"
+                + "<meta name='viewport' content='width=device-width,initial-scale=1'>"
+                + "<meta name='theme-color' content='#14100b'>"
+                + "<title>تم الرفع</title>"
+                + "<style>" + PAGE_CSS + "</style></head>"
+                + "<body><div class='wrap'>"
+                + "<div class='brand'>ذبذبة خلفيات</div>"
+                + "<p class='sub'>THABTHABA STORE</p>"
+                + "<div class='card' style='text-align:center'>"
+                + "<div style='font-size:44px;line-height:1;color:#ffd27a'>✓</div>"
+                + "<h2 style='color:#ffd27a;font-size:21px;margin:10px 0 6px'>تم الرفع بنجاح</h2>"
+                + "<p style='margin:0;color:#b0a48f'>الصورة ظهرت على الشاشة كخلفية.</p>"
+                + "</div>"
+                + "<div class='privacy'>"
+                + "<b>محفوظة في هذه السيارة فقط</b>"
+                + "<p>لم تُرسَل صورتك إلى منصتنا السحابية — هي مخزّنة داخل شاشة هذه السيارة وحدها.</p>"
+                + "</div>"
+                + "<p style='text-align:center'><a href='/'>رفع صورة أخرى</a></p>"
+                + "</div></body></html>";
     }
 
     /** The device's local Wi-Fi IPv4 address, or null. Prefers the actual Wi-Fi interface. */
     public static String getLocalIpAddress(Context ctx) {
-        // 1) Ask the Wi-Fi manager directly — most reliable for the real Wi-Fi IP
+        // 1) Ask the Wi-Fi manager directly — most reliable for the real Wi-Fi IP.
+        //    But only believe it if the address is still bound to a live interface:
+        //    getConnectionInfo() reports the *station* lease, which on a head unit that is
+        //    now running its own hotspot (or that roamed) can be a stale address from
+        //    another network. Putting that in the QR points the customer's phone at an
+        //    IP it cannot route to, and the browser then sits on a blank page until the
+        //    TCP connect times out — which looks exactly like "white screen, very slow".
         try {
             WifiManager wm = (WifiManager) ctx.getApplicationContext().getSystemService(Context.WIFI_SERVICE);
             if(wm != null && wm.getConnectionInfo() != null) {
                 int ip = wm.getConnectionInfo().getIpAddress();
                 if(ip != 0) {
-                    return String.format(Locale.US, "%d.%d.%d.%d",
+                    String addr = String.format(Locale.US, "%d.%d.%d.%d",
                             (ip & 0xff), (ip >> 8 & 0xff), (ip >> 16 & 0xff), (ip >> 24 & 0xff));
+                    if(isBoundToLiveInterface(addr)) return addr;
+                    Log.w(TAG, "WifiManager reported " + addr + " but no live interface has it — ignoring");
                 }
             }
         } catch(Exception ignored) { }
@@ -230,6 +332,23 @@ public class UploadServer extends NanoHTTPD {
         String wlan = scanInterfaces(true);
         if(wlan != null) return wlan;
         return scanInterfaces(false);
+    }
+
+    /** True if some up, non-loopback interface currently holds this IPv4 address. */
+    private static boolean isBoundToLiveInterface(String addr) {
+        try {
+            Enumeration<NetworkInterface> ifaces = NetworkInterface.getNetworkInterfaces();
+            while(ifaces.hasMoreElements()) {
+                NetworkInterface ni = ifaces.nextElement();
+                if(!ni.isUp() || ni.isLoopback()) continue;
+                Enumeration<InetAddress> addrs = ni.getInetAddresses();
+                while(addrs.hasMoreElements()) {
+                    InetAddress a = addrs.nextElement();
+                    if(a instanceof Inet4Address && addr.equals(a.getHostAddress())) return true;
+                }
+            }
+        } catch(Exception ignored) { }
+        return false;
     }
 
     private static String scanInterfaces(boolean wlanOnly) {

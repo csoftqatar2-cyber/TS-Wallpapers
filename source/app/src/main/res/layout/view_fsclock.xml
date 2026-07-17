@@ -234,102 +234,197 @@
         android:id="@+id/layoutActivation"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:background="#E6000000"
-        android:gravity="center_horizontal|top"
+        android:background="#f214100b"
+        android:gravity="center"
         android:orientation="vertical"
-        android:padding="32dp"
-        android:paddingTop="72dp"
+        android:padding="24dp"
         android:visibility="gone"
         tools:visibility="visible">
 
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="تفعيل البرنامج"
-            android:textColor="#00FFCC"
-            android:textSize="32sp"
-            android:textStyle="bold"
-            android:gravity="center" />
-
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="12dp"
-            android:text="يرجى إدخال الرقم التسلسلي لتفعيل البرنامج:"
-            android:textColor="#FFFFFF"
-            android:textSize="18sp"
-            android:gravity="center" />
-
-        <EditText
-            android:id="@+id/editTextActivationSerial"
-            android:layout_width="260dp"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
-            android:background="#22FFFFFF"
-            android:textColor="#FFFFFF"
-            android:textSize="20sp"
-            android:gravity="center"
-            android:padding="12dp"
-            android:inputType="numberPassword"
-            android:hint="******"
-            android:textColorHint="#66FFFFFF" />
-
-        <CheckBox
-            android:id="@+id/checkBoxFse"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:checked="false"
-            android:text="FSE"
-            android:textColor="#FFFFFF"
-            android:textSize="16sp"
-            android:buttonTint="#00FFCC" />
-
-        <Button
-            android:id="@+id/buttonActivate"
-            android:layout_width="260dp"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="12dp"
-            android:background="#00FFCC"
-            android:textColor="#000000"
-            android:text="تفعيل الآن"
-            android:textSize="18sp"
-            android:textStyle="bold" />
-
-        <TextView
-            android:id="@+id/textViewActivationStatus"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:textColor="#FF4444"
-            android:textSize="14sp"
-            android:gravity="center"
-            android:visibility="gone" />
-
+        <!-- One centred card, split into two columns. Head-unit screens are wide and short
+             (~2.67:1), so the old single 260dp column ran off the bottom: everything the user
+             types is on the left, everything they choose is on the right, and neither column
+             has to be tall. -->
         <LinearLayout
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginTop="20dp"
-            android:background="#11FFFFFF"
-            android:orientation="horizontal"
-            android:padding="8dp"
-            android:gravity="center">
+            android:background="@drawable/activation_card_bg"
+            android:orientation="vertical"
+            android:padding="24dp">
 
-            <TextView
+            <LinearLayout
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="معرف الجهاز: "
-                android:textColor="#88FFFFFF"
-                android:textSize="12sp" />
+                android:baselineAligned="false"
+                android:orientation="horizontal">
 
-            <TextView
-                android:id="@+id/textViewActivationDeviceId"
+                <!-- Left: identify yourself and act. -->
+                <LinearLayout
+                    android:layout_width="300dp"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="@string/activation_overlay_title"
+                        android:textColor="@color/gold"
+                        android:textSize="28sp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="6dp"
+                        android:text="@string/activation_overlay_subtitle"
+                        android:textColor="@color/aurora_muted"
+                        android:textSize="15sp" />
+
+                    <EditText
+                        android:id="@+id/editTextActivationSerial"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="16dp"
+                        android:background="@drawable/activation_input_bg"
+                        android:textColor="@color/aurora_text"
+                        android:textSize="20sp"
+                        android:gravity="center"
+                        android:padding="12dp"
+                        android:inputType="numberPassword"
+                        android:hint="******"
+                        android:textColorHint="@color/aurora_muted" />
+
+                    <Button
+                        android:id="@+id/buttonActivate"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="12dp"
+                        android:background="@drawable/activation_primary_btn"
+                        android:textColor="#1a1204"
+                        android:text="@string/activation_button"
+                        android:textSize="18sp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:id="@+id/textViewActivationStatus"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="8dp"
+                        android:textColor="@color/aurora_danger"
+                        android:textSize="14sp"
+                        android:gravity="center"
+                        android:visibility="gone" />
+                </LinearLayout>
+
+                <View
+                    android:layout_width="1dp"
+                    android:layout_height="match_parent"
+                    android:layout_marginStart="24dp"
+                    android:layout_marginEnd="24dp"
+                    android:background="@color/aurora_border" />
+
+                <!-- Right: operating mode. Was a lone "FSE" checkbox with nothing explaining
+                     what FSE is; Leopard could not simply be glued next to it, because the two
+                     are exclusive and a second checkbox would let both be ticked with no
+                     answer for what that means. -->
+                <LinearLayout
+                    android:layout_width="280dp"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="@string/mode_title"
+                        android:textColor="@color/gold"
+                        android:textSize="13sp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="2dp"
+                        android:text="@string/mode_exclusive_note"
+                        android:textColor="@color/aurora_muted"
+                        android:textSize="11sp" />
+
+                    <RadioGroup
+                        android:id="@+id/radioGroupActivationMode"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="6dp"
+                        android:orientation="vertical">
+
+                        <RadioButton
+                            android:id="@+id/radioActivationNormal"
+                            style="@style/ActivationModeRadio"
+                            android:checked="true"
+                            android:text="@string/mode_normal" />
+
+                        <RadioButton
+                            android:id="@+id/radioActivationFse"
+                            style="@style/ActivationModeRadio"
+                            android:text="@string/mode_fse" />
+
+                        <RadioButton
+                            android:id="@+id/radioActivationLeopard"
+                            style="@style/ActivationModeRadio"
+                            android:text="@string/mode_leopard" />
+
+                    </RadioGroup>
+
+                    <TextView
+                        android:id="@+id/textViewActivationModeDesc"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="4dp"
+                        android:textColor="@color/aurora_muted"
+                        android:textSize="11sp" />
+
+                    <!-- The old checkbox stays, hidden: FsClockView and the settings screen
+                         both still read it, and the radio above drives it. Removing it would
+                         mean touching every read site in one go for no behavioural gain. -->
+                    <CheckBox
+                        android:id="@+id/checkBoxFse"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:checked="false"
+                        android:visibility="gone"
+                        android:text="FSE" />
+                </LinearLayout>
+            </LinearLayout>
+
+            <!-- Device ID: the one thing support asks for over the phone, so it stays on the
+                 card, but quiet — it is read out, never acted on. -->
+            <LinearLayout
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="UNKNOWN"
-                android:textColor="#88FFFFFF"
-                android:textSize="12sp"
-                android:textStyle="bold" />
+                android:layout_gravity="center_horizontal"
+                android:layout_marginTop="20dp"
+                android:background="@drawable/chip_neutral_bg"
+                android:orientation="horizontal"
+                android:paddingStart="12dp"
+                android:paddingEnd="12dp"
+                android:paddingTop="6dp"
+                android:paddingBottom="6dp"
+                android:gravity="center">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/activation_device_id_label"
+                    android:textColor="@color/aurora_muted"
+                    android:textSize="12sp" />
+
+                <TextView
+                    android:id="@+id/textViewActivationDeviceId"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="UNKNOWN"
+                    android:textColor="@color/aurora_text"
+                    android:textSize="12sp"
+                    android:textStyle="bold" />
+            </LinearLayout>
         </LinearLayout>
     </LinearLayout>
 

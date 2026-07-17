@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Header status chip: device activated. Green is used nowhere else, so it reads as "good"
+     without needing to be read. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+    <solid android:color="#2434d399" />
+    <corners android:radius="12dp" />
+</shape>

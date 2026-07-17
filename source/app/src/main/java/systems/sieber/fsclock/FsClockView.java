@@ -158,6 +158,7 @@ public class FsClockView extends FrameLayout {
         postDelayed(mPeriodicSyncRunnable, PERIODIC_SYNC_INTERVAL_MS);
     }
     View mLayoutActivation;
+    android.widget.RadioGroup mRadioGroupActivationMode;
     TextView mTextViewActivationDeviceId;
     EditText mEditTextActivationSerial;
     Button mButtonActivate;
@@ -229,6 +230,8 @@ public class FsClockView extends FrameLayout {
             mWallpaper.setRepo(mWallpaperRepo);
         }
         mLayoutActivation = findViewById(R.id.layoutActivation);
+        mRadioGroupActivationMode = findViewById(R.id.radioGroupActivationMode);
+        initActivationModePicker();
         mTextViewActivationDeviceId = findViewById(R.id.textViewActivationDeviceId);
         mEditTextActivationSerial = findViewById(R.id.editTextActivationSerial);
         mButtonActivate = findViewById(R.id.buttonActivate);
@@ -241,17 +244,17 @@ public class FsClockView extends FrameLayout {
                 public void onClick(View v) {
                     final String serial = mEditTextActivationSerial.getText().toString().trim();
                     if (serial.isEmpty()) {
-                        mTextViewActivationStatus.setText("يرجى إدخال الرقم التسلسلي");
+                        mTextViewActivationStatus.setText(R.string.activation_error_empty_serial);
                         mTextViewActivationStatus.setVisibility(View.VISIBLE);
                         return;
                     }
                     if (!serial.startsWith("7078")) {
-                        mTextViewActivationStatus.setText("الرقم التسلسلي غير صحيح");
+                        mTextViewActivationStatus.setText(R.string.activation_error_invalid_serial);
                         mTextViewActivationStatus.setVisibility(View.VISIBLE);
                         return;
                     }
-                    
-                    mTextViewActivationStatus.setText("جاري التحقق من التفعيل...");
+
+                    mTextViewActivationStatus.setText(R.string.activation_checking);
                     mTextViewActivationStatus.setTextColor(Color.YELLOW);
                     mTextViewActivationStatus.setVisibility(View.VISIBLE);
                     mButtonActivate.setEnabled(false);
@@ -264,7 +267,7 @@ public class FsClockView extends FrameLayout {
                                 public void run() {
                                     mButtonActivate.setEnabled(true);
                                     if (success) {
-                                        mTextViewActivationStatus.setText("تم التفعيل بنجاح!");
+                                        mTextViewActivationStatus.setText(R.string.activation_success);
                                         mTextViewActivationStatus.setTextColor(Color.GREEN);
 
                                         // activation done -> now hide the on-screen keyboard
@@ -278,13 +281,25 @@ public class FsClockView extends FrameLayout {
                                         // shop owner never has to flip a toggle after activating.
                                         // FSE checked at activation time = run the app in a fixed
                                         // 1920x720 window from now on (special head-unit panels).
-                                        boolean fse = mCheckBoxFse != null && mCheckBoxFse.isChecked();
+                                        // The mode chosen on this screen decides what the app
+                                        // becomes. OperatingMode writes both flags together so
+                                        // FSE and Leopard can never end up on at once.
+                                        int mode = selectedActivationMode();
                                         mSharedPref.edit()
                                                 .putBoolean(WallpaperRepo.PREF_ENABLED, true)
-                                                .putBoolean(FullscreenActivity.PREF_FSE_SCREEN, fse)
                                                 .apply();
+                                        OperatingMode.set(mSharedPref, mode);
+                                        if(mCheckBoxFse != null) mCheckBoxFse.setChecked(mode == OperatingMode.FSE);
                                         if(mActivity instanceof FullscreenActivity) {
                                             ((FullscreenActivity) mActivity).applyFseScreenSize();
+                                        }
+                                        if(mode == OperatingMode.LEOPARD) {
+                                            // Nothing left for this screen to draw — hand over
+                                            // to the picker rather than sit on a dead clock.
+                                            getContext().startActivity(
+                                                    new android.content.Intent(getContext(), LeopardPickerActivity.class));
+                                            if(mActivity != null) mActivity.finish();
+                                            return;
                                         }
 
                                         postDelayed(new Runnable() {
@@ -300,13 +315,14 @@ public class FsClockView extends FrameLayout {
                                     } else {
                                         mTextViewActivationStatus.setTextColor(Color.RED);
                                         if ("serial_already_used".equals(result)) {
-                                            mTextViewActivationStatus.setText("هذا الرقم التسلسلي مستخدم بالفعل على جهاز آخر");
+                                            mTextViewActivationStatus.setText(R.string.activation_error_already_used);
                                         } else if ("invalid_format".equals(result)) {
-                                            mTextViewActivationStatus.setText("الرقم التسلسلي غير صحيح");
+                                            mTextViewActivationStatus.setText(R.string.activation_error_invalid_serial);
                                         } else if ("blocked".equals(result)) {
-                                            mTextViewActivationStatus.setText("تم حظر هذا الجهاز. يرجى التواصل مع الدعم.");
+                                            mTextViewActivationStatus.setText(R.string.activation_error_blocked);
                                         } else {
-                                            mTextViewActivationStatus.setText("فشل التفعيل: " + (error != null ? error : "خطأ غير معروف"));
+                                            mTextViewActivationStatus.setText(getContext().getString(R.string.activation_error_failed,
+                                                    error != null ? error : getContext().getString(R.string.activation_error_unknown)));
                                         }
                                     }
                                 }
@@ -638,14 +654,11 @@ public class FsClockView extends FrameLayout {
     }
 
     void loadSettings() {
+        // Always on, and no longer a setting: this is a wallpaper-and-clock screen in a car, so
+        // a version of it that lets the screen sleep is a version nobody wants. The switch only
+        // existed to offer the answer that breaks the product.
         if(mActivity != null) {
-            if(mSharedPref.getBoolean("keep-screen-on", true)) {
-                mActivity.getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
-                Log.i("SCREEN", "Keep ON");
-            } else {
-                mActivity.getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
-                Log.i("SCREEN", "Keep OFF");
-            }
+            mActivity.getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         }
 
         refreshNightMode();
@@ -986,6 +999,49 @@ public class FsClockView extends FrameLayout {
     }
 
     /** Fetch outside weather using the real GPS location when available, else the typed city / IP. */
+    /**
+     * The operating-mode choice on the activation overlay.
+     *
+     * Leopard is disabled outright on head units whose ROM has no live wallpaper support —
+     * this has to be a real, visible state rather than a crash or a silent no-op, because the
+     * technician has no other way to find out.
+     */
+    private void initActivationModePicker() {
+        if(mRadioGroupActivationMode == null) return;
+
+        final android.widget.RadioButton leopard = findViewById(R.id.radioActivationLeopard);
+        final android.widget.TextView desc = findViewById(R.id.textViewActivationModeDesc);
+        final boolean supported = OperatingMode.isSupported(getContext());
+        if(leopard != null && !supported) {
+            leopard.setEnabled(false);
+            leopard.setAlpha(0.4f);
+        }
+
+        updateActivationModeDesc(desc, OperatingMode.NORMAL, supported);
+        mRadioGroupActivationMode.setOnCheckedChangeListener((g, id) ->
+                updateActivationModeDesc(desc, selectedActivationMode(), supported));
+    }
+
+    private void updateActivationModeDesc(android.widget.TextView desc, int mode, boolean supported) {
+        if(desc == null) return;
+        int res = mode == OperatingMode.LEOPARD ? R.string.mode_leopard_desc
+                : mode == OperatingMode.FSE ? R.string.mode_fse_desc : R.string.mode_normal_desc;
+        String text = getContext().getString(res);
+        if(!supported) text += "\n" + getContext().getString(R.string.mode_leopard_unsupported_note);
+        desc.setText(text);
+    }
+
+    private int selectedActivationMode() {
+        if(mRadioGroupActivationMode == null) {
+            // Older overlay without the picker: fall back to the hidden FSE mirror.
+            return mCheckBoxFse != null && mCheckBoxFse.isChecked() ? OperatingMode.FSE : OperatingMode.NORMAL;
+        }
+        int id = mRadioGroupActivationMode.getCheckedRadioButtonId();
+        if(id == R.id.radioActivationLeopard) return OperatingMode.LEOPARD;
+        if(id == R.id.radioActivationFse) return OperatingMode.FSE;
+        return OperatingMode.NORMAL;
+    }
+
     private void refreshWeather() {
         if(!mSharedPref.getBoolean("show-weather", true)) return;
         Double lat = null, lon = null;
@@ -993,7 +1049,7 @@ public class FsClockView extends FrameLayout {
             lat = mLastLocation.getLatitude();
             lon = mLastLocation.getLongitude();
         }
-        Weather.fetch(mSharedPref.getBoolean("weather-celsius", true), lat, lon,
+        Weather.fetch(getContext(), mSharedPref.getBoolean("weather-celsius", true), lat, lon,
                 mSharedPref.getString("weather-city", "Doha"), new Weather.WeatherCallback() {
             @Override
             public void onResult(String text) {
@@ -1108,7 +1164,7 @@ public class FsClockView extends FrameLayout {
         if(mWallpaperRepo == null || !mWallpaperRepo.isEnabled()) return;
         mAdjustMode = true;
         setClockHidden(true);
-        Toast.makeText(getContext(), "وضع تحريك الصورة: اسحب لضبط مكان الصورة، ثم اضغط للحفظ", Toast.LENGTH_LONG).show();
+        Toast.makeText(getContext(), R.string.wallpaper_adjust_mode_hint, Toast.LENGTH_LONG).show();
     }
 
     /** Save the current wallpaper position and leave adjust mode. */
@@ -1117,7 +1173,7 @@ public class FsClockView extends FrameLayout {
         mAdjustMode = false;
         if(mWallpaper != null) mWallpaper.saveFrontFocal();
         setClockHidden(false);
-        Toast.makeText(getContext(), "تم حفظ مكان الصورة", Toast.LENGTH_SHORT).show();
+        Toast.makeText(getContext(), R.string.wallpaper_position_saved, Toast.LENGTH_SHORT).show();
     }
 
     /** Move the current wallpaper by a finger delta while in adjust mode. */

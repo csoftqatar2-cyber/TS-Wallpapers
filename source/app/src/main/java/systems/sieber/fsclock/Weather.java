@@ -1,5 +1,6 @@
 package systems.sieber.fsclock;
 
+import android.content.Context;
 import android.os.Handler;
 import android.os.Looper;
 
@@ -26,12 +27,16 @@ public class Weather {
         void onResult(String text); // null on failure
     }
 
-    public static void fetch(final boolean celsius, final String city, final WeatherCallback cb) {
-        fetch(celsius, null, null, city, cb);
+    public static void fetch(final Context context, final boolean celsius, final String city, final WeatherCallback cb) {
+        fetch(context, celsius, null, null, city, cb);
     }
 
-    public static void fetch(final boolean celsius, final Double gpsLat, final Double gpsLon,
+    public static void fetch(final Context context, final boolean celsius, final Double gpsLat, final Double gpsLon,
                              final String city, final WeatherCallback cb) {
+        // Application context so the worker thread cannot hold an Activity, but wrapped, because
+        // the raw application context resolves strings in the *system* locale and would ignore
+        // the in-app language switch. wrap() re-reads the pref, so this is right at fetch time.
+        final Context appContext = LocaleHelper.wrap(context.getApplicationContext());
         new Thread(new Runnable() {
             @Override
             public void run() {
@@ -69,7 +74,7 @@ public class Weather {
                     double temp = current.getDouble("temperature_2m");
                     int code = current.optInt("weather_code", 0);
                     boolean day = current.optInt("is_day", 1) == 1;
-                    result = emoji(code, day) + " " + describe(code, day) + " " + Math.round(temp) + "°";
+                    result = emoji(code, day) + " " + describe(appContext, code, day) + " " + Math.round(temp) + "°";
                 } catch(Exception ignored) { }
 
                 final String fr = result;
@@ -83,15 +88,15 @@ public class Weather {
         }).start();
     }
 
-    private static String describe(int code, boolean day) {
-        if(code == 0) return day ? "مشمس" : "صافٍ";
-        if(code >= 1 && code <= 3) return "غيوم جزئية";
-        if(code == 45 || code == 48) return "ضباب";
-        if(code >= 51 && code <= 67) return "ممطر";
-        if(code >= 71 && code <= 77) return "ثلوج";
-        if(code >= 80 && code <= 82) return "زخات مطر";
-        if(code >= 95) return "عاصفة";
-        return "غائم";
+    private static String describe(Context context, int code, boolean day) {
+        if(code == 0) return context.getString(day ? R.string.weather_sunny : R.string.weather_clear_night);
+        if(code >= 1 && code <= 3) return context.getString(R.string.weather_partly_cloudy);
+        if(code == 45 || code == 48) return context.getString(R.string.weather_fog);
+        if(code >= 51 && code <= 67) return context.getString(R.string.weather_rainy);
+        if(code >= 71 && code <= 77) return context.getString(R.string.weather_snowy);
+        if(code >= 80 && code <= 82) return context.getString(R.string.weather_showers);
+        if(code >= 95) return context.getString(R.string.weather_storm);
+        return context.getString(R.string.weather_cloudy);
     }
 
     private static String emoji(int code, boolean day) {

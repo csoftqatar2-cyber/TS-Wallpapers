@@ -1,35 +1,67 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout
-    xmlns:android="http://schemas.android.com/apk/res/android"
-    android:layout_width="match_parent"
-    android:layout_height="wrap_content"
-    android:gravity="center_vertical"
-    android:orientation="horizontal"
-    android:padding="8dp">
+<!-- One wallpaper in the manage grid.
+     The cell IS the picture: you are choosing between images, so the image is the thing to make
+     big. The two controls sit in the top corners, over a scrim so they stay readable on a white
+     photo, and the name goes underneath where it can be ignored.
 
-    <!-- the row itself handles the click (remote/TV friendly), so the box is not focusable -->
+     Nothing here is `focusable`. A focusable child inside an AdapterView steals the row's click
+     — which is exactly what broke the tick when this was a list with an "edit" button in it.
+     Every tap target below is wired by the adapter instead. -->
+<FrameLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/wallpaperCell"
+    android:layout_width="match_parent"
+    android:layout_height="168dp"
+    android:layout_margin="5dp"
+    android:background="@drawable/wp_grid_cell_bg">
+
+    <ImageView
+        android:id="@+id/imageViewWallpaperThumb"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:scaleType="fitCenter"
+        android:contentDescription="@string/wallpaper_manage_title" />
+
+    <!-- top scrim: the corner controls sit on an arbitrary photo -->
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="52dp"
+        android:layout_gravity="top"
+        android:background="@drawable/wp_grid_scrim" />
+
     <CheckBox
         android:id="@+id/checkBoxWallpaperVisible"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
+        android:layout_gravity="top|start"
+        android:layout_margin="6dp"
         android:clickable="false"
         android:focusable="false" />
 
     <ImageView
-        android:id="@+id/imageViewWallpaperThumb"
-        android:layout_width="88dp"
-        android:layout_height="56dp"
-        android:layout_marginStart="4dp"
-        android:layout_marginEnd="10dp"
-        android:scaleType="centerCrop"
-        android:contentDescription="@string/wallpaper_manage_title" />
+        android:id="@+id/buttonWallpaperEdit"
+        android:layout_width="36dp"
+        android:layout_height="36dp"
+        android:layout_gravity="top|end"
+        android:layout_margin="6dp"
+        android:padding="7dp"
+        android:background="@drawable/wp_grid_edit_bg"
+        android:src="@drawable/ic_edit_20dp"
+        android:contentDescription="@string/wallpaper_edit" />
 
     <TextView
         android:id="@+id/textViewWallpaperName"
-        android:layout_width="0dp"
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_weight="1"
+        android:layout_gravity="bottom"
+        android:background="#B3000000"
+        android:paddingStart="8dp"
+        android:paddingEnd="8dp"
+        android:paddingTop="5dp"
+        android:paddingBottom="5dp"
         android:ellipsize="middle"
-        android:maxLines="2"
-        android:textSize="14sp" />
-</LinearLayout>
+        android:maxLines="1"
+        android:textColor="@color/aurora_text"
+        android:textSize="11sp" />
+
+</FrameLayout>
