@@ -568,6 +568,52 @@
                                 android:inputType="textCapWords"
                                 android:maxLines="1" />
 
+                            <!-- ===== settings text size =====
+                                 Head units at the same resolution come in very different physical
+                                 sizes, and the ROM's own font scale is usually locked. This scales
+                                 the settings UI only — the clock face has its own sizing. -->
+                            <LinearLayout
+                                android:id="@+id/rowTextScale"
+                                style="@style/SettingsRow"
+                                android:orientation="vertical">
+                                <LinearLayout
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:orientation="horizontal"
+                                    android:baselineAligned="false">
+                                    <TextView
+                                        android:layout_width="0dp"
+                                        android:layout_weight="1"
+                                        android:layout_height="wrap_content"
+                                        android:textColor="@color/aurora_text"
+                                        android:textSize="15sp"
+                                        android:textStyle="bold"
+                                        android:text="@string/text_scale" />
+                                    <TextView
+                                        android:id="@+id/textViewTextScaleValue"
+                                        android:layout_width="wrap_content"
+                                        android:layout_height="wrap_content"
+                                        android:textColor="@color/gold"
+                                        android:textSize="16sp"
+                                        android:textStyle="bold" />
+                                </LinearLayout>
+                                <TextView
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:textColor="@color/aurora_muted"
+                                    android:textSize="11sp"
+                                    android:text="@string/text_scale_hint" />
+                                <SeekBar
+                                    android:id="@+id/seekBarTextScale"
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:layout_marginTop="8dp"
+                                    android:max="100"
+                                    android:progressDrawable="@drawable/seekbar_track"
+                                    android:thumb="@drawable/seekbar_thumb"
+                                    android:splitTrack="false" />
+                            </LinearLayout>
+
                             <!-- ===== operating mode ===== -->
                             <TextView
                                 style="@style/SettingsGroupLabel"

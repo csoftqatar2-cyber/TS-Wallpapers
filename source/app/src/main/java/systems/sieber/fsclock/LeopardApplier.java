@@ -8,6 +8,7 @@ import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.net.Uri;
 import android.os.Build;
+import android.util.Log;
 
 import java.io.InputStream;
 
@@ -28,6 +29,8 @@ import java.io.InputStream;
  * home-only while an image is both. The copy must not promise otherwise.
  */
 class LeopardApplier {
+
+    private static final String TAG = "LeopardApplier";
 
     /** Our own note of what was picked. The engine deliberately does NOT read this — it asks
      *  contentResolver for the real MIME, exactly as the proven reference does. This is only
@@ -82,21 +85,39 @@ class LeopardApplier {
         try {
             Uri uri = Uri.parse(uriStr);
             in = openAny(ctx, uri);
-            if(in == null) return false;
+            if(in == null) {
+                Log.e(TAG, "cannot open " + uriStr);
+                return false;
+            }
             Bitmap bmp = BitmapFactory.decodeStream(in);
-            if(bmp == null) return false;
+            if(bmp == null) {
+                Log.e(TAG, "not a decodable image: " + uriStr);
+                return false;
+            }
 
             WallpaperManager wm = WallpaperManager.getInstance(ctx);
             if(Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-                // Home and lock together, in one call, with no system screen.
-                wm.setBitmap(bmp, null, true,
-                        WallpaperManager.FLAG_SYSTEM | WallpaperManager.FLAG_LOCK);
+                try {
+                    // Home and lock together, in one call, with no system screen.
+                    wm.setBitmap(bmp, null, true,
+                            WallpaperManager.FLAG_SYSTEM | WallpaperManager.FLAG_LOCK);
+                } catch(Throwable t) {
+                    // Car head units regularly ship a stripped wallpaper service with no lock
+                    // screen at all, and asking for FLAG_LOCK there fails the whole call. The
+                    // home screen is the one that matters on a dashboard — set it alone rather
+                    // than report failure for a lock screen the car does not have.
+                    Log.w(TAG, "home+lock rejected, falling back to home only", t);
+                    wm.setBitmap(bmp, null, true, WallpaperManager.FLAG_SYSTEM);
+                }
             } else {
                 // Pre-N has no per-target flags: this sets the one wallpaper there is.
                 wm.setBitmap(bmp);
             }
             return true;
         } catch(Throwable t) {
+            // This used to be silent, which is why a missing SET_WALLPAPER permission looked
+            // like "video works, images do not" with nothing in the log to say why.
+            Log.e(TAG, "setting the still wallpaper failed", t);
             return false;
         } finally {
             if(in != null) try { in.close(); } catch(Exception ignored) {}

@@ -22,6 +22,12 @@
     <!-- do not remove - still necessary for older API levels <= 22 -->
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
 
+    <!-- Leopard mode sets a still image as the system wallpaper via WallpaperManager.setBitmap().
+         Without this the call throws SecurityException and every image fails while video still
+         works, because video goes through the system's own live-wallpaper screen instead.
+         Normal permission: granted at install, nothing to request at runtime. -->
+    <uses-permission android:name="android.permission.SET_WALLPAPER" />
+
     <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
     <uses-feature android:name="android.software.leanback" android:required="false" />
 

@@ -67,6 +67,7 @@ import androidx.core.view.WindowInsetsCompat;
 import com.google.gson.Gson;
 
 import java.io.BufferedReader;
+import java.io.File;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.lang.reflect.Method;
@@ -77,7 +78,9 @@ import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Calendar;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 public class BaseSettingsActivity extends AppCompatActivity {
 
@@ -100,6 +103,10 @@ public class BaseSettingsActivity extends AppCompatActivity {
     Button mButtonUnlockSettings;
     CompoundButton mCheckBoxFse;
     CompoundButton mCheckBoxAutoStartOnBoot;
+    /** Live "grant overlay access" dialog, so two routes on one tap cannot stack two of them. */
+    private AlertDialog mOverlayPermissionDialog;
+    /** Whether this visit already asked, so onResume re-checks without nagging in a loop. */
+    private boolean mOverlayPermissionAsked;
     CompoundButton mCheckBoxAnalogClockShow;
     CompoundButton mCheckBoxAnalogClockShowSeconds;
     CompoundButton mCheckBoxAnalogClockSmoothHands;
@@ -162,6 +169,10 @@ public class BaseSettingsActivity extends AppCompatActivity {
     TextView mTextViewLocalFolder;
     WallpaperRepo mWallpaperRepo;
     UploadServer mUploadServer;
+    /** Absolute paths of an uploaded batch awaiting the customer's "تم", or null. */
+    private List<String> mPendingBatch;
+    /** Which of that batch are currently unticked — survives a trip through the fit editor. */
+    private Set<String> mBatchDiscarded;
     TextView mTextViewSettingsDeviceId;
     TextView mTextViewSettingsMacAddress;
     TextView mPairStatus;
@@ -396,6 +407,7 @@ public class BaseSettingsActivity extends AppCompatActivity {
 
         initNavRail();
         initModePicker();
+        initTextScale();
         initFitDefaults();
         refreshHeaderChips();
         syncDependentRows();
@@ -687,6 +699,42 @@ public class BaseSettingsActivity extends AppCompatActivity {
      * activity re-inflates against the new locale — that is what re-mirrors the layout, which
      * setting the strings alone would not do.
      */
+    /**
+     * The settings text size slider.
+     *
+     * The slider runs 0..100 and carries an offset of 100, because SeekBar has no minimum before
+     * API 26 and this app still supports 21.
+     *
+     * Applying the new scale needs recreate() — sp sizes are resolved at inflate time, so nothing
+     * already on screen changes on its own. That is why the commit happens on release and not on
+     * every tick: recreating the activity on each pixel of drag would be unusable.
+     */
+    private void initTextScale() {
+        final SeekBar bar = findViewById(R.id.seekBarTextScale);
+        final TextView value = findViewById(R.id.textViewTextScaleValue);
+        if(bar == null || value == null) return;
+
+        final int current = TextScaleHelper.saved(this);
+        bar.setMax(TextScaleHelper.SCALE_MAX - TextScaleHelper.SCALE_MIN);
+        bar.setProgress(current - TextScaleHelper.SCALE_MIN);
+        value.setText(current + "%");
+
+        bar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            @Override public void onProgressChanged(SeekBar s, int progress, boolean fromUser) {
+                // Live label while dragging, so the number tracks the thumb even though the
+                // screen itself cannot re-scale until release.
+                value.setText(TextScaleHelper.snap(progress + TextScaleHelper.SCALE_MIN) + "%");
+            }
+            @Override public void onStartTrackingTouch(SeekBar s) {}
+            @Override public void onStopTrackingTouch(SeekBar s) {
+                int percent = TextScaleHelper.snap(s.getProgress() + TextScaleHelper.SCALE_MIN);
+                if(percent == TextScaleHelper.saved(BaseSettingsActivity.this)) return;
+                TextScaleHelper.save(BaseSettingsActivity.this, percent);
+                recreate();
+            }
+        });
+    }
+
     private void toggleLanguage() {
         boolean arabicNow = LocaleHelper.LANG_ARABIC.equals(LocaleHelper.resolved(this));
         LocaleHelper.save(this, arabicNow ? LocaleHelper.LANG_ENGLISH : LocaleHelper.LANG_ARABIC);
@@ -697,7 +745,10 @@ public class BaseSettingsActivity extends AppCompatActivity {
 
     @Override
     protected void attachBaseContext(Context newBase) {
-        super.attachBaseContext(LocaleHelper.wrap(newBase));
+        // Language first, then text scale. The scale wrapper has to be applied on its own because
+        // LocaleHelper.wrap() returns the context untouched when the language is the system
+        // default, so chaining the scale inside it would silently do nothing for most users.
+        super.attachBaseContext(TextScaleHelper.wrap(LocaleHelper.wrap(newBase)));
     }
 
     @Override
@@ -719,6 +770,14 @@ public class BaseSettingsActivity extends AppCompatActivity {
             case(PICK_WALLPAPERS_REQUEST):
                 if(resultCode == RESULT_OK && data != null) {
                     importPickedWallpapers(data);
+                }
+                break;
+            case(FIT_EDITOR_REQUEST):
+                // Coming back from editing one image of an unconfirmed batch: put the review
+                // screen back up so the customer can carry on through the rest. Without this the
+                // batch would be silently accepted the moment they edited any single image.
+                if(mPendingBatch != null && !mPendingBatch.isEmpty()) {
+                    reopenBatchReview();
                 }
                 break;
             case(PICK_CLOCK_FACE_REQUEST):
@@ -763,11 +822,19 @@ public class BaseSettingsActivity extends AppCompatActivity {
      * Android 10+ blocks starting activities from a BroadcastReceiver unless the app
      * holds the "Display over other apps" permission. Ask for it when the user enables
      * auto-start so the app can actually open itself when the car (device) boots.
+     *
+     * Without it the failure is invisible: the pref reads "on", BootReceiver runs, and the
+     * startActivity call is dropped by the system — the car simply comes up on its launcher.
+     * That is why this is asked for insistently rather than once.
      */
     private void requestOverlayPermissionIfNeeded() {
         if(Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return;
         if(Settings.canDrawOverlays(this)) return;
-        new AlertDialog.Builder(this)
+        // Two routes can fire on one tap (the checkbox listener and applyMode); never stack
+        // a second dialog on top of the first.
+        if(mOverlayPermissionDialog != null && mOverlayPermissionDialog.isShowing()) return;
+        mOverlayPermissionAsked = true;
+        mOverlayPermissionDialog = new AlertDialog.Builder(this)
                 .setTitle(R.string.auto_start_overlay_title)
                 .setMessage(R.string.auto_start_overlay_message)
                 .setPositiveButton(R.string.ok, new DialogInterface.OnClickListener() {
@@ -778,13 +845,30 @@ public class BaseSettingsActivity extends AppCompatActivity {
                                     Uri.parse("package:" + getPackageName()));
                             startActivity(intent);
                         } catch(ActivityNotFoundException e) {
-                            // some head units do not ship this settings screen; auto-start
-                            // via BOOT_COMPLETED usually still works there
+                            // Some head units ship no overlay settings screen. The old comment
+                            // here claimed auto-start "usually still works" then — it does not on
+                            // Android 10+, which is the whole reason this permission is needed.
+                            // Say so instead of leaving a dead setting behind.
+                            Toast.makeText(BaseSettingsActivity.this,
+                                    R.string.auto_start_overlay_unavailable, Toast.LENGTH_LONG).show();
                         }
                     }
                 })
                 .setNegativeButton(R.string.update_cancel, null)
                 .show();
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        // The overlay screen is a separate activity that reports no result, and on a fresh
+        // install the technician can reach FSE before ever seeing the dialog. Re-check on the
+        // way back in, so "auto-start is on but Android is blocking it" cannot survive quietly.
+        // Once per visit: asking again the instant the user declines would be a loop.
+        if(mSharedPref != null && !mOverlayPermissionAsked
+                && mSharedPref.getBoolean(BootReceiver.PREF_AUTO_START, false)) {
+            requestOverlayPermissionIfNeeded();
+        }
     }
 
     protected void enableDisableAllSettings(boolean state) {
@@ -1713,6 +1797,14 @@ public class BaseSettingsActivity extends AppCompatActivity {
             // setChecked fires the listener, which persists it and (when turning on) asks for the
             // overlay permission — exactly what a manual tap would have done.
             mCheckBoxAutoStartOnBoot.setChecked(wantAutoStart);
+        } else if(wantAutoStart) {
+            // The switch was already on, so setChecked() above is a no-op and its listener never
+            // runs — which used to mean the permission was never requested on this path. The pref
+            // then says "start on boot" while Android silently blocks the launch, and the car
+            // comes up on its launcher: exactly the "I enabled FSE and it still does not open"
+            // report. Persist and ask here instead of relying on the switch having moved.
+            mSharedPref.edit().putBoolean(BootReceiver.PREF_AUTO_START, true).apply();
+            requestOverlayPermissionIfNeeded();
         }
 
         updateModeDescription(mode, OperatingMode.isSupported(this));
@@ -1889,6 +1981,159 @@ public class BaseSettingsActivity extends AppCompatActivity {
         return null;
     }
 
+    /**
+     * Review a freshly uploaded batch before it joins the playlist.
+     *
+     * The files are already on disk — the server had to write them somewhere to receive them — so
+     * "adding" here means keeping them and "cancelling" means deleting them again. That is why
+     * cancel is destructive on purpose: the customer sent a batch from their phone, glanced at it
+     * on the car screen and said no.
+     *
+     * Ticked = keep. Pencil = open the fit editor on that one image and come back here.
+     */
+    private void reviewImportedBatch(List<String> savedPaths) {
+        if(mWallpaperRepo == null) return;
+
+        // A file can vanish between upload and review — the editor's trash button deletes it.
+        final List<WallpaperItem> items = new ArrayList<>();
+        for(String path : savedPaths) {
+            if(path == null) continue;
+            if(!new File(path).exists()) continue;
+            items.add(new WallpaperItem(WallpaperItem.guessType(path), path));
+        }
+        if(items.isEmpty()) {
+            mPendingBatch = null;
+            mBatchDiscarded = null;
+            return;
+        }
+
+        mPendingBatch = new ArrayList<>();
+        for(WallpaperItem item : items) mPendingBatch.add(item.url);
+
+        // Carry the ticks across an edit round-trip; on the first showing nothing is discarded.
+        Set<String> discarded = mBatchDiscarded != null ? mBatchDiscarded : new HashSet<String>();
+        final WallpaperSelectAdapter adapter = new WallpaperSelectAdapter(
+                this, mWallpaperRepo, items, discarded);
+
+        float d = getResources().getDisplayMetrics().density;
+        int pad = (int) (16 * d);
+
+        LinearLayout ll = new LinearLayout(this);
+        ll.setOrientation(LinearLayout.VERTICAL);
+
+        TextView hint = new TextView(this);
+        hint.setText(getString(R.string.batch_review_hint));
+        hint.setPadding(pad, pad, pad, pad / 2);
+        hint.setTextSize(12);
+
+        GridView grid = new GridView(this);
+        grid.setAdapter(adapter);
+        grid.setNumColumns(2);
+        grid.setLayoutParams(new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
+        grid.setPadding(pad / 2, 0, pad / 2, 0);
+        grid.setClipToPadding(false);
+
+        ll.addView(hint);
+        ll.addView(grid);
+
+        final AlertDialog dialog = new AlertDialog.Builder(this)
+                .setTitle(getString(R.string.batch_review_title, items.size()))
+                .setView(ll)
+                .setCancelable(false) // dismissing by accident would silently discard the batch
+                .setPositiveButton(R.string.fit_done, new DialogInterface.OnClickListener() {
+                    @Override
+                    public void onClick(DialogInterface d2, int which) {
+                        commitBatch(adapter.getHiddenUrls());
+                    }
+                })
+                .setNegativeButton(R.string.batch_review_discard, new DialogInterface.OnClickListener() {
+                    @Override
+                    public void onClick(DialogInterface d2, int which) {
+                        confirmDiscardBatch();
+                    }
+                })
+                .show();
+
+        if(dialog.getWindow() != null) {
+            android.util.DisplayMetrics dm = getResources().getDisplayMetrics();
+            dialog.getWindow().setLayout(Math.round(dm.widthPixels * 0.92f),
+                    Math.round(dm.heightPixels * 0.9f));
+        }
+
+        adapter.setOnEditListener(item -> {
+            // Remember the ticks; onActivityResult brings this screen back afterwards.
+            mBatchDiscarded = new HashSet<>(adapter.getHiddenUrls());
+            dialog.dismiss();
+            openFitEditor(item.url);
+        });
+    }
+
+    /** Put the review screen back after an edit, dropping anything the editor deleted. */
+    private void reopenBatchReview() {
+        List<String> paths = mPendingBatch;
+        mPendingBatch = null;
+        if(paths != null) reviewImportedBatch(paths);
+    }
+
+    /** Keep the ticked images, delete the rest off the disk, and refresh the playlist. */
+    private void commitBatch(List<String> discardedUrls) {
+        Set<String> discarded = new HashSet<>(discardedUrls);
+        int kept = 0;
+        if(mPendingBatch != null) {
+            for(String path : mPendingBatch) {
+                if(discarded.contains(path)) {
+                    deleteImportedFile(path);
+                } else {
+                    kept++;
+                }
+            }
+        }
+        mPendingBatch = null;
+        mBatchDiscarded = null;
+
+        mWallpaperRepo.load();
+        Toast.makeText(this, getString(R.string.batch_review_added, kept), Toast.LENGTH_LONG).show();
+        setResult(RESULT_OK);
+        autoSave(); // makes the clock screen reload the playlist on return
+    }
+
+    /** Cancelling throws away files the customer already sent, so make them say it twice. */
+    private void confirmDiscardBatch() {
+        new AlertDialog.Builder(this)
+                .setTitle(R.string.batch_review_discard)
+                .setMessage(R.string.batch_review_discard_confirm)
+                .setPositiveButton(R.string.batch_review_discard, new DialogInterface.OnClickListener() {
+                    @Override
+                    public void onClick(DialogInterface d, int which) {
+                        if(mPendingBatch != null) {
+                            for(String path : mPendingBatch) deleteImportedFile(path);
+                        }
+                        mPendingBatch = null;
+                        mBatchDiscarded = null;
+                        mWallpaperRepo.load();
+                        autoSave();
+                    }
+                })
+                .setNegativeButton(R.string.update_cancel, new DialogInterface.OnClickListener() {
+                    @Override
+                    public void onClick(DialogInterface d, int which) {
+                        reopenBatchReview(); // back to the review, nothing lost
+                    }
+                })
+                .show();
+    }
+
+    /** Delete an imported file plus the fit settings that were keyed to it. */
+    private void deleteImportedFile(String path) {
+        if(path == null) return;
+        try {
+            mWallpaperRepo.clearFit(path);
+            File f = new File(path);
+            if(f.exists()) f.delete();
+        } catch(Exception ignored) { }
+    }
+
     /** Show a QR code that the customer scans to upload an image over the local Wi-Fi. */
     public void onClickPairPhone(View v) {
         stopUploadServer();
@@ -1898,19 +2143,23 @@ public class BaseSettingsActivity extends AppCompatActivity {
         try {
             mUploadServer = UploadServer.startNew(this, mWallpaperRepo, new UploadServer.UploadListener() {
                 @Override
-                public void onUploaded(String savedPath) {
-                    setResult(RESULT_OK); // so the clock reloads and shows the uploaded wallpaper
-                    Toast.makeText(BaseSettingsActivity.this, getString(R.string.pair_uploaded), Toast.LENGTH_LONG).show();
+                public void onUploaded(List<String> savedPaths) {
+                    // The server posts this to the main thread, but the activity may already be
+                    // gone by the time it lands — the customer can walk away mid-upload.
+                    if(isFinishing() || isDestroyed()) return;
+                    if(savedPaths == null || savedPaths.isEmpty()) return;
 
-                    // The image has landed, so the QR has done its job: close it and go straight
-                    // to the editor. Dismissing also stops the server (see setOnDismissListener),
-                    // which is what we want — a second upload arriving while the first is being
-                    // edited would be two images and one editor.
+                    setResult(RESULT_OK); // so the clock reloads and shows the uploaded wallpaper
+                    Toast.makeText(BaseSettingsActivity.this,
+                            getString(R.string.pair_uploaded_n, savedPaths.size()),
+                            Toast.LENGTH_LONG).show();
+
+                    // The images have landed, so the QR has done its job: close it. Dismissing
+                    // also stops the server (see setOnDismissListener) — a second batch arriving
+                    // while the first is being reviewed would be two batches and one screen.
                     if(holder[0] != null && holder[0].isShowing()) holder[0].dismiss();
 
-                    if(savedPath != null && mWallpaperRepo.isEditOnImport()) {
-                        openFitEditor("file://" + savedPath);
-                    }
+                    reviewImportedBatch(savedPaths);
                 }
             });
             url = mUploadServer.getUrl();

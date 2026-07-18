@@ -21,6 +21,7 @@
     <string name="auto_start_on_boot">فتح التطبيق تلقائياً عند تشغيل السيارة</string>
     <string name="auto_start_overlay_title">إذن مطلوب</string>
     <string name="auto_start_overlay_message">حتى يفتح التطبيق تلقائياً عند تشغيل السيارة، فعّل إذن \"الظهور فوق التطبيقات الأخرى\" في الشاشة التالية.</string>
+    <string name="auto_start_overlay_unavailable">الشاشة دي مفيهاش إعداد \"الظهور فوق التطبيقات الأخرى\"، فالتطبيق مش هيقدر يفتح لوحده عند تشغيل السيارة. افتحه يدوياً.</string>
 
     <!-- Moved out of values/ so the default locale is genuinely English.
          These shipped as Arabic-in-the-EN-locale, which left the app half-translated. -->
@@ -69,6 +70,12 @@
     <string name="pair_scan_hint">الزبون يصوّر الكود ده بكاميرا موبايله (لازم نفس شبكة الواي‑فاي) ويرفع الصورة.\nلو الصفحة فضلت بيضا أو مفتحتش: اقفل بيانات الموبايل (الداتا) من الهاتف — الشبكة دي محلية من غير إنترنت، فالموبايل بيحاول يفتح اللينك على الداتا ومبيوصلش.\nولو لسه: تأكد إن الراوتر مش مفعّل فيه عزل الأجهزة (AP isolation).</string>
     <string name="pair_waiting">في انتظار صورة من الهاتف…</string>
     <string name="pair_uploaded">تم استلام الصورة ✓ وأصبحت الخلفية الافتراضية</string>
+    <string name="pair_uploaded_n">تم استلام %1$d صورة ✓</string>
+    <string name="batch_review_title">مراجعة %1$d صورة</string>
+    <string name="batch_review_hint">دي الصور اللي وصلت من الموبايل. شيل العلامة عن أي صورة مش عايزها، واضغط على القلم لتعديل أي صورة. لما تضغط «تم» هتتضاف للخلفيات.</string>
+    <string name="batch_review_added">تمت إضافة %1$d صورة للخلفيات</string>
+    <string name="batch_review_discard">إلغاء الصور</string>
+    <string name="batch_review_discard_confirm">هتتمسح كل الصور اللي وصلت من الموبايل ومش هتتضاف للخلفيات. متأكد؟</string>
     <string name="pair_no_wifi">تأكد من اتصال الجهاز بشبكة واي‑فاي</string>
     <string name="wallpaper_local_folder">مجلد الخلفيات على الجهاز:\n%s</string>
     <string name="wallpaper_added">تمت إضافة %d ملف ✓</string>
@@ -307,6 +314,8 @@
     <string name="fit_defaults_header">إعدادات استيراد الصور</string>
     <string name="fit_defaults_subtitle">تنطبق على الصور المرفوعة من الجهاز أو من الهاتف عبر QR — تتظبط مرة واحدة.</string>
     <string name="fit_default_mode">الوضع الافتراضي</string>
+    <string name="text_scale">حجم خط الإعدادات</string>
+    <string name="text_scale_hint">يكبّر نصوص شاشة الإعدادات فقط، من غير ما يغيّر شكل الساعة.</string>
     <string name="fit_default_blur">قوة الضبابية الافتراضية</string>
     <string name="fit_default_color">لون الجانبين الافتراضي</string>
     <string name="fit_edit_on_import">افتح شاشة التعديل بعد كل استيراد</string>

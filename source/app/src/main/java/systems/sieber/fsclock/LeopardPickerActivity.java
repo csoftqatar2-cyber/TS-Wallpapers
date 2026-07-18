@@ -162,7 +162,15 @@ public class LeopardPickerActivity extends AppCompatActivity {
         stopUploadServer();
         final String url;
         try {
-            mUploadServer = UploadServer.startNew(this, mRepo, savedPath -> onPhoneUpload(savedPath));
+            // The upload page can now send a batch, but Leopard's flow is deliberately one
+            // picture at a time — it hands the chosen image straight to the car. Take the last
+            // one and leave the rest on disk for the wallpaper list; changing the Leopard flow
+            // itself is out of scope until it has been tested on a real Leopard car.
+            mUploadServer = UploadServer.startNew(this, mRepo, savedPaths -> {
+                if(savedPaths != null && !savedPaths.isEmpty()) {
+                    onPhoneUpload(savedPaths.get(savedPaths.size() - 1));
+                }
+            });
             url = mUploadServer.getUrl();
         } catch(Exception e) {
             stopUploadServer();

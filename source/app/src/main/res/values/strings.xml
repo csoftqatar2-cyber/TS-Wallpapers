@@ -56,6 +56,12 @@
     <string name="pair_scan_hint">The customer scans this code with their phone camera (both must be on the same Wi-Fi) and uploads the image.\nIf the page stays blank or does not open: turn mobile data off on the phone — this network is local with no internet, so the phone tries to open the link over mobile data and never reaches it.\nStill nothing: make sure AP isolation is turned off on the router.</string>
     <string name="pair_waiting">Waiting for an image from the phone…</string>
     <string name="pair_uploaded">Image received ✓ and set as the default wallpaper</string>
+    <string name="pair_uploaded_n">%1$d image(s) received ✓</string>
+    <string name="batch_review_title">Review %1$d image(s)</string>
+    <string name="batch_review_hint">These just arrived from the phone. Untick any you do not want, tap the pencil to edit one, then press Done to add them to your wallpapers.</string>
+    <string name="batch_review_added">%1$d image(s) added to your wallpapers</string>
+    <string name="batch_review_discard">Discard</string>
+    <string name="batch_review_discard_confirm">Every image that arrived from the phone will be deleted and none will be added. Are you sure?</string>
     <string name="pair_no_wifi">Make sure the device is connected to a Wi-Fi network</string>
     <string name="wallpaper_local_folder">Wallpaper folder on this device:\n%s</string>
     <string name="wallpaper_added">%d files added ✓</string>
@@ -125,6 +131,7 @@ Roboto Font Copyright (c) Christian Robertson. Licensed under the Apache License
     <string name="auto_start_on_boot">Auto-start app when the car (device) turns on</string>
     <string name="auto_start_overlay_title">Permission Required</string>
     <string name="auto_start_overlay_message">To allow the app to open automatically when the car turns on, please enable the \"Display over other apps\" permission on the next screen.</string>
+    <string name="auto_start_overlay_unavailable">This head unit has no \"Display over other apps\" screen, so the app cannot open itself when the car starts. Open it manually.</string>
     <string name="use_own_images">Use Custom Images</string>
     <string name="clock_face_color">Clock Face Color</string>
     <string name="hour_hand_color">Hour Hand Color</string>
@@ -318,6 +325,8 @@ Roboto Font Copyright (c) Christian Robertson. Licensed under the Apache License
     <string name="fit_defaults_header">Image import settings</string>
     <string name="fit_defaults_subtitle">Applies to images imported from the device or from a phone via QR — set once.</string>
     <string name="fit_default_mode">Default mode</string>
+    <string name="text_scale">Settings text size</string>
+    <string name="text_scale_hint">Enlarges the settings screen text only — the clock face is unaffected.</string>
     <string name="fit_default_blur">Default blur strength</string>
     <string name="fit_default_color">Default side colour</string>
     <string name="fit_edit_on_import">Open the editor after every import</string>
