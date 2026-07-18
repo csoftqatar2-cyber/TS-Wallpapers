@@ -1,5 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- THABTHABA STORE icon background: soft cream like the original logo sheet -->
+<!-- Icon background: the logo's own black plate, not the cream of the old mark.
+     The logo is a black clock face with a gold bezel, so a light background would ring it with
+     a bright halo on every launcher that applies a mask. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
     android:height="108dp"
@@ -13,8 +15,8 @@
                 android:type="linear"
                 android:startX="0" android:startY="0"
                 android:endX="108" android:endY="108">
-                <item android:offset="0.0" android:color="#FFFBF8F2" />
-                <item android:offset="1.0" android:color="#FFF0E8DA" />
+                <item android:offset="0.0" android:color="#FF16151A" />
+                <item android:offset="1.0" android:color="#FF07070A" />
             </gradient>
         </aapt:attr>
     </path>
