@@ -33,6 +33,7 @@ public class FitPreviewView extends View {
 
     private final Paint mPaint = new Paint(Paint.FILTER_BITMAP_FLAG | Paint.ANTI_ALIAS_FLAG);
     private final Paint mFadePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint mFramePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Rect mSrc = new Rect();
     private final RectF mDst = new RectF();
 
@@ -54,6 +55,9 @@ public class FitPreviewView extends View {
     public FitPreviewView(Context c, AttributeSet a) {
         super(c, a);
         setBackgroundColor(Color.BLACK);
+        mFramePaint.setStyle(Paint.Style.STROKE);
+        mFramePaint.setStrokeWidth(2f * getResources().getDisplayMetrics().density);
+        mFramePaint.setColor(androidx.core.content.ContextCompat.getColor(c, R.color.colorAccent));
     }
 
     public void setOnFocalChangeListener(OnFocalChangeListener l) { mFocalListener = l; }
@@ -106,12 +110,16 @@ public class FitPreviewView extends View {
     @Override
     protected void onMeasure(int wSpec, int hSpec) {
         // Always the target screen's shape — a preview in the view's own aspect would lie.
-        int w = MeasureSpec.getSize(wSpec);
-        int h = MeasureSpec.getSize(hSpec);
-        if(w <= 0 && h <= 0) { setMeasuredDimension(0, 0); return; }
+        int wMode = MeasureSpec.getMode(wSpec), hMode = MeasureSpec.getMode(hSpec);
+        int w = MeasureSpec.getSize(wSpec), h = MeasureSpec.getSize(hSpec);
+        if(wMode == MeasureSpec.UNSPECIFIED) w = h > 0
+                ? Math.round(h * mTargetW / (float) mTargetH) : mTargetW;
+        if(hMode == MeasureSpec.UNSPECIFIED) h = w > 0
+                ? Math.round(w * mTargetH / (float) mTargetW) : mTargetH;
+        if(w <= 0 || h <= 0) { setMeasuredDimension(0, 0); return; }
         float target = mTargetW / (float) mTargetH;
         int outW, outH;
-        if(h <= 0 || w / (float) h < target) { outW = w; outH = Math.round(w / target); }
+        if(w / (float) h < target) { outW = w; outH = Math.round(w / target); }
         else { outH = h; outW = Math.round(h * target); }
         setMeasuredDimension(outW, outH);
     }
@@ -119,7 +127,11 @@ public class FitPreviewView extends View {
     @Override
     protected void onDraw(Canvas canvas) {
         int vw = getWidth(), vh = getHeight();
-        if(mImage == null || vw <= 0 || vh <= 0) return;
+        if(vw <= 0 || vh <= 0) return;
+        if(mImage == null) {
+            drawFrame(canvas, vw, vh);
+            return;
+        }
 
         int mode = resolvedMode();
         int iw = mImage.getWidth(), ih = mImage.getHeight();
@@ -140,6 +152,13 @@ public class FitPreviewView extends View {
                 ? Math.max(vw / (float) iw, vh / (float) ih)
                 : Math.min(vw / (float) iw, vh / (float) ih);
         drawScaled(canvas, mImage, base * zoom, vw, vh, iw, ih);
+        drawFrame(canvas, vw, vh);
+    }
+
+    private void drawFrame(Canvas canvas, int vw, int vh) {
+        // Centre the stroke on the exact target edge without clipping its outer half.
+        float inset = mFramePaint.getStrokeWidth() / 2f;
+        canvas.drawRect(inset, inset, vw - inset, vh - inset, mFramePaint);
     }
 
     private void drawBlurBackdrop(Canvas canvas, int vw, int vh, int iw, int ih) {

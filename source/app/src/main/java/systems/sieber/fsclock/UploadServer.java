@@ -46,8 +46,23 @@ public class UploadServer extends NanoHTTPD {
     private static final int READ_TIMEOUT_MS = 120_000;
 
     public interface UploadListener {
-        void onUploaded(String savedPath); // called on the UI thread
+        /**
+         * One call per POST, carrying every file that request delivered — the phone can now pick
+         * several at once, and they have to arrive together or the review screen would open once
+         * per image instead of once per batch. Never empty.
+         */
+        void onUploaded(List<String> savedPaths); // called on the UI thread
     }
+
+    /**
+     * Field names the page posts under. A multipart body may repeat a field name, but NanoHTTPD
+     * keys its temp-file map by name, so repeats overwrite each other and only the last file
+     * survives. Numbering the fields is what makes N files actually reachable.
+     */
+    private static final String FIELD_PREFIX = "image";
+
+    /** A phone can select an entire album; cap the batch so one tap cannot fill the disk. */
+    private static final int MAX_BATCH = 30;
 
     private final Context mContext;
     private final WallpaperRepo mRepo;
@@ -96,32 +111,43 @@ public class UploadServer extends NanoHTTPD {
             if(Method.POST.equals(session.getMethod())) {
                 Map<String, String> files = new HashMap<>();
                 session.parseBody(files);
-                // NOTE: the POST contract is deliberately path-agnostic and unchanged —
-                // the page posts to "/" with the field name "image".
-                String tmpPath = files.get("image");
-                String originalName = "upload.jpg";
-                List<String> names = session.getParameters().get("image");
-                if(names != null && !names.isEmpty() && names.get(0) != null && !names.get(0).trim().isEmpty()) {
-                    originalName = names.get(0);
-                }
-                if(tmpPath != null) {
-                    final String saved = saveUpload(tmpPath, originalName);
-                    if(saved != null) {
-                        // make it the default wallpaper + enable the slideshow
-                        SharedPreferences sp = mContext.getSharedPreferences(SettingsActivity.SHARED_PREF_DOMAIN, Context.MODE_PRIVATE);
-                        sp.edit()
-                                .putString(WallpaperRepo.PREF_DEFAULT, saved)
-                                .putBoolean(WallpaperRepo.PREF_ENABLED, true)
-                                .putBoolean(WallpaperRepo.PREF_LOCAL_ENABLED, true)
-                                .apply();
-                        if(mListener != null) {
-                            mMain.post(new Runnable() {
-                                @Override
-                                public void run() { mListener.onUploaded(saved); }
-                            });
-                        }
-                        return newFixedLengthResponse(Response.Status.OK, "text/html; charset=utf-8", successPage());
+                // The page posts to "/" under image0, image1, ... — see FIELD_PREFIX. The old
+                // single-file field name is still accepted so a stale page left open on a phone
+                // does not start failing after an app update.
+                final List<String> saved = new ArrayList<>();
+                boolean sawFile = false;
+                for(int i = 0; i < MAX_BATCH; i++) {
+                    String field = FIELD_PREFIX + i;
+                    String tmpPath = files.get(field);
+                    if(tmpPath == null && i == 0) {
+                        field = FIELD_PREFIX;                 // legacy single-file page
+                        tmpPath = files.get(field);
                     }
+                    if(tmpPath == null) continue;
+                    sawFile = true;
+                    String one = saveUpload(tmpPath, originalName(session, field));
+                    if(one != null) saved.add(one);
+                }
+                if(!saved.isEmpty()) {
+                    // Make the last one the default wallpaper + enable the slideshow. Picking one
+                    // of a batch is arbitrary, but leaving PREF_DEFAULT pointing at whatever came
+                    // before would be worse: the user just sent these and expects to see them.
+                    SharedPreferences sp = mContext.getSharedPreferences(SettingsActivity.SHARED_PREF_DOMAIN, Context.MODE_PRIVATE);
+                    sp.edit()
+                            .putString(WallpaperRepo.PREF_DEFAULT, saved.get(saved.size() - 1))
+                            .putBoolean(WallpaperRepo.PREF_ENABLED, true)
+                            .putBoolean(WallpaperRepo.PREF_LOCAL_ENABLED, true)
+                            .apply();
+                    if(mListener != null) {
+                        mMain.post(new Runnable() {
+                            @Override
+                            public void run() { mListener.onUploaded(saved); }
+                        });
+                    }
+                    return newFixedLengthResponse(Response.Status.OK, "text/html; charset=utf-8",
+                            successPage(saved.size()));
+                }
+                if(sawFile) {
                     return newFixedLengthResponse(Response.Status.INTERNAL_ERROR, "text/plain; charset=utf-8",
                             "تعذّر حفظ الملف على الجهاز — تأكد من وجود مساحة كافية");
                 }
@@ -156,6 +182,29 @@ public class UploadServer extends NanoHTTPD {
         }
     }
 
+    /** Append -2, -3, ... before the extension until the name is free. */
+    private static File uniqueName(File dest, String ext) {
+        if(!dest.exists()) return dest;
+        String name = dest.getName();
+        String stem = name.toLowerCase().endsWith(ext.toLowerCase())
+                ? name.substring(0, name.length() - ext.length())
+                : name;
+        for(int i = 2; i < 1000; i++) {
+            File candidate = new File(dest.getParentFile(), stem + "-" + i + ext);
+            if(!candidate.exists()) return candidate;
+        }
+        return dest;
+    }
+
+    /** The browser sends the file's own name as a plain parameter under the same field name. */
+    private String originalName(IHTTPSession session, String field) {
+        List<String> names = session.getParameters().get(field);
+        if(names != null && !names.isEmpty() && names.get(0) != null && !names.get(0).trim().isEmpty()) {
+            return names.get(0);
+        }
+        return "upload.jpg";
+    }
+
     private String saveUpload(String tmpPath, String originalName) {
         try {
             String ext = ".jpg";
@@ -166,6 +215,11 @@ public class UploadServer extends NanoHTTPD {
             if(!dest.getName().toLowerCase().endsWith(ext.toLowerCase())) {
                 dest = new File(mRepo.getLocalFolder(), "upload" + ext);
             }
+            // Never overwrite. Phones hand out colliding names constantly (IMG_0001.jpg on every
+            // device, or the "upload.jpg" fallback above for a whole batch), and silently
+            // replacing an existing wallpaper with a new one is data loss the user never asked
+            // for — worse, in a batch the images would eat each other and only the last survive.
+            dest = uniqueName(dest, ext);
             FileInputStream in = new FileInputStream(tmpPath);
             FileOutputStream out = new FileOutputStream(dest);
             byte[] buf = new byte[8192];
@@ -244,11 +298,12 @@ public class UploadServer extends NanoHTTPD {
                 + "</div>"
 
                 + "<div class='card'>"
-                + "<p style='margin:0 0 14px'>اختر صورة أو فيديو من هاتفك ليظهر على الشاشة كخلفية</p>"
+                + "<p style='margin:0 0 14px'>اختر صورة أو أكثر من هاتفك لتظهر على الشاشة كخلفية"
+                + " — تقدر تختار أكتر من صورة مرة واحدة</p>"
                 + "<form id='f' method='post' action='/' enctype='multipart/form-data'>"
-                + "<input id='file' type='file' name='image' accept='image/*,video/*' required>"
-                + "<label id='pick' class='pick' for='file'>اضغط هنا لاختيار صورة أو فيديو</label>"
-                + "<button id='btn' type='submit'>رفع الصورة</button>"
+                + "<input id='file' type='file' name='image' accept='image/*,video/*' multiple required>"
+                + "<label id='pick' class='pick' for='file'>اضغط هنا لاختيار الصور أو الفيديو</label>"
+                + "<button id='btn' type='submit'>رفع الصور</button>"
                 + "</form>"
                 + "<div id='bar'><div id='fill'></div></div>"
                 + "<p id='msg'></p>"
@@ -261,12 +316,17 @@ public class UploadServer extends NanoHTTPD {
                 + "fill=document.getElementById('fill');"
                 // Immediate feedback on choosing a file, so the page never looks inert.
                 + "fi.onchange=function(){if(fi.files.length){pick.className='pick has';"
-                + "pick.textContent=fi.files[0].name;m.className='';m.textContent='';}};"
-                + "function reset(t){b.disabled=false;b.textContent='رفع الصورة';bar.style.display='none';"
+                + "pick.textContent=fi.files.length===1?fi.files[0].name:('تم اختيار '+fi.files.length+' ملف');"
+                + "m.className='';m.textContent='';}};"
+                + "function reset(t){b.disabled=false;b.textContent='رفع الصور';bar.style.display='none';"
                 + "fill.style.width='0';m.className='err';m.textContent=t;}"
                 + "f.onsubmit=function(e){e.preventDefault();"
                 + "if(!fi.files.length){m.className='err';m.textContent='اختر ملف أولاً';return;}"
-                + "var fd=new FormData();fd.append('image',fi.files[0]);"
+                + "if(fi.files.length>" + MAX_BATCH + "){m.className='err';"
+                + "m.textContent='أقصى عدد " + MAX_BATCH + " ملف في المرة الواحدة';return;}"
+                // Numbered field names: a repeated name would collapse to one file server-side.
+                + "var fd=new FormData();"
+                + "for(var i=0;i<fi.files.length;i++){fd.append('image'+i,fi.files[i]);}"
                 + "var x=new XMLHttpRequest();x.open('POST','/',true);x.timeout=180000;"
                 // in-progress state: button locks, bar appears, percentage counts up
                 + "b.disabled=true;b.textContent='جارٍ الرفع…';bar.style.display='block';"
@@ -285,7 +345,11 @@ public class UploadServer extends NanoHTTPD {
                 + "</" + "script></body></html>";
     }
 
-    private String successPage() {
+    private String successPage(int count) {
+        String headline = count == 1 ? "تم الرفع بنجاح" : ("تم رفع " + count + " صور بنجاح");
+        String detail = count == 1
+                ? "الصورة وصلت للشاشة — كمّل عليها من الشاشة نفسها."
+                : "الصور وصلت للشاشة — كمّل عليها من الشاشة نفسها.";
         return "<!doctype html><html dir='rtl' lang='ar'><head><meta charset='utf-8'>"
                 + "<meta name='viewport' content='width=device-width,initial-scale=1'>"
                 + "<meta name='theme-color' content='#14100b'>"
@@ -296,14 +360,14 @@ public class UploadServer extends NanoHTTPD {
                 + "<p class='sub'>THABTHABA STORE</p>"
                 + "<div class='card' style='text-align:center'>"
                 + "<div style='font-size:44px;line-height:1;color:#ffd27a'>✓</div>"
-                + "<h2 style='color:#ffd27a;font-size:21px;margin:10px 0 6px'>تم الرفع بنجاح</h2>"
-                + "<p style='margin:0;color:#b0a48f'>الصورة ظهرت على الشاشة كخلفية.</p>"
+                + "<h2 style='color:#ffd27a;font-size:21px;margin:10px 0 6px'>" + headline + "</h2>"
+                + "<p style='margin:0;color:#b0a48f'>" + detail + "</p>"
                 + "</div>"
                 + "<div class='privacy'>"
                 + "<b>محفوظة في هذه السيارة فقط</b>"
-                + "<p>لم تُرسَل صورتك إلى منصتنا السحابية — هي مخزّنة داخل شاشة هذه السيارة وحدها.</p>"
+                + "<p>لم تُرسَل صورك إلى منصتنا السحابية — هي مخزّنة داخل شاشة هذه السيارة وحدها.</p>"
                 + "</div>"
-                + "<p style='text-align:center'><a href='/'>رفع صورة أخرى</a></p>"
+                + "<p style='text-align:center'><a href='/'>رفع صور أخرى</a></p>"
                 + "</div></body></html>";
     }
 

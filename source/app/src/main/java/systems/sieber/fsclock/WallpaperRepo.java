@@ -119,7 +119,13 @@ public class WallpaperRepo {
      *  is sourced from the car itself, so it survives a factory reset of the head
      *  unit. Empty string when not running on a vehicle head unit. */
     public static String getVin() {
-        String[] keys = {"persist.sys.vehicle.vin", "sys.vehicle.hardware.vin.code"};
+        String[] keys = {
+            "persist.sys.vehicle.vin", "sys.vehicle.hardware.vin.code",
+            // BYD DiLink (Leopard / 豹5 and friends) – same value in all four,
+            // the persist.* ones survive a factory reset of the head unit.
+            "persist.sys.dms.config.vin", "persist.sys.cloud.last_vin",
+            "sys.dms.config.vin", "sys.virtual.vin"
+        };
         for (String k : keys) {
             String v = getSystemProperty(k);
             if (v != null) {
