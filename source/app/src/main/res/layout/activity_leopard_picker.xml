@@ -274,6 +274,30 @@
         android:scaleType="centerCrop"
         android:importantForAccessibility="no" />
 
+    <!-- A video used to preview as a flat brown rectangle with the word "video" on it, which is
+         no basis for committing a dashboard to a clip. It is fetched first (the file is needed on
+         disk to apply it anyway, so this costs nothing extra) and then played here, looping and
+         muted, with the same Set / Change buttons underneath. -->
+    <VideoView
+        android:id="@+id/leopardPreviewVideo"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:layout_gravity="center"
+        android:visibility="gone" />
+
+    <!-- Sits under the spinner: a car's link makes this a real wait, and "جارٍ التحميل 43%"
+         is the difference between waiting and assuming it has hung. -->
+    <TextView
+        android:id="@+id/leopardPreviewLoading"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:layout_marginTop="76dp"
+        android:gravity="center"
+        android:textColor="@color/aurora_text"
+        android:textSize="14sp"
+        android:visibility="gone" />
+
     <!-- Scrim: the buttons sit on top of an arbitrary photo and have to stay readable on a
          white one. -->
     <View

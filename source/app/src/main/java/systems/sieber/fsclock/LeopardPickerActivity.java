@@ -6,6 +6,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.graphics.Outline;
+import android.media.MediaPlayer;
 import android.net.Uri;
 import android.os.Bundle;
 import android.view.Gravity;
@@ -17,6 +18,7 @@ import android.widget.LinearLayout;
 import android.widget.ProgressBar;
 import android.widget.TextView;
 import android.widget.Toast;
+import android.widget.VideoView;
 
 import androidx.activity.EdgeToEdge;
 import androidx.appcompat.app.AppCompatActivity;
@@ -59,6 +61,10 @@ public class LeopardPickerActivity extends AppCompatActivity {
     private ImageView mPreviewImage;
     private TextView mPreviewBadge;
     private ProgressBar mPreviewProgress;
+    private VideoView mPreviewVideo;
+    private TextView mPreviewLoading;
+    /** Bumped whenever the preview changes, so a slow download knows it is no longer wanted. */
+    private int mPreviewToken;
 
     private final List<WallpaperItem> mShown = new ArrayList<>();
     private WallpaperItem mSelected;
@@ -108,6 +114,8 @@ public class LeopardPickerActivity extends AppCompatActivity {
         mPreviewImage = findViewById(R.id.leopardPreviewImage);
         mPreviewBadge = findViewById(R.id.leopardPreviewBadge);
         mPreviewProgress = findViewById(R.id.leopardPreviewProgress);
+        mPreviewVideo = findViewById(R.id.leopardPreviewVideo);
+        mPreviewLoading = findViewById(R.id.leopardPreviewLoading);
 
         mSourceCloud.setOnClickListener(v -> selectSource(SOURCE_CLOUD));
         mSourceLocal.setOnClickListener(v -> selectSource(SOURCE_LOCAL));
@@ -131,6 +139,14 @@ public class LeopardPickerActivity extends AppCompatActivity {
         if(!OperatingMode.isLeopard(mPrefs)) {
             startActivity(new Intent(this, FullscreenActivity.class));
             finish();
+            return;
+        }
+        // onPause tore the player down. Coming back — most often from the system's live-wallpaper
+        // screen, which every video apply passes through — the preview would otherwise be a black
+        // rectangle where a playing clip was. The file is cached by now, so this is instant.
+        if(mPreview != null && mPreview.getVisibility() == View.VISIBLE
+                && mSelected != null && mSelected.isVideo()) {
+            preparePreviewVideo(mSelected);
         }
     }
 
@@ -359,7 +375,12 @@ public class LeopardPickerActivity extends AppCompatActivity {
         // scrolls, and fillViewport would otherwise centre a short strip on its own.
         mFilmstrip.setGravity(Gravity.START | Gravity.CENTER_VERTICAL);
         float d = getResources().getDisplayMetrics().density;
-        int cellW = Math.round(326 * d), cellH = Math.round(122 * d), gap = Math.round(16 * d);
+        // 2.67:1, the shape of the screen the wallpaper lands on, so a cell reads as a preview of
+        // the result. Bigger than it was: at 122dp tall you could not tell two dark photos apart
+        // across a cabin. Held at 165dp rather than filling the band because the body is only
+        // ~185dp tall once the header and the button bar are taken out on a 2x-density panel —
+        // anything taller would be clipped on exactly the head units this mode exists for.
+        int cellW = Math.round(440 * d), cellH = Math.round(165 * d), gap = Math.round(16 * d);
         String currentUri = mPrefs.getString(MediaWallpaperService.PREF_URI, "");
 
         final int radius = Math.round(16 * d);   // must match the corners in leopard_cell_bg
@@ -387,10 +408,11 @@ public class LeopardPickerActivity extends AppCompatActivity {
             ImageView img = new ImageView(this);
             img.setLayoutParams(new FrameLayout.LayoutParams(
                     FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
-            // FIT_XY, not CENTER_CROP: a cell is 2.67:1 and most uploads are portrait, so
-            // cropping to fill cut the top and bottom off exactly the part you are choosing by.
-            // Stretched-but-whole is the honest thumbnail here — you can see what the image IS.
-            img.setScaleType(ImageView.ScaleType.FIT_XY);
+            // FIT_CENTER: the whole picture, in its own proportions. FIT_XY also showed all of it
+            // but squashed a portrait photo into a 2.67:1 slot, which reads as a badly cropped
+            // image even though nothing was cut. Letterbox bars are the honest answer — you are
+            // choosing by what the picture is, so it must not be distorted.
+            img.setScaleType(ImageView.ScaleType.FIT_CENTER);
             cell.addView(img);
 
             if(item.isVideo()) {
@@ -484,12 +506,15 @@ public class LeopardPickerActivity extends AppCompatActivity {
         mStatus.setText("");
         mPreviewBadge.setVisibility(item.isVideo() ? View.VISIBLE : View.GONE);
         mPreviewBadge.setText(R.string.leopard_badge_video);
+        stopPreviewVideo();
 
         if(item.isVideo()) {
-            // No poster frame exists on the server, and pulling one would mean fetching the
-            // whole file just to preview it. Say "video" honestly instead of faking a still.
             mPreviewImage.setImageDrawable(new android.graphics.drawable.ColorDrawable(0xFF241c11));
+            preparePreviewVideo(item);
         } else {
+            mPreviewVideo.setVisibility(View.GONE);
+            mPreviewLoading.setVisibility(View.GONE);
+            mPreviewProgress.setVisibility(View.GONE);
             Object model = item.url.startsWith("content://") ? Uri.parse(item.url)
                     : (item.url.startsWith("http") ? item.url : new File(item.url));
             Glide.with(this).load(model).into(mPreviewImage);
@@ -497,9 +522,113 @@ public class LeopardPickerActivity extends AppCompatActivity {
         findViewById(R.id.buttonPreviewSet).requestFocus();
     }
 
+    /**
+     * Fetch the clip if it is not already here, then play it in the preview.
+     *
+     * The token guards the obvious race: the download takes seconds, and in that time the user
+     * can go back and pick something else. Without it a late-finishing download would start
+     * playing over whatever they chose afterwards.
+     */
+    private void preparePreviewVideo(final WallpaperItem item) {
+        final int token = ++mPreviewToken;
+        final String url = item.url;
+
+        if(!LeopardCache.isRemote(url)) {
+            // A local pick (content:// or a file on the head unit) needs no download.
+            playPreviewVideo(Uri.parse(url.startsWith("content://") ? url : "file://" + url));
+            return;
+        }
+
+        mPreviewVideo.setVisibility(View.GONE);
+        mPreviewProgress.setVisibility(View.VISIBLE);
+        mPreviewLoading.setVisibility(View.VISIBLE);
+        mPreviewLoading.setText(R.string.leopard_preparing);
+
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                final Uri local = LeopardCache.materialise(LeopardPickerActivity.this, url,
+                        new LeopardCache.ProgressListener() {
+                            @Override
+                            public void onProgress(final int percent) {
+                                runOnUiThread(new Runnable() {
+                                    @Override
+                                    public void run() {
+                                        if(token != mPreviewToken) return;
+                                        mPreviewLoading.setText(percent < 0
+                                                ? getString(R.string.leopard_preparing)
+                                                : getString(R.string.leopard_downloading, percent));
+                                    }
+                                });
+                            }
+                        });
+                runOnUiThread(new Runnable() {
+                    @Override
+                    public void run() {
+                        if(token != mPreviewToken) return;   // the user moved on
+                        mPreviewProgress.setVisibility(View.GONE);
+                        mPreviewLoading.setVisibility(View.GONE);
+                        if(local == null) {
+                            say(R.string.leopard_download_failed);
+                            return;
+                        }
+                        playPreviewVideo(local);
+                    }
+                });
+            }
+        }).start();
+    }
+
+    private void playPreviewVideo(Uri uri) {
+        try {
+            mPreviewVideo.setVisibility(View.VISIBLE);
+            mPreviewVideo.setVideoURI(uri);
+            mPreviewVideo.setOnPreparedListener(new MediaPlayer.OnPreparedListener() {
+                @Override
+                public void onPrepared(MediaPlayer mp) {
+                    mp.setLooping(true);
+                    // Silent: this is a preview on a dashboard, and the wallpaper itself has no
+                    // sound either — playing audio here would misrepresent the result.
+                    try { mp.setVolume(0f, 0f); } catch(Exception ignored) {}
+                }
+            });
+            mPreviewVideo.setOnErrorListener(new MediaPlayer.OnErrorListener() {
+                @Override
+                public boolean onError(MediaPlayer mp, int what, int extra) {
+                    // Some clips the wallpaper engine can still play will not open in a VideoView.
+                    // Fall back to the old flat panel rather than a system "can't play" dialog:
+                    // the file is already downloaded, so applying it may well work regardless.
+                    mPreviewVideo.setVisibility(View.GONE);
+                    mPreviewLoading.setVisibility(View.GONE);
+                    return true;
+                }
+            });
+            mPreviewVideo.start();
+        } catch(Throwable t) {
+            mPreviewVideo.setVisibility(View.GONE);
+        }
+    }
+
+    private void stopPreviewVideo() {
+        try {
+            if(mPreviewVideo.isPlaying()) mPreviewVideo.stopPlayback();
+        } catch(Throwable ignored) {}
+        mPreviewVideo.setVisibility(View.GONE);
+    }
+
     private void hidePreview() {
+        mPreviewToken++;   // abandon any download still running for this preview
+        stopPreviewVideo();
         mPreview.setVisibility(View.GONE);
         mPreviewProgress.setVisibility(View.GONE);
+        mPreviewLoading.setVisibility(View.GONE);
+    }
+
+    @Override
+    protected void onPause() {
+        super.onPause();
+        // Leaving a decoder running behind another app is not something a head unit forgives.
+        stopPreviewVideo();
     }
 
     @Override

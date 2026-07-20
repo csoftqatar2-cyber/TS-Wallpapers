@@ -370,6 +370,7 @@
     <string name="nav_clock">الساعة</string>
     <string name="leopard_change">تغيير</string>
     <string name="leopard_preparing">جارٍ التجهيز…</string>
+    <string name="leopard_downloading">جارٍ تحميل الفيديو… %1$d%%</string>
     <string name="leopard_download_failed">تعذّر تنزيل الخلفية دي</string>
     <string name="leopard_source_phone">من الهاتف</string>
     <string name="leopard_phone_hint">امسح الكود ده بموبايل على نفس شبكة الواي‑فاي، وبعدين ارفع الصورة.</string>
