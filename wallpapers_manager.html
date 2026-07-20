@@ -1931,6 +1931,28 @@
             return (str || "").replace(/[^0-9A-Fa-f]/g, "").toUpperCase();
         }
 
+        /**
+         * Poster frame for a video, so the grid shows what the clip IS rather than an identical
+         * film icon on every row — with dozens of uploads named by UUID, the icon told you nothing.
+         *
+         * There is no stored poster and generating one would mean downloading whole clips, so we
+         * let the browser do it: "#t=0.1" is a media fragment that makes it seek to 0.1s and paint
+         * that frame, and preload="metadata" keeps it from pulling the entire file. muted +
+         * playsinline are required or iOS refuses to render the frame at all.
+         *
+         * Formats a browser cannot decode (.bin hardware clips, .mkv) fire onerror, and the old
+         * icon is still there underneath to take over — so those rows look exactly as before
+         * rather than turning into a broken black box.
+         */
+        function videoThumbHtml(url, videoClass, fallbackHtml) {
+            const safe = String(url).replace(/"/g, "&quot;");
+            return '<video class="' + videoClass + '" src="' + safe + '#t=0.1" preload="metadata"'
+                + ' muted playsinline tabindex="-1"'
+                + ' onerror="this.style.display=\'none\';'
+                + 'if(this.nextElementSibling)this.nextElementSibling.style.display=\'flex\';">'
+                + '</video>' + fallbackHtml;
+        }
+
         // Handle an uploaded QR image: decode it and fill the hardware id field
         async function handleQrUpload(e) {
             const file = e.target.files && e.target.files[0];
@@ -2405,13 +2427,13 @@
                 mediaWrapper.className = "wp-media-wrapper";
 
                 if (wp.type === 'video') {
-                    // Show a placeholder or icon for video
-                    mediaWrapper.innerHTML = `
-                        <div style="width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;background:#2e2417;color:var(--text-muted);">
+                    // First frame when the browser can decode it, the old icon when it cannot.
+                    mediaWrapper.innerHTML = videoThumbHtml(wp.url, "wp-media", `
+                        <div style="display:none;width:100%;height:100%;flex-direction:column;align-items:center;justify-content:center;background:#2e2417;color:var(--text-muted);">
                             <i class="fa-regular fa-file-video" style="font-size:2rem;margin-bottom:8px;"></i>
                             <span style="font-size:0.75rem;">ملف فيديو / عتاد</span>
                         </div>
-                    `;
+                    `);
                 } else {
                     const img = document.createElement("img");
                     img.className = "wp-media";
@@ -3088,12 +3110,12 @@
                     cell.className = "mini-wp";
 
                     if (wp.type === 'video') {
-                        cell.innerHTML = `
-                            <div class="mini-wp-video">
+                        cell.innerHTML = videoThumbHtml(wp.url, "mini-wp-media", `
+                            <div class="mini-wp-video" style="display:none;">
                                 <i class="fa-regular fa-file-video" style="font-size:1.4rem;"></i>
                                 <span>ملف فيديو / عتاد</span>
                             </div>
-                        `;
+                        `);
                     } else {
                         cell.innerHTML = `<img class="mini-wp-media" src="${wp.url}" loading="lazy" alt="">`;
                     }
