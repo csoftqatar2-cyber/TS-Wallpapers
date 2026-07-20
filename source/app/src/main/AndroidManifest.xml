@@ -126,12 +126,22 @@
             </intent-filter>
         </receiver>
 
+        <!-- Deliberately NOT directBootAware: our settings live in credential-protected storage,
+             so a receiver running before unlock could not read them anyway, and touching that
+             storage that early throws on some devices. BOOT_COMPLETED after unlock is enough. -->
         <receiver android:name=".BootReceiver"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
                 <action android:name="android.intent.action.QUICKBOOT_POWERON" />
                 <action android:name="com.htc.intent.action.QUICKBOOT_POWERON" />
+                <!-- the car woke rather than booted: no BOOT_COMPLETED is sent, and this is the
+                     case that made auto-start work only after a long park -->
+                <action android:name="android.intent.action.USER_PRESENT" />
+            </intent-filter>
+            <intent-filter>
+                <!-- come back up by ourselves after an in-app update replaces the APK -->
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
             </intent-filter>
         </receiver>
 
