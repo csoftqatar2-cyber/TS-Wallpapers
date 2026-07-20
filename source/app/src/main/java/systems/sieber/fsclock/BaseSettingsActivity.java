@@ -509,7 +509,22 @@ public class BaseSettingsActivity extends AppCompatActivity {
             findViewById(NAV_RAIL_ITEMS[i]).setOnClickListener(v -> showSection(section));
         }
         applyLeopardVisibility();
-        showSection(firstVisibleSection());
+        showSection(defaultSection());
+    }
+
+    /**
+     * Where Settings opens. Wallpapers, not General: changing the picture is what this screen
+     * gets opened for nearly every time, while General holds install-time switches the owner
+     * touches once. Landing on General meant one extra tap on every single visit.
+     */
+    private int defaultSection() {
+        for(int i = 0; i < NAV_RAIL_ITEMS.length; i++) {
+            if(NAV_RAIL_ITEMS[i] != R.id.navWallpapers) continue;
+            View v = findViewById(NAV_RAIL_ITEMS[i]);
+            if(v != null && v.getVisibility() == View.VISIBLE) return i;
+            break;
+        }
+        return firstVisibleSection();
     }
 
     /** Strip the rail down to what Leopard can actually act on. */
