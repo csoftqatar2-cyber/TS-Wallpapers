@@ -270,6 +270,17 @@ public class UploadServer extends NanoHTTPD {
             + "border:1px solid rgba(255,214,160,0.14);overflow:hidden}"
             + "#fill{height:100%;width:0;background:#ffd27a;transition:width .2s}"
             + "#msg{margin:14px 0 0;font-size:16px;min-height:24px;text-align:center;color:#b0a48f}"
+            // Instructions for a customer who just scanned a code off a dashboard: quieter than
+            // the card so it never competes with the upload button, but full size to stay
+            // readable on a phone held at arm's length in a car.
+            + ".steps{background:#2e2417;border:1px solid rgba(255,214,160,0.14);border-radius:16px;"
+            + "padding:18px 20px}"
+            + ".steps b{color:#ffd27a}"
+            + ".steps>b{display:block;font-size:18px;margin-bottom:10px}"
+            + ".steps ol{margin:0;padding-inline-start:22px}"
+            + ".steps li{margin-bottom:10px;font-size:16px}"
+            + ".steps li:last-child{margin-bottom:0}"
+            + ".steps .note{margin:14px 0 0;font-size:15px;color:#b0a48f}"
             + ".err{color:#ff8f6b}.ok{color:#ffd27a}"
             + "a{color:#ffd27a}";
 
@@ -307,6 +318,21 @@ public class UploadServer extends NanoHTTPD {
                 + "</form>"
                 + "<div id='bar'><div id='fill'></div></div>"
                 + "<p id='msg'></p>"
+                + "</div>"
+
+                // What happens next, in the customer's own words. They scanned a code off a car
+                // dashboard with no idea what they are in the middle of — the steps are numbered
+                // so it reads as a short process with an end, and it sits UNDER the button so it
+                // never pushes the thing they came to press below the fold.
+                + "<div class='steps'>"
+                + "<b>إزاي تحطّ صورتك على الشاشة</b>"
+                + "<ol>"
+                + "<li>اضغط <b>اختيار الصور</b> واختر من ألبوم هاتفك — تقدر تختار أكتر من صورة.</li>"
+                + "<li>اضغط <b>رفع الصور</b> واستنى شريط التقدّم لحد ما يكمّل.</li>"
+                + "<li>الصورة هتظهر على شاشة السيارة على طول، وتقدر تظبّط مكانها وحجمها من الشاشة نفسها.</li>"
+                + "</ol>"
+                + "<p class='note'>خلّي هاتفك على نفس شبكة الواي‑فاي بتاعة السيارة، وما تقفلش الصفحة"
+                + " دي وانت بترفع. الصور بتفضل موجودة على الشاشة حتى بعد ما تقفل الصفحة.</p>"
                 + "</div>"
 
                 + "</div><script>"
