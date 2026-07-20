@@ -30,23 +30,46 @@ class LeopardCache {
         return url != null && (url.startsWith("http://") || url.startsWith("https://"));
     }
 
+    /** Reports download progress so a wait on a car's link does not look like a freeze. */
+    interface ProgressListener {
+        /** @param percent 0..100, or -1 when the server did not say how big the file is. */
+        void onProgress(int percent);
+    }
+
+    static Uri materialise(Context ctx, String url) {
+        return materialise(ctx, url, null);
+    }
+
     /**
      * Download (or reuse) the file and return a content:// URI for it.
      * Blocking — call from a background thread.
      *
      * @return null if it could not be fetched.
      */
-    static Uri materialise(Context ctx, String url) {
+    static Uri materialise(Context ctx, String url, ProgressListener listener) {
         try {
             File dir = new File(ctx.getCacheDir(), DIR);
             if(!dir.exists() && !dir.mkdirs()) return null;
 
             File dest = new File(dir, fileName(url));
             // Same URL, same file: a re-pick of the current wallpaper should not re-download.
+            // This is also what makes previewing a video free at apply time — it is already here.
             if(!dest.exists() || dest.length() == 0) {
-                if(!download(url, dest)) return null;
+                if(!download(url, dest, listener)) return null;
+            } else if(listener != null) {
+                listener.onProgress(100);
             }
             return FileProvider.getUriForFile(ctx, ctx.getPackageName() + ".fileprovider", dest);
+        } catch(Throwable t) {
+            return null;
+        }
+    }
+
+    /** The cached file for a URL, or null when it has not been downloaded yet. */
+    static File cachedFile(Context ctx, String url) {
+        try {
+            File f = new File(new File(ctx.getCacheDir(), DIR), fileName(url));
+            return (f.exists() && f.length() > 0) ? f : null;
         } catch(Throwable t) {
             return null;
         }
@@ -75,7 +98,7 @@ class LeopardCache {
         return WallpaperItem.TYPE_VIDEO.equals(WallpaperItem.guessType(url)) ? "mp4" : "jpg";
     }
 
-    private static boolean download(String url, File dest) {
+    private static boolean download(String url, File dest, ProgressListener listener) {
         HttpURLConnection c = null;
         InputStream in = null;
         FileOutputStream out = null;
@@ -87,11 +110,24 @@ class LeopardCache {
             c.setInstanceFollowRedirects(true);
             if(c.getResponseCode() / 100 != 2) return false;
 
+            final int total = c.getContentLength();
             in = c.getInputStream();
             out = new FileOutputStream(tmp);
             byte[] buf = new byte[16384];
             int n;
-            while((n = in.read(buf)) != -1) out.write(buf, 0, n);
+            long done = 0;
+            int lastPercent = -1;
+            while((n = in.read(buf)) != -1) {
+                out.write(buf, 0, n);
+                if(listener == null) continue;
+                done += n;
+                // Only on change, or a 30 MB clip would post thousands of identical UI updates.
+                int percent = total > 0 ? (int) (done * 100 / total) : -1;
+                if(percent != lastPercent) {
+                    lastPercent = percent;
+                    listener.onProgress(percent);
+                }
+            }
             out.flush();
             out.close();
             out = null;

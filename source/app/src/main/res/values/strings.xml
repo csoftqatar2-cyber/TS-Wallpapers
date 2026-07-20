@@ -394,6 +394,7 @@ Roboto Font Copyright (c) Christian Robertson. Licensed under the Apache License
     <string name="nav_clock">Clock</string>
     <string name="leopard_change">Change</string>
     <string name="leopard_preparing">Preparing…</string>
+    <string name="leopard_downloading">Downloading the video… %1$d%%</string>
     <string name="leopard_download_failed">Could not download this wallpaper</string>
     <string name="leopard_source_phone">From a phone</string>
     <string name="leopard_phone_hint">Scan this code with a phone on the same Wi-Fi, then upload the image.</string>
