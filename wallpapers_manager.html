@@ -1965,9 +1965,18 @@
                 const raw = code.data.trim();
                 const mac = extractMac(raw);
 
-                // Try to match a registered device by hex MAC
-                let matchedDevice = null;
-                if (mac) {
+                // 1) The QR encodes the device id verbatim (BaseSettingsActivity.onClickShowMacQr
+                //    passes getDeviceId() straight to QrCode.generate), so an exact match is the
+                //    normal case and must be tried FIRST. It used to be missing entirely: matching
+                //    ran only through extractMac(), which needs 12 hex characters, and a VIN like
+                //    VIN-LNNBDDEU3TJ005004 has letters that are not hex. So every car identified
+                //    by its VIN — i.e. every Automotive head unit, the main product — reported
+                //    "unregistered" no matter how long it had been activated.
+                let matchedDevice = devicesList.find(
+                    d => (d.hardware_id || "").trim().toLowerCase() === raw.toLowerCase());
+
+                // 2) Legacy MAC-based ids, still the only thing older non-vehicle devices have.
+                if (!matchedDevice && mac) {
                     matchedDevice = devicesList.find(d => hexOnly(d.hardware_id).includes(mac));
                 }
 
