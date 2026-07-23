@@ -22,6 +22,17 @@
     <!-- do not remove - still necessary for older API levels <= 22 -->
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
 
+    <!-- The GWM Split section mirrors cloud images into a shared folder (default
+         /sdcard/Pictures/GWMSplit_Styles) that a SEPARATE app reads. Writing where another app
+         can read on Android 11+ needs all-files access; it is requested at runtime, only when the
+         technician turns that section on, and is irrelevant to every other feature. maxSdkVersion
+         is not set because the folder must stay reachable on the newest head units too. -->
+    <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE"
+        tools:ignore="ScopedStorage" />
+    <!-- Pre-11 path to the same shared folder. -->
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+        android:maxSdkVersion="29" />
+
     <!-- Leopard mode sets a still image as the system wallpaper via WallpaperManager.setBitmap().
          Without this the call throws SecurityException and every image fails while video still
          works, because video goes through the system's own live-wallpaper screen instead.

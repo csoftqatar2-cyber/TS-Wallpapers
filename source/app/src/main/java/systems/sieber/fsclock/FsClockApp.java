@@ -17,6 +17,22 @@ public class FsClockApp extends Application {
         setAppTheme(getAppTheme(getApplicationContext()));
         IntegrityGuard.init(getApplicationContext());
         super.onCreate();
+        kickGwmSync();
+    }
+
+    /**
+     * One GWM Split mirror per process launch, independent of the operating mode (the clock view
+     * that runs the periodic sync does not exist in Leopard). No-ops instantly when the section is
+     * off or storage access is missing, so it costs nothing for the vast majority of cars.
+     */
+    private void kickGwmSync() {
+        try {
+            final Context app = getApplicationContext();
+            SharedPreferences prefs = app.getSharedPreferences(
+                    BaseSettingsActivity.SHARED_PREF_DOMAIN, Context.MODE_PRIVATE);
+            if(!GwmSync.isEnabled(prefs)) return;
+            GwmSync.syncAsync(app, new WallpaperRepo(app), null);
+        } catch(Throwable ignored) { }
     }
 
     public static void setAppTheme(int setting) {

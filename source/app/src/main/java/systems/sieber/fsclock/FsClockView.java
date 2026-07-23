@@ -148,6 +148,15 @@ public class FsClockView extends FrameLayout {
                     }
                 });
             }
+            // Mirror the GWM Split folder on the same cadence. Independent of the wallpaper sync
+            // above (different channel, different destination); no-ops when the section is off.
+            if(mWallpaperRepo != null && getContext() != null) {
+                SharedPreferences p = getContext().getSharedPreferences(
+                        BaseSettingsActivity.SHARED_PREF_DOMAIN, Context.MODE_PRIVATE);
+                if(GwmSync.isEnabled(p)) {
+                    GwmSync.syncAsync(getContext().getApplicationContext(), mWallpaperRepo, null);
+                }
+            }
             postDelayed(this, PERIODIC_SYNC_INTERVAL_MS);
         }
     };
@@ -162,6 +171,7 @@ public class FsClockView extends FrameLayout {
     TextView mTextViewActivationDeviceId;
     EditText mEditTextActivationSerial;
     Button mButtonActivate;
+    Button mButtonRecheck;
     CheckBox mCheckBoxFse;
     TextView mTextViewActivationStatus;
     View mBatteryView;
@@ -235,6 +245,7 @@ public class FsClockView extends FrameLayout {
         mTextViewActivationDeviceId = findViewById(R.id.textViewActivationDeviceId);
         mEditTextActivationSerial = findViewById(R.id.editTextActivationSerial);
         mButtonActivate = findViewById(R.id.buttonActivate);
+        mButtonRecheck = findViewById(R.id.buttonRecheck);
         mCheckBoxFse = findViewById(R.id.checkBoxFse);
         mTextViewActivationStatus = findViewById(R.id.textViewActivationStatus);
 
@@ -266,52 +277,9 @@ public class FsClockView extends FrameLayout {
                                 @Override
                                 public void run() {
                                     mButtonActivate.setEnabled(true);
+                                    if(mButtonRecheck != null) mButtonRecheck.setEnabled(true);
                                     if (success) {
-                                        mTextViewActivationStatus.setText(R.string.activation_success);
-                                        mTextViewActivationStatus.setTextColor(Color.GREEN);
-
-                                        // activation done -> now hide the on-screen keyboard
-                                        InputMethodManager imm = (InputMethodManager) getContext().getSystemService(Context.INPUT_METHOD_SERVICE);
-                                        if (imm != null) {
-                                            imm.hideSoftInputFromWindow(mEditTextActivationSerial.getWindowToken(), 0);
-                                        }
-                                        mEditTextActivationSerial.clearFocus();
-
-                                        // Make sure the wallpaper slideshow is switched on so the
-                                        // shop owner never has to flip a toggle after activating.
-                                        // FSE checked at activation time = run the app in a fixed
-                                        // 1920x720 window from now on (special head-unit panels).
-                                        // The mode chosen on this screen decides what the app
-                                        // becomes. OperatingMode writes both flags together so
-                                        // FSE and Leopard can never end up on at once.
-                                        int mode = selectedActivationMode();
-                                        mSharedPref.edit()
-                                                .putBoolean(WallpaperRepo.PREF_ENABLED, true)
-                                                .apply();
-                                        OperatingMode.set(mSharedPref, mode);
-                                        if(mCheckBoxFse != null) mCheckBoxFse.setChecked(mode == OperatingMode.FSE);
-                                        if(mActivity instanceof FullscreenActivity) {
-                                            ((FullscreenActivity) mActivity).applyFseScreenSize();
-                                        }
-                                        if(mode == OperatingMode.LEOPARD) {
-                                            // Nothing left for this screen to draw — hand over
-                                            // to the picker rather than sit on a dead clock.
-                                            getContext().startActivity(
-                                                    new android.content.Intent(getContext(), LeopardPickerActivity.class));
-                                            if(mActivity != null) mActivity.finish();
-                                            return;
-                                        }
-
-                                        postDelayed(new Runnable() {
-                                            @Override
-                                            public void run() {
-                                                loadSettings();
-                                                // Automatically download the public wallpapers right
-                                                // after activation, retrying a few times so a brief
-                                                // network hiccup doesn't leave the screen empty.
-                                                autoDownloadWallpapers(3);
-                                            }
-                                        }, 1500);
+                                        applyActivationSuccess(selectedActivationMode());
                                     } else {
                                         mTextViewActivationStatus.setTextColor(Color.RED);
                                         if ("serial_already_used".equals(result)) {
@@ -324,6 +292,48 @@ public class FsClockView extends FrameLayout {
                                             mTextViewActivationStatus.setText(getContext().getString(R.string.activation_error_failed,
                                                     error != null ? error : getContext().getString(R.string.activation_error_unknown)));
                                         }
+                                    }
+                                }
+                            });
+                        }
+                    });
+                }
+            });
+        }
+
+        // "Already registered? Re-check" — ask the server whether this exact car is already
+        // registered (its VIN/device id is known and active), and if so open straight into the
+        // app without needing a fresh serial. Solves the reinstall / cleared-data case where the
+        // serial was already consumed, so re-entering it would only return "already used".
+        if (mButtonRecheck != null && mTextViewActivationStatus != null) {
+            mButtonRecheck.setOnClickListener(new View.OnClickListener() {
+                @Override
+                public void onClick(View v) {
+                    mTextViewActivationStatus.setText(R.string.activation_rechecking);
+                    mTextViewActivationStatus.setTextColor(Color.YELLOW);
+                    mTextViewActivationStatus.setVisibility(View.VISIBLE);
+                    mButtonRecheck.setEnabled(false);
+                    if(mButtonActivate != null) mButtonActivate.setEnabled(false);
+
+                    // sync() hits get_wallpapers and writes PREF_ACTIVE from the server's answer
+                    // ("inactive" sentinel = not registered), so isActive() is authoritative once
+                    // it returns — no separate endpoint needed.
+                    mWallpaperRepo.sync(new WallpaperRepo.SyncCallback() {
+                        @Override
+                        public void done(final boolean success, final int count, final String error) {
+                            post(new Runnable() {
+                                @Override
+                                public void run() {
+                                    mButtonRecheck.setEnabled(true);
+                                    if(mButtonActivate != null) mButtonActivate.setEnabled(true);
+                                    if (mWallpaperRepo.isActive()) {
+                                        applyActivationSuccess(selectedActivationMode());
+                                    } else {
+                                        mTextViewActivationStatus.setTextColor(Color.RED);
+                                        // A network failure and "server says not registered" look
+                                        // the same to the shop owner here: either way the fix is to
+                                        // enter the serial, so we show the same guidance.
+                                        mTextViewActivationStatus.setText(R.string.activation_recheck_not_found);
                                     }
                                 }
                             });
@@ -662,11 +672,6 @@ public class FsClockView extends FrameLayout {
         }
 
         refreshNightMode();
-
-        // FSE screen: let the wallpaper layer use each image's saved position and be pannable
-        if(mWallpaper != null) {
-            mWallpaper.setFseMode(mSharedPref.getBoolean(FullscreenActivity.PREF_FSE_SCREEN, false));
-        }
 
         // burn-in prevention, calendar/app events and system-alarm display were removed
         // from the app — force them off regardless of any previously stored preference.
@@ -1042,6 +1047,56 @@ public class FsClockView extends FrameLayout {
         return OperatingMode.NORMAL;
     }
 
+    /**
+     * Finish activating on the UI thread: switch the slideshow on, lock in the chosen operating
+     * mode, dismiss the keyboard and either hand over to the Leopard picker or load the clock and
+     * pull the wallpapers. Shared by the "Activate Now" success path and the "Re-check" path (a
+     * car the server already had on record), so both leave the app in exactly the same state.
+     */
+    private void applyActivationSuccess(int mode) {
+        mTextViewActivationStatus.setText(R.string.activation_success);
+        mTextViewActivationStatus.setTextColor(Color.GREEN);
+        mTextViewActivationStatus.setVisibility(View.VISIBLE);
+
+        // hide the on-screen keyboard now that the serial field is done with
+        InputMethodManager imm = (InputMethodManager) getContext().getSystemService(Context.INPUT_METHOD_SERVICE);
+        if (imm != null && mEditTextActivationSerial != null) {
+            imm.hideSoftInputFromWindow(mEditTextActivationSerial.getWindowToken(), 0);
+        }
+        if(mEditTextActivationSerial != null) mEditTextActivationSerial.clearFocus();
+
+        // Make sure the wallpaper slideshow is switched on so the shop owner never has to flip a
+        // toggle after activating. FSE selected here = run the app in a fixed 1920x720 window from
+        // now on (special head-unit panels). OperatingMode writes both flags together so FSE and
+        // Leopard can never end up on at once.
+        mSharedPref.edit()
+                .putBoolean(WallpaperRepo.PREF_ENABLED, true)
+                .apply();
+        OperatingMode.set(mSharedPref, mode);
+        if(mCheckBoxFse != null) mCheckBoxFse.setChecked(mode == OperatingMode.FSE);
+        if(mActivity instanceof FullscreenActivity) {
+            ((FullscreenActivity) mActivity).applyFseScreenSize();
+        }
+        if(mode == OperatingMode.LEOPARD) {
+            // Nothing left for this screen to draw — hand over to the picker rather than sit on a
+            // dead clock.
+            getContext().startActivity(
+                    new android.content.Intent(getContext(), LeopardPickerActivity.class));
+            if(mActivity != null) mActivity.finish();
+            return;
+        }
+
+        postDelayed(new Runnable() {
+            @Override
+            public void run() {
+                loadSettings();
+                // Automatically download the public wallpapers right after activation, retrying a
+                // few times so a brief network hiccup doesn't leave the screen empty.
+                autoDownloadWallpapers(3);
+            }
+        }, 1500);
+    }
+
     private void refreshWeather() {
         if(!mSharedPref.getBoolean("show-weather", true)) return;
         Double lat = null, lon = null;
@@ -1149,18 +1204,14 @@ public class FsClockView extends FrameLayout {
         }
     }
 
-    /** Whether the FSE fixed-screen mode is on (only then is wallpaper repositioning offered). */
-    public boolean isFseMode() {
-        return mSharedPref != null && mSharedPref.getBoolean(FullscreenActivity.PREF_FSE_SCREEN, false);
-    }
-
     public boolean isAdjustMode() {
         return mAdjustMode;
     }
 
-    /** Enter wallpaper "adjust position" mode: hide the clock and let drags pan the image. */
+    /** Enter wallpaper "adjust position" mode: hide the clock and let drags pan the image.
+     *  Available in both the normal (general) screen and FSE — only a live wallpaper is needed. */
     public void enterAdjustMode() {
-        if(mAdjustMode || !isFseMode()) return;
+        if(mAdjustMode) return;
         if(mWallpaperRepo == null || !mWallpaperRepo.isEnabled()) return;
         mAdjustMode = true;
         setClockHidden(true);

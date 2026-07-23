@@ -62,10 +62,6 @@ public class WallpaperView extends FrameLayout {
     private Slot mFront;
     private WallpaperRepo mRepo;
 
-    // FSE mode: when on, each wallpaper uses its saved focal point and can be panned;
-    // when off, everything stays centered (identical to the old center-crop behavior).
-    private boolean mFseMode = false;
-
     public WallpaperView(Context c, AttributeSet attrs) {
         super(c, attrs);
         setBackgroundColor(Color.BLACK);
@@ -129,11 +125,6 @@ public class WallpaperView extends FrameLayout {
 
     public void setRepo(WallpaperRepo repo) {
         mRepo = repo;
-    }
-
-    /** Turn FSE per-wallpaper positioning on/off. Off = classic centered crop. */
-    public void setFseMode(boolean on) {
-        mFseMode = on;
     }
 
     /** Remove any content (used when the slideshow is disabled). */
@@ -209,8 +200,11 @@ public class WallpaperView extends FrameLayout {
         // How this wallpaper is fitted. Unlike the focal point this applies whether or not FSE
         // is on: a 9:16 photo is butchered by center-crop on any wide screen, not just 1920x720.
         slot.fit = mRepo != null ? mRepo.getFit(item.url) : new FitSettings();
-        // load the saved focal point for this wallpaper (center when FSE is off)
-        if(mFseMode && mRepo != null && item.url != null) {
+        // Load the saved focal point for this wallpaper. Now that "adjust position" is offered
+        // on the normal screen too (not just FSE), the saved position must be restored in both:
+        // getFocal() returns the centre (0.5, 0.5) when nothing was ever saved, so a wallpaper
+        // the user never repositioned still centre-crops exactly as before.
+        if(mRepo != null && item.url != null) {
             float[] f = mRepo.getFocal(item.url);
             slot.focalX = f[0];
             slot.focalY = f[1];

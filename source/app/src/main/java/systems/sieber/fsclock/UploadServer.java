@@ -67,13 +67,17 @@ public class UploadServer extends NanoHTTPD {
     private final Context mContext;
     private final WallpaperRepo mRepo;
     private final UploadListener mListener;
+    /** When true, uploads land in the external GWM Split folder, not our wallpaper folder, and are
+     *  NOT made the current wallpaper — they belong to a different app entirely. */
+    private final boolean mGwmFolder;
     private final Handler mMain = new Handler(Looper.getMainLooper());
 
-    private UploadServer(Context c, int port, WallpaperRepo repo, UploadListener listener) {
+    private UploadServer(Context c, int port, WallpaperRepo repo, UploadListener listener, boolean gwmFolder) {
         super(port);
         mContext = c.getApplicationContext();
         mRepo = repo;
         mListener = listener;
+        mGwmFolder = gwmFolder;
         // Do NOT use NanoHTTPD's default temp file manager: it writes to
         // System.getProperty("java.io.tmpdir"), which on Android points into the app
         // cache — a directory Android may wipe at any time. When it is gone, every
@@ -90,9 +94,18 @@ public class UploadServer extends NanoHTTPD {
 
     /** Bind and start the server, falling back to the next port if one is taken. */
     public static UploadServer startNew(Context c, WallpaperRepo repo, UploadListener listener) throws IOException {
+        return startNew(c, repo, listener, false);
+    }
+
+    /** Variant whose uploads go straight into the external GWM Split folder. */
+    public static UploadServer startNewGwm(Context c, WallpaperRepo repo, UploadListener listener) throws IOException {
+        return startNew(c, repo, listener, true);
+    }
+
+    private static UploadServer startNew(Context c, WallpaperRepo repo, UploadListener listener, boolean gwmFolder) throws IOException {
         IOException last = null;
         for(int i = 0; i < PORT_TRIES; i++) {
-            UploadServer server = new UploadServer(c, PORT + i, repo, listener);
+            UploadServer server = new UploadServer(c, PORT + i, repo, listener, gwmFolder);
             try {
                 server.start(READ_TIMEOUT_MS, true);
                 return server;
@@ -129,15 +142,18 @@ public class UploadServer extends NanoHTTPD {
                     if(one != null) saved.add(one);
                 }
                 if(!saved.isEmpty()) {
-                    // Make the last one the default wallpaper + enable the slideshow. Picking one
-                    // of a batch is arbitrary, but leaving PREF_DEFAULT pointing at whatever came
-                    // before would be worse: the user just sent these and expects to see them.
-                    SharedPreferences sp = mContext.getSharedPreferences(SettingsActivity.SHARED_PREF_DOMAIN, Context.MODE_PRIVATE);
-                    sp.edit()
-                            .putString(WallpaperRepo.PREF_DEFAULT, saved.get(saved.size() - 1))
-                            .putBoolean(WallpaperRepo.PREF_ENABLED, true)
-                            .putBoolean(WallpaperRepo.PREF_LOCAL_ENABLED, true)
-                            .apply();
+                    // GWM uploads belong to a different app's folder — they are not our wallpaper,
+                    // so none of the slideshow prefs apply. For our own uploads, make the last one
+                    // the default wallpaper + enable the slideshow (picking one of a batch is
+                    // arbitrary, but leaving PREF_DEFAULT on whatever came before is worse).
+                    if(!mGwmFolder) {
+                        SharedPreferences sp = mContext.getSharedPreferences(SettingsActivity.SHARED_PREF_DOMAIN, Context.MODE_PRIVATE);
+                        sp.edit()
+                                .putString(WallpaperRepo.PREF_DEFAULT, saved.get(saved.size() - 1))
+                                .putBoolean(WallpaperRepo.PREF_ENABLED, true)
+                                .putBoolean(WallpaperRepo.PREF_LOCAL_ENABLED, true)
+                                .apply();
+                    }
                     if(mListener != null) {
                         mMain.post(new Runnable() {
                             @Override
@@ -206,6 +222,21 @@ public class UploadServer extends NanoHTTPD {
     }
 
     private String saveUpload(String tmpPath, String originalName) {
+        // GWM mode: hand the file to the GWM folder writer, which also tracks it so a later cloud
+        // mirror does not treat it as a stranger's file. All the wallpaper-folder logic below is
+        // skipped — this file is not one of our wallpapers.
+        if(mGwmFolder) {
+            try {
+                FileInputStream in = new FileInputStream(tmpPath);
+                String path = GwmSync.saveLocalCopy(mContext, in,
+                        "upload_" + originalName.replaceAll("[\\\\/:*?\"<>|]", "_"));
+                in.close();
+                return path;
+            } catch(Exception e) {
+                Log.e(TAG, "saving the GWM upload failed", e);
+                return null;
+            }
+        }
         try {
             String ext = ".jpg";
             int dot = originalName.lastIndexOf('.');

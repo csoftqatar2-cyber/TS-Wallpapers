@@ -262,6 +262,7 @@
     <string name="activation_overlay_title">تفعيل البرنامج</string>
     <string name="activation_overlay_subtitle">يرجى إدخال الرقم التسلسلي لتفعيل البرنامج:</string>
     <string name="activation_button">تفعيل الآن</string>
+    <string name="activation_recheck_button">السيارة مسجّلة من قبل؟ إعادة الفحص</string>
     <string name="activation_device_id_label">معرف الجهاز: </string>
     <string name="activation_dialog_title">تفعيل الإعدادات (Activation)</string>
 
@@ -269,6 +270,8 @@
     <string name="activation_error_empty_serial">يرجى إدخال الرقم التسلسلي</string>
     <string name="activation_error_invalid_serial">الرقم التسلسلي غير صحيح</string>
     <string name="activation_checking">جاري التحقق من التفعيل...</string>
+    <string name="activation_rechecking">جاري التحقق من السيرفرات...</string>
+    <string name="activation_recheck_not_found">السيارة غير مسجّلة بعد — أدخل الرقم التسلسلي للتفعيل</string>
     <string name="activation_success">تم التفعيل بنجاح!</string>
     <string name="activation_error_already_used">هذا الرقم التسلسلي مستخدم بالفعل على جهاز آخر</string>
     <string name="activation_error_blocked">تم حظر هذا الجهاز. يرجى التواصل مع الدعم.</string>
@@ -319,6 +322,21 @@
     <string name="fit_default_blur">قوة الضبابية الافتراضية</string>
     <string name="fit_default_color">لون الجانبين الافتراضي</string>
     <string name="fit_edit_on_import">افتح شاشة التعديل بعد كل استيراد</string>
+
+    <!-- GWM Split -->
+    <string name="gwm_section">GWM Split</string>
+    <string name="gwm_subtitle">بينزّل الصور المعلّمة \"GWM Split\" من السحابة في فولدر على العربية عشان تطبيق GWM Split يستخدمها. مالوش أي علاقة بخلفيات تطبيقنا.</string>
+    <string name="gwm_enable">تفعيل مزامنة GWM Split</string>
+    <string name="gwm_folder">الفولدر: %1$s</string>
+    <string name="gwm_grant_permission">امنح \"الوصول لكل الملفات\" (مطلوب)</string>
+    <string name="gwm_pair_phone">رفع من الهاتف (QR)</string>
+    <string name="gwm_sync_now">زامن الآن</string>
+    <string name="gwm_status_syncing">جارٍ المزامنة…</string>
+    <string name="gwm_status_done">%1$d ملف في الفولدر</string>
+    <string name="gwm_status_failed">فشلت المزامنة: %1$s</string>
+    <string name="gwm_status_no_permission">في انتظار \"الوصول لكل الملفات\" — امنحه من الزر بالأعلى.</string>
+    <string name="gwm_permission_title">إذن مطلوب</string>
+    <string name="gwm_permission_message">عشان نحط الصور في فولدر يقدر تطبيق تاني يقراه، فعّل \"السماح بإدارة كل الملفات\" في الشاشة التالية.</string>
 
     <!-- Leopard: the app hands the wallpaper to Android and steps out of the way. -->
     <string name="leopard_wallpaper_description">ذبذبة خلفيات — الصورة أو الفيديو اللي اخترته</string>

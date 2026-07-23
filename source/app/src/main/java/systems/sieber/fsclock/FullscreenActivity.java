@@ -229,8 +229,10 @@ public class FullscreenActivity extends AppCompatActivity {
                         }
                         @Override
                         public void onLongPress(MotionEvent e) {
-                            // long press on an FSE screen starts wallpaper "adjust position" mode
-                            if(mContentView.isFseMode() && !mContentView.isAdjustMode()) {
+                            // long press starts wallpaper "adjust position" mode — in both the
+                            // normal (general) screen and the FSE screen; Leopard never reaches
+                            // this activity, so no mode check beyond "not already adjusting".
+                            if(!mContentView.isAdjustMode()) {
                                 mContentView.enterAdjustMode();
                                 mClockHidden = true;
                                 hide();

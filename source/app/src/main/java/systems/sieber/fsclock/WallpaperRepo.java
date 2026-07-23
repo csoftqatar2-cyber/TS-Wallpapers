@@ -128,19 +128,50 @@ public class WallpaperRepo {
         };
         for (String k : keys) {
             String v = getSystemProperty(k);
-            if (v != null) {
-                v = v.trim();
-                if (v.length() >= 8 && !v.equalsIgnoreCase("unknown")) {
-                    return v;
-                }
-            }
+            if (isPlausibleVin(v)) return v.trim();
         }
         return "";
     }
 
+    /**
+     * VIN sources that live in the settings database rather than in system properties.
+     *
+     * Geely / Lynk &amp; Co head units (Flyme) publish it here and expose no VIN property at all,
+     * so without this every Lynk car falls back to the legacy chain and identifies itself by a
+     * serial that a head-unit swap changes.
+     *
+     * The obvious route — CarPropertyManager with INFO_VIN — is closed to us: that property is
+     * gated behind android.car.permission.CAR_IDENTIFICATION, which is signature|privileged on
+     * AAOS and cannot be granted to a normal app. Settings.Global needs no permission at all.
+     */
+    private static String getVinFromSettings(Context context) {
+        String[] keys = { "geely_gpt_vin" };   // Geely / Lynk & Co
+        for (String k : keys) {
+            try {
+                String v = android.provider.Settings.Global.getString(
+                        context.getContentResolver(), k);
+                if (isPlausibleVin(v)) return v.trim();
+            } catch (Throwable ignored) { }
+        }
+        return "";
+    }
+
+    /** Guards against the placeholders these fields carry before the car has been provisioned. */
+    private static boolean isPlausibleVin(String v) {
+        if (v == null) return false;
+        v = v.trim();
+        return v.length() >= 8
+                && !v.equalsIgnoreCase("unknown")
+                && !v.equalsIgnoreCase("null")
+                && !v.replace("0", "").isEmpty();   // all-zero placeholder
+    }
+
     public static String getHardwareId(Context context) {
         // 0. Vehicle VIN (Android Automotive) – tied to the car, survives factory reset.
-        String vin = getVin();
+        //    Settings first: a car that has both must not get a different id depending on which
+        //    source is consulted, and the settings value is the one Geely keeps current.
+        String vin = getVinFromSettings(context);
+        if (vin.isEmpty()) vin = getVin();
         if (!vin.isEmpty()) {
             return "VIN-" + vin;
         }
@@ -221,6 +252,34 @@ public class WallpaperRepo {
             }
         }
         return url;
+    }
+
+    /** RPC that returns the GWM Split channel images for this car (empty when not configured). */
+    private String getGwmSyncUrl() {
+        String sbUrl = getSupabaseUrl();
+        if (sbUrl.contains("YOUR_SUPABASE_PROJECT")) return "";
+        return sbUrl + "/rest/v1/rpc/get_gwm_wallpapers?device_hw_id=" + getDeviceId()
+                + "&legacy_hw_id=" + getLegacyDeviceId();
+    }
+
+    /**
+     * Fetch the GWM Split manifest for this car: the images the operator tagged for the external
+     * folder, global-to-all-GWM plus this car's own. Blocking — call from a background thread.
+     *
+     * Returns an empty list for an unactivated device (the RPC answers with a single "inactive"
+     * sentinel, exactly like the normal channel), so a car that is not activated never writes
+     * anything into the shared folder.
+     */
+    public List<WallpaperItem> fetchGwmItems() throws Exception {
+        String url = getGwmSyncUrl();
+        if (url.isEmpty()) return new ArrayList<>();
+        String json = httpGet(url);
+        if (json == null || json.trim().isEmpty()) return new ArrayList<>();
+        List<WallpaperItem> parsed = parse(json);
+        if (parsed.size() == 1 && "inactive".equals(parsed.get(0).url)) {
+            return new ArrayList<>();
+        }
+        return parsed;
     }
 
     /** sub-folder inside the app's external files dir where the shop can drop wallpapers. */
@@ -734,7 +793,10 @@ public class WallpaperRepo {
     }
 
     private String httpGet(String urlStr) throws Exception {
-        boolean isRpc = urlStr.contains("/rpc/get_wallpapers");
+        // Both wallpaper RPCs take the same (device_hw_id, legacy_hw_id) body, so they share this
+        // path. get_gwm_wallpapers does not contain the literal "get_wallpapers" substring, so it
+        // must be listed explicitly.
+        boolean isRpc = urlStr.contains("/rpc/get_wallpapers") || urlStr.contains("/rpc/get_gwm_wallpapers");
         URL url = new URL(isRpc ? urlStr.split("\\?")[0] : urlStr);
         HttpURLConnection conn = (HttpURLConnection) url.openConnection();
         conn.setConnectTimeout(15000);

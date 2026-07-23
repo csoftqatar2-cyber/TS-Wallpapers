@@ -1285,6 +1285,110 @@
 
                         </LinearLayout>
                     </com.google.android.material.card.MaterialCardView>
+
+                    <!-- ===== GWM Split: a self-contained side channel. Downloads cloud images of
+                         the 'gwm_split' channel into an external folder that a SEPARATE app on GWM
+                         cars reads. Nothing here affects our own wallpaper/slideshow or modes. ===== -->
+                    <com.google.android.material.card.MaterialCardView
+                        android:id="@+id/sectionGwm"
+                        style="@style/SettingsCard">
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:orientation="vertical">
+
+                            <TextView
+                                style="@style/SectionHeader"
+                                android:text="@string/gwm_section" />
+
+                            <TextView
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_marginBottom="6dp"
+                                android:textColor="@color/aurora_muted"
+                                android:textSize="11sp"
+                                android:text="@string/gwm_subtitle" />
+
+                            <com.google.android.material.switchmaterial.SwitchMaterial
+                                android:id="@+id/checkBoxGwmEnabled"
+                                style="@style/SettingsSwitch"
+                                android:text="@string/gwm_enable" />
+
+                            <TextView
+                                android:id="@+id/textViewGwmFolder"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:paddingTop="6dp"
+                                android:paddingBottom="6dp"
+                                android:textColor="@color/aurora_text"
+                                android:textSize="12sp"
+                                android:textIsSelectable="true"
+                                android:text="" />
+
+                            <TextView
+                                android:id="@+id/buttonGwmPermission"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_marginTop="6dp"
+                                android:background="@drawable/fit_secondary_btn"
+                                android:padding="12dp"
+                                android:gravity="center"
+                                android:focusable="true"
+                                android:clickable="true"
+                                android:textColor="@color/gold"
+                                android:textStyle="bold"
+                                android:textSize="13sp"
+                                android:visibility="gone"
+                                android:text="@string/gwm_grant_permission" />
+
+                            <LinearLayout
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:orientation="horizontal"
+                                android:layout_marginTop="10dp"
+                                android:baselineAligned="false">
+
+                                <LinearLayout
+                                    android:id="@+id/buttonGwmPairPhone"
+                                    style="@style/WallpaperTile"
+                                    android:layout_width="0dp"
+                                    android:layout_weight="1">
+                                    <ImageView
+                                        style="@style/WallpaperTileIcon"
+                                        android:src="@drawable/ic_tile_phone_upload_32dp" />
+                                    <TextView
+                                        style="@style/WallpaperTileLabel"
+                                        android:text="@string/gwm_pair_phone" />
+                                </LinearLayout>
+
+                                <LinearLayout
+                                    android:id="@+id/buttonGwmSyncNow"
+                                    style="@style/WallpaperTile"
+                                    android:layout_marginStart="10dp"
+                                    android:layout_width="0dp"
+                                    android:layout_weight="1">
+                                    <ImageView
+                                        style="@style/WallpaperTileIcon"
+                                        android:src="@drawable/ic_cloud_48dp" />
+                                    <TextView
+                                        style="@style/WallpaperTileLabel"
+                                        android:text="@string/gwm_sync_now" />
+                                </LinearLayout>
+
+                            </LinearLayout>
+
+                            <TextView
+                                android:id="@+id/textViewGwmStatus"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:paddingTop="8dp"
+                                android:textColor="@color/aurora_muted"
+                                android:textSize="11sp"
+                                android:text="" />
+
+                        </LinearLayout>
+                    </com.google.android.material.card.MaterialCardView>
+
                     <com.google.android.material.card.MaterialCardView
                         android:id="@+id/sectionClockLayout"
                         style="@style/SettingsCard">

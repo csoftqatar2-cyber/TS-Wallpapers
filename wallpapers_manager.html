@@ -1334,6 +1334,21 @@
                 </h2>
 
                 <form id="upload-form" onsubmit="event.preventDefault(); startUpload();">
+                    <!-- Delivery channel: our own app, or the external GWM Split folder. The
+                         global/private choice below applies inside whichever channel is picked. -->
+                    <div class="form-group">
+                        <label>وجهة التسليم</label>
+                        <div class="toggle-group">
+                            <button type="button" class="toggle-btn active" id="btn-channel-app" onclick="setChannel('app')">
+                                <i class="fa-solid fa-mobile-screen"></i> تطبيق ذبذبة (خلفيات الشاشة)
+                            </button>
+                            <button type="button" class="toggle-btn" id="btn-channel-gwm" onclick="setChannel('gwm_split')">
+                                <i class="fa-solid fa-folder-tree"></i> GWM Split (فولدر خارجي)
+                            </button>
+                        </div>
+                        <p id="channel-hint" style="margin: 8px 2px 0; font-size: 0.82rem; color: var(--text-muted);"></p>
+                    </div>
+
                     <!-- Target Type (Global vs Private) -->
                     <div class="form-group">
                         <label>من يستطيع رؤية هذه الخلفيات؟</label>
@@ -1452,6 +1467,9 @@
                     </button>
                     <button type="button" class="wp-filter-btn" id="wp-filter-private" onclick="setWallpaperFilter('private')">
                         <i class="fa-solid fa-user-shield"></i> الخاصة فقط
+                    </button>
+                    <button type="button" class="wp-filter-btn" id="wp-filter-gwm" onclick="setWallpaperFilter('gwm')">
+                        <i class="fa-solid fa-folder-tree"></i> GWM Split
                     </button>
                 </div>
 
@@ -1673,6 +1691,27 @@
         let hideModalSelection = null; // Set of hardware_ids ticked in that modal
         let selectedFiles = [];
         let targetType = 'global'; // global or private
+        let uploadChannel = 'app'; // 'app' (our slideshow) or 'gwm_split' (external GWM folder)
+
+        // Switch the delivery channel. The global/private target below is orthogonal and stays
+        // as-is; only the copy changes so the operator knows where these images will land.
+        function setChannel(ch) {
+            uploadChannel = (ch === 'gwm_split') ? 'gwm_split' : 'app';
+            document.getElementById("btn-channel-app").classList.toggle('active', uploadChannel === 'app');
+            document.getElementById("btn-channel-gwm").classList.toggle('active', uploadChannel === 'gwm_split');
+
+            const globalBtn = document.getElementById("btn-target-global");
+            const hint = document.getElementById("channel-hint");
+            if (uploadChannel === 'gwm_split') {
+                // "Global" now means "every GWM car", because only cars with the GWM Split section
+                // enabled ever pull this channel — so relabel it to say exactly that.
+                globalBtn.innerHTML = '<i class="fa-solid fa-globe"></i> كل عربيات GWM';
+                hint.innerText = 'هذه الصور لا تظهر داخل تطبيقنا. تُنزَّل في فولدر GWMSplit_Styles على العربية ليستخدمها تطبيق GWM Split. تظهر فقط على العربيات المفعّل بها قسم GWM Split.';
+            } else {
+                globalBtn.innerHTML = '<i class="fa-solid fa-globe"></i> جميع الأجهزة (عام)';
+                hint.innerText = '';
+            }
+        }
         let inputMode = 'files'; // files or folder
         let activeFilter = 'all'; // all | global | private (main grid filter)
 
@@ -1779,11 +1818,13 @@
             if (!response.ok) throw new Error("Failed to load wallpapers");
             wallpapersList = await response.json();
 
-            // Render stats
-            document.getElementById("stat-total-wp").innerText = wallpapersList.length;
-            const privateCount = wallpapersList.filter(w => !w.is_global).length;
+            // Render stats — app channel only, so the GWM Split images (a separate delivery path)
+            // never inflate the counts the operator reads for our own app.
+            const appList = wallpapersList.filter(w => (w.channel || 'app') === 'app');
+            document.getElementById("stat-total-wp").innerText = appList.length;
+            const privateCount = appList.filter(w => !w.is_global).length;
             document.getElementById("stat-private-wp").innerText = privateCount;
-            const globalCount = wallpapersList.filter(w => w.is_global).length;
+            const globalCount = appList.filter(w => w.is_global).length;
             document.getElementById("stat-global-wp").innerText = globalCount;
 
             // Respect the currently active filter + search query
@@ -2215,7 +2256,7 @@
 
                 try {
                     // Upload + record via the admin-upload Edge Function (throws on failure)
-                    await uploadViaFunction(file, isGlobal, hwId);
+                    await uploadViaFunction(file, isGlobal, hwId, uploadChannel);
                     successCount++;
                 } catch (err) {
                     console.error(`Error uploading ${file.name}:`, err);
@@ -2271,7 +2312,7 @@
         // Function. The function verifies the caller is the admin and performs the
         // storage write with the service role, which sidesteps the fact that the
         // Storage service does not accept this project's user JWTs directly.
-        async function uploadViaFunction(file, isGlobal, hardwareId) {
+        async function uploadViaFunction(file, isGlobal, hardwareId, channel) {
             // Classify every video container the app can play (case-insensitive);
             // previously .mkv / uppercase .MP4 were stored as type "image" and the
             // device tried to render them with the image pipeline.
@@ -2299,7 +2340,8 @@
                     "x-file-name": encodeURIComponent(uniqueName),
                     "x-file-type": fileType,
                     "x-is-global": String(isGlobal),
-                    "x-hardware-id": hardwareId || ""
+                    "x-hardware-id": hardwareId || "",
+                    "x-channel": channel || "app"
                 },
                 body: file
             });
@@ -2480,9 +2522,21 @@
                 title.title = filename;
 
                 // Target Device or Serial
+                const isGwm = (wp.channel || 'app') === 'gwm_split';
                 const target = document.createElement("div");
                 target.className = "wp-target";
-                if (wp.is_global) {
+                if (isGwm) {
+                    // GWM Split image: it lands in the external folder, not our slideshow. Say so,
+                    // then still show whether it is for all GWM cars or one specific car.
+                    if (wp.is_global) {
+                        target.innerHTML = '<i class="fa-solid fa-folder-tree"></i> GWM Split · كل عربيات GWM';
+                    } else {
+                        const device = devicesList.find(d => d.hardware_id === wp.hardware_id);
+                        const serial = device ? device.serial_number : 'غير معروف';
+                        target.innerHTML = `<i class="fa-solid fa-folder-tree"></i> GWM Split · كود: ${serial}`;
+                        target.title = `معرف الجهاز: ${wp.hardware_id}`;
+                    }
+                } else if (wp.is_global) {
                     target.innerHTML = hiddenCount > 0
                         ? `<i class="fa-solid fa-users"></i> متاح لجميع الأجهزة النشطة ما عدا ${hiddenCount} سيارة`
                         : '<i class="fa-solid fa-users"></i> متاح لجميع الأجهزة النشطة';
@@ -2897,9 +2951,9 @@
             const body = document.getElementById("devices-modal-body");
             const q = (document.getElementById("devices-search").value || "").toLowerCase().trim();
 
-            // count private wallpapers per device
+            // count private wallpapers per device (app channel only — GWM Split has its own view)
             const wpCount = {};
-            wallpapersList.filter(w => !w.is_global && w.hardware_id).forEach(w => {
+            wallpapersList.filter(w => (w.channel || 'app') === 'app' && !w.is_global && w.hardware_id).forEach(w => {
                 wpCount[w.hardware_id] = (wpCount[w.hardware_id] || 0) + 1;
             });
 
@@ -3017,8 +3071,9 @@
             const body = document.getElementById("private-modal-body");
             const query = (document.getElementById("private-search").value || "").toLowerCase().trim();
 
-            // Only private wallpapers that are actually assigned to a device
-            const privateList = wallpapersList.filter(w => !w.is_global && w.hardware_id);
+            // Only private wallpapers that are actually assigned to a device (app channel only;
+            // GWM Split images are managed from the GWM Split filter, not this per-device view)
+            const privateList = wallpapersList.filter(w => (w.channel || 'app') === 'app' && !w.is_global && w.hardware_id);
 
             // Group by hardware_id
             const groups = {};
@@ -3189,6 +3244,7 @@
             document.getElementById("wp-filter-all").classList.toggle('active', filter === 'all');
             document.getElementById("wp-filter-global").classList.toggle('active', filter === 'global');
             document.getElementById("wp-filter-private").classList.toggle('active', filter === 'private');
+            document.getElementById("wp-filter-gwm").classList.toggle('active', filter === 'gwm');
             filterWallpapers();
         }
 
@@ -3197,9 +3253,17 @@
             const query = document.getElementById("search-input").value.toLowerCase().trim();
 
             const filtered = wallpapersList.filter(wp => {
-                // 1) Type filter
-                if (activeFilter === 'global' && !wp.is_global) return false;
-                if (activeFilter === 'private' && wp.is_global) return false;
+                const ch = wp.channel || 'app';
+                // Channel gate: GWM Split images live in their own filter and never show up under
+                // all/global/private, so the operator's normal view stays exactly about our app.
+                if (activeFilter === 'gwm') {
+                    if (ch !== 'gwm_split') return false;
+                } else {
+                    if (ch !== 'app') return false;
+                    // 1) Type filter (app channel only)
+                    if (activeFilter === 'global' && !wp.is_global) return false;
+                    if (activeFilter === 'private' && wp.is_global) return false;
+                }
 
                 // 2) Search query
                 if (!query) return true;
