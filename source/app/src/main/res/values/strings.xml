@@ -331,6 +331,21 @@ Roboto Font Copyright (c) Christian Robertson. Licensed under the Apache License
     <string name="fit_default_color">Default side colour</string>
     <string name="fit_edit_on_import">Open the editor after every import</string>
 
+    <!-- GWM Split: mirror cloud images into an external folder another app reads -->
+    <string name="gwm_section">GWM Split</string>
+    <string name="gwm_subtitle">Downloads images tagged \"GWM Split\" from the cloud into a folder on this car for the GWM Split app to use. Does not affect this app\'s own wallpapers.</string>
+    <string name="gwm_enable">Enable GWM Split sync</string>
+    <string name="gwm_folder">Folder: %1$s</string>
+    <string name="gwm_grant_permission">Grant \"All files access\" (required)</string>
+    <string name="gwm_pair_phone">Upload from phone (QR)</string>
+    <string name="gwm_sync_now">Sync now</string>
+    <string name="gwm_status_syncing">Syncing…</string>
+    <string name="gwm_status_done">%1$d file(s) in the folder</string>
+    <string name="gwm_status_failed">Sync failed: %1$s</string>
+    <string name="gwm_status_no_permission">Waiting for \"All files access\" — grant it above.</string>
+    <string name="gwm_permission_title">Permission required</string>
+    <string name="gwm_permission_message">To place images in a folder another app can read, enable \"Allow access to manage all files\" on the next screen.</string>
+
     <!-- Device identity block in the Wallpapers section. These were concatenated in Java, which
          is why they stayed Arabic in every locale. -->
     <string name="device_id_status">Device ID: %1$s\nStatus: %2$s</string>
@@ -375,6 +390,7 @@ Roboto Font Copyright (c) Christian Robertson. Licensed under the Apache License
     <string name="activation_overlay_title">Activate the App</string>
     <string name="activation_overlay_subtitle">Please enter the serial number to activate the app:</string>
     <string name="activation_button">Activate Now</string>
+    <string name="activation_recheck_button">Already registered? Re-check</string>
     <string name="activation_device_id_label">Device ID: </string>
     <string name="activation_dialog_title">Activation Settings (Activation)</string>
 
@@ -382,6 +398,8 @@ Roboto Font Copyright (c) Christian Robertson. Licensed under the Apache License
     <string name="activation_error_empty_serial">Please enter the serial number</string>
     <string name="activation_error_invalid_serial">Invalid serial number</string>
     <string name="activation_checking">Verifying activation…</string>
+    <string name="activation_rechecking">Checking the servers…</string>
+    <string name="activation_recheck_not_found">This car is not registered yet — enter the serial number to activate</string>
     <string name="activation_success">Activated successfully!</string>
     <string name="activation_error_already_used">This serial number is already used on another device</string>
     <string name="activation_error_blocked">This device has been blocked. Please contact support.</string>

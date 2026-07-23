@@ -305,6 +305,18 @@
                         android:textSize="18sp"
                         android:textStyle="bold" />
 
+                    <Button
+                        android:id="@+id/buttonRecheck"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="8dp"
+                        android:background="@drawable/fit_secondary_btn"
+                        android:textColor="@color/aurora_text"
+                        android:text="@string/activation_recheck_button"
+                        android:textAllCaps="false"
+                        android:textSize="15sp"
+                        android:padding="10dp" />
+
                     <TextView
                         android:id="@+id/textViewActivationStatus"
                         android:layout_width="match_parent"

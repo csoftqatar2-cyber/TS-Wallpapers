@@ -409,6 +409,7 @@ public class BaseSettingsActivity extends AppCompatActivity {
         initModePicker();
         initTextScale();
         initFitDefaults();
+        initGwmSection();
         refreshHeaderChips();
         syncDependentRows();
 
@@ -476,7 +477,7 @@ public class BaseSettingsActivity extends AppCompatActivity {
     private static final int[][] NAV_RAIL_SECTIONS = {
             { R.id.sectionGeneral },
             { R.id.sectionAnalog, R.id.sectionDigital, R.id.sectionClockLayout },
-            { R.id.sectionWallpapers },
+            { R.id.sectionWallpapers, R.id.sectionGwm },
             { R.id.sectionAbout }
     };
 
@@ -883,6 +884,14 @@ public class BaseSettingsActivity extends AppCompatActivity {
         if(mSharedPref != null && !mOverlayPermissionAsked
                 && mSharedPref.getBoolean(BootReceiver.PREF_AUTO_START, false)) {
             requestOverlayPermissionIfNeeded();
+        }
+        // Returning from the all-files-access grant screen: refresh the GWM section and, if the
+        // permission just arrived while the section is enabled, run the first mirror.
+        refreshGwmSection();
+        if(mGwmPendingSyncAfterGrant && mSharedPref != null && GwmSync.isEnabled(mSharedPref)
+                && GwmSync.hasStoragePermission(this)) {
+            mGwmPendingSyncAfterGrant = false;
+            runGwmSync();
         }
     }
 
@@ -1955,6 +1964,179 @@ public class BaseSettingsActivity extends AppCompatActivity {
     private static int indexOfMode(int mode) {
         for(int i = 0; i < FIT_MODE_ORDER.length; i++) if(FIT_MODE_ORDER[i] == mode) return i;
         return 0;
+    }
+
+    // ===== GWM Split section =================================================================
+    // A self-contained sync into an external folder for a separate app. Independent of every
+    // other feature here; it only ever does anything when the switch below is on.
+
+    private CompoundButton mCheckBoxGwmEnabled;
+    private TextView mTextViewGwmFolder;
+    private TextView mButtonGwmPermission;
+    private TextView mTextViewGwmStatus;
+    /** True after we sent the user to the all-files-access screen so onResume can start the sync. */
+    private boolean mGwmPendingSyncAfterGrant;
+
+    private void initGwmSection() {
+        mCheckBoxGwmEnabled = findViewById(R.id.checkBoxGwmEnabled);
+        mTextViewGwmFolder = findViewById(R.id.textViewGwmFolder);
+        mButtonGwmPermission = findViewById(R.id.buttonGwmPermission);
+        mTextViewGwmStatus = findViewById(R.id.textViewGwmStatus);
+        if(mCheckBoxGwmEnabled == null) return;
+
+        mCheckBoxGwmEnabled.setChecked(GwmSync.isEnabled(mSharedPref));
+        // Not an app-wallpaper setting: keep it out of the generic auto-save sweep, it persists itself.
+        mAutoSaveExcluded.add(mCheckBoxGwmEnabled);
+        mCheckBoxGwmEnabled.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
+            @Override
+            public void onCheckedChanged(CompoundButton b, boolean checked) {
+                mSharedPref.edit().putBoolean(GwmSync.PREF_ENABLED, checked).apply();
+                refreshGwmSection();
+                if(checked) {
+                    if(!GwmSync.hasStoragePermission(BaseSettingsActivity.this)) {
+                        requestGwmStoragePermission();
+                    } else {
+                        runGwmSync();
+                    }
+                }
+            }
+        });
+
+        mButtonGwmPermission.setOnClickListener(new View.OnClickListener() {
+            @Override public void onClick(View v) { requestGwmStoragePermission(); }
+        });
+        findViewById(R.id.buttonGwmSyncNow).setOnClickListener(new View.OnClickListener() {
+            @Override public void onClick(View v) {
+                if(!GwmSync.hasStoragePermission(BaseSettingsActivity.this)) {
+                    requestGwmStoragePermission();
+                    return;
+                }
+                runGwmSync();
+            }
+        });
+        findViewById(R.id.buttonGwmPairPhone).setOnClickListener(new View.OnClickListener() {
+            @Override public void onClick(View v) { onClickGwmPairPhone(); }
+        });
+
+        refreshGwmSection();
+    }
+
+    /** Keep the folder line, the permission button and the status text honest with current state. */
+    private void refreshGwmSection() {
+        if(mTextViewGwmFolder == null) return;
+        mTextViewGwmFolder.setText(getString(R.string.gwm_folder, GwmSync.folder(mSharedPref)));
+        boolean enabled = GwmSync.isEnabled(mSharedPref);
+        boolean hasPerm = GwmSync.hasStoragePermission(this);
+        mButtonGwmPermission.setVisibility(enabled && !hasPerm ? View.VISIBLE : View.GONE);
+        if(enabled && !hasPerm) {
+            mTextViewGwmStatus.setText(R.string.gwm_status_no_permission);
+        }
+    }
+
+    private void requestGwmStoragePermission() {
+        new AlertDialog.Builder(this)
+                .setTitle(R.string.gwm_permission_title)
+                .setMessage(R.string.gwm_permission_message)
+                .setPositiveButton(R.string.ok, new DialogInterface.OnClickListener() {
+                    @Override public void onClick(DialogInterface d, int w) {
+                        mGwmPendingSyncAfterGrant = true;
+                        try {
+                            if(Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                                Intent i = new Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION,
+                                        Uri.parse("package:" + getPackageName()));
+                                startActivity(i);
+                            } else {
+                                ActivityCompat.requestPermissions(BaseSettingsActivity.this,
+                                        new String[]{ android.Manifest.permission.WRITE_EXTERNAL_STORAGE }, 0);
+                            }
+                        } catch(ActivityNotFoundException e) {
+                            // Some ROMs lack the per-app all-files screen; fall back to the list.
+                            try { startActivity(new Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION)); }
+                            catch(Exception ignored) {
+                                Toast.makeText(BaseSettingsActivity.this,
+                                        R.string.gwm_status_no_permission, Toast.LENGTH_LONG).show();
+                            }
+                        }
+                    }
+                })
+                .setNegativeButton(R.string.update_cancel, null)
+                .show();
+    }
+
+    private void runGwmSync() {
+        if(mTextViewGwmStatus != null) mTextViewGwmStatus.setText(R.string.gwm_status_syncing);
+        GwmSync.syncAsync(getApplicationContext(), mWallpaperRepo, new GwmSync.Callback() {
+            @Override
+            public void done(final int wrote, final String error) {
+                runOnUiThread(new Runnable() {
+                    @Override public void run() {
+                        if(isFinishing() || isDestroyed() || mTextViewGwmStatus == null) return;
+                        if(wrote < 0) {
+                            mTextViewGwmStatus.setText(getString(R.string.gwm_status_failed,
+                                    error == null ? "?" : error));
+                        } else {
+                            mTextViewGwmStatus.setText(getString(R.string.gwm_status_done, wrote));
+                        }
+                    }
+                });
+            }
+        });
+    }
+
+    /** QR upload whose files land directly in the GWM folder (never our wallpaper folder). */
+    private void onClickGwmPairPhone() {
+        if(!GwmSync.hasStoragePermission(this)) { requestGwmStoragePermission(); return; }
+        stopUploadServer();
+        final String url;
+        try {
+            mUploadServer = UploadServer.startNewGwm(this, mWallpaperRepo, new UploadServer.UploadListener() {
+                @Override
+                public void onUploaded(List<String> savedPaths) {
+                    if(isFinishing() || isDestroyed() || savedPaths == null || savedPaths.isEmpty()) return;
+                    Toast.makeText(BaseSettingsActivity.this,
+                            getString(R.string.pair_uploaded_n, savedPaths.size()), Toast.LENGTH_LONG).show();
+                    refreshGwmSection();
+                }
+            });
+            url = mUploadServer.getUrl();
+        } catch(Exception e) {
+            Toast.makeText(this, "Server error: " + e.getMessage(), Toast.LENGTH_LONG).show();
+            return;
+        }
+        if(url == null) {
+            stopUploadServer();
+            infoDialog(getString(R.string.gwm_pair_phone), getString(R.string.pair_no_wifi));
+            return;
+        }
+
+        float d = getResources().getDisplayMetrics().density;
+        int pad = (int) (20 * d);
+        int qrPx = (int) (240 * d);
+        LinearLayout ll = new LinearLayout(this);
+        ll.setOrientation(LinearLayout.VERTICAL);
+        ll.setPadding(pad, pad, pad, pad);
+        ll.setGravity(android.view.Gravity.CENTER_HORIZONTAL);
+        TextView hint = new TextView(this);
+        hint.setText(getString(R.string.pair_scan_hint));
+        hint.setGravity(android.view.Gravity.CENTER);
+        ImageView qr = new ImageView(this);
+        qr.setImageBitmap(QrCode.generate(url, 600));
+        LinearLayout.LayoutParams qlp = new LinearLayout.LayoutParams(qrPx, qrPx);
+        qlp.topMargin = pad; qlp.bottomMargin = pad;
+        qr.setLayoutParams(qlp);
+        TextView urlText = new TextView(this);
+        urlText.setText(url);
+        urlText.setGravity(android.view.Gravity.CENTER);
+        urlText.setTextIsSelectable(true);
+        ll.addView(hint); ll.addView(qr); ll.addView(urlText);
+        new AlertDialog.Builder(this)
+                .setTitle(R.string.gwm_pair_phone)
+                .setView(ll)
+                .setPositiveButton(R.string.ok, null)
+                .setOnDismissListener(new DialogInterface.OnDismissListener() {
+                    @Override public void onDismiss(DialogInterface dialog) { stopUploadServer(); }
+                })
+                .show();
     }
 
     /** Hide the defaults that the chosen mode cannot use. */
