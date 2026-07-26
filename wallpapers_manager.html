@@ -1742,6 +1742,12 @@
                 globalBtn.innerHTML = '<i class="fa-solid fa-globe"></i> جميع الأجهزة (عام)';
                 hint.innerText = '';
             }
+
+            // The channel decides which cars are eligible, so re-filter the device
+            // dropdown to match (Lynk & Co channel → only Lynk & Co cars).
+            const searchBox = document.getElementById("device-search");
+            if (searchBox) searchBox.value = "";
+            renderDevicesDropdown();
         }
         let inputMode = 'files'; // files or folder
         let activeFilter = 'all'; // all | global | private (main grid filter)
@@ -1896,16 +1902,24 @@
             // Preserve the current selection so filtering doesn't reset the chosen device
             const prevValue = selectEl.value;
 
-            const matches = devicesList.filter(device => {
+            // When the Lynk & Co channel is active, only cars actually running that
+            // mode can receive these wallpapers, so never offer any other car here.
+            const modeFiltered = uploadTargetMode
+                ? devicesList.filter(d => d.mode === uploadTargetMode)
+                : devicesList;
+
+            const matches = modeFiltered.filter(device => {
                 if (!q) return true;
                 const serial = (device.serial_number || '').toLowerCase();
                 const hw = (device.hardware_id || '').toLowerCase();
                 return serial.includes(q) || hw.includes(q);
             });
 
-            const placeholder = q && matches.length === 0
-                ? '-- لا يوجد جهاز مطابق --'
-                : '-- اختر جهازاً أو اكتب كوداً مخصصاً --';
+            let placeholder = '-- اختر جهازاً أو اكتب كوداً مخصصاً --';
+            if (matches.length === 0) {
+                if (q) placeholder = '-- لا يوجد جهاز مطابق --';
+                else if (uploadTargetMode === 'lynkco') placeholder = '-- لا توجد عربيات Lynk & Co مفعّلة بعد --';
+            }
             selectEl.innerHTML = `<option value="">${placeholder}</option>`;
 
             matches.forEach(device => {
