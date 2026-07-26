@@ -183,6 +183,17 @@ public class FullscreenActivity extends AppCompatActivity {
         // skipping to the picker on an unactivated device would hand a technician a wallpaper
         // library with no way to enter the serial.
         mSharedPref = getSharedPreferences(SettingsActivity.SHARED_PREF_DOMAIN, Context.MODE_PRIVATE);
+
+        // Before anything is drawn or handed off: an activated car whose mode nobody has ever
+        // chosen answers that question first. It has to come before the Leopard/Lynkco redirect
+        // below, or a car migrated onto the wrong mode would sail past the gate into a picker
+        // it should not be in. See ModeConfirmActivity for why the gate exists at all.
+        if(ModeConfirmActivity.isPending(this, mSharedPref)) {
+            startActivity(new Intent(this, ModeConfirmActivity.class));
+            finish();
+            return;
+        }
+
         if(OperatingMode.isHandoff(mSharedPref) && new WallpaperRepo(this).isActive()) {
             startActivity(new Intent(this, LeopardPickerActivity.class));
             finish();

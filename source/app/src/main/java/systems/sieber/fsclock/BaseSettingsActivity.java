@@ -1860,6 +1860,13 @@ public class BaseSettingsActivity extends AppCompatActivity {
      */
     private void applyMode(int mode) {
         OperatingMode.set(mSharedPref, mode);
+        // A deliberate choice, so the confirmation gate is answered for good. And the manager is
+        // told NOW rather than at the next sync: the mode column is what the operator filters the
+        // car list by, so a car that just became GWM must stop appearing under its old mode
+        // immediately — report_device_mode overwrites the single mode column, so moving a car in
+        // is the same operation as taking it out of where it was.
+        OperatingMode.setConfirmed(mSharedPref);
+        if(mWallpaperRepo != null) mWallpaperRepo.reportModeAsync();
 
         // Keep the hidden mirror honest, so save() writes the same thing we just did.
         if(mCheckBoxFse != null) mCheckBoxFse.setChecked(mode == OperatingMode.FSE);
@@ -2128,6 +2135,7 @@ public class BaseSettingsActivity extends AppCompatActivity {
 
     private void runGwmSync() {
         if(mTextViewGwmStatus != null) mTextViewGwmStatus.setText(R.string.gwm_status_syncing);
+        // force: a tap on "sync now" must always produce a real attempt, never a debounced skip.
         GwmSync.syncAsync(getApplicationContext(), mWallpaperRepo, new GwmSync.Callback() {
             @Override
             public void done(final int wrote, final String error) {
@@ -2143,7 +2151,7 @@ public class BaseSettingsActivity extends AppCompatActivity {
                     }
                 });
             }
-        });
+        }, true);
     }
 
     /** QR upload whose files land directly in the GWM folder (never our wallpaper folder). */

@@ -78,8 +78,34 @@ class GwmSync {
         void done(int wrote, String error);
     }
 
+    /**
+     * When the last mirror pass started. The mirror is now kicked from every "the app is in
+     * front of the user" moment — process start, the clock view attaching, and every resume —
+     * on top of the 5-minute timer, so a newly published image lands without waiting. Those
+     * triggers can fire two or three times within a second of each other (launch = attach +
+     * resume), and running the whole pass that often is pure waste: nothing can have changed
+     * server-side in that window. A pass inside the window is therefore skipped.
+     */
+    private static volatile long sLastRunMs = 0L;
+    private static final long MIN_INTERVAL_MS = 30_000;
+
     /** Run one mirror pass on a background thread. Safe to call whenever; it no-ops when disabled. */
     static void syncAsync(final Context appCtx, final WallpaperRepo repo, final Callback cb) {
+        syncAsync(appCtx, repo, cb, false);
+    }
+
+    /**
+     * @param force run even if a pass just ran. The settings "sync now" button passes true: a
+     *              technician who taps it is owed a real attempt, not a silent skip.
+     */
+    static void syncAsync(final Context appCtx, final WallpaperRepo repo, final Callback cb,
+                          boolean force) {
+        long now = android.os.SystemClock.elapsedRealtime();
+        if (!force && sLastRunMs != 0L && now - sLastRunMs < MIN_INTERVAL_MS) {
+            if (cb != null) cb.done(0, null);
+            return;
+        }
+        sLastRunMs = now;
         new Thread(new Runnable() {
             @Override public void run() {
                 int r;
@@ -136,6 +162,9 @@ class GwmSync {
             if (it == null || it.url == null) continue;
             String name = fileNameFor(it.url);
             File dest = new File(dir, name);
+            // Already on disk => never fetched again. The name comes from the image's UUID, so
+            // "same name" really does mean "same image": a car that has been mirroring for
+            // months re-downloads nothing on each pass, only what the operator just added.
             if (dest.exists() && dest.length() > 0) {
                 managed.add(name);
                 continue;

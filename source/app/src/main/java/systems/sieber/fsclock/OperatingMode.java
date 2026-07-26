@@ -43,6 +43,32 @@ class OperatingMode {
     private static final String PREF_GWM = "gwm-mode";
     private static final String PREF_LYNKCO = "lynkco-mode";
 
+    /**
+     * Has a human explicitly chosen this car's mode on a build that knows all five modes?
+     *
+     * The flag exists because the manager needs each car's mode to be the TRUTH, not a guess.
+     * Cars in the field were migrated onto NORMAL/FSE by {@code migrateOperatingMode} — a
+     * reasonable default, never a decision, and a car quietly reporting "normal" when it is
+     * really a GWM or Lynk &amp; Co unit is worse than one reporting nothing. So an install that
+     * updates into this version is held on {@link ModeConfirmActivity} until the technician
+     * confirms the mode once; from then on the flag is set and the gate never appears again.
+     */
+    private static final String PREF_CONFIRMED = "operating-mode-confirmed";
+
+    /** True once the mode was picked by a person (activation, settings, or the confirm gate). */
+    static boolean isConfirmed(SharedPreferences prefs) {
+        return prefs.getBoolean(PREF_CONFIRMED, false);
+    }
+
+    /**
+     * Record that the mode standing in prefs was chosen deliberately. Called from the three
+     * places a human picks one — never from {@link #set}, because migrations and internal
+     * corrections write a mode too and those are exactly what the gate is meant to catch.
+     */
+    static void setConfirmed(SharedPreferences prefs) {
+        prefs.edit().putBoolean(PREF_CONFIRMED, true).apply();
+    }
+
     /** The head unit's own theme app; the only supported way to set the wallpaper in Lynkco. */
     static final String LYNKCO_CUSTOMIZE_PACKAGE = "com.flyme.auto.customize";
 

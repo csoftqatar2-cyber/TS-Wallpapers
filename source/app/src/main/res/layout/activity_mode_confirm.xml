@@ -1,0 +1,122 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    The mode confirmation gate. Deliberately shaped like the activation overlay (same card,
+    same gold/aurora palette) so a technician reads it as the same step of the same setup —
+    but with the serial field replaced by a green "already activated" line, because the whole
+    point is that activation is DONE and only the mode is missing.
+
+    Head-unit screens are wide and short, so the card scrolls rather than clipping its button
+    on the shortest panels.
+-->
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#f214100b"
+    android:fillViewport="true">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center"
+        android:orientation="vertical"
+        android:padding="24dp">
+
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:background="@drawable/activation_card_bg"
+            android:orientation="vertical"
+            android:padding="24dp">
+
+            <TextView
+                android:id="@+id/textViewModeConfirmActivated"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/mode_confirm_activated"
+                android:textColor="#4caf50"
+                android:textSize="18sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:text="@string/mode_confirm_title"
+                android:textColor="@color/gold"
+                android:textSize="26sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:layout_width="360dp"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:text="@string/mode_confirm_subtitle"
+                android:textColor="@color/aurora_muted"
+                android:textSize="14sp" />
+
+            <TextView
+                android:id="@+id/textViewModeConfirmDeviceId"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:textColor="@color/aurora_muted"
+                android:textSize="12sp" />
+
+            <RadioGroup
+                android:id="@+id/radioGroupConfirmMode"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:orientation="vertical">
+
+                <RadioButton
+                    android:id="@+id/radioConfirmNormal"
+                    style="@style/ActivationModeRadio"
+                    android:text="@string/mode_normal" />
+
+                <RadioButton
+                    android:id="@+id/radioConfirmFse"
+                    style="@style/ActivationModeRadio"
+                    android:text="@string/mode_fse" />
+
+                <RadioButton
+                    android:id="@+id/radioConfirmLeopard"
+                    style="@style/ActivationModeRadio"
+                    android:text="@string/mode_leopard" />
+
+                <RadioButton
+                    android:id="@+id/radioConfirmGwm"
+                    style="@style/ActivationModeRadio"
+                    android:text="@string/mode_gwm" />
+
+                <RadioButton
+                    android:id="@+id/radioConfirmLynkco"
+                    style="@style/ActivationModeRadio"
+                    android:text="@string/mode_lynkco" />
+
+            </RadioGroup>
+
+            <TextView
+                android:id="@+id/textViewModeConfirmDesc"
+                android:layout_width="360dp"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:textColor="@color/aurora_muted"
+                android:textSize="13sp" />
+
+            <Button
+                android:id="@+id/buttonModeConfirm"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="14dp"
+                android:background="@drawable/activation_primary_btn"
+                android:text="@string/mode_confirm_button"
+                android:textColor="#1a1204"
+                android:textSize="18sp"
+                android:textStyle="bold" />
+
+        </LinearLayout>
+
+    </LinearLayout>
+
+</ScrollView>

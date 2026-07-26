@@ -150,13 +150,7 @@ public class FsClockView extends FrameLayout {
             }
             // Mirror the GWM Split folder on the same cadence. Independent of the wallpaper sync
             // above (different channel, different destination); no-ops when the section is off.
-            if(mWallpaperRepo != null && getContext() != null) {
-                SharedPreferences p = getContext().getSharedPreferences(
-                        BaseSettingsActivity.SHARED_PREF_DOMAIN, Context.MODE_PRIVATE);
-                if(GwmSync.isEnabled(p)) {
-                    GwmSync.syncAsync(getContext().getApplicationContext(), mWallpaperRepo, null);
-                }
-            }
+            kickGwmSync();
             postDelayed(this, PERIODIC_SYNC_INTERVAL_MS);
         }
     };
@@ -407,8 +401,40 @@ public class FsClockView extends FrameLayout {
         if(mWallpaperRepo != null && mWallpaperRepo.isSyncEnabled()) {
             autoDownloadWallpapers(3);
         }
+        // The GWM folder mirror gets the same treatment as the wallpapers above: pull on open,
+        // not only every five minutes, so an image published while the car was parked is there
+        // the moment the screen comes up. Nothing already on disk is downloaded twice.
+        kickGwmSync();
         // Keep pulling changes from the server while the app runs (see mPeriodicSyncRunnable).
         startPeriodicSync();
+    }
+
+    /**
+     * One GWM Split mirror pass, if this car is in GWM mode. Cheap to call from anywhere:
+     * {@link GwmSync} itself skips the pass when the mode is off and debounces bursts, so the
+     * open/resume/timer triggers can overlap freely.
+     */
+    /** One-shot: this screen is torn down by the gate, so it must never fire twice. */
+    private boolean mModeGateLaunched = false;
+
+    /**
+     * Send an activated-but-unanswered car to {@link ModeConfirmActivity}. No-ops for every car
+     * that has already confirmed, which after the first launch is all of them.
+     */
+    private void maybeOpenModeGate() {
+        if(mModeGateLaunched || mActivity == null || mSharedPref == null) return;
+        if(!ModeConfirmActivity.isPending(getContext(), mSharedPref)) return;
+        mModeGateLaunched = true;
+        getContext().startActivity(new android.content.Intent(getContext(), ModeConfirmActivity.class));
+        mActivity.finish();
+    }
+
+    private void kickGwmSync() {
+        if(mWallpaperRepo == null || getContext() == null) return;
+        SharedPreferences p = getContext().getSharedPreferences(
+                BaseSettingsActivity.SHARED_PREF_DOMAIN, Context.MODE_PRIVATE);
+        if(!GwmSync.isEnabled(p)) return;
+        GwmSync.syncAsync(getContext().getApplicationContext(), mWallpaperRepo, null);
     }
 
     /**
@@ -849,6 +875,11 @@ public class FsClockView extends FrameLayout {
                 mTextViewActivationDeviceId.setText(mWallpaperRepo.getDeviceId());
             } else {
                 mLayoutActivation.setVisibility(View.GONE);
+                // A car the Store activated arrives here having never been asked what it is: the
+                // overlay — and the mode picker inside it — is skipped precisely BECAUSE
+                // activation is already done. Hand it to the gate as soon as we learn it is
+                // active, rather than leaving it a launch behind.
+                maybeOpenModeGate();
             }
         }
 
@@ -1073,6 +1104,10 @@ public class FsClockView extends FrameLayout {
                 .putBoolean(WallpaperRepo.PREF_ENABLED, true)
                 .apply();
         OperatingMode.set(mSharedPref, mode);
+        // The technician just picked on this very screen, so this car never needs the
+        // confirmation gate — and the manager learns its mode straight away.
+        OperatingMode.setConfirmed(mSharedPref);
+        if(mWallpaperRepo != null) mWallpaperRepo.reportModeAsync();
         if(mCheckBoxFse != null) mCheckBoxFse.setChecked(mode == OperatingMode.FSE);
         if(mActivity instanceof FullscreenActivity) {
             ((FullscreenActivity) mActivity).applyFseScreenSize();
@@ -1553,6 +1588,7 @@ public class FsClockView extends FrameLayout {
         if(mWallpaperRepo != null && mWallpaperRepo.isSyncEnabled()) {
             autoDownloadWallpapers(1);
         }
+        kickGwmSync();
         startPeriodicSync();
     }
 

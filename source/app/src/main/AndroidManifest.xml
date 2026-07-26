@@ -79,6 +79,14 @@
             android:configChanges="orientation|screenSize|keyboardHidden"
             android:theme="@style/AppTheme" />
 
+        <!-- The one-time mode confirmation gate. Not exported and not launchable on its own:
+             FullscreenActivity routes into it, and it routes back out once answered. -->
+        <activity
+            android:name=".ModeConfirmActivity"
+            android:exported="false"
+            android:configChanges="orientation|screenSize|keyboardHidden"
+            android:theme="@style/AppTheme" />
+
         <!-- Leopard: the live wallpaper Android offers in its own picker. Only ever used for
              moving content — still images go straight through WallpaperManager and never
              involve this service. -->

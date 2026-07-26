@@ -278,6 +278,12 @@
     <string name="activation_error_failed">فشل التفعيل: %1$s</string>
     <string name="activation_error_unknown">خطأ غير معروف</string>
 
+    <!-- شاشة تأكيد الوضع (ModeConfirmActivity.java) — سيارة مفعّلة لم يُختَر وضعها بعد. -->
+    <string name="mode_confirm_activated">✓ هذه السيارة مفعّلة</string>
+    <string name="mode_confirm_title">اختر وضع السيارة</string>
+    <string name="mode_confirm_subtitle">اختر الوضع الذي تعمل به هذه السيارة. يُسجَّل مرة واحدة ويفتح البرنامج عليه مباشرة بعد ذلك — ويمكنك تغييره لاحقاً من الإعدادات.</string>
+    <string name="mode_confirm_button">تأكيد ومتابعة</string>
+
     <!-- FSE wallpaper "adjust position" mode toasts (FsClockView.java). -->
     <string name="wallpaper_adjust_mode_hint">وضع تحريك الصورة: اسحب لضبط مكان الصورة، ثم اضغط للحفظ</string>
     <string name="wallpaper_position_saved">تم حفظ مكان الصورة</string>

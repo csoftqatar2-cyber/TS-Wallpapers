@@ -418,6 +418,14 @@ Roboto Font Copyright (c) Christian Robertson. Licensed under the Apache License
     <string name="activation_error_failed">Activation failed: %1$s</string>
     <string name="activation_error_unknown">Unknown error</string>
 
+    <!-- Mode confirmation gate (ModeConfirmActivity.java) — an activated car that has never
+         had its mode chosen on a build that knows all five. No serial field here: activation
+         is already done (often by the Store), so all that is left is the one choice. -->
+    <string name="mode_confirm_activated">✓ This car is activated</string>
+    <string name="mode_confirm_title">Choose the car\'s mode</string>
+    <string name="mode_confirm_subtitle">Pick the mode this car runs in. It is recorded once and the app opens straight into it from now on — you can change it later from Settings.</string>
+    <string name="mode_confirm_button">Confirm and continue</string>
+
     <!-- FSE wallpaper "adjust position" mode toasts (FsClockView.java). -->
     <string name="wallpaper_adjust_mode_hint">Adjust image position: drag to reposition, then tap to save</string>
     <string name="wallpaper_position_saved">Image position saved</string>
