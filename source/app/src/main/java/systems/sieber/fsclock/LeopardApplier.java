@@ -49,6 +49,21 @@ class LeopardApplier {
         return moving && !isOurServiceActive(ctx);
     }
 
+    /**
+     * Remove our video live wallpaper if it is the currently active one. Lynk & Co sets images
+     * through the Flyme theme app, a different wallpaper system from the Android live wallpaper a
+     * video uses — so a still applied after a video would be hidden underneath the still-running
+     * video. Clearing the live wallpaper first lets the Flyme image actually show. No-op (and
+     * harmless) when our service is not the active wallpaper.
+     */
+    static void clearOurLiveWallpaper(Context ctx) {
+        try {
+            if(isOurServiceActive(ctx)) WallpaperManager.getInstance(ctx).clear();
+        } catch(Throwable t) {
+            Log.w(TAG, "could not clear live wallpaper before applying a still", t);
+        }
+    }
+
     static boolean isOurServiceActive(Context ctx) {
         try {
             WallpaperManager wm = WallpaperManager.getInstance(ctx);

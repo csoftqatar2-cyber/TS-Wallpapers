@@ -408,6 +408,7 @@ public class BaseSettingsActivity extends AppCompatActivity {
         initNavRail();
         initModePicker();
         initTextScale();
+        initLynkcoScale();
         initFitDefaults();
         initGwmSection();
         refreshHeaderChips();
@@ -541,6 +542,9 @@ public class BaseSettingsActivity extends AppCompatActivity {
         if(banner != null) banner.setVisibility(handoff ? View.VISIBLE : View.GONE);
         View leopardGroup = findViewById(R.id.groupLeopard);
         if(leopardGroup != null) leopardGroup.setVisibility(handoff ? View.VISIBLE : View.GONE);
+        // The UI-size slider is a Lynk & Co concern only (that is the mode that scales its picker).
+        View lynkcoScale = findViewById(R.id.groupLynkcoScale);
+        if(lynkcoScale != null) lynkcoScale.setVisibility(OperatingMode.isLynkco(mSharedPref) ? View.VISIBLE : View.GONE);
     }
 
     private int firstVisibleSection() {
@@ -753,6 +757,33 @@ public class BaseSettingsActivity extends AppCompatActivity {
                 if(percent == TextScaleHelper.saved(BaseSettingsActivity.this)) return;
                 TextScaleHelper.save(BaseSettingsActivity.this, percent);
                 recreate();
+            }
+        });
+    }
+
+    /**
+     * The Lynk & Co picker UI-size slider. Runs {@link LynkcoScale#MIN}..{@link LynkcoScale#MAX}
+     * percent with the SeekBar offset to start at MIN (no pre-API-26 minimum). Unlike the text
+     * scale, this does not affect the settings screen itself — only the picker reads it — so there
+     * is nothing to recreate() here; the new size takes effect the next time the picker opens.
+     */
+    private void initLynkcoScale() {
+        final SeekBar bar = findViewById(R.id.seekBarLynkcoScale);
+        final TextView value = findViewById(R.id.textViewLynkcoScaleValue);
+        if(bar == null || value == null) return;
+
+        final int current = LynkcoScale.percent(mSharedPref);
+        bar.setMax(LynkcoScale.MAX - LynkcoScale.MIN);
+        bar.setProgress(current - LynkcoScale.MIN);
+        value.setText(current + "%");
+
+        bar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            @Override public void onProgressChanged(SeekBar s, int progress, boolean fromUser) {
+                value.setText((progress + LynkcoScale.MIN) + "%");
+            }
+            @Override public void onStartTrackingTouch(SeekBar s) {}
+            @Override public void onStopTrackingTouch(SeekBar s) {
+                LynkcoScale.save(mSharedPref, s.getProgress() + LynkcoScale.MIN);
             }
         });
     }

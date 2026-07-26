@@ -342,6 +342,12 @@
     <string name="leopard_wallpaper_description">ذبذبة خلفيات — الصورة أو الفيديو اللي اخترته</string>
     <string name="leopard_title">اختر خلفية الجهاز</string>
     <string name="leopard_chip">وضع Leopard</string>
+    <string name="lynkco_chip">وضع Lynk &amp; Co</string>
+    <string name="lynkco_scale">حجم واجهة Lynk &amp; Co</string>
+    <string name="lynkco_scale_hint">كبّر أو صغّر واجهة اختيار الخلفية بالكامل على شاشات Lynk &amp; Co.</string>
+    <string name="lynkco_frame_title">كيف تملأ الشاشة؟</string>
+    <string name="lynkco_frame_fill">قص للملء (بدون حواف)</string>
+    <string name="lynkco_frame_fit">احتواء الصورة كاملة (مع حواف)</string>
     <string name="leopard_source_cloud">الخلفيات المتاحة</string>
     <string name="leopard_source_cloud_sub">المزامنة السحابية</string>
     <string name="leopard_source_local">من الجهاز</string>

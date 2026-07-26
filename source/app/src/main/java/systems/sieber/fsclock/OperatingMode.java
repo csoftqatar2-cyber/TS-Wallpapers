@@ -2,6 +2,7 @@ package systems.sieber.fsclock;
 
 import android.app.WallpaperManager;
 import android.content.Context;
+import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 
@@ -120,7 +121,14 @@ class OperatingMode {
      */
     static boolean isLynkcoSupported(Context ctx) {
         try {
-            ctx.getPackageManager().getPackageInfo(LYNKCO_CUSTOMIZE_PACKAGE, 0);
+            PackageManager pm = ctx.getPackageManager();
+            // Primary check: can the theme app actually receive our wallpaper intent? This is what
+            // support truly means, and it resolves even on units where the receiver lives under a
+            // component the bare package name does not (the package is declared in <queries>).
+            Intent probe = new Intent(LynkcoApplier.ACTION_SET).setPackage(LYNKCO_CUSTOMIZE_PACKAGE);
+            if(!pm.queryIntentActivities(probe, 0).isEmpty()) return true;
+            // Fallback: the package is simply installed and visible.
+            pm.getPackageInfo(LYNKCO_CUSTOMIZE_PACKAGE, 0);
             return true;
         } catch(Throwable t) {
             return false;

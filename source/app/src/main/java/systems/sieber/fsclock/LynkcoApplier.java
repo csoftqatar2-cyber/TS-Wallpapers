@@ -2,6 +2,10 @@ package systems.sieber.fsclock;
 
 import android.content.Context;
 import android.content.Intent;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
+import android.graphics.Canvas;
+import android.graphics.Rect;
 import android.net.Uri;
 import android.os.Environment;
 import android.util.Log;
@@ -50,6 +54,11 @@ class LynkcoApplier {
     static final int RESULT_LAUNCHED = 0;   // staged and the theme app's preview was opened
     static final int RESULT_FAILED = 1;
 
+    /** How an image is fitted to the car screen before it is handed to the theme app. */
+    static final int SCALE_NONE = 0;   // hand the raw image over untouched (theme app decides)
+    static final int SCALE_FILL = 1;   // cover the screen, cropping top/bottom — no borders
+    static final int SCALE_FIT  = 2;   // whole image inside the screen, letterboxed if needed
+
     /**
      * Stage the file to shared storage and open the theme app's apply screen.
      *
@@ -57,18 +66,29 @@ class LynkcoApplier {
      * cheap and safe to run from here; the caller is an Activity so no NEW_TASK juggling is needed,
      * but we add the flag anyway so a future non-Activity caller still works.
      *
+     * The theme app's own crop/fit preview is inconsistent, so for images we bake the chosen
+     * framing in ourselves: the file is pre-rendered to the car screen's exact aspect
+     * ({@code canvasW}x{@code canvasH}), after which fill and fit look identical to the theme app
+     * and the result is deterministic. {@code scaleMode==SCALE_NONE} or a non-image hands the file
+     * over untouched (videos ride the Leopard path and never reach here).
+     *
      * @param uriStr an https:// URL, a content:// from the system picker, or a file path/URI.
      */
-    static int apply(Context ctx, String uriStr, String type) {
+    static int apply(Context ctx, String uriStr, String type, int scaleMode, int canvasW, int canvasH) {
         File staged = stage(ctx, uriStr, type);
         if(staged == null) {
             Log.e(TAG, "could not stage " + uriStr);
             return RESULT_FAILED;
         }
+        File toSend = staged;
+        if(scaleMode != SCALE_NONE && !WallpaperItem.TYPE_VIDEO.equals(type) && canvasW > 0 && canvasH > 0) {
+            File framed = reframe(staged, scaleMode, canvasW, canvasH);
+            if(framed != null) toSend = framed;   // on failure, hand over the untouched original
+        }
         try {
             Intent i = new Intent(ACTION_SET);
             i.setPackage(OperatingMode.LYNKCO_CUSTOMIZE_PACKAGE);
-            i.putExtra(EXTRA_PATH, staged.getAbsolutePath());
+            i.putExtra(EXTRA_PATH, toSend.getAbsolutePath());
             i.putExtra(EXTRA_SOURCE_TYPE, SOURCE_TYPE_GALLERY);
             i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
             ctx.startActivity(i);
@@ -121,6 +141,46 @@ class LynkcoApplier {
         } finally {
             if(out != null) try { out.close(); } catch(Exception ignored) {}
             if(in != null) try { in.close(); } catch(Exception ignored) {}
+        }
+    }
+
+    /**
+     * Render {@code src} to exactly {@code canvasW}x{@code canvasH} with the chosen framing and
+     * write it to a new file next to the original (cached per mode+size, so re-picking is free and
+     * a fill then a fit of the same image do not clobber each other). FILL scales to cover and
+     * centre-crops the overflow; FIT scales to contain and centres on black bars. Returns the new
+     * file, or null on any failure so the caller keeps the untouched original.
+     */
+    private static File reframe(File src, int scaleMode, int canvasW, int canvasH) {
+        try {
+            File out = new File(src.getAbsolutePath().replaceAll("\\.[^.]+$", "")
+                    + "_" + (scaleMode == SCALE_FILL ? "fill" : "fit") + "_" + canvasW + "x" + canvasH + ".jpg");
+            if(out.exists() && out.length() > 0) return out;
+
+            Bitmap srcBmp = BitmapFactory.decodeFile(src.getAbsolutePath());
+            if(srcBmp == null) return null;
+            Bitmap canvasBmp = Bitmap.createBitmap(canvasW, canvasH, Bitmap.Config.ARGB_8888);
+            Canvas c = new Canvas(canvasBmp);
+            c.drawColor(0xFF000000);   // black letterbox for FIT; painted over entirely by FILL
+            int sw = srcBmp.getWidth(), sh = srcBmp.getHeight();
+            float scale = (scaleMode == SCALE_FILL)
+                    ? Math.max((float) canvasW / sw, (float) canvasH / sh)   // cover
+                    : Math.min((float) canvasW / sw, (float) canvasH / sh);  // contain
+            int dw = Math.round(sw * scale), dh = Math.round(sh * scale);
+            int left = (canvasW - dw) / 2, top = (canvasH - dh) / 2;
+            c.drawBitmap(srcBmp, null, new Rect(left, top, left + dw, top + dh), null);
+            srcBmp.recycle();
+
+            File tmp = new File(out.getAbsolutePath() + ".part");
+            FileOutputStream fos = new FileOutputStream(tmp);
+            canvasBmp.compress(Bitmap.CompressFormat.JPEG, 92, fos);
+            fos.flush();
+            fos.close();
+            canvasBmp.recycle();
+            return tmp.renameTo(out) ? out : null;
+        } catch(Throwable t) {
+            Log.w(TAG, "reframe failed, handing over the original", t);
+            return null;
         }
     }
 

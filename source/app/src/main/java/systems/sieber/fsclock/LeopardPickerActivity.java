@@ -5,6 +5,7 @@ import android.content.ActivityNotFoundException;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.content.res.Configuration;
 import android.graphics.Outline;
 import android.media.MediaPlayer;
 import android.net.Uri;
@@ -73,9 +74,31 @@ public class LeopardPickerActivity extends AppCompatActivity {
     /** Guards the one automatic sync, so a car that is genuinely empty does not loop. */
     private boolean mTriedAutoSync = false;
 
+    /** Chosen framing for the next Lynk & Co image apply (fill vs fit). Defaults to fill. */
+    private int mLynkcoScaleMode = LynkcoApplier.SCALE_FILL;
+
     @Override
     protected void attachBaseContext(Context newBase) {
-        super.attachBaseContext(LocaleHelper.wrap(newBase));
+        super.attachBaseContext(scaleForLynkco(LocaleHelper.wrap(newBase)));
+    }
+
+    /**
+     * Lynk & Co renders this picker on a small, dense passenger panel where the default UI is
+     * too tiny to use. Blow the whole activity up by overriding the density the layout inflates
+     * against: every dp and sp scales together, so all views, text and icons grow uniformly with
+     * no per-widget edits. The factor is operator-adjustable (see {@link LynkcoScale} and the
+     * slider in Settings). Only Lynk & Co is affected — Leopard, GWM and Normal inflate at their
+     * real density, unchanged.
+     */
+    private static Context scaleForLynkco(Context base) {
+        SharedPreferences prefs =
+                base.getSharedPreferences(BaseSettingsActivity.SHARED_PREF_DOMAIN, Context.MODE_PRIVATE);
+        if (!OperatingMode.isLynkco(prefs)) return base;
+        float factor = LynkcoScale.factor(prefs);
+        if (factor == 1f) return base;
+        Configuration cfg = new Configuration(base.getResources().getConfiguration());
+        cfg.densityDpi = Math.round(cfg.densityDpi * factor);
+        return base.createConfigurationContext(cfg);
     }
 
     @Override
@@ -98,6 +121,16 @@ public class LeopardPickerActivity extends AppCompatActivity {
 
         mRepo = new WallpaperRepo(this);
         mPrefs = getSharedPreferences(BaseSettingsActivity.SHARED_PREF_DOMAIN, Context.MODE_PRIVATE);
+
+        // Tell the backend this car's mode on every open, even if the cached library means no
+        // sync runs below — otherwise a Lynk & Co car never shows up as one in the manager.
+        mRepo.reportModeAsync();
+
+        // This picker is shared with Leopard, whose header chip reads "Leopard mode". On a Lynk
+        // & Co car that label is wrong — relabel the chip so it names the mode the car is in.
+        if (OperatingMode.isLynkco(mPrefs)) {
+            ((TextView) findViewById(R.id.leopardChip)).setText(R.string.lynkco_chip);
+        }
 
         mFilmstrip = findViewById(R.id.filmstrip);
         mSourceCloud = findViewById(R.id.sourceCloud);
@@ -276,21 +309,36 @@ public class LeopardPickerActivity extends AppCompatActivity {
             if(LeopardCache.isRemote(it.url)) mShown.add(it);
         }
 
-        if(mShown.isEmpty()) {
-            // Nothing cached. In Leopard there is no Settings screen doing the first sync for
-            // us, so a freshly activated car would otherwise open onto an empty box and wait
-            // for the technician to guess that a button behind it needs pressing. Fetch once,
-            // by ourselves, and only give up out loud if that fails.
-            if(!mTriedAutoSync) {
-                mTriedAutoSync = true;
+        // Refresh once per open so images deleted (or added) on the manager propagate to the car
+        // instead of the cached list lingering until the cache happens to empty. An empty box
+        // shows the spinner as before; a cached box shows its images immediately and refreshes
+        // quietly underneath, so a wallpaper removed from the website disappears on the next open.
+        if(!mTriedAutoSync) {
+            mTriedAutoSync = true;
+            if(mShown.isEmpty()) {
                 refreshCloud();
                 return;
             }
+            hideState();
+            buildFilmstrip();
+            silentRefresh();
+            return;
+        }
+
+        if(mShown.isEmpty()) {
             showState(R.string.leopard_empty, R.string.leopard_empty_action, v -> refreshCloud());
             return;
         }
         hideState();
         buildFilmstrip();
+    }
+
+    /** Sync without disturbing the visible strip; on success re-read the list so anything deleted
+     *  on the manager drops out and anything new appears. Failures are ignored — the cache stands. */
+    private void silentRefresh() {
+        mRepo.sync((success, count, error) -> runOnUiThread(() -> {
+            if(success) showCloud();
+        }));
     }
 
     private void refreshCloud() {
@@ -644,6 +692,22 @@ public class LeopardPickerActivity extends AppCompatActivity {
     private void applySelection() {
         if(mSelected == null) { toast(R.string.leopard_pick_first); return; }
 
+        // Lynk & Co images: the theme app's own crop/fit preview is unreliable, so we ask here and
+        // bake the framing in ourselves. Video skips this (it rides the Leopard live-wallpaper path).
+        if(OperatingMode.isLynkco(mPrefs) && !mSelected.isVideo()) {
+            new AlertDialog.Builder(this)
+                    .setTitle(R.string.lynkco_frame_title)
+                    .setItems(new CharSequence[]{
+                            getString(R.string.lynkco_frame_fill),
+                            getString(R.string.lynkco_frame_fit) }, (d, which) -> {
+                        mLynkcoScaleMode = (which == 0) ? LynkcoApplier.SCALE_FILL : LynkcoApplier.SCALE_FIT;
+                        doApply();
+                    })
+                    .setNegativeButton(R.string.update_cancel, null)
+                    .show();
+            return;
+        }
+
         // Images in Lynkco go to the head unit's theme app (no system screen). Video does NOT —
         // the theme app's file entry point is image-only — so a Lynkco video falls back to our own
         // MediaWallpaperService, which still needs the one-time system live-wallpaper screen.
@@ -669,13 +733,22 @@ public class LeopardPickerActivity extends AppCompatActivity {
         // falls through to the Leopard path below (our own MediaWallpaperService live wallpaper),
         // which is the one way to play an arbitrary local video on these units without root.
         final boolean lynkcoImage = OperatingMode.isLynkco(mPrefs) && !WallpaperItem.TYPE_VIDEO.equals(type);
+        // Screen size for the fill/fit reframing — read on the UI thread, where window access is safe.
+        final android.util.DisplayMetrics dm = new android.util.DisplayMetrics();
+        getWindowManager().getDefaultDisplay().getRealMetrics(dm);
+        final int canvasW = dm.widthPixels, canvasH = dm.heightPixels;
+        final int scaleMode = mLynkcoScaleMode;
         new Thread(() -> {
             // Lynkco hands the image to the head unit's own theme app, which reads a plain file
             // path off shared storage. LynkcoApplier stages the download/copy there itself and
             // opens the theme app's preview — a different path from Leopard's WallpaperManager.
             if(lynkcoImage) {
                 runOnUiThread(() -> say(R.string.leopard_preparing));
-                final int r = LynkcoApplier.apply(this, url, type);
+                // If a video was applied earlier it is running as our Android live wallpaper, a
+                // different system from the Flyme theme app this image goes to — clear it first
+                // or the video keeps playing on top of the new image.
+                LeopardApplier.clearOurLiveWallpaper(this);
+                final int r = LynkcoApplier.apply(this, url, type, scaleMode, canvasW, canvasH);
                 runOnUiThread(() -> { setBusy(false, 0); onLynkcoApplied(r); });
                 return;
             }

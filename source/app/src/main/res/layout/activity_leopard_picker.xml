@@ -43,6 +43,7 @@
             android:text="@string/leopard_title" />
 
         <TextView
+            android:id="@+id/leopardChip"
             style="@style/HeaderChip"
             android:background="@drawable/chip_accent_bg"
             android:textColor="@color/gold"
@@ -326,7 +327,7 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_gravity="bottom|center_horizontal"
-        android:layout_marginBottom="72dp"
+        android:layout_marginBottom="120dp"
         android:orientation="horizontal"
         android:baselineAligned="false">
 

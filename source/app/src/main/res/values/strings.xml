@@ -238,6 +238,12 @@ Roboto Font Copyright (c) Christian Robertson. Licensed under the Apache License
     <string name="leopard_wallpaper_description">TS Wallpapers — the image or video you picked</string>
     <string name="leopard_title">Choose device wallpaper</string>
     <string name="leopard_chip">Leopard mode</string>
+    <string name="lynkco_chip">Lynk &amp; Co mode</string>
+    <string name="lynkco_scale">Lynk &amp; Co interface size</string>
+    <string name="lynkco_scale_hint">Enlarge or shrink the whole wallpaper picker on Lynk &amp; Co screens.</string>
+    <string name="lynkco_frame_title">How should it fit the screen?</string>
+    <string name="lynkco_frame_fill">Crop to fill (no borders)</string>
+    <string name="lynkco_frame_fit">Fit whole image (with borders)</string>
     <string name="leopard_source_cloud">Available wallpapers</string>
     <string name="leopard_source_cloud_sub">Cloud sync</string>
     <string name="leopard_source_local">From the device</string>

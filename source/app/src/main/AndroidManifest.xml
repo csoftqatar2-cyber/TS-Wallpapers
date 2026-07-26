@@ -39,6 +39,18 @@
          Normal permission: granted at install, nothing to request at runtime. -->
     <uses-permission android:name="android.permission.SET_WALLPAPER" />
 
+    <!-- Package visibility (Android 11+): Lynk & Co hands wallpapers to the head unit's Flyme
+         theme app. Without declaring it here the app cannot see it — getPackageInfo throws and
+         isLynkcoSupported() wrongly reports false, so Lynk & Co is greyed out and reverts to
+         Normal on this exact hardware. Declaring both the package and the intent covers units
+         where the receiver lives under a component the package name alone does not resolve. -->
+    <queries>
+        <package android:name="com.flyme.auto.customize" />
+        <intent>
+            <action android:name="com.flyme.auto.customize.wallpaper.setting" />
+        </intent>
+    </queries>
+
     <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
     <uses-feature android:name="android.software.leanback" android:required="false" />
 

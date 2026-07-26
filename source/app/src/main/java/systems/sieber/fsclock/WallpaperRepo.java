@@ -259,6 +259,19 @@ public class WallpaperRepo {
      * manager can see it. Fire-and-forget: any failure (offline, RPC missing on an older
      * backend, non-2xx) is swallowed and never disturbs the sync it rides along with.
      */
+    /**
+     * Report the current operating mode right now, off the UI thread. The report that rides
+     * {@link #sync} only fires after a successful manifest fetch — and in the Lynkco/Leopard
+     * picker a warm cache means no fetch happens, so a car could sit in Lynk & Co for days
+     * without the manager ever learning its mode. Call this on every app launch so the mode
+     * is reported regardless of whether a sync runs.
+     */
+    public void reportModeAsync() {
+        new Thread(new Runnable() {
+            @Override public void run() { reportOperatingMode(); }
+        }).start();
+    }
+
     private void reportOperatingMode() {
         try {
             String sbUrl = getSupabaseUrl();
