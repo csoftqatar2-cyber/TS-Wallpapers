@@ -329,6 +329,24 @@
             background: rgba(0, 0, 0, 0.3);
         }
 
+        /* The native <select> popup inherits the control's translucent background,
+           which renders as an unreadable washed-out grey. Force a solid dark
+           surface with high-contrast text on the list and each option. */
+        select.form-control {
+            background-color: #1c150c;
+            color: var(--text-main);
+        }
+        select.form-control option {
+            background-color: #1c150c;
+            color: var(--text-main);
+            padding: 8px;
+        }
+        select.form-control option:checked,
+        select.form-control option:hover {
+            background-color: var(--primary);
+            color: #1c150c;
+        }
+
         /* Toggle Button Group */
         .toggle-group {
             display: flex;
