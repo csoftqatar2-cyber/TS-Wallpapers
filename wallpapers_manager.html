@@ -1726,6 +1726,14 @@
         let uploadChannel = 'app';    // 'app' (our slideshow) or 'gwm_split' (external GWM folder)
         let uploadTargetMode = null;  // null = every car; 'lynkco' = Lynk & Co cars only
 
+        // Which device operating-mode the currently selected channel targets, so the
+        // device dropdown can offer only the cars that actually run that mode.
+        function channelDeviceMode() {
+            if (uploadTargetMode === 'lynkco') return 'lynkco';
+            if (uploadChannel === 'gwm_split') return 'gwm';
+            return null; // plain app channel reaches every car
+        }
+
         // Switch the delivery destination. Three choices, but only two are real channels: Lynk & Co
         // rides the SAME 'app' channel as the normal library — it is not a separate delivery path,
         // it is the app channel plus a per-mode filter (target_mode='lynkco'), applied after upload
@@ -1920,10 +1928,14 @@
             // Preserve the current selection so filtering doesn't reset the chosen device
             const prevValue = selectEl.value;
 
-            // When the Lynk & Co channel is active, only cars actually running that
-            // mode can receive these wallpapers, so never offer any other car here.
-            const modeFiltered = uploadTargetMode
-                ? devicesList.filter(d => d.mode === uploadTargetMode)
+            // Each channel only reaches cars actually running the matching mode, so the
+            // dropdown must offer only those cars — never the whole fleet.
+            //   Lynk & Co channel  -> cars whose reported mode = 'lynkco'
+            //   GWM Split channel   -> cars whose reported mode = 'gwm'
+            //   plain app channel   -> every car (no mode restriction)
+            const requiredMode = channelDeviceMode();
+            const modeFiltered = requiredMode
+                ? devicesList.filter(d => d.mode === requiredMode)
                 : devicesList;
 
             const matches = modeFiltered.filter(device => {
@@ -1936,7 +1948,8 @@
             let placeholder = '-- اختر جهازاً أو اكتب كوداً مخصصاً --';
             if (matches.length === 0) {
                 if (q) placeholder = '-- لا يوجد جهاز مطابق --';
-                else if (uploadTargetMode === 'lynkco') placeholder = '-- لا توجد عربيات Lynk & Co مفعّلة بعد --';
+                else if (requiredMode === 'lynkco') placeholder = '-- لا توجد عربيات Lynk & Co مفعّلة بعد --';
+                else if (requiredMode === 'gwm') placeholder = '-- لا توجد عربيات GWM مفعّلة بعد --';
             }
             selectEl.innerHTML = `<option value="">${placeholder}</option>`;
 
