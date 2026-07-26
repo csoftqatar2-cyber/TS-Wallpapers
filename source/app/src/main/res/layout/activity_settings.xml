@@ -644,6 +644,14 @@
                                     android:id="@+id/radioModeLeopard"
                                     style="@style/ModeRadio"
                                     android:text="@string/mode_leopard" />
+                                <RadioButton
+                                    android:id="@+id/radioModeGwm"
+                                    style="@style/ModeRadio"
+                                    android:text="@string/mode_gwm" />
+                                <RadioButton
+                                    android:id="@+id/radioModeLynkco"
+                                    style="@style/ModeRadio"
+                                    android:text="@string/mode_lynkco" />
                             </RadioGroup>
 
                             <TextView
@@ -1308,11 +1316,6 @@
                                 android:textColor="@color/aurora_muted"
                                 android:textSize="11sp"
                                 android:text="@string/gwm_subtitle" />
-
-                            <com.google.android.material.switchmaterial.SwitchMaterial
-                                android:id="@+id/checkBoxGwmEnabled"
-                                style="@style/SettingsSwitch"
-                                android:text="@string/gwm_enable" />
 
                             <TextView
                                 android:id="@+id/textViewGwmFolder"

@@ -30,7 +30,10 @@ create table if not exists public.devices (
     client_name   text,
     is_active     boolean default false,
     created_at    timestamptz not null default timezone('utc', now()),
-    is_blocked    boolean not null default false
+    is_blocked    boolean not null default false,
+    -- Operating mode the device last reported (normal | fse | leopard | gwm | lynkco).
+    -- null = an older APK that does not report yet. Set via report_device_mode RPC.
+    mode          text check (mode is null or mode in ('normal','fse','leopard','gwm','lynkco'))
 );
 
 -- Wallpaper catalog. is_global=true rows go to EVERY activated device;
@@ -41,6 +44,10 @@ create table if not exists public.wallpapers (
     type        text not null,              -- 'image' | 'video'
     is_global   boolean default false,
     hardware_id text references public.devices(hardware_id),
+    -- When set, this wallpaper only reaches cars whose last reported mode matches
+    -- (e.g. 'lynkco' + is_global = "every Lynk & Co car"). null = the normal
+    -- library that syncs to every car. See get_wallpapers.
+    target_mode text check (target_mode is null or target_mode in ('normal','fse','leopard','gwm','lynkco')),
     created_at  timestamptz not null default timezone('utc', now())
 );
 
@@ -179,7 +186,9 @@ begin
         return query
         select w.url, w.type
         from public.wallpapers w
-        where w.is_global = true or w.hardware_id = device_hw_id
+        join public.devices d on d.hardware_id = device_hw_id
+        where (w.is_global = true or w.hardware_id = device_hw_id)
+          and (w.target_mode is null or w.target_mode = d.mode)
         order by w.created_at desc;
     else
         return query select 'inactive'::text, 'image'::text;
@@ -229,6 +238,67 @@ begin
 end;
 $function$;
 
+-- Internal helper: move a device's row (activation + wallpapers + hides) from an
+-- old hardware id to a new one. INTERNAL ONLY — called via `perform` from
+-- get_gwm_wallpapers. EXECUTE is revoked from anon/authenticated (see bottom of
+-- this section): exposing it over REST let anyone who knew a victim's hardware id
+-- (the car VIN) hijack that device's activation into an id they controlled.
+CREATE OR REPLACE FUNCTION public.migrate_device_hardware_id(old_id text, new_id text)
+ RETURNS void
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+begin
+    if old_id is null or old_id = '' or new_id is null or new_id = '' or old_id = new_id then
+        return;
+    end if;
+    -- Only ever migrate INTO an id that does not exist yet, so two devices can never be merged.
+    if exists (select 1 from public.devices d where d.hardware_id = new_id)
+       or not exists (select 1 from public.devices d where d.hardware_id = old_id) then
+        return;
+    end if;
+    update public.devices        set hardware_id = new_id where hardware_id = old_id;
+    update public.wallpapers     set hardware_id = new_id where hardware_id = old_id;
+    update public.wallpaper_hides set hardware_id = new_id where hardware_id = old_id;
+end;
+$function$;
+
+-- GWM-split channel playlist (companion program). Same activation gate as
+-- get_wallpapers; filters wallpapers to channel='gwm_split'.
+CREATE OR REPLACE FUNCTION public.get_gwm_wallpapers(device_hw_id text, legacy_hw_id text DEFAULT NULL::text)
+ RETURNS TABLE(url text, type text)
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+begin
+    perform public.migrate_device_hardware_id(legacy_hw_id, device_hw_id);
+
+    if exists (
+        select 1 from public.devices d
+        where d.hardware_id = device_hw_id and d.is_active = true and d.is_blocked = false
+    ) then
+        return query
+        select w.url, w.type
+        from public.wallpapers w
+        where w.channel = 'gwm_split'
+          and (w.is_global = true or w.hardware_id = device_hw_id)
+        order by w.created_at desc;
+    else
+        return query select 'inactive'::text, 'image'::text;
+    end if;
+end;
+$function$;
+
+-- SECURITY: migrate_device_hardware_id is internal-only. Revoke direct REST
+-- access so it cannot be used to hijack a device by its (guessable) VIN. The
+-- `perform` call inside get_gwm_wallpapers still works because that function is
+-- SECURITY DEFINER (the inner call runs as the owner, not the caller).
+revoke execute on function public.migrate_device_hardware_id(text, text) from anon;
+revoke execute on function public.migrate_device_hardware_id(text, text) from authenticated;
+revoke execute on function public.migrate_device_hardware_id(text, text) from public;
+
 -- Cross-program activation check: the OTHER programs on the device call this
 -- with the same hardware id to inherit the activation done in any one of them.
 CREATE OR REPLACE FUNCTION public.is_device_activated(device_hw_id text)
@@ -244,6 +314,28 @@ AS $function$
       and d.is_active = true
       and d.is_blocked = false
   );
+$function$;
+
+-- Operating-mode report: the app calls this on every sync so the manager can
+-- see each car's mode (normal | fse | leopard | gwm | lynkco). UPDATE-only (never creates
+-- a device row); unknown device id or unknown mode is a silent no-op.
+CREATE OR REPLACE FUNCTION public.report_device_mode(device_hw_id text, device_mode text, legacy_hw_id text DEFAULT NULL::text)
+ RETURNS void
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+begin
+    perform public.migrate_device_hardware_id(legacy_hw_id, device_hw_id);
+
+    if device_mode is null or device_mode not in ('normal','fse','leopard','gwm','lynkco') then
+        return;
+    end if;
+
+    update public.devices
+       set mode = device_mode
+     where hardware_id = device_hw_id;
+end;
 $function$;
 
 -- Store-app check-in: upserts the install row, refreshes last_seen, returns

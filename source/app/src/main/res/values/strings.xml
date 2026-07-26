@@ -274,6 +274,12 @@ Roboto Font Copyright (c) Christian Robertson. Licensed under the Apache License
     <string name="mode_fse_desc">Forces a fixed 1920×720 window for very wide screens.</string>
     <string name="mode_leopard">Leopard</string>
     <string name="mode_leopard_desc">The app hands the wallpaper to Android and disappears — no clock, no switching.</string>
+    <string name="mode_gwm">GWM</string>
+    <string name="mode_gwm_desc">Same as Normal, plus a \"Manage GWM images\" section that mirrors the GWM channel into the shared folder the GWM dashboard app reads.</string>
+    <string name="mode_lynkco">Lynk &amp; Co</string>
+    <string name="mode_lynkco_desc">For Lynk &amp; Co / Flyme head units. The app is just a picker — the chosen wallpaper is handed to the car\'s own theme app, which opens a preview with an \"Apply\" button.</string>
+    <string name="lynkco_unsupported">Not a Lynk &amp; Co / Flyme head unit</string>
+    <string name="lynkco_applied">Opening the wallpaper preview — tap \"Apply\" on the car\'s screen to set it.</string>
     <string name="mode_leopard_unsupported_note">Some screens do not support Leopard — the option is disabled automatically on those.</string>
     <string name="mode_new_badge">New</string>
 
@@ -417,4 +423,6 @@ Roboto Font Copyright (c) Christian Robertson. Licensed under the Apache License
     <string name="leopard_source_phone">From a phone</string>
     <string name="leopard_phone_hint">Scan this code with a phone on the same Wi-Fi, then upload the image.</string>
     <string name="chip_mode_leopard">Mode: Leopard</string>
+    <string name="chip_mode_gwm">Mode: GWM</string>
+    <string name="chip_mode_lynkco">Mode: Lynk &amp; Co</string>
 </resources>

@@ -134,9 +134,10 @@ public class LeopardPickerActivity extends AppCompatActivity {
     protected void onResume() {
         super.onResume();
         // The mirror of the check in FullscreenActivity: this screen only exists because the
-        // mode is Leopard, so the moment that stops being true — the user switched back in
-        // Settings, which we launch plainly and get no result from — it has to stand down.
-        if(!OperatingMode.isLeopard(mPrefs)) {
+        // mode is a hand-off product (Leopard or Lynkco), so the moment that stops being true —
+        // the user switched back in Settings, which we launch plainly and get no result from —
+        // it has to stand down.
+        if(!OperatingMode.isHandoff(mPrefs)) {
             startActivity(new Intent(this, FullscreenActivity.class));
             finish();
             return;
@@ -643,6 +644,9 @@ public class LeopardPickerActivity extends AppCompatActivity {
     private void applySelection() {
         if(mSelected == null) { toast(R.string.leopard_pick_first); return; }
 
+        // Images in Lynkco go to the head unit's theme app (no system screen). Video does NOT —
+        // the theme app's file entry point is image-only — so a Lynkco video falls back to our own
+        // MediaWallpaperService, which still needs the one-time system live-wallpaper screen.
         if(LeopardApplier.needsSystemScreen(this, mSelected.type)) {
             // The worst moment in the feature: we are about to throw the user into an unstyled
             // system screen with an English button. Warn first, and say it is one-time — an
@@ -661,7 +665,20 @@ public class LeopardPickerActivity extends AppCompatActivity {
     private void doApply() {
         setBusy(true, R.string.leopard_applying);
         final String url = mSelected.url, type = mSelected.type;
+        // Only IMAGES go to the theme app — its file entry point is image-only. A Lynkco video
+        // falls through to the Leopard path below (our own MediaWallpaperService live wallpaper),
+        // which is the one way to play an arbitrary local video on these units without root.
+        final boolean lynkcoImage = OperatingMode.isLynkco(mPrefs) && !WallpaperItem.TYPE_VIDEO.equals(type);
         new Thread(() -> {
+            // Lynkco hands the image to the head unit's own theme app, which reads a plain file
+            // path off shared storage. LynkcoApplier stages the download/copy there itself and
+            // opens the theme app's preview — a different path from Leopard's WallpaperManager.
+            if(lynkcoImage) {
+                runOnUiThread(() -> say(R.string.leopard_preparing));
+                final int r = LynkcoApplier.apply(this, url, type);
+                runOnUiThread(() -> { setBusy(false, 0); onLynkcoApplied(r); });
+                return;
+            }
             // A cloud item is an https:// URL, which the wallpaper engine cannot read: it asks
             // the ContentResolver for the type and the stream, and HTTP has neither. Download
             // it once and hand over a content:// instead — the same shape the system file
@@ -679,6 +696,25 @@ public class LeopardPickerActivity extends AppCompatActivity {
             final int result = LeopardApplier.apply(this, applyUrl, type);
             runOnUiThread(() -> { setBusy(false, 0); onApplied(result, type); });
         }).start();
+    }
+
+    /**
+     * Lynkco's apply does not finish here — it opens the head unit's own preview with an "Apply"
+     * button, so success means "the theme app took it and is now showing the preview", not "the
+     * wallpaper is set". The copy that reaches the user has to say that, or a tap that then needs
+     * a second tap on the system screen reads as the app not working.
+     */
+    private void onLynkcoApplied(int result) {
+        if(result != LynkcoApplier.RESULT_LAUNCHED) {
+            say(R.string.leopard_apply_failed);
+            return;
+        }
+        say(R.string.lynkco_applied);
+        hidePreview();
+        buildFilmstrip();
+        if(mPrefs.getBoolean("leopard-close-after-set", false)) {
+            mSetButton.postDelayed(this::finish, 900);
+        }
     }
 
     /** The download can take real seconds on a car's link; say so rather than look frozen. */

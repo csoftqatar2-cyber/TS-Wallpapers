@@ -254,6 +254,26 @@ public class WallpaperRepo {
         return url;
     }
 
+    /**
+     * Report this install's operating mode (normal/fse/leopard/gwm) to the backend so the
+     * manager can see it. Fire-and-forget: any failure (offline, RPC missing on an older
+     * backend, non-2xx) is swallowed and never disturbs the sync it rides along with.
+     */
+    private void reportOperatingMode() {
+        try {
+            String sbUrl = getSupabaseUrl();
+            if (sbUrl.contains("YOUR_SUPABASE_PROJECT")) return;
+            JSONObject body = new JSONObject();
+            body.put("device_hw_id", getDeviceId());
+            body.put("device_mode", OperatingMode.wire(mPref));
+            String legacy = getLegacyDeviceId();
+            if (legacy != null && !legacy.isEmpty()) body.put("legacy_hw_id", legacy);
+            httpPost(sbUrl + "/rest/v1/rpc/report_device_mode", body.toString());
+        } catch (Exception e) {
+            Log.w(TAG, "reportOperatingMode failed", e);
+        }
+    }
+
     /** RPC that returns the GWM Split channel images for this car (empty when not configured). */
     private String getGwmSyncUrl() {
         String sbUrl = getSupabaseUrl();
@@ -624,8 +644,13 @@ public class WallpaperRepo {
                          .putString(PREF_CACHE, toJson(parsed))
                          .apply();
                     mSecurePref.putBoolean(PREF_ACTIVE, active);
-                         
+
                     load();
+
+                    // Tell the backend which mode this car runs, so the manager can see it.
+                    // Best-effort telemetry on the same thread; runs after the manifest fetch
+                    // already migrated any VIN, so the device row is under the current id.
+                    reportOperatingMode();
 
                     // Clean up video cache files that are no longer used
                     try {

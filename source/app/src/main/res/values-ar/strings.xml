@@ -374,6 +374,12 @@
     <string name="mode_fse_desc">يفرض نافذة ثابتة 1920×720 للشاشات العريضة جداً.</string>
     <string name="mode_leopard">Leopard</string>
     <string name="mode_leopard_desc">التطبيق يسلّم الخلفية لنظام أندرويد ويختفي — بلا ساعة أو تبديل.</string>
+    <string name="mode_gwm">GWM</string>
+    <string name="mode_gwm_desc">زي الوضع العادي بالظبط، بالإضافة لقسم «إدارة صور GWM» اللي بيزامن قناة GWM في الفولدر المشترك اللي بيقراه تطبيق داشبورد GWM.</string>
+    <string name="mode_lynkco">Lynk &amp; Co</string>
+    <string name="mode_lynkco_desc">لشاشات Lynk &amp; Co / Flyme. التطبيق مجرّد أداة اختيار — الخلفية المختارة بتتسلّم لتطبيق الثيم بتاع السيارة، اللي بيفتح معاينة فيها زرار «تطبيق».</string>
+    <string name="lynkco_unsupported">مش شاشة Lynk &amp; Co / Flyme</string>
+    <string name="lynkco_applied">بيتفتح معاينة الخلفية — دوس «تطبيق» على شاشة السيارة عشان تتظبط.</string>
     <string name="mode_leopard_unsupported_note">بعض الشاشات لا تدعم Leopard — الخيار بيظهر مُعطّلاً تلقائياً عليها.</string>
     <string name="mode_new_badge">جديد</string>
     <string name="leopard_settings_banner_title">وضع Leopard مُفعّل</string>
@@ -393,4 +399,6 @@
     <string name="leopard_source_phone">من الهاتف</string>
     <string name="leopard_phone_hint">امسح الكود ده بموبايل على نفس شبكة الواي‑فاي، وبعدين ارفع الصورة.</string>
     <string name="chip_mode_leopard">الوضع: Leopard</string>
+    <string name="chip_mode_gwm">الوضع: GWM</string>
+    <string name="chip_mode_lynkco">الوضع: Lynk &amp; Co</string>
 </resources>

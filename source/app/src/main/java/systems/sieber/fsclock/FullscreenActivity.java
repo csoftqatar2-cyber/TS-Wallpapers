@@ -152,7 +152,7 @@ public class FullscreenActivity extends AppCompatActivity {
                         // The operating mode is decided in onCreate, which does not run again on
                         // the way back from Settings — so switching mode there used to write the
                         // pref and change nothing until the app was killed and reopened.
-                        if(OperatingMode.isLeopard(mSharedPref) && new WallpaperRepo(FullscreenActivity.this).isActive()) {
+                        if(OperatingMode.isHandoff(mSharedPref) && new WallpaperRepo(FullscreenActivity.this).isActive()) {
                             startActivity(new Intent(FullscreenActivity.this, LeopardPickerActivity.class));
                             finish();
                             return;
@@ -183,7 +183,7 @@ public class FullscreenActivity extends AppCompatActivity {
         // skipping to the picker on an unactivated device would hand a technician a wallpaper
         // library with no way to enter the serial.
         mSharedPref = getSharedPreferences(SettingsActivity.SHARED_PREF_DOMAIN, Context.MODE_PRIVATE);
-        if(OperatingMode.isLeopard(mSharedPref) && new WallpaperRepo(this).isActive()) {
+        if(OperatingMode.isHandoff(mSharedPref) && new WallpaperRepo(this).isActive()) {
             startActivity(new Intent(this, LeopardPickerActivity.class));
             finish();
             return;

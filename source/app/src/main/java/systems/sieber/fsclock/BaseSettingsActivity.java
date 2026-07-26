@@ -434,6 +434,8 @@ public class BaseSettingsActivity extends AppCompatActivity {
             switch(OperatingMode.get(mSharedPref)) {
                 case OperatingMode.LEOPARD: mode.setText(R.string.chip_mode_leopard); break;
                 case OperatingMode.FSE:     mode.setText(R.string.chip_mode_fse); break;
+                case OperatingMode.GWM:     mode.setText(R.string.chip_mode_gwm); break;
+                case OperatingMode.LYNKCO:  mode.setText(R.string.chip_mode_lynkco); break;
                 default:                    mode.setText(R.string.chip_mode_normal); break;
             }
             // The chip already names the mode; the caret is what says it can be changed here.
@@ -528,17 +530,17 @@ public class BaseSettingsActivity extends AppCompatActivity {
         return firstVisibleSection();
     }
 
-    /** Strip the rail down to what Leopard can actually act on. */
+    /** Strip the rail down to what a hand-off mode (Leopard or Lynkco) can actually act on. */
     private void applyLeopardVisibility() {
-        boolean leopard = OperatingMode.isLeopard(mSharedPref);
+        boolean handoff = OperatingMode.isHandoff(mSharedPref);
         for(int id : NAV_RAIL_LEOPARD_HIDDEN) {
             View v = findViewById(id);
-            if(v != null) v.setVisibility(leopard ? View.GONE : View.VISIBLE);
+            if(v != null) v.setVisibility(handoff ? View.GONE : View.VISIBLE);
         }
         View banner = findViewById(R.id.leopardBanner);
-        if(banner != null) banner.setVisibility(leopard ? View.VISIBLE : View.GONE);
+        if(banner != null) banner.setVisibility(handoff ? View.VISIBLE : View.GONE);
         View leopardGroup = findViewById(R.id.groupLeopard);
-        if(leopardGroup != null) leopardGroup.setVisibility(leopard ? View.VISIBLE : View.GONE);
+        if(leopardGroup != null) leopardGroup.setVisibility(handoff ? View.VISIBLE : View.GONE);
     }
 
     private int firstVisibleSection() {
@@ -555,13 +557,17 @@ public class BaseSettingsActivity extends AppCompatActivity {
      * a settings change and never triggers a save.
      */
     private void showSection(int section) {
-        boolean leopard = OperatingMode.isLeopard(mSharedPref);
+        boolean handoff = OperatingMode.isHandoff(mSharedPref);
+        boolean gwm = OperatingMode.isGwm(mSharedPref);
         for(int i = 0; i < NAV_RAIL_ITEMS.length; i++) {
             findViewById(NAV_RAIL_ITEMS[i]).setSelected(i == section);
             for(int card : NAV_RAIL_SECTIONS[i]) {
-                // Belt and braces: in Leopard the whole Clock rail entry is gone anyway, but a
-                // card must never appear just because its group happens to be selected.
-                boolean show = i == section && !(leopard && isLeopardHiddenCard(card));
+                // Belt and braces: in a hand-off mode the whole Clock rail entry is gone anyway,
+                // but a card must never appear just because its group happens to be selected. The
+                // GWM management card is likewise only meaningful in GWM mode.
+                boolean show = i == section
+                        && !(handoff && isLeopardHiddenCard(card))
+                        && !(card == R.id.sectionGwm && !gwm);
                 findViewById(card).setVisibility(show ? View.VISIBLE : View.GONE);
             }
         }
@@ -1773,14 +1779,27 @@ public class BaseSettingsActivity extends AppCompatActivity {
             leopard.setAlpha(0.4f);
         }
 
+        // Lynkco is only a real product on a head unit that ships the Flyme theme app we hand the
+        // wallpaper to. Everywhere else the switch would do nothing, so it is shown disabled
+        // rather than offered and then silently failing.
+        final RadioButton lynkco = findViewById(R.id.radioModeLynkco);
+        boolean lynkcoSupported = OperatingMode.isLynkcoSupported(this);
+        if(lynkco != null && !lynkcoSupported) {
+            lynkco.setEnabled(false);
+            lynkco.setAlpha(0.4f);
+        }
+
         int mode = OperatingMode.get(mSharedPref);
         if(mode == OperatingMode.LEOPARD && !supported) mode = OperatingMode.NORMAL;
+        if(mode == OperatingMode.LYNKCO && !lynkcoSupported) mode = OperatingMode.NORMAL;
         group.check(radioFor(mode));
         updateModeDescription(mode, supported);
 
         group.setOnCheckedChangeListener((g, checkedId) -> {
             int m = checkedId == R.id.radioModeLeopard ? OperatingMode.LEOPARD
-                    : checkedId == R.id.radioModeFse ? OperatingMode.FSE : OperatingMode.NORMAL;
+                    : checkedId == R.id.radioModeFse ? OperatingMode.FSE
+                    : checkedId == R.id.radioModeGwm ? OperatingMode.GWM
+                    : checkedId == R.id.radioModeLynkco ? OperatingMode.LYNKCO : OperatingMode.NORMAL;
             applyMode(m);
         });
 
@@ -1799,7 +1818,9 @@ public class BaseSettingsActivity extends AppCompatActivity {
 
     private static int radioFor(int mode) {
         return mode == OperatingMode.LEOPARD ? R.id.radioModeLeopard
-                : mode == OperatingMode.FSE ? R.id.radioModeFse : R.id.radioModeNormal;
+                : mode == OperatingMode.FSE ? R.id.radioModeFse
+                : mode == OperatingMode.GWM ? R.id.radioModeGwm
+                : mode == OperatingMode.LYNKCO ? R.id.radioModeLynkco : R.id.radioModeNormal;
     }
 
     /**
@@ -1831,6 +1852,18 @@ public class BaseSettingsActivity extends AppCompatActivity {
             requestOverlayPermissionIfNeeded();
         }
 
+        // GWM is the on-switch for the folder mirror. Entering it does what the old enable
+        // checkbox did: get the storage grant (or run a first sync when we already have it).
+        // Leaving it needs nothing — GwmSync.isEnabled() now reads false and the mirror stops.
+        refreshGwmSection();
+        if(mode == OperatingMode.GWM) {
+            if(!GwmSync.hasStoragePermission(this)) {
+                requestGwmStoragePermission();
+            } else {
+                runGwmSync();
+            }
+        }
+
         updateModeDescription(mode, OperatingMode.isSupported(this));
         applyLeopardVisibility();
         showSection(firstVisibleSection());
@@ -1844,15 +1877,22 @@ public class BaseSettingsActivity extends AppCompatActivity {
      */
     private void showModeDialog() {
         final boolean supported = OperatingMode.isSupported(this);
-        final int[] modes = { OperatingMode.NORMAL, OperatingMode.FSE, OperatingMode.LEOPARD };
+        final boolean lynkcoSupported = OperatingMode.isLynkcoSupported(this);
+        final int[] modes = { OperatingMode.NORMAL, OperatingMode.FSE, OperatingMode.LEOPARD, OperatingMode.GWM, OperatingMode.LYNKCO };
         CharSequence[] labels = {
                 getString(R.string.mode_normal),
                 getString(R.string.mode_fse),
                 supported ? getString(R.string.mode_leopard)
-                        : getString(R.string.mode_leopard) + " — " + getString(R.string.leopard_unsupported)
+                        : getString(R.string.mode_leopard) + " — " + getString(R.string.leopard_unsupported),
+                getString(R.string.mode_gwm),
+                lynkcoSupported ? getString(R.string.mode_lynkco)
+                        : getString(R.string.mode_lynkco) + " — " + getString(R.string.lynkco_unsupported)
         };
         int current = OperatingMode.get(mSharedPref);
-        int checked = current == OperatingMode.LEOPARD ? 2 : current == OperatingMode.FSE ? 1 : 0;
+        int checked = current == OperatingMode.LEOPARD ? 2
+                : current == OperatingMode.FSE ? 1
+                : current == OperatingMode.GWM ? 3
+                : current == OperatingMode.LYNKCO ? 4 : 0;
 
         new AlertDialog.Builder(this)
                 .setTitle(R.string.mode_title)
@@ -1861,6 +1901,12 @@ public class BaseSettingsActivity extends AppCompatActivity {
                         // Some cheap ROMs ship no live wallpaper picker at all. Say so rather
                         // than accepting a mode that cannot start.
                         Toast.makeText(this, R.string.leopard_unsupported, Toast.LENGTH_LONG).show();
+                        return;
+                    }
+                    if(modes[which] == OperatingMode.LYNKCO && !lynkcoSupported) {
+                        // No Flyme theme app on this unit — Lynkco has nothing to hand the
+                        // wallpaper to, so refuse it here rather than accept a dead mode.
+                        Toast.makeText(this, R.string.lynkco_unsupported, Toast.LENGTH_LONG).show();
                         return;
                     }
                     d.dismiss();
@@ -1878,9 +1924,13 @@ public class BaseSettingsActivity extends AppCompatActivity {
         TextView desc = findViewById(R.id.textViewModeDesc);
         if(desc == null) return;
         int res = mode == OperatingMode.LEOPARD ? R.string.mode_leopard_desc
-                : mode == OperatingMode.FSE ? R.string.mode_fse_desc : R.string.mode_normal_desc;
+                : mode == OperatingMode.FSE ? R.string.mode_fse_desc
+                : mode == OperatingMode.GWM ? R.string.mode_gwm_desc
+                : mode == OperatingMode.LYNKCO ? R.string.mode_lynkco_desc : R.string.mode_normal_desc;
         String text = getString(res);
-        if(!leopardSupported) text += "\n" + getString(R.string.leopard_unsupported);
+        // The unsupported note is about Leopard's live-wallpaper requirement; only append it when
+        // Leopard is the mode being described, so Lynkco/Normal do not carry an unrelated warning.
+        if(!leopardSupported && mode == OperatingMode.LEOPARD) text += "\n" + getString(R.string.leopard_unsupported);
         desc.setText(text);
     }
 
@@ -1970,7 +2020,6 @@ public class BaseSettingsActivity extends AppCompatActivity {
     // A self-contained sync into an external folder for a separate app. Independent of every
     // other feature here; it only ever does anything when the switch below is on.
 
-    private CompoundButton mCheckBoxGwmEnabled;
     private TextView mTextViewGwmFolder;
     private TextView mButtonGwmPermission;
     private TextView mTextViewGwmStatus;
@@ -1978,29 +2027,12 @@ public class BaseSettingsActivity extends AppCompatActivity {
     private boolean mGwmPendingSyncAfterGrant;
 
     private void initGwmSection() {
-        mCheckBoxGwmEnabled = findViewById(R.id.checkBoxGwmEnabled);
         mTextViewGwmFolder = findViewById(R.id.textViewGwmFolder);
         mButtonGwmPermission = findViewById(R.id.buttonGwmPermission);
         mTextViewGwmStatus = findViewById(R.id.textViewGwmStatus);
-        if(mCheckBoxGwmEnabled == null) return;
-
-        mCheckBoxGwmEnabled.setChecked(GwmSync.isEnabled(mSharedPref));
-        // Not an app-wallpaper setting: keep it out of the generic auto-save sweep, it persists itself.
-        mAutoSaveExcluded.add(mCheckBoxGwmEnabled);
-        mCheckBoxGwmEnabled.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
-            @Override
-            public void onCheckedChanged(CompoundButton b, boolean checked) {
-                mSharedPref.edit().putBoolean(GwmSync.PREF_ENABLED, checked).apply();
-                refreshGwmSection();
-                if(checked) {
-                    if(!GwmSync.hasStoragePermission(BaseSettingsActivity.this)) {
-                        requestGwmStoragePermission();
-                    } else {
-                        runGwmSync();
-                    }
-                }
-            }
-        });
+        // The whole section only ever appears in GWM mode (see showSection); the operating-mode
+        // picker turns the mirror on and off, so there is no separate enable switch here any more.
+        if(mTextViewGwmFolder == null) return;
 
         mButtonGwmPermission.setOnClickListener(new View.OnClickListener() {
             @Override public void onClick(View v) { requestGwmStoragePermission(); }

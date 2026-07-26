@@ -36,7 +36,6 @@ class GwmSync {
 
     private static final String TAG = "GwmSync";
 
-    static final String PREF_ENABLED = "gwm-split-enabled";
     static final String PREF_FOLDER  = "gwm-split-folder";
     /** JSON array of the file names we created in the folder, so we never delete a stranger's file. */
     private static final String PREF_MANAGED = "gwm-split-managed-files";
@@ -47,8 +46,13 @@ class GwmSync {
         return new File(pics, "GWMSplit_Styles").getAbsolutePath();
     }
 
+    /**
+     * The GWM mirror runs on exactly one condition: this install is in GWM mode. The mode picker
+     * IS the on-switch — there is no separate enable flag any more. Every previous call site
+     * (boot, view, settings) keeps working unchanged; they now all mean "in GWM mode".
+     */
     static boolean isEnabled(SharedPreferences p) {
-        return p.getBoolean(PREF_ENABLED, false);
+        return OperatingMode.get(p) == OperatingMode.GWM;
     }
 
     static String folder(SharedPreferences p) {

@@ -717,6 +717,12 @@
             color: var(--accent);
         }
 
+        .wp-badge.mode {
+            background: rgba(96, 165, 250, 0.18);
+            border: 1px solid rgba(96, 165, 250, 0.42);
+            color: #60a5fa;
+        }
+
         .wp-type-icon {
             position: absolute;
             bottom: 10px;
@@ -1224,6 +1230,7 @@
         .dev-badge.on  { background: rgba(16,185,129,0.12); color: var(--success); border: 1px solid rgba(16,185,129,0.25); }
         .dev-badge.off { background: rgba(148,163,184,0.12); color: #94a3b8; border: 1px solid rgba(148,163,184,0.25); }
         .dev-badge.blk { background: rgba(239,68,68,0.12); color: var(--danger); border: 1px solid rgba(239,68,68,0.3); }
+        .dev-badge.mode { background: rgba(245,158,11,0.12); color: #f59e0b; border: 1px solid rgba(245,158,11,0.3); }
         .dev-row-actions { display: flex; gap: 8px; flex-wrap: wrap; }
         .dev-act {
             padding: 8px 12px; border-radius: 10px; cursor: pointer; font-size: 0.8rem;
@@ -1345,6 +1352,9 @@
                             <button type="button" class="toggle-btn" id="btn-channel-gwm" onclick="setChannel('gwm_split')">
                                 <i class="fa-solid fa-folder-tree"></i> GWM Split (فولدر خارجي)
                             </button>
+                            <button type="button" class="toggle-btn" id="btn-channel-lynkco" onclick="setChannel('lynkco')">
+                                <i class="fa-solid fa-car-side"></i> Lynk &amp; Co (خلفيات السيارة)
+                            </button>
                         </div>
                         <p id="channel-hint" style="margin: 8px 2px 0; font-size: 0.82rem; color: var(--text-muted);"></p>
                     </div>
@@ -1365,6 +1375,10 @@
                     <!-- Device Selector (Shown only for private) -->
                     <div class="form-group" id="device-selection-group" style="display: none;">
                         <label for="device-select">اختر الجهاز المستهدف:</label>
+                        <div class="input-wrapper" style="margin-bottom: 8px;">
+                            <i class="fa-solid fa-magnifying-glass"></i>
+                            <input type="text" id="device-search" class="form-control" placeholder="ابحث بالكود أو الماك..." oninput="filterDeviceOptions()">
+                        </div>
                         <div class="input-wrapper">
                             <i class="fa-solid fa-microchip"></i>
                             <select id="device-select" class="form-control" onchange="onDeviceSelectChange()">
@@ -1691,18 +1705,35 @@
         let hideModalSelection = null; // Set of hardware_ids ticked in that modal
         let selectedFiles = [];
         let targetType = 'global'; // global or private
-        let uploadChannel = 'app'; // 'app' (our slideshow) or 'gwm_split' (external GWM folder)
+        let uploadChannel = 'app';    // 'app' (our slideshow) or 'gwm_split' (external GWM folder)
+        let uploadTargetMode = null;  // null = every car; 'lynkco' = Lynk & Co cars only
 
-        // Switch the delivery channel. The global/private target below is orthogonal and stays
-        // as-is; only the copy changes so the operator knows where these images will land.
+        // Switch the delivery destination. Three choices, but only two are real channels: Lynk & Co
+        // rides the SAME 'app' channel as the normal library — it is not a separate delivery path,
+        // it is the app channel plus a per-mode filter (target_mode='lynkco'), applied after upload
+        // by patching the row. The global/private target below is orthogonal and stays as-is; only
+        // the copy changes so the operator knows where these images will land.
         function setChannel(ch) {
-            uploadChannel = (ch === 'gwm_split') ? 'gwm_split' : 'app';
-            document.getElementById("btn-channel-app").classList.toggle('active', uploadChannel === 'app');
+            if (ch === 'lynkco') {
+                uploadChannel = 'app';
+                uploadTargetMode = 'lynkco';
+            } else {
+                uploadChannel = (ch === 'gwm_split') ? 'gwm_split' : 'app';
+                uploadTargetMode = null;
+            }
+            document.getElementById("btn-channel-app").classList.toggle('active', uploadChannel === 'app' && !uploadTargetMode);
             document.getElementById("btn-channel-gwm").classList.toggle('active', uploadChannel === 'gwm_split');
+            const lynkcoBtn = document.getElementById("btn-channel-lynkco");
+            if (lynkcoBtn) lynkcoBtn.classList.toggle('active', uploadTargetMode === 'lynkco');
 
             const globalBtn = document.getElementById("btn-target-global");
             const hint = document.getElementById("channel-hint");
-            if (uploadChannel === 'gwm_split') {
+            if (uploadTargetMode === 'lynkco') {
+                // "Global" here means "every Lynk & Co car" — the mode filter already narrows it to
+                // that fleet, so say so rather than the misleading "all devices".
+                globalBtn.innerHTML = '<i class="fa-solid fa-globe"></i> كل عربيات Lynk &amp; Co';
+                hint.innerText = 'تظهر داخل تطبيقنا على عربيات Lynk & Co فقط (اللي مفعّل عليها وضع Lynk & Co). العربية بتفتح معاينة رسمية وتدوس «تطبيق» لتثبيت الخلفية.';
+            } else if (uploadChannel === 'gwm_split') {
                 // "Global" now means "every GWM car", because only cars with the GWM Split section
                 // enabled ever pull this channel — so relabel it to say exactly that.
                 globalBtn.innerHTML = '<i class="fa-solid fa-globe"></i> كل عربيات GWM';
@@ -1857,13 +1888,27 @@
             return set ? set.size : 0;
         }
 
-        // Render devices into selection dropdown
-        function renderDevicesDropdown() {
+        // Render devices into selection dropdown (optionally filtered by a search term)
+        function renderDevicesDropdown(term) {
             const selectEl = document.getElementById("device-select");
-            // Clear current options keeping the first one
-            selectEl.innerHTML = '<option value="">-- اختر جهازاً أو اكتب كوداً مخصصاً --</option>';
+            const q = (term || "").trim().toLowerCase();
 
-            devicesList.forEach(device => {
+            // Preserve the current selection so filtering doesn't reset the chosen device
+            const prevValue = selectEl.value;
+
+            const matches = devicesList.filter(device => {
+                if (!q) return true;
+                const serial = (device.serial_number || '').toLowerCase();
+                const hw = (device.hardware_id || '').toLowerCase();
+                return serial.includes(q) || hw.includes(q);
+            });
+
+            const placeholder = q && matches.length === 0
+                ? '-- لا يوجد جهاز مطابق --'
+                : '-- اختر جهازاً أو اكتب كوداً مخصصاً --';
+            selectEl.innerHTML = `<option value="">${placeholder}</option>`;
+
+            matches.forEach(device => {
                 const serial = device.serial_number || 'بدون كود';
                 const label = `${serial} | الماك: ${device.hardware_id}`;
                 const option = document.createElement("option");
@@ -1871,6 +1916,17 @@
                 option.innerText = label;
                 selectEl.appendChild(option);
             });
+
+            // Re-apply the previous selection if it is still in the filtered list
+            if (prevValue && matches.some(d => d.hardware_id === prevValue)) {
+                selectEl.value = prevValue;
+            }
+        }
+
+        // Filter the device dropdown live as the user types in the search box
+        function filterDeviceOptions() {
+            const term = document.getElementById("device-search").value;
+            renderDevicesDropdown(term);
         }
 
         // Set Target Type (Global vs Private)
@@ -2256,7 +2312,7 @@
 
                 try {
                     // Upload + record via the admin-upload Edge Function (throws on failure)
-                    await uploadViaFunction(file, isGlobal, hwId, uploadChannel);
+                    await uploadViaFunction(file, isGlobal, hwId, uploadChannel, uploadTargetMode);
                     successCount++;
                 } catch (err) {
                     console.error(`Error uploading ${file.name}:`, err);
@@ -2312,7 +2368,7 @@
         // Function. The function verifies the caller is the admin and performs the
         // storage write with the service role, which sidesteps the fact that the
         // Storage service does not accept this project's user JWTs directly.
-        async function uploadViaFunction(file, isGlobal, hardwareId, channel) {
+        async function uploadViaFunction(file, isGlobal, hardwareId, channel, targetMode) {
             // Classify every video container the app can play (case-insensitive);
             // previously .mkv / uppercase .MP4 were stored as type "image" and the
             // device tried to render them with the image pipeline.
@@ -2353,6 +2409,27 @@
                     throw new Error("انتهت صلاحية جلسة الدخول. سجّل الدخول من جديد ثم أعد المحاولة.");
                 }
                 throw new Error(`فشل الرفع (HTTP ${response.status})${msg ? ": " + msg.slice(0, 200) : ""}`);
+            }
+
+            // Lynk & Co images ride the same 'app' channel as the normal library; what keeps them
+            // to Lynk & Co cars is target_mode. The upload function does not take it, so set it here
+            // on the freshly-created row, matched by its unique UUID url.
+            if (targetMode) {
+                const okData = await response.json().catch(() => ({}));
+                const createdUrl = okData && okData.url;
+                if (createdUrl) {
+                    const patchRes = await fetch(`${REST_WALLPAPERS}?url=eq.${encodeURIComponent(createdUrl)}`, {
+                        method: "PATCH",
+                        headers: {
+                            "apikey": ANON_KEY,
+                            "Authorization": `Bearer ${SESSION_TOKEN}`,
+                            "Content-Type": "application/json",
+                            "Prefer": "return=minimal"
+                        },
+                        body: JSON.stringify({ target_mode: targetMode })
+                    });
+                    if (!patchRes.ok) throw new Error(`تعذّر توجيه الخلفية لسيارات Lynk & Co (HTTP ${patchRes.status})`);
+                }
             }
             return true;
         }
@@ -2494,6 +2571,14 @@
                     badge.innerHTML = '<i class="fa-solid fa-user-shield"></i> خاص';
                 }
                 mediaWrapper.appendChild(badge);
+
+                // Mode-targeted badge: this image only reaches cars running that mode (Lynk & Co).
+                if (wp.target_mode === 'lynkco') {
+                    const modeBadge = document.createElement("span");
+                    modeBadge.className = "wp-badge mode";
+                    modeBadge.innerHTML = '<i class="fa-solid fa-car-side"></i> Lynk & Co';
+                    mediaWrapper.appendChild(modeBadge);
+                }
 
                 // "hidden on N cars" badge (global wallpapers with per-car exceptions)
                 const hiddenCount = hiddenCountFor(wp.id);
@@ -2947,6 +3032,19 @@
         }
 
         // Render the full devices list with block/activate/rename/delete controls
+        // Operating mode the car reported (report_device_mode RPC). null = older APK / never synced.
+        const MODE_LABELS = {
+            normal:  ['fa-desktop', 'عادي'],
+            fse:     ['fa-tv', 'FSE'],
+            leopard: ['fa-image', 'ليوبارد'],
+            gwm:     ['fa-folder-tree', 'GWM'],
+        };
+        function modeBadge(mode) {
+            const m = MODE_LABELS[mode];
+            if (!m) return '';  // unknown / not reported yet — show nothing rather than a guess
+            return `<span class="dev-badge mode"><i class="fa-solid ${m[0]}"></i> ${m[1]}</span>`;
+        }
+
         function renderDevicesModal() {
             const body = document.getElementById("devices-modal-body");
             const q = (document.getElementById("devices-search").value || "").toLowerCase().trim();
@@ -2964,10 +3062,13 @@
                 return true;
             });
             if (q) {
-                list = list.filter(d =>
-                    (d.hardware_id || '').toLowerCase().includes(q) ||
-                    (d.serial_number || '').toLowerCase().includes(q) ||
-                    (d.client_name || '').toLowerCase().includes(q));
+                list = list.filter(d => {
+                    const modeText = (MODE_LABELS[d.mode] ? MODE_LABELS[d.mode][1] : '') + ' ' + (d.mode || '');
+                    return (d.hardware_id || '').toLowerCase().includes(q) ||
+                        (d.serial_number || '').toLowerCase().includes(q) ||
+                        (d.client_name || '').toLowerCase().includes(q) ||
+                        modeText.toLowerCase().includes(q);
+                });
             }
 
             if (list.length === 0) {
@@ -3004,6 +3105,7 @@
                     <div class="dev-row-title">
                         <span class="dev-row-serial">${escapeHtml(d.serial_number || 'بدون كود')}${nameBit}</span>
                         ${statusBadge}
+                        ${modeBadge(d.mode)}
                         <span class="dev-badge off">${count} صورة</span>
                     </div>
                     <div class="dev-row-mac">${escapeHtml(hwId)}</div>`;
