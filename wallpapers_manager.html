@@ -246,16 +246,34 @@
             border: 1px solid rgba(6, 182, 212, 0.2);
         }
 
-        /* Grid Workspace Layout */
+        /* Grid Workspace Layout — stacked: the (option-heavy) upload panel is a
+           wide full-width card on top, the active-wallpapers manager below it. */
         .workspace-grid {
             display: grid;
-            grid-template-columns: 430px 1fr;
+            grid-template-columns: 1fr;
             gap: 30px;
             align-items: start;
         }
 
-        @media (max-width: 1024px) {
-            .workspace-grid {
+        /* Upload form spreads its many option groups across the wide panel:
+           the toggle groups flow into 2–3 columns on wide screens, while the
+           dropzone / previews / progress / submit stay full-width. */
+        #upload-form {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 4px 28px;
+            align-items: start;
+        }
+        #upload-form > .dropzone,
+        #upload-form > .previews-container,
+        #upload-form > .upload-progress-container,
+        #upload-form > #submit-btn,
+        #upload-form > #device-selection-group {
+            grid-column: 1 / -1;
+        }
+
+        @media (max-width: 640px) {
+            #upload-form {
                 grid-template-columns: 1fr;
             }
         }
