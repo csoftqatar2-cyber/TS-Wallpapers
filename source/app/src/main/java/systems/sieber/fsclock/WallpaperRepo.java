@@ -596,6 +596,100 @@ public class WallpaperRepo {
         return items.get(index);
     }
 
+    /**
+     * Put the slideshow on one specific wallpaper, by url.
+     *
+     * This is what makes a freshly added image actually appear. Adding an image only ever
+     * grew the playlist — and since {@link #load()} re-anchors on PREF_LAST_URL, the screen
+     * stayed on whatever was showing before, with the new picture buried wherever its file
+     * name sorted. From the customer's side that is indistinguishable from "my photo never
+     * arrived", which is exactly what the phone upload page promises it did.
+     *
+     * @return true when the wallpaper is in the playlist and is now the current one.
+     */
+    public boolean jumpTo(String url) {
+        if(url == null || url.isEmpty()) return false;
+        List<WallpaperItem> items = mItems;
+        String key = fitKey(url);
+        for(int i = 0; i < items.size(); i++) {
+            WallpaperItem it = items.get(i);
+            if(it.url != null && key.equals(fitKey(it.url))) {
+                mIndex = i;
+                savePosition(it);
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** A wallpaper served from the shop's library rather than stored on this device. */
+    public static boolean isRemoteUrl(String url) {
+        return url != null && (url.startsWith("http://") || url.startsWith("https://"));
+    }
+
+    /**
+     * Delete a wallpaper that lives on this device — the file itself and everything keyed to
+     * it: fit, focal point, hide entry, and the "resume here" / "default wallpaper" pointers.
+     *
+     * Only local files. A cloud wallpaper cannot be deleted from a car: the row lives on the
+     * server and the very next sync would bring it back, so "deleted" would be a lie the user
+     * discovers on the next swipe.
+     *
+     * @return true only when the file is genuinely gone from disk. The caller must not report
+     *         success on false — that is the whole point of returning it.
+     */
+    public boolean deleteLocal(String url) {
+        if(url == null || url.isEmpty() || isRemoteUrl(url)) return false;
+        String key = fitKey(url);
+        File f = new File(key);
+        if(f.exists() && !f.delete()) return false;
+        if(f.exists()) return false;      // delete() lied, or something re-created it
+
+        SharedPreferences.Editor e = mPref.edit();
+        // Forget the per-image settings, so a future file that happens to land on the same
+        // name does not inherit a stranger's crop.
+        e.remove(FIT_PREFIX + key).remove(FOCAL_PREFIX + key);
+        String last = mPref.getString(PREF_LAST_URL, "");
+        if(!last.isEmpty() && key.equals(fitKey(last))) e.remove(PREF_LAST_URL);
+        String def = mPref.getString(PREF_DEFAULT, "");
+        if(!def.isEmpty() && key.equals(fitKey(def))) e.remove(PREF_DEFAULT);
+        e.apply();
+
+        // Drop any hide entry as well, or the pref grows a tail of urls to files that no
+        // longer exist. setHiddenUrls rebuilds the playlist; otherwise do it here.
+        java.util.Set<String> hidden = getHiddenUrls();
+        List<String> keep = new ArrayList<>();
+        boolean wasHidden = false;
+        for(String h : hidden) {
+            if(key.equals(fitKey(h))) wasHidden = true;
+            else keep.add(h);
+        }
+        if(wasHidden) setHiddenUrls(keep);
+        else load();
+        return true;
+    }
+
+    /** The playlist as a set of urls — hand it to {@link #newSince} after a reload. */
+    public java.util.Set<String> urlSnapshot() {
+        java.util.Set<String> set = new java.util.HashSet<>();
+        for(WallpaperItem it : mItems) if(it.url != null) set.add(it.url);
+        return set;
+    }
+
+    /**
+     * Wallpapers in the playlist now that were not in this snapshot — i.e. what a sync (or a
+     * local-folder rescan) just brought in. Order follows the playlist, so a batch published
+     * together stays together.
+     */
+    public List<String> newSince(java.util.Set<String> before) {
+        List<String> fresh = new ArrayList<>();
+        if(before == null || before.isEmpty()) return fresh;   // first build: everything is "new"
+        for(WallpaperItem it : mItems) {
+            if(it.url != null && !before.contains(it.url)) fresh.add(it.url);
+        }
+        return fresh;
+    }
+
     /** Remember where the slideshow stands, so the next app start resumes on this wallpaper. */
     public void savePosition(WallpaperItem item) {
         SharedPreferences.Editor e = mPref.edit().putInt(PREF_INDEX, mIndex);

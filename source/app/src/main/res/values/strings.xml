@@ -21,6 +21,10 @@
     <string name="wallpaper_type_gif">Animated image</string>
     <string name="wallpaper_type_video">Video</string>
     <string name="wallpaper_source_local">From this device</string>
+    <string name="wallpaper_delete">Delete</string>
+    <string name="wallpaper_delete_confirm">Delete “%1$s” from this device for good? Only images sent from a phone or added from the device can be deleted; this cannot be undone.</string>
+    <string name="wallpaper_delete_done">Image deleted from the device ✓</string>
+    <string name="wallpaper_delete_failed">Could not delete the image — it is still on the device</string>
     <string name="wallpaper_source_remote">From the server</string>
 
     <string-array name="wallpaper_interval_labels">
@@ -40,6 +44,7 @@
     <string name="wallpaper_refresh">Check for new wallpapers</string>
     <string name="wallpaper_checking">Checking for new wallpapers…</string>
     <string name="wallpaper_up_to_date">Wallpapers are up to date — nothing new (%d wallpapers)</string>
+    <string name="wallpaper_fresh_arrived">%d new wallpaper(s) arrived — swipe to see them</string>
     <string name="wallpaper_new_added">%1$d new wallpapers added ✓ (%2$d total)</string>
     <string name="mac_show_qr">Show device QR Code</string>
     <string name="mac_qr_title">Device Linking Code</string>

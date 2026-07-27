@@ -127,20 +127,24 @@ public class FsClockView extends FrameLayout {
             if(mWallpaperRepo != null && mWallpaperRepo.isSyncEnabled()) {
                 WallpaperItem cur = mWallpaperRepo.current();
                 final String beforeUrl = (cur != null) ? cur.url : null;
-                final int beforeSize = mWallpaperRepo.size();
+                final java.util.Set<String> before = mWallpaperRepo.urlSnapshot();
                 mWallpaperRepo.sync(new WallpaperRepo.SyncCallback() {
                     @Override
                     public void done(final boolean success, final int count, String error) {
                         post(new Runnable() {
                             @Override
                             public void run() {
-                                if(!success) return;
+                                if(!success || mWallpaperRepo == null) return;
+                                // Anything the shop published while this car sat here is queued
+                                // for the next swipe (or auto-switch tick) rather than shoved
+                                // onto the screen mid-view — see pollFreshWallpaper().
+                                adoptNewWallpapers(before);
                                 // Refresh what's on screen only when the playlist actually
                                 // changed, so a deleted wallpaper disappears immediately while
                                 // an unchanged list keeps playing without any flicker.
-                                WallpaperItem now = (mWallpaperRepo != null) ? mWallpaperRepo.current() : null;
+                                WallpaperItem now = mWallpaperRepo.current();
                                 String afterUrl = (now != null) ? now.url : null;
-                                boolean changed = (count != beforeSize)
+                                boolean changed = !mWallpaperRepo.urlSnapshot().equals(before)
                                         || (beforeUrl == null ? afterUrl != null : !beforeUrl.equals(afterUrl));
                                 if(changed) loadSettings();
                             }
@@ -1340,20 +1344,108 @@ public class FsClockView extends FrameLayout {
         }
     }
 
-    /** Switch to the next wallpaper with a left-swipe animation. */
+    /** Switch to the next wallpaper with a left-swipe animation (auto-switch tick). */
     public void nextWallpaper() {
-        if(mWallpaperRepo != null && mWallpaperRepo.isEnabled()) {
-            mWallpaper.showItem(mWallpaperRepo.next(), 1);
-            scheduleContrast();
-        }
+        advanceWallpaper(1, false);
     }
 
     /** Switch to the previous wallpaper with a right-swipe animation. */
     public void prevWallpaper() {
-        if(mWallpaperRepo != null && mWallpaperRepo.isEnabled()) {
-            mWallpaper.showItem(mWallpaperRepo.prev(), -1);
-            scheduleContrast();
+        advanceWallpaper(-1, false);
+    }
+
+    /** A person swiped (or pressed the D-pad): also a cue to go looking for new wallpapers. */
+    public void nextWallpaperByUser() {
+        advanceWallpaper(1, true);
+    }
+
+    public void prevWallpaperByUser() {
+        advanceWallpaper(-1, true);
+    }
+
+    private void advanceWallpaper(int direction, boolean fromUser) {
+        if(mWallpaperRepo == null || mWallpaper == null || !mWallpaperRepo.isEnabled()) return;
+        // A wallpaper that arrived since the last look jumps the queue: it is the one thing on
+        // this screen somebody is actively waiting for. Only forwards — going back means going
+        // back through what has already been seen.
+        WallpaperItem target = (direction > 0) ? pollFreshWallpaper() : null;
+        if(target == null) target = (direction > 0) ? mWallpaperRepo.next() : mWallpaperRepo.prev();
+        mWallpaper.showItem(target, direction);
+        scheduleContrast();
+        // Deliberately not on the auto-switch tick: with a 30 second interval that would be a
+        // sync every 30 seconds on a car nobody is even looking at.
+        if(fromUser) refreshOnSwipe();
+    }
+
+    // --- picking up new wallpapers while the screen is running -----------------------
+    //
+    // Two ways a wallpaper appears on a car that is already showing the slideshow: the shop
+    // publishes one from the manager (cloud), or somebody sends one from their phone / the
+    // file picker (local folder). Both used to need up to five minutes (the periodic sync)
+    // to even enter the playlist, and even then landed wherever the sort order put them —
+    // so the person who just sent a picture swiped a few times, did not see it, and
+    // concluded it never arrived. Swiping is exactly the moment they are asking "where is
+    // it?", so that is when we go and look.
+
+    /** Wallpapers spotted by a refresh and not yet shown; the next swipe serves these first. */
+    private final java.util.LinkedList<String> mFreshWallpapers = new java.util.LinkedList<>();
+
+    /** Never hammer the backend: a fast swiper would otherwise fire one sync per flick. */
+    private static final long SWIPE_REFRESH_MIN_GAP_MS = 20_000;
+    private long mLastSwipeRefresh = 0;
+    private boolean mSwipeRefreshRunning = false;
+
+    /** The next new arrival, or null when there is none left that is still in the playlist. */
+    private WallpaperItem pollFreshWallpaper() {
+        while(!mFreshWallpapers.isEmpty()) {
+            String url = mFreshWallpapers.poll();
+            if(mWallpaperRepo.jumpTo(url)) return mWallpaperRepo.current();
+            // gone again (deleted on the manager, or hidden on this car) — try the next one
         }
+        return null;
+    }
+
+    /**
+     * Look for new wallpapers because the user just swiped. Throttled and fully in the
+     * background: the swipe animation never waits for the network.
+     */
+    private void refreshOnSwipe() {
+        if(mWallpaperRepo == null || !mWallpaperRepo.isSyncEnabled()) return;
+        long now = android.os.SystemClock.elapsedRealtime();
+        if(mSwipeRefreshRunning || now - mLastSwipeRefresh < SWIPE_REFRESH_MIN_GAP_MS) return;
+        mSwipeRefreshRunning = true;
+        mLastSwipeRefresh = now;
+
+        final java.util.Set<String> before = mWallpaperRepo.urlSnapshot();
+        mWallpaperRepo.sync(new WallpaperRepo.SyncCallback() {
+            @Override
+            public void done(boolean success, int count, String error) {
+                post(new Runnable() {
+                    @Override
+                    public void run() {
+                        mSwipeRefreshRunning = false;
+                        if(mWallpaperRepo == null) return;
+                        // Rescan even when the sync failed: the car may be offline while a
+                        // phone on the same Wi-Fi has just dropped a file in the local folder.
+                        mWallpaperRepo.load();
+                        adoptNewWallpapers(before);
+                    }
+                });
+            }
+        });
+    }
+
+    /** Queue whatever the reload added and tell the person standing at the screen. */
+    private void adoptNewWallpapers(java.util.Set<String> before) {
+        if(mWallpaperRepo == null) return;
+        java.util.List<String> fresh = mWallpaperRepo.newSince(before);
+        if(fresh.isEmpty()) return;
+        for(String url : fresh) {
+            if(!mFreshWallpapers.contains(url)) mFreshWallpapers.add(url);
+        }
+        Toast.makeText(getContext(),
+                getContext().getString(R.string.wallpaper_fresh_arrived, fresh.size()),
+                Toast.LENGTH_SHORT).show();
     }
 
     void refreshNightMode() {

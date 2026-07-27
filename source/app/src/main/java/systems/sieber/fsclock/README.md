@@ -47,6 +47,14 @@ applicationId is `store.thabthaba.clock`). Read this before editing any class.
   around the pair-phone dialog in settings (must always be stopped — socket leak otherwise).
   Saves uploads into the same `Wallpapers/` folder the repo scans.
 - `QrCode` — ZXing wrapper (pairing URL QR, device-id QR).
+- **New wallpapers reaching a running car** (added 2026-07). Adding an image only grew the
+  playlist; `load()` re-anchors on `wallpaper-last-url`, so the screen kept showing the old
+  wallpaper and the new file sat wherever its name sorted — read by customers as "my upload
+  never arrived". Now: (a) every import path (`commitBatch`, `importPickedWallpapers`, return
+  from the fit editor) calls `WallpaperRepo.jumpTo(url)` so the added image *is* the current
+  wallpaper; (b) a user swipe / D-pad press (`FsClockView.nextWallpaperByUser`, **not** the
+  auto-switch tick) kicks a throttled sync + local rescan, and anything `newSince()` reports is
+  queued so the next forward swipe lands on it. The 5-min periodic sync feeds the same queue.
 
 ### Settings
 - `BaseSettingsActivity` — everything configurable; `SHARED_PREF_DOMAIN = "CLOCK"`.

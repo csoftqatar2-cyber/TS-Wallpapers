@@ -38,9 +38,25 @@ public class WallpaperSelectAdapter extends BaseAdapter {
         void onEdit(WallpaperItem item);
     }
 
+    /** Told which row's bin was pressed. Only ever fires for images stored on this device. */
+    interface OnDeleteListener {
+        void onDelete(WallpaperItem item);
+    }
+
     private OnEditListener mEditListener;
+    private OnDeleteListener mDeleteListener;
 
     void setOnEditListener(OnEditListener l) { mEditListener = l; }
+
+    void setOnDeleteListener(OnDeleteListener l) { mDeleteListener = l; }
+
+    /** Drop one row after its file was deleted, without rebuilding the whole dialog. */
+    void removeItem(WallpaperItem item) {
+        if(item == null) return;
+        mItems.remove(item);
+        if(item.url != null) mVisibleUrls.remove(item.url);
+        notifyDataSetChanged();
+    }
 
     WallpaperSelectAdapter(Context context, WallpaperRepo repo, List<WallpaperItem> items, Set<String> hiddenUrls) {
         mContext = context;
@@ -111,6 +127,7 @@ public class WallpaperSelectAdapter extends BaseAdapter {
             holder.thumb = convertView.findViewById(R.id.imageViewWallpaperThumb);
             holder.title = convertView.findViewById(R.id.textViewWallpaperName);
             holder.edit = convertView.findViewById(R.id.buttonWallpaperEdit);
+            holder.delete = convertView.findViewById(R.id.buttonWallpaperDelete);
             convertView.setTag(holder);
         } else {
             holder = (ViewHolder) convertView.getTag();
@@ -141,6 +158,14 @@ public class WallpaperSelectAdapter extends BaseAdapter {
         holder.edit.setOnClickListener(v -> {
             if(mEditListener != null) mEditListener.onEdit(item);
         });
+
+        // The bin only exists for a file this device owns. A cloud wallpaper (public or
+        // assigned to this car) belongs to the shop's library — the car can hide it or edit a
+        // local copy of it, but it cannot delete somebody else's picture, and pretending
+        // otherwise would produce a "deleted" image that the next sync puts straight back.
+        boolean deletable = mDeleteListener != null && !isRemote(item.url);
+        holder.delete.setVisibility(deletable ? View.VISIBLE : View.GONE);
+        holder.delete.setOnClickListener(deletable ? v -> mDeleteListener.onDelete(item) : null);
         return convertView;
     }
 
@@ -161,8 +186,9 @@ public class WallpaperSelectAdapter extends BaseAdapter {
                 : mContext.getString(R.string.wallpaper_source_local);
     }
 
+    /** One definition of "remote", shared with the repo — the bin's visibility depends on it. */
     private static boolean isRemote(String url) {
-        return url != null && (url.startsWith("http://") || url.startsWith("https://"));
+        return WallpaperRepo.isRemoteUrl(url);
     }
 
     private static String fileName(String url) {
@@ -215,5 +241,6 @@ public class WallpaperSelectAdapter extends BaseAdapter {
         ImageView thumb;
         TextView title;
         ImageView edit;
+        ImageView delete;
     }
 }

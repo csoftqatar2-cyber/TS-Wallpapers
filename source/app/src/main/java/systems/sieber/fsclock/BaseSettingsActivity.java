@@ -831,6 +831,13 @@ public class BaseSettingsActivity extends AppCompatActivity {
                 // batch would be silently accepted the moment they edited any single image.
                 if(mPendingBatch != null && !mPendingBatch.isEmpty()) {
                     reopenBatchReview();
+                } else if(mLastEditedUrl != null) {
+                    // Editing one image ends with "Done" and no other feedback, so leave the
+                    // slideshow standing on it — pressing back then shows the result of the
+                    // edit instead of whatever happened to be on screen beforehand.
+                    mWallpaperRepo.load();
+                    mWallpaperRepo.jumpTo(mLastEditedUrl);
+                    mLastEditedUrl = null;
                 }
                 break;
             case(PICK_CLOCK_FACE_REQUEST):
@@ -1126,6 +1133,13 @@ public class BaseSettingsActivity extends AppCompatActivity {
             editWallpaper(item);
         });
 
+        // The bin, for images that live on this car only (phone uploads and file-picker
+        // imports). The adapter shows it for nothing else — see WallpaperSelectAdapter.getView.
+        adapter.setOnDeleteListener(item -> confirmDeleteLocalWallpaper(item, () -> {
+            adapter.removeItem(item);
+            if(adapter.getCount() == 0) dialog.dismiss();
+        }));
+
         // keep the dialog open when "select all" is pressed (it toggles all rows instead)
         Button selectAll = dialog.getButton(DialogInterface.BUTTON_NEUTRAL);
         if(selectAll != null) {
@@ -1191,6 +1205,40 @@ public class BaseSettingsActivity extends AppCompatActivity {
                 openFitEditor("file://" + saved);
             });
         }).start();
+    }
+
+    /**
+     * Ask, then really delete an image stored on this car.
+     *
+     * "Really" is the requirement: the complaint this exists to answer is a delete that says it
+     * worked and then hands the picture back on the next swipe. So the file goes, its fit and
+     * focal go, its hide entry goes, the resume pointer that named it goes, the playlist is
+     * rebuilt, and the clock screen is told to reload — and if the file is somehow still on
+     * disk afterwards, this says so instead of claiming success.
+     */
+    private void confirmDeleteLocalWallpaper(final WallpaperItem item, final Runnable onDeleted) {
+        if(item == null || item.url == null) return;
+        new AlertDialog.Builder(this)
+                .setTitle(R.string.wallpaper_delete)
+                .setMessage(getString(R.string.wallpaper_delete_confirm, fileNameOf(item.url)))
+                .setPositiveButton(R.string.wallpaper_delete, new DialogInterface.OnClickListener() {
+                    @Override
+                    public void onClick(DialogInterface d, int which) {
+                        if(!mWallpaperRepo.deleteLocal(item.url)) {
+                            Toast.makeText(BaseSettingsActivity.this,
+                                    R.string.wallpaper_delete_failed, Toast.LENGTH_LONG).show();
+                            return;
+                        }
+                        mTextViewWallpaperStatus.setText(R.string.wallpaper_delete_done);
+                        Toast.makeText(BaseSettingsActivity.this,
+                                R.string.wallpaper_delete_done, Toast.LENGTH_SHORT).show();
+                        setResult(RESULT_OK);   // the clock screen rebuilds its playlist on return
+                        autoSave();
+                        if(onDeleted != null) onDeleted.run();
+                    }
+                })
+                .setNegativeButton(R.string.update_cancel, null)
+                .show();
     }
 
     /** Add one url to this device's hidden list, leaving every other car untouched. */
@@ -1761,6 +1809,7 @@ public class BaseSettingsActivity extends AppCompatActivity {
         }
         int ok = 0;
         java.io.File lastImported = null;
+        java.io.File firstImported = null;
         for(Uri uri : uris) {
             try {
                 String name = queryDisplayName(uri);
@@ -1768,10 +1817,13 @@ public class BaseSettingsActivity extends AppCompatActivity {
                 java.io.InputStream in = getContentResolver().openInputStream(uri);
                 if(in == null) continue;
                 java.io.File f = mWallpaperRepo.importLocalFileReturningPath(in, name);
-                if(f != null) { ok++; lastImported = f; }
+                if(f != null) { ok++; lastImported = f; if(firstImported == null) firstImported = f; }
             } catch(Exception ignored) { }
         }
         mWallpaperRepo.load();
+        // Show what was just imported (see commitBatch for why): a bulk import lands on the
+        // first of the batch, and the rest are the swipes that follow it.
+        if(firstImported != null) mWallpaperRepo.jumpTo(firstImported.getAbsolutePath());
         mTextViewLocalFolder.setText(getString(R.string.wallpaper_local_folder, mWallpaperRepo.getLocalFolder().getAbsolutePath()));
         Toast.makeText(this, getString(R.string.wallpaper_added, ok), Toast.LENGTH_LONG).show();
 
@@ -2223,8 +2275,12 @@ public class BaseSettingsActivity extends AppCompatActivity {
         colorRow.setVisibility(bars && mode != FitSettings.MODE_BLUR ? View.VISIBLE : View.GONE);
     }
 
+    /** The image the fit editor was last opened on, so the return trip can land on it. */
+    private String mLastEditedUrl;
+
     /** Open the fit editor against the screen the wallpaper will actually be shown on. */
     protected void openFitEditor(String url) {
+        mLastEditedUrl = url;
         int w, h;
         if(mCheckBoxFse != null && mCheckBoxFse.isChecked()) {
             // FSE pins the wallpaper window to 1920x720 regardless of the panel's real size.
@@ -2348,12 +2404,14 @@ public class BaseSettingsActivity extends AppCompatActivity {
     private void commitBatch(List<String> discardedUrls) {
         Set<String> discarded = new HashSet<>(discardedUrls);
         int kept = 0;
+        String firstKept = null;
         if(mPendingBatch != null) {
             for(String path : mPendingBatch) {
                 if(discarded.contains(path)) {
                     deleteImportedFile(path);
                 } else {
                     kept++;
+                    if(firstKept == null) firstKept = path;
                 }
             }
         }
@@ -2361,6 +2419,11 @@ public class BaseSettingsActivity extends AppCompatActivity {
         mBatchDiscarded = null;
 
         mWallpaperRepo.load();
+        // Put the slideshow on what was just added. Without this the playlist grew but the
+        // screen kept showing the old wallpaper, with the new one sorted in among all the
+        // others — the customer who just sent it swipes twice, does not find it, and reports
+        // that the upload did not work.
+        if(firstKept != null) mWallpaperRepo.jumpTo(firstKept);
         Toast.makeText(this, getString(R.string.batch_review_added, kept), Toast.LENGTH_LONG).show();
         setResult(RESULT_OK);
         autoSave(); // makes the clock screen reload the playlist on return
@@ -2392,13 +2455,11 @@ public class BaseSettingsActivity extends AppCompatActivity {
                 .show();
     }
 
-    /** Delete an imported file plus the fit settings that were keyed to it. */
+    /** Delete an imported file plus everything keyed to it (fit, focal, pointers). */
     private void deleteImportedFile(String path) {
         if(path == null) return;
         try {
-            mWallpaperRepo.clearFit(path);
-            File f = new File(path);
-            if(f.exists()) f.delete();
+            mWallpaperRepo.deleteLocal(path);
         } catch(Exception ignored) { }
     }
 
@@ -2416,6 +2477,13 @@ public class BaseSettingsActivity extends AppCompatActivity {
                     // gone by the time it lands — the customer can walk away mid-upload.
                     if(isFinishing() || isDestroyed()) return;
                     if(savedPaths == null || savedPaths.isEmpty()) return;
+
+                    // The server switched the slideshow and the local folder on in the prefs
+                    // directly (it has no view of this screen). Mirror that into the switches
+                    // here, or the very next autoSave() writes their stale state back and the
+                    // images that just arrived are excluded from the playlist again.
+                    if(mCheckBoxWallpaperEnabled != null) mCheckBoxWallpaperEnabled.setChecked(true);
+                    if(mCheckBoxWallpaperLocal != null) mCheckBoxWallpaperLocal.setChecked(true);
 
                     setResult(RESULT_OK); // so the clock reloads and shows the uploaded wallpaper
                     Toast.makeText(BaseSettingsActivity.this,

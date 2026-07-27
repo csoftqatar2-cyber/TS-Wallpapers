@@ -43,6 +43,10 @@
     <string name="wallpaper_type_gif">صورة متحركة</string>
     <string name="wallpaper_type_video">فيديو</string>
     <string name="wallpaper_source_local">من الجهاز</string>
+    <string name="wallpaper_delete">حذف</string>
+    <string name="wallpaper_delete_confirm">تحذف «%1$s» من الجهاز نهائياً؟ الحذف متاح للصور المرفوعة من الهاتف أو المضافة من الجهاز فقط، ومش هينفع ترجع فيه.</string>
+    <string name="wallpaper_delete_done">تم حذف الصورة من الجهاز ✓</string>
+    <string name="wallpaper_delete_failed">تعذّر حذف الصورة — لسه موجودة على الجهاز</string>
     <string name="wallpaper_source_remote">من السيرفر</string>
     <string name="wallpaper_url_hint">رابط قائمة الخلفيات (JSON manifest URL)</string>
     <string name="wallpaper_sync">تحديث الخلفيات من الرابط الآن</string>
@@ -54,6 +58,7 @@
     <string name="wallpaper_refresh">التحقق من الخلفيات الجديدة</string>
     <string name="wallpaper_checking">جارٍ التحقق من الخلفيات الجديدة…</string>
     <string name="wallpaper_up_to_date">الخلفيات محدثة — لا يوجد جديد (%d خلفية)</string>
+    <string name="wallpaper_fresh_arrived">وصلت %d خلفية جديدة — اسحب لعرضها</string>
     <string name="wallpaper_new_added">تمت إضافة %1$d خلفية جديدة ✓ (الإجمالي %2$d)</string>
     <string name="mac_show_qr">عرض QR Code لكود الجهاز</string>
     <string name="mac_qr_title">كود ربط الجهاز (Device Linking Code)</string>

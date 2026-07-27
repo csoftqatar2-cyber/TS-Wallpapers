@@ -267,8 +267,10 @@ public class FullscreenActivity extends AppCompatActivity {
                             float dx = e2.getX() - e1.getX();
                             float dy = e2.getY() - e1.getY();
                             if(Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 120 && Math.abs(velocityX) > 200) {
-                                if(dx < 0) mContentView.nextWallpaper();
-                                else mContentView.prevWallpaper();
+                                // ByUser: a swipe is also the moment somebody is asking "where
+                                // is the picture I just sent?" — see FsClockView.refreshOnSwipe.
+                                if(dx < 0) mContentView.nextWallpaperByUser();
+                                else mContentView.prevWallpaperByUser();
                                 return true;
                             }
                             return false;
@@ -400,10 +402,10 @@ public class FullscreenActivity extends AppCompatActivity {
                 openSettings(null);
                 handled = true; break;
             case KeyEvent.KEYCODE_DPAD_LEFT:
-                mContentView.prevWallpaper();
+                mContentView.prevWallpaperByUser();
                 handled = true; break;
             case KeyEvent.KEYCODE_DPAD_RIGHT:
-                mContentView.nextWallpaper();
+                mContentView.nextWallpaperByUser();
                 handled = true; break;
         }
         return handled || super.onKeyDown(keyCode, event);
