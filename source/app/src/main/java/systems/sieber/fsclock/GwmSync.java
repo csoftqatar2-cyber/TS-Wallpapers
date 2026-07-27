@@ -40,7 +40,14 @@ class GwmSync {
     /** JSON array of the file names we created in the folder, so we never delete a stranger's file. */
     private static final String PREF_MANAGED = "gwm-split-managed-files";
 
-    /** The path the GWM Split app reads by default. Editable in settings for other integrations. */
+    /**
+     * The path the GWM Split app reads by default. Editable in settings for other integrations.
+     *
+     * Deliberately the SAME folder the Cars-installer script pushes photos to when a technician
+     * sets up a GWM car by cable (/sdcard/Pictures/GWMSplit_Styles — see Copy-ImagesToDevice in
+     * "Cars installer.ps1"). Cloud delivery and cable delivery must land in one place, or the
+     * head unit ends up with two half-full galleries.
+     */
     static String defaultFolder() {
         File pics = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES);
         return new File(pics, "GWMSplit_Styles").getAbsolutePath();
@@ -146,6 +153,7 @@ class GwmSync {
         }
 
         Set<String> managed = loadManaged(p);
+        List<String> touched = new ArrayList<>();   // paths to hand to the media scanner
 
         // 1) delete files we previously wrote that are no longer wanted
         for (String name : new HashSet<>(managed)) {
@@ -154,6 +162,7 @@ class GwmSync {
                 //noinspection ResultOfMethodCallIgnored
                 f.delete();
                 managed.remove(name);
+                touched.add(f.getAbsolutePath());
             }
         }
 
@@ -171,13 +180,37 @@ class GwmSync {
             }
             if (download(it.url, dest)) {
                 managed.add(name);
+                touched.add(dest.getAbsolutePath());
             }
         }
 
         saveManaged(p, managed);
+        mediaScan(appCtx, touched);
 
         File[] now = dir.listFiles();
         return now == null ? 0 : now.length;
+    }
+
+    /**
+     * Tell Android's media database about files we just wrote or removed.
+     *
+     * The folder is only half the contract: the head unit's own background app finds its
+     * pictures through MediaStore, not by listing the directory, so a freshly downloaded image
+     * stays invisible to it until the file is scanned — and a deleted one keeps being offered.
+     * The Cars-installer script does exactly this after pushing photos to the same folder
+     * (`am broadcast -a android.intent.action.MEDIA_SCANNER_SCAN_FILE -d file:///sdcard/Pictures`);
+     * doing it here is what makes a cloud-delivered image behave like a hand-pushed one.
+     *
+     * No-op when nothing changed, so a steady-state pass costs nothing.
+     */
+    private static void mediaScan(Context appCtx, List<String> paths) {
+        if (paths == null || paths.isEmpty()) return;
+        try {
+            android.media.MediaScannerConnection.scanFile(
+                    appCtx, paths.toArray(new String[0]), null, null);
+        } catch (Throwable t) {
+            Log.w(TAG, "media scan failed", t);
+        }
     }
 
     /** Stable on-disk name for a wallpaper URL: keep the (already unique) last path segment. */
@@ -273,6 +306,7 @@ class GwmSync {
             Set<String> managed = loadManaged(p);
             managed.add(dest.getName());
             saveManaged(p, managed);
+            mediaScan(appCtx, java.util.Collections.singletonList(dest.getAbsolutePath()));
             return dest.getAbsolutePath();
         } catch (Throwable t) {
             Log.e(TAG, "saveLocalCopy failed", t);

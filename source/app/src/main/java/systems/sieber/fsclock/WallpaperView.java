@@ -277,22 +277,28 @@ public class WallpaperView extends FrameLayout {
         if(vw <= 0 || vh <= 0 || cw <= 0 || ch <= 0) return;
 
         int mode = resolvedMode(slot, vw, vh);
-        float zoom = slot.fit != null ? FitSettings.clampZoom(slot.fit.zoom) : 1f;
-        Matrix m = new Matrix();
+        FitSettings fit = slot.fit != null ? slot.fit : new FitSettings();
+        float zoom = FitSettings.clampZoom(fit.zoom);
+        int rot = FitSettings.clampRotation(fit.rotation);
+        // Everything below measures the image as the screen will see it: a quarter turn swaps
+        // its width and height, and fitting the pre-rotation shape would frame the wrong box.
+        int ew = fit.effectiveW(cw, ch), eh = fit.effectiveH(cw, ch);
 
-        if(FitSettings.isFitMode(mode)) {
-            float scale = Math.min((float) vw / cw, (float) vh / ch) * zoom;
-            float sw = cw * scale, sh = ch * scale;
-            m.setScale(scale, scale);
-            // Nothing is cropped at zoom 1, so centring is the whole story; past 1 the image
-            // starts overflowing and the focal point takes over, exactly as in FILL.
-            m.postTranslate(offset(sw, vw, slot.focalX), offset(sh, vh, slot.focalY));
-        } else {
-            float scale = Math.max((float) vw / cw, (float) vh / ch) * zoom;
-            float sw = cw * scale, sh = ch * scale;
-            m.setScale(scale, scale);
-            m.postTranslate(offset(sw, vw, slot.focalX), offset(sh, vh, slot.focalY));
-        }
+        float scale = FitSettings.isFitMode(mode)
+                ? Math.min((float) vw / ew, (float) vh / eh) * zoom
+                : Math.max((float) vw / ew, (float) vh / eh) * zoom;
+        float sw = ew * scale, sh = eh * scale;   // on-screen size of the rotated image
+
+        Matrix m = new Matrix();
+        // Rotate about the bitmap's own centre first: the turned image then occupies a box of
+        // ew x eh centred on that same point, which the scale and translate below place. At
+        // rotation 0 this collapses to the original setScale/postTranslate exactly.
+        m.setRotate(rot, cw / 2f, ch / 2f);
+        m.postScale(scale, scale);
+        // Nothing is cropped at zoom 1 in a fit mode, so centring is the whole story; past 1 the
+        // image starts overflowing and the focal point takes over, exactly as in FILL.
+        m.postTranslate(offset(sw, vw, slot.focalX) - (cw - ew) * scale / 2f,
+                        offset(sh, vh, slot.focalY) - (ch - eh) * scale / 2f);
         slot.image.setImageMatrix(m);
         slot.image.setFade(slot.fit != null ? slot.fit.fade : 0);
         applyBackdrop(slot, mode);
@@ -380,16 +386,20 @@ public class WallpaperView extends FrameLayout {
     private float[] overflow(Slot slot) {
         float vw = getWidth(), vh = getHeight();
         if(slot.contentW <= 0 || slot.contentH <= 0 || vw <= 0 || vh <= 0) return new float[]{0f, 0f};
-        float zoom = slot.fit != null ? FitSettings.clampZoom(slot.fit.zoom) : 1f;
-        // Must pick the same base scale applyImageMatrix() did, or the pan disagrees with what
-        // is on screen: it used max unconditionally, so in a fit mode it reported an overflow
-        // that offset() then ignored — the drag did nothing but still wrote a focal point.
+        FitSettings fit = slot.fit != null ? slot.fit : new FitSettings();
+        float zoom = FitSettings.clampZoom(fit.zoom);
+        // Must pick the same base scale — and the same rotated dimensions — applyImageMatrix()
+        // did, or the pan disagrees with what is on screen: it used max unconditionally, so in a
+        // fit mode it reported an overflow that offset() then ignored — the drag did nothing but
+        // still wrote a focal point.
         int mode = resolvedMode(slot, (int) vw, (int) vh);
+        float ew = fit.effectiveW(slot.contentW, slot.contentH);
+        float eh = fit.effectiveH(slot.contentW, slot.contentH);
         float base = FitSettings.isFitMode(mode)
-                ? Math.min(vw / slot.contentW, vh / slot.contentH)
-                : Math.max(vw / slot.contentW, vh / slot.contentH);
+                ? Math.min(vw / ew, vh / eh)
+                : Math.max(vw / ew, vh / eh);
         float scale = base * zoom;
-        return new float[]{ slot.contentW * scale - vw, slot.contentH * scale - vh };
+        return new float[]{ ew * scale - vw, eh * scale - vh };
     }
 
     private void reapply(Slot slot) {
@@ -459,20 +469,36 @@ public class WallpaperView extends FrameLayout {
         }
     }
 
-    /** Center-crop the video into the texture view, offset by the slot's focal point. */
+    /**
+     * Center-crop the video into the texture view, offset by the slot's focal point and turned
+     * by the slot's rotation (a portrait-filmed clip is the reason rotation exists at all).
+     *
+     * A TextureView already stretches the stream to fill its own box, so the transform works in
+     * view pixels: sx/sy undo that stretch back to the cover-scaled video, and the rotation then
+     * happens about the centre of that box. At rotation 0 the maths is the plain centre-crop it
+     * has always been.
+     */
     private void applyVideoScale(Slot slot, int vw, int vh) {
         int tw = slot.texture.getWidth();
         int th = slot.texture.getHeight();
         if(vw <= 0 || vh <= 0 || tw <= 0 || th <= 0) return;
         slot.contentW = vw;
         slot.contentH = vh;
-        float maxScale = Math.max((float) tw / vw, (float) th / vh);
-        float sx = (maxScale * vw) / tw;   // texture box is tw x th; sx*tw = scaled content width
-        float sy = (maxScale * vh) / th;
-        float overflowX = sx * tw - tw, overflowY = sy * th - th;
+
+        FitSettings fit = slot.fit != null ? slot.fit : new FitSettings();
+        int rot = FitSettings.clampRotation(fit.rotation);
+        float ew = fit.effectiveW(vw, vh), eh = fit.effectiveH(vw, vh);
+
+        float cover = Math.max(tw / ew, th / eh);
+        float sx = (cover * vw) / tw;      // texture box is tw x th; sx*tw = scaled video width
+        float sy = (cover * vh) / th;
+        float bw = ew * cover, bh = eh * cover;   // on-screen size once rotated
+
         Matrix m = new Matrix();
-        m.setScale(sx, sy);                // scale about origin
-        m.postTranslate(-overflowX * clamp01(slot.focalX), -overflowY * clamp01(slot.focalY));
+        m.setScale(sx, sy);                       // scale about origin
+        m.postRotate(rot, sx * tw / 2f, sy * th / 2f);
+        m.postTranslate(offset(bw, tw, clamp01(slot.focalX)) + (bw - sx * tw) / 2f,
+                        offset(bh, th, clamp01(slot.focalY)) + (bh - sy * th) / 2f);
         slot.texture.setTransform(m);
     }
 

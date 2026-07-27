@@ -307,6 +307,8 @@
     <string name="fit_reposition_hint">اسحب الصورة لتحديد الجزء الظاهر.</string>
     <string name="fit_reposition_dpad">اضبط بأزرار الاتجاهات</string>
     <string name="fit_dpad_hint">أزرار الاتجاهات: يمين/يسار للضبط</string>
+    <string name="fit_rotate">تدوير</string>
+    <string name="fit_rotate_degrees">%1$d°</string>
     <string name="fit_done">تم</string>
     <string name="fit_reset">إعادة الضبط</string>
     <string name="fit_delete">حذف الصورة</string>

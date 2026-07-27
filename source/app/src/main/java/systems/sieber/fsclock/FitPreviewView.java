@@ -102,9 +102,18 @@ public class FitPreviewView extends View {
     public boolean barsAreNegligible() {
         if(mImage == null) return true;
         if(mFit.fade > 0) return false;   // the fade needs the backdrop, however wide the image
-        float fit = Math.min(mTargetW / (float) mImage.getWidth(), mTargetH / (float) mImage.getHeight())
-                * FitSettings.clampZoom(mFit.zoom);
-        return mImage.getWidth() * fit >= mTargetW - 1f;
+        float ew = effW(), eh = effH();
+        float fit = Math.min(mTargetW / ew, mTargetH / eh) * FitSettings.clampZoom(mFit.zoom);
+        return ew * fit >= mTargetW - 1f;
+    }
+
+    /** The image's width/height as the screen sees them, i.e. after the rotation. */
+    private float effW() {
+        return mImage == null ? 0f : mFit.effectiveW(mImage.getWidth(), mImage.getHeight());
+    }
+
+    private float effH() {
+        return mImage == null ? 0f : mFit.effectiveH(mImage.getWidth(), mImage.getHeight());
     }
 
     @Override
@@ -148,9 +157,11 @@ public class FitPreviewView extends View {
             }
         }
 
+        // Measured on the rotated shape — same rule as WallpaperView.applyImageMatrix().
+        float ew = effW(), eh = effH();
         float base = mode == FitSettings.MODE_FILL
-                ? Math.max(vw / (float) iw, vh / (float) ih)
-                : Math.min(vw / (float) iw, vh / (float) ih);
+                ? Math.max(vw / ew, vh / eh)
+                : Math.min(vw / ew, vh / eh);
         drawScaled(canvas, mImage, base * zoom, vw, vh, iw, ih);
         drawFrame(canvas, vw, vh);
     }
@@ -180,20 +191,26 @@ public class FitPreviewView extends View {
     }
 
     private void drawScaled(Canvas canvas, Bitmap bmp, float scale, int vw, int vh, int iw, int ih) {
+        // The rotated image occupies a box of ew x eh on screen; the bitmap itself is still drawn
+        // at iw x ih, centred on that box, with the canvas turned under it.
+        float bw = effW() * scale, bh = effH() * scale;
+        float left = offset(bw, vw, mFocalX);
+        float top = offset(bh, vh, mFocalY);
+        float cx = left + bw / 2f, cy = top + bh / 2f;
         float sw = iw * scale, sh = ih * scale;
-        float left = offset(sw, vw, mFocalX);
-        float top = offset(sh, vh, mFocalY);
-        mDst.set(left, top, left + sw, top + sh);
+        mDst.set(cx - sw / 2f, cy - sh / 2f, cx + sw / 2f, cy + sh / 2f);
 
         if(mFit.fade <= 0) {
-            canvas.drawBitmap(bmp, mSrc, mDst, mPaint);
+            drawRotated(canvas, bmp, cx, cy);
             return;
         }
 
         // Remove the edges from the image itself, so the backdrop below shows through — the
-        // same DST_OUT trick FadingImageView uses on the real wallpaper.
+        // same DST_OUT trick FadingImageView uses on the real wallpaper. The fade bands are in
+        // view space (they are screen edges, not image edges), so they go on after the rotation
+        // has been restored.
         int save = canvas.saveLayer(0, 0, vw, vh, null);
-        canvas.drawBitmap(bmp, mSrc, mDst, mPaint);
+        drawRotated(canvas, bmp, cx, cy);
         float band = buildFadeShaders(vw);
         mFadePaint.setXfermode(DST_OUT);
         mFadePaint.setShader(mFadeLeft);
@@ -202,6 +219,19 @@ public class FitPreviewView extends View {
         canvas.drawRect(vw - band, 0, vw, vh, mFadePaint);
         mFadePaint.setShader(null);
         mFadePaint.setXfermode(null);
+        canvas.restoreToCount(save);
+    }
+
+    /** Draw the bitmap into mDst, spun about the box centre when a rotation is set. */
+    private void drawRotated(Canvas canvas, Bitmap bmp, float cx, float cy) {
+        int rot = FitSettings.clampRotation(mFit.rotation);
+        if(rot == 0) {
+            canvas.drawBitmap(bmp, mSrc, mDst, mPaint);
+            return;
+        }
+        int save = canvas.save();
+        canvas.rotate(rot, cx, cy);
+        canvas.drawBitmap(bmp, mSrc, mDst, mPaint);
         canvas.restoreToCount(save);
     }
 
@@ -230,13 +260,13 @@ public class FitPreviewView extends View {
         // but now also any mode zoomed past the point where it fits.
         if(mImage == null) return false;
         int vw = getWidth(), vh = getHeight();
-        int iw = mImage.getWidth(), ih = mImage.getHeight();
+        float ew = effW(), eh = effH();
         float base = resolvedMode() == FitSettings.MODE_FILL
-                ? Math.max(vw / (float) iw, vh / (float) ih)
-                : Math.min(vw / (float) iw, vh / (float) ih);
+                ? Math.max(vw / ew, vh / eh)
+                : Math.min(vw / ew, vh / eh);
         float scale = base * FitSettings.clampZoom(mFit.zoom);
-        float overflowX = iw * scale - vw;
-        float overflowY = ih * scale - vh;
+        float overflowX = ew * scale - vw;
+        float overflowY = eh * scale - vh;
         if(overflowX <= 0f && overflowY <= 0f) return false;
 
         switch(e.getActionMasked()) {

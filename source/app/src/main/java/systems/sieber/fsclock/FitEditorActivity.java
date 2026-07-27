@@ -52,7 +52,7 @@ public class FitEditorActivity extends AppCompatActivity {
 
     private FitPreviewView mPreview;
     private SeekBar mSeekBlur, mSeekZoom, mSeekFade, mSeekHue;
-    private TextView mBlurValue, mZoomValue, mFadeValue, mHint, mTarget, mBlurNote;
+    private TextView mBlurValue, mZoomValue, mFadeValue, mHint, mTarget, mBlurNote, mRotateValue;
     private View mPanelBlur, mPanelColor, mPanelFill;
     private LinearLayout mTileFill, mTileBlur, mTileColor, mPresets;
     private ProgressBar mProgress;
@@ -96,6 +96,7 @@ public class FitEditorActivity extends AppCompatActivity {
         mZoomValue = findViewById(R.id.textViewZoomValue);
         mFadeValue = findViewById(R.id.textViewFadeValue);
         mBlurNote = findViewById(R.id.textViewBlurNote);
+        mRotateValue = findViewById(R.id.textViewFitRotate);
         mHint = findViewById(R.id.textViewFitHint);
         mTarget = findViewById(R.id.textViewFitTarget);
         mPanelBlur = findViewById(R.id.panelBlur);
@@ -109,6 +110,9 @@ public class FitEditorActivity extends AppCompatActivity {
 
         mPreview.setTargetSize(mTargetW, mTargetH);
         mTarget.setText(getString(R.string.fit_target, mTargetW, mTargetH));
+        // The badge reports the saved angle from the moment the screen opens — syncUi() only
+        // runs once the bitmap has decoded, and an empty button until then reads as broken.
+        updateRotateLabel();
 
         float[] focal = mRepo.getFocal(mUrl);
         mPreview.setFocal(focal[0], focal[1]);
@@ -165,6 +169,7 @@ public class FitEditorActivity extends AppCompatActivity {
             @Override public void onStopTrackingTouch(SeekBar s) { applyAndSave(); }
         });
 
+        findViewById(R.id.buttonFitRotate).setOnClickListener(v -> rotate());
         findViewById(R.id.buttonFitDone).setOnClickListener(v -> { save(); finish(); });
         findViewById(R.id.buttonFitReset).setOnClickListener(v -> reset());
         findViewById(R.id.buttonFitDelete).setOnClickListener(v -> confirmDelete());
@@ -263,6 +268,25 @@ public class FitEditorActivity extends AppCompatActivity {
         applyAndSave();
     }
 
+    /**
+     * One tap = one quarter turn clockwise, applied and saved straight away.
+     *
+     * The pan is deliberately reset with it: the focal point says "show me THIS part of the
+     * frame", and after a quarter turn that part is somewhere else entirely — keeping the old
+     * value would jump the picture to a crop nobody chose. From centre, one drag puts it right.
+     */
+    private void updateRotateLabel() {
+        mRotateValue.setText(getString(R.string.fit_rotate_degrees,
+                FitSettings.clampRotation(mFit.rotation)));
+    }
+
+    private void rotate() {
+        mFit.rotation = FitSettings.nextRotation(mFit.rotation);
+        mRepo.setFocal(mUrl, 0.5f, 0.5f);
+        mPreview.setFocal(0.5f, 0.5f);
+        applyAndSave();
+    }
+
     private void applyAndSave() {
         mPreview.setFit(mFit);
         save();
@@ -307,6 +331,7 @@ public class FitEditorActivity extends AppCompatActivity {
         mSeekFade.setProgress(mFit.fade);
         mFadeValue.setText(getString(R.string.fit_percent, mFit.fade));
         mSeekHue.setProgress(HueTrackDrawable.hueOf(mFit.barColor));
+        updateRotateLabel();
 
         if(resolved == FitSettings.MODE_BLUR) mHint.setText(R.string.fit_hint_blur);
         else if(resolved == FitSettings.MODE_COLOR) mHint.setText(R.string.fit_hint_color);

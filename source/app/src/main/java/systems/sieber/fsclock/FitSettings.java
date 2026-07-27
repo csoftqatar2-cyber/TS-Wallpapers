@@ -33,6 +33,12 @@ public class FitSettings {
     public float zoom = ZOOM_DEFAULT;
     /** 0..100: how much of each side the image fades out over, as a percentage of view width. */
     public int fade = 0;
+    /**
+     * Clockwise rotation applied to the image before anything else is measured, in degrees.
+     * Only right angles: this exists because a photo arrives on its side (a phone shot whose
+     * EXIF nobody honoured, a video filmed portrait), not to tilt pictures artistically.
+     */
+    public int rotation = 0;
 
     public static final float ZOOM_MIN = 0.5f;
     public static final float ZOOM_MAX = 5.0f;
@@ -64,6 +70,36 @@ public class FitSettings {
         return v < 0 ? 0 : (v > 100 ? 100 : v);
     }
 
+    /** Snap to one of 0/90/180/270, whatever arithmetic (or an old pref) produced. */
+    public static int clampRotation(int deg) {
+        int d = deg % 360;
+        if(d < 0) d += 360;
+        return (d / 90) * 90;
+    }
+
+    /** The next quarter turn clockwise — what the editor's rotate button steps through. */
+    public static int nextRotation(int deg) {
+        return clampRotation(deg + 90);
+    }
+
+    /** True when the rotation swaps the image's width and height (90° or 270°). */
+    public boolean swapsAxes() {
+        return clampRotation(rotation) % 180 != 0;
+    }
+
+    /**
+     * The image's on-screen width after rotation. Every scale/fit/overflow calculation must use
+     * these rather than the raw bitmap size, or a photo turned on its side is measured against
+     * the shape it no longer has.
+     */
+    public int effectiveW(int contentW, int contentH) {
+        return swapsAxes() ? contentH : contentW;
+    }
+
+    public int effectiveH(int contentW, int contentH) {
+        return swapsAxes() ? contentW : contentH;
+    }
+
     /**
      * Zooming out below 1.0 shrinks the image away from the screen edges, and FILL has no
      * backdrop of its own — so without this the gap would show whatever is behind the slot,
@@ -84,9 +120,17 @@ public class FitSettings {
         return imageAspect < screenAspect * AUTO_BLUR_RATIO ? MODE_BLUR : MODE_FILL;
     }
 
-    /** The mode to actually render with, never MODE_AUTO. */
+    /**
+     * The mode to actually render with, never MODE_AUTO.
+     *
+     * Auto is judged on the ROTATED shape: a portrait photo turned a quarter turn is a landscape
+     * image now, and giving it the blurred side bars meant for tall images would be wrong.
+     */
     public int resolved(int contentW, int contentH, int screenW, int screenH) {
-        if(mode == MODE_AUTO) return resolveAuto(contentW, contentH, screenW, screenH);
+        if(mode == MODE_AUTO) {
+            return resolveAuto(effectiveW(contentW, contentH), effectiveH(contentW, contentH),
+                    screenW, screenH);
+        }
         return mode;
     }
 
@@ -96,12 +140,13 @@ public class FitSettings {
     }
 
     String serialize() {
-        return mode + "," + blur + "," + barColor + "," + zoom + "," + fade;
+        return mode + "," + blur + "," + barColor + "," + zoom + "," + fade + "," + clampRotation(rotation);
     }
 
     /**
-     * Tolerates the three-field form written before zoom and fade existed, so wallpapers already
-     * fitted on a customer's car keep their settings across the update.
+     * Tolerates the three-field form written before zoom and fade existed (and the five-field one
+     * written before rotation), so wallpapers already fitted on a customer's car keep their
+     * settings across the update — a missing field simply means "never set", i.e. the default.
      */
     static FitSettings parse(String s, FitSettings fallback) {
         if(s == null || s.isEmpty()) return fallback;
@@ -110,6 +155,7 @@ public class FitSettings {
             FitSettings f = new FitSettings(Integer.parseInt(p[0]), Integer.parseInt(p[1]), Integer.parseInt(p[2]));
             if(p.length > 3) f.zoom = clampZoom(Float.parseFloat(p[3]));
             if(p.length > 4) f.fade = clampFade(Integer.parseInt(p[4]));
+            if(p.length > 5) f.rotation = clampRotation(Integer.parseInt(p[5]));
             return f;
         } catch(Exception e) {
             return fallback;

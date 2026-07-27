@@ -3,10 +3,15 @@ import { createClient } from 'jsr:@supabase/supabase-js@2'
 // The single admin account. Only this user id may upload.
 const ADMIN_ID = '5b8e1336-ce54-4dd9-bd23-243158c178fe'
 
+// Delivery channels a wallpaper row may carry. 'app' is the historical default (our own
+// slideshow); 'gwm_split' routes the image into an external folder on GWM cars for a separate
+// app to read. Anything unrecognised is coerced to 'app' so a stale page can never invent one.
+const CHANNELS = ['app', 'gwm_split']
+
 const cors = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers':
-    'authorization, x-client-info, apikey, content-type, x-file-name, x-file-type, x-is-global, x-hardware-id',
+    'authorization, x-client-info, apikey, content-type, x-file-name, x-file-type, x-is-global, x-hardware-id, x-channel',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 }
 
@@ -45,6 +50,8 @@ Deno.serve(async (req) => {
     const fileType = req.headers.get('x-file-type') || 'image'
     const isGlobal = req.headers.get('x-is-global') === 'true'
     const hardwareId = req.headers.get('x-hardware-id') || null
+    let channel = (req.headers.get('x-channel') || 'app').trim()
+    if (!CHANNELS.includes(channel)) channel = 'app'
     const contentType = req.headers.get('content-type') || 'application/octet-stream'
     const bytes = new Uint8Array(await req.arrayBuffer())
     if (bytes.length === 0) return json({ error: 'empty file' }, 400)
@@ -74,7 +81,7 @@ Deno.serve(async (req) => {
     // can be reassigned to a different device by re-using a URL.
     const { error: dbErr } = await admin
       .from('wallpapers')
-      .insert({ url: publicUrl, type: fileType, is_global: isGlobal, hardware_id: hardwareId })
+      .insert({ url: publicUrl, type: fileType, is_global: isGlobal, hardware_id: hardwareId, channel })
     if (dbErr) return json({ error: 'db: ' + dbErr.message }, 500)
 
     return json({ ok: true, url: publicUrl })

@@ -549,11 +549,21 @@ public class WallpaperRepo {
         mPref.edit().remove(FIT_PREFIX + fitKey(url)).apply();
     }
 
-    /** The technician's "40 images, all reels, same treatment" button. */
+    /**
+     * The technician's "40 images, all reels, same treatment" button.
+     *
+     * Rotation is deliberately NOT part of "the same treatment": it corrects one photo that
+     * arrived on its side, so copying it onto the whole library would lay 39 correct images down
+     * flat. Every wallpaper keeps whatever rotation it already had.
+     */
     public void applyFitToAll(FitSettings s) {
         SharedPreferences.Editor e = mPref.edit();
         for(WallpaperItem item : mItems) {
-            if(item.url != null && !item.url.isEmpty()) e.putString(FIT_PREFIX + fitKey(item.url), s.serialize());
+            if(item.url == null || item.url.isEmpty()) continue;
+            String key = fitKey(item.url);
+            FitSettings copy = new FitSettings(s.mode, s.blur, s.barColor, s.zoom, s.fade);
+            copy.rotation = getFit(item.url).rotation;
+            e.putString(FIT_PREFIX + key, copy.serialize());
         }
         e.apply();
     }

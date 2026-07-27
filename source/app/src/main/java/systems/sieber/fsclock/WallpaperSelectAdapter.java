@@ -223,10 +223,17 @@ public class WallpaperSelectAdapter extends BaseAdapter {
             view.setImageResource(R.drawable.ic_play_pause_white);
             return;
         }
-        Glide.with(mContext.getApplicationContext())
-                .load(model)
-                .centerCrop()
-                .into(view);
+        // Show it the way the car will: straighten first, then crop to the cell. Rotating after
+        // the crop would turn the cell's own framing, not the picture inside it.
+        int rot = (mRepo != null && item.url != null)
+                ? FitSettings.clampRotation(mRepo.getFit(item.url).rotation) : 0;
+        com.bumptech.glide.RequestBuilder<android.graphics.drawable.Drawable> req =
+                Glide.with(mContext.getApplicationContext()).load(model);
+        req = rot == 0
+                ? req.centerCrop()
+                : req.transform(new RotateTransformation(rot),
+                                new com.bumptech.glide.load.resource.bitmap.CenterCrop());
+        req.into(view);
     }
 
     /**

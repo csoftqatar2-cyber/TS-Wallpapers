@@ -57,6 +57,43 @@
                 android:textSize="11sp"
                 android:textStyle="bold" />
 
+            <!-- Rotate sits ON the preview, not down in the action row: it is a thing you do to
+                 the picture in front of you, and one tap = one quarter turn, applied instantly.
+                 The label under the icon is the current angle, so the button also reports state. -->
+            <LinearLayout
+                android:id="@+id/buttonFitRotate"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="top|start"
+                android:layout_margin="10dp"
+                android:background="@drawable/fit_badge_bg"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:paddingStart="8dp"
+                android:paddingEnd="10dp"
+                android:paddingTop="5dp"
+                android:paddingBottom="5dp"
+                android:focusable="true"
+                android:clickable="true"
+                android:contentDescription="@string/fit_rotate">
+
+                <ImageView
+                    android:layout_width="18dp"
+                    android:layout_height="18dp"
+                    android:src="@drawable/ic_rotate_24dp"
+                    android:contentDescription="@string/fit_rotate" />
+
+                <TextView
+                    android:id="@+id/textViewFitRotate"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="6dp"
+                    android:textColor="@color/aurora_text"
+                    android:textSize="11sp"
+                    android:textStyle="bold" />
+
+            </LinearLayout>
+
             <TextView
                 android:id="@+id/textViewFitTarget"
                 android:layout_width="wrap_content"

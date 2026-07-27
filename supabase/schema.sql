@@ -48,8 +48,15 @@ create table if not exists public.wallpapers (
     -- (e.g. 'lynkco' + is_global = "every Lynk & Co car"). null = the normal
     -- library that syncs to every car. See get_wallpapers.
     target_mode text check (target_mode is null or target_mode in ('normal','fse','leopard','gwm','lynkco')),
+    -- Delivery channel. 'app' = shown by our own slideshow. 'gwm_split' = NOT shown
+    -- by us at all: the car downloads it into /sdcard/Pictures/GWMSplit_Styles for
+    -- the head unit's own background app to read (the same folder the Cars-installer
+    -- script pushes photos to on a GWM car). The two channels have one RPC each and
+    -- must never leak into one another — see get_wallpapers / get_gwm_wallpapers.
+    channel     text not null default 'app',
     created_at  timestamptz not null default timezone('utc', now())
 );
+create index if not exists wallpapers_channel_idx on public.wallpapers (channel);
 
 -- Published app builds; devices poll this to self-update.
 create table if not exists public.app_versions (
@@ -171,24 +178,28 @@ CREATE OR REPLACE FUNCTION public.get_wallpapers(device_hw_id text, legacy_hw_id
 AS $function$
 begin
     -- One-time in-place migration: an already-registered device that now reports a
-    -- VIN keeps its row (activation, wallpapers, block status) under the new id.
-    if legacy_hw_id is not null and legacy_hw_id <> '' and legacy_hw_id <> device_hw_id then
-        if not exists (select 1 from public.devices d where d.hardware_id = device_hw_id)
-           and exists (select 1 from public.devices d where d.hardware_id = legacy_hw_id) then
-            update public.devices set hardware_id = device_hw_id where hardware_id = legacy_hw_id;
-        end if;
-    end if;
+    -- VIN keeps its row (activation, wallpapers, hides, block status) under the new id.
+    perform public.migrate_device_hardware_id(legacy_hw_id, device_hw_id);
 
     if exists (
         select 1 from public.devices d
         where d.hardware_id = device_hw_id and d.is_active = true and d.is_blocked = false
     ) then
+        -- Three independent gates, all required:
+        --   channel='app'  -> GWM Split images are a file drop, never our slideshow
+        --   target_mode    -> a mode-targeted image only reaches cars in that mode
+        --   wallpaper_hides-> a global image hidden on this car stays hidden
         return query
         select w.url, w.type
         from public.wallpapers w
         join public.devices d on d.hardware_id = device_hw_id
-        where (w.is_global = true or w.hardware_id = device_hw_id)
+        where w.channel = 'app'
+          and (w.is_global = true or w.hardware_id = device_hw_id)
           and (w.target_mode is null or w.target_mode = d.mode)
+          and not exists (
+              select 1 from public.wallpaper_hides h
+              where h.wallpaper_id = w.id and h.hardware_id = device_hw_id
+          )
         order by w.created_at desc;
     else
         return query select 'inactive'::text, 'image'::text;

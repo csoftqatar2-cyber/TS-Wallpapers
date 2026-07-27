@@ -41,6 +41,15 @@ applicationId is `store.thabthaba.clock`). Read this before editing any class.
 - `WallpaperView` — two ping-pong slots with crossfade; Glide for image/GIF,
   TextureView+MediaPlayer (muted, looping, center-crop) for video; `sampleLuminance()`
   drives auto-contrast clock colors.
+- **Per-image fit** — `FitSettings` (serialized `mode,blur,barColor,zoom,fade,rotation` under
+  pref `wp-fit:<url>`; short forms from older builds still parse) + `FitEditorActivity` /
+  `FitPreviewView`. `rotation` is 0/90/180/270 and is applied *before* anything is measured:
+  every scale, overflow and MODE_AUTO decision uses `effectiveW/H()`, since a quarter turn
+  swaps the image's width and height. Three renderers must agree — `WallpaperView`
+  (`applyImageMatrix` for images, `applyVideoScale` for video), `FitPreviewView` (the editor's
+  preview, deliberately the same maths), and `WallpaperSelectAdapter` thumbnails (via
+  `RotateTransformation`, rotate-then-centre-crop). `applyFitToAll` copies everything *except*
+  rotation: it fixes one sideways photo, it is not a library-wide look.
 - `StorageControl` — file paths for the static clock face/hands/background PNGs in
   `externalFilesDir/` (`clockface.png`, `hour.png`, `minute.png`, `second.png`, `bg.png`).
 - `UploadServer` — NanoHTTPD on **port 8089**, Arabic HTML upload page; started/stopped

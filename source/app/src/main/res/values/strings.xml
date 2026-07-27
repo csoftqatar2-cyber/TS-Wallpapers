@@ -319,6 +319,8 @@ Roboto Font Copyright (c) Christian Robertson. Licensed under the Apache License
     <string name="fit_reposition_hint">Drag the image to choose the visible part.</string>
     <string name="fit_reposition_dpad">Adjust with the d-pad</string>
     <string name="fit_dpad_hint">D-pad: left/right to adjust</string>
+    <string name="fit_rotate">Rotate</string>
+    <string name="fit_rotate_degrees">%1$d°</string>
     <string name="fit_done">Done</string>
     <string name="fit_reset">Reset</string>
     <string name="fit_delete">Delete image</string>

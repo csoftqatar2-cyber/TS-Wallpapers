@@ -365,6 +365,72 @@
             color: #1c150c;
         }
 
+        /* Autocomplete suggestions (device search by activation code / MAC / client) */
+        .ac-wrap {
+            position: relative;
+        }
+
+        .ac-panel {
+            position: absolute;
+            top: calc(100% + 6px);
+            right: 0;
+            left: 0;
+            z-index: 40;
+            max-height: 260px;
+            overflow-y: auto;
+            background: #1c150c;
+            border: 1px solid var(--panel-border);
+            border-radius: 12px;
+            box-shadow: 0 12px 30px rgba(0, 0, 0, 0.45);
+            display: none;
+        }
+
+        .ac-panel.open {
+            display: block;
+        }
+
+        .ac-item {
+            padding: 9px 14px;
+            cursor: pointer;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .ac-item:last-child {
+            border-bottom: none;
+        }
+
+        .ac-item:hover,
+        .ac-item.active {
+            background: rgba(255, 255, 255, 0.07);
+        }
+
+        .ac-item-code {
+            font-size: 0.92rem;
+            font-weight: 700;
+            color: var(--text-main);
+        }
+
+        .ac-item-sub {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            direction: ltr;
+            text-align: right;
+            margin-top: 2px;
+        }
+
+        .ac-item mark {
+            background: var(--primary);
+            color: #1c150c;
+            border-radius: 3px;
+            padding: 0 2px;
+        }
+
+        .ac-empty {
+            padding: 12px 14px;
+            font-size: 0.85rem;
+            color: var(--text-muted);
+        }
+
         /* Toggle Button Group */
         .toggle-group {
             display: flex;
@@ -1411,9 +1477,14 @@
                     <!-- Device Selector (Shown only for private) -->
                     <div class="form-group" id="device-selection-group" style="display: none;">
                         <label for="device-select">اختر الجهاز المستهدف:</label>
-                        <div class="input-wrapper" style="margin-bottom: 8px;">
+                        <div class="input-wrapper ac-wrap" style="margin-bottom: 8px;">
                             <i class="fa-solid fa-magnifying-glass"></i>
-                            <input type="text" id="device-search" class="form-control" placeholder="ابحث بالكود أو الماك..." oninput="filterDeviceOptions()">
+                            <input type="text" id="device-search" class="form-control" autocomplete="off"
+                                   placeholder="ابحث بكود التفعيل أو الماك أو اسم العميل..."
+                                   oninput="filterDeviceOptions()"
+                                   onfocus="openDeviceSuggestions()"
+                                   onkeydown="onDeviceSearchKey(event)">
+                            <div id="device-ac" class="ac-panel"></div>
                         </div>
                         <div class="input-wrapper">
                             <i class="fa-solid fa-microchip"></i>
@@ -1938,6 +2009,26 @@
             return set ? set.size : 0;
         }
 
+        // Each channel only reaches cars actually running the matching mode, so the
+        // dropdown must offer only those cars — never the whole fleet.
+        //   Lynk & Co channel  -> cars whose reported mode = 'lynkco'
+        //   GWM Split channel   -> cars whose reported mode = 'gwm'
+        //   plain app channel   -> every car (no mode restriction)
+        function channelEligibleDevices() {
+            const requiredMode = channelDeviceMode();
+            return requiredMode ? devicesList.filter(d => d.mode === requiredMode) : devicesList;
+        }
+
+        // One matching rule for both the dropdown and the suggestions list:
+        // activation code (serial), MAC / hardware id, or client name.
+        function deviceMatchesQuery(device, q) {
+            if (!q) return true;
+            const serial = (device.serial_number || '').toLowerCase();
+            const hw = (device.hardware_id || '').toLowerCase();
+            const name = (device.client_name || '').toLowerCase();
+            return serial.includes(q) || hw.includes(q) || name.includes(q);
+        }
+
         // Render devices into selection dropdown (optionally filtered by a search term)
         function renderDevicesDropdown(term) {
             const selectEl = document.getElementById("device-select");
@@ -1946,22 +2037,7 @@
             // Preserve the current selection so filtering doesn't reset the chosen device
             const prevValue = selectEl.value;
 
-            // Each channel only reaches cars actually running the matching mode, so the
-            // dropdown must offer only those cars — never the whole fleet.
-            //   Lynk & Co channel  -> cars whose reported mode = 'lynkco'
-            //   GWM Split channel   -> cars whose reported mode = 'gwm'
-            //   plain app channel   -> every car (no mode restriction)
-            const requiredMode = channelDeviceMode();
-            const modeFiltered = requiredMode
-                ? devicesList.filter(d => d.mode === requiredMode)
-                : devicesList;
-
-            const matches = modeFiltered.filter(device => {
-                if (!q) return true;
-                const serial = (device.serial_number || '').toLowerCase();
-                const hw = (device.hardware_id || '').toLowerCase();
-                return serial.includes(q) || hw.includes(q);
-            });
+            const matches = channelEligibleDevices().filter(device => deviceMatchesQuery(device, q));
 
             let placeholder = '-- اختر جهازاً أو اكتب كوداً مخصصاً --';
             if (matches.length === 0) {
@@ -1986,11 +2062,125 @@
             }
         }
 
-        // Filter the device dropdown live as the user types in the search box
+        // Filter the device dropdown live as the user types in the search box,
+        // and offer completion suggestions from the cars we already know about.
         function filterDeviceOptions() {
             const term = document.getElementById("device-search").value;
             renderDevicesDropdown(term);
+            renderDeviceSuggestions(term);
         }
+
+        // ============ Device search autocomplete ============
+
+        let deviceAcMatches = [];   // devices currently listed in the suggestions panel
+        let deviceAcIndex = -1;     // keyboard-highlighted row (-1 = none)
+
+        const AC_MAX_SUGGESTIONS = 12;
+
+        // Highlight the typed part inside a suggestion label
+        function acHighlight(text, q) {
+            const safe = escapeHtml(text || '');
+            if (!q) return safe;
+            const idx = (text || '').toLowerCase().indexOf(q);
+            if (idx < 0) return safe;
+            const before = escapeHtml(text.slice(0, idx));
+            const hit = escapeHtml(text.slice(idx, idx + q.length));
+            const after = escapeHtml(text.slice(idx + q.length));
+            return `${before}<mark>${hit}</mark>${after}`;
+        }
+
+        function renderDeviceSuggestions(term) {
+            const panel = document.getElementById("device-ac");
+            const q = (term || "").trim().toLowerCase();
+
+            deviceAcMatches = channelEligibleDevices()
+                .filter(d => deviceMatchesQuery(d, q))
+                .slice(0, AC_MAX_SUGGESTIONS);
+            deviceAcIndex = -1;
+
+            if (!deviceAcMatches.length) {
+                panel.innerHTML = '<div class="ac-empty">لا يوجد جهاز مطابق</div>';
+                panel.classList.add('open');
+                return;
+            }
+
+            panel.innerHTML = deviceAcMatches.map((d, i) => {
+                const code = acHighlight(d.serial_number || 'بدون كود', q);
+                const mac = acHighlight(d.hardware_id || '', q);
+                const name = d.client_name ? ` · ${acHighlight(d.client_name, q)}` : '';
+                return `<div class="ac-item" data-index="${i}" onmousedown="pickDeviceSuggestion(${i})">
+                            <div class="ac-item-code">${code}${name}</div>
+                            <div class="ac-item-sub">${mac}</div>
+                        </div>`;
+            }).join('');
+            panel.classList.add('open');
+        }
+
+        function openDeviceSuggestions() {
+            renderDeviceSuggestions(document.getElementById("device-search").value);
+        }
+
+        function closeDeviceSuggestions() {
+            const panel = document.getElementById("device-ac");
+            if (panel) panel.classList.remove('open');
+            deviceAcIndex = -1;
+        }
+
+        // Commit one suggestion: fill the search box, the dropdown and the hardware id field
+        function pickDeviceSuggestion(index) {
+            const device = deviceAcMatches[index];
+            if (!device) return;
+
+            document.getElementById("device-search").value = device.serial_number || device.hardware_id;
+            renderDevicesDropdown(device.serial_number || device.hardware_id);
+
+            const selectEl = document.getElementById("device-select");
+            selectEl.value = device.hardware_id;
+            onDeviceSelectChange();
+            closeDeviceSuggestions();
+        }
+
+        function moveDeviceAcHighlight(delta) {
+            if (!deviceAcMatches.length) return;
+            deviceAcIndex = (deviceAcIndex + delta + deviceAcMatches.length) % deviceAcMatches.length;
+            const panel = document.getElementById("device-ac");
+            panel.querySelectorAll('.ac-item').forEach(el => {
+                const on = Number(el.dataset.index) === deviceAcIndex;
+                el.classList.toggle('active', on);
+                if (on) el.scrollIntoView({ block: 'nearest' });
+            });
+        }
+
+        // Arrow keys walk the list, Enter picks, Escape closes
+        function onDeviceSearchKey(event) {
+            const panel = document.getElementById("device-ac");
+            const isOpen = panel && panel.classList.contains('open');
+
+            if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+                event.preventDefault();
+                if (!isOpen) { openDeviceSuggestions(); return; }
+                moveDeviceAcHighlight(event.key === 'ArrowDown' ? 1 : -1);
+            } else if (event.key === 'Enter') {
+                if (isOpen && deviceAcIndex >= 0) {
+                    event.preventDefault();
+                    pickDeviceSuggestion(deviceAcIndex);
+                } else if (isOpen && deviceAcMatches.length === 1) {
+                    event.preventDefault();
+                    pickDeviceSuggestion(0);
+                }
+            } else if (event.key === 'Escape') {
+                closeDeviceSuggestions();
+            }
+        }
+
+        // Clicking anywhere outside the search box dismisses the suggestions
+        document.addEventListener('click', (e) => {
+            const wrap = document.getElementById("device-search");
+            const panel = document.getElementById("device-ac");
+            if (!wrap || !panel) return;
+            if (e.target === wrap || panel.contains(e.target)) return;
+            closeDeviceSuggestions();
+        });
 
         // Set Target Type (Global vs Private)
         function setTargetType(type) {
