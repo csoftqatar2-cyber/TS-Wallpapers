@@ -34,6 +34,9 @@ public class UploadServer extends NanoHTTPD {
 
     private static final String TAG = "UploadServer";
 
+    /** Every file received from a phone is named with this, and nothing else is. */
+    public static final String RECEIVED_PREFIX = "upload_";
+
     public static final int PORT = 8089;
     /** if 8089 is still held by a previous run (or another app), try the next few */
     private static final int PORT_TRIES = 5;
@@ -241,8 +244,12 @@ public class UploadServer extends NanoHTTPD {
             String ext = ".jpg";
             int dot = originalName.lastIndexOf('.');
             if(dot >= 0 && dot < originalName.length() - 1) ext = originalName.substring(dot);
-            // name so it sorts predictably; the default is tracked by PREF_DEFAULT path
-            File dest = new File(mRepo.getLocalFolder(), "upload_" + originalName.replaceAll("[\\\\/:*?\"<>|]", "_"));
+            // name so it sorts predictably; the default is tracked by PREF_DEFAULT path.
+            // The prefix is also load-bearing: it is the only durable record that a file came
+            // from a phone, which is what lets the Leopard picker list these under the phone
+            // source instead of mixing them into the head unit's own storage.
+            File dest = new File(mRepo.getLocalFolder(),
+                    RECEIVED_PREFIX + originalName.replaceAll("[\\\\/:*?\"<>|]", "_"));
             if(!dest.getName().toLowerCase().endsWith(ext.toLowerCase())) {
                 dest = new File(mRepo.getLocalFolder(), "upload" + ext);
             }

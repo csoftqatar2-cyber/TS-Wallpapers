@@ -445,6 +445,12 @@ Roboto Font Copyright (c) Christian Robertson. Licensed under the Apache License
     <string name="leopard_download_failed">Could not download this wallpaper</string>
     <string name="leopard_source_phone">From a phone</string>
     <string name="leopard_phone_hint">Scan this code with a phone on the same Wi-Fi, then upload the image.</string>
+    <string name="leopard_phone_step1">1 — Scan the code with the phone\'s camera (same Wi-Fi)</string>
+    <string name="leopard_phone_step2">2 — A page opens on the phone: pick the image</string>
+    <string name="leopard_phone_step3">3 — Press "Upload" and it appears here on the screen</string>
+    <string name="leopard_phone_keep_open">⚠ Leave this screen open until the phone has finished uploading — if you close the app the picture will not arrive.</string>
+    <string name="leopard_phone_received">Image received ✓ — frame it, then set it</string>
+    <string name="leopard_phone_empty">Nothing sent from a phone yet — scan the code to add an image</string>
     <string name="chip_mode_leopard">Mode: Leopard</string>
     <string name="chip_mode_gwm">Mode: GWM</string>
     <string name="chip_mode_lynkco">Mode: Lynk &amp; Co</string>

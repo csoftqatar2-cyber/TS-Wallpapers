@@ -7,6 +7,7 @@ import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.res.Configuration;
 import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.graphics.Outline;
 import android.graphics.drawable.Drawable;
 import android.media.MediaPlayer;
@@ -17,6 +18,7 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.view.ViewOutlineProvider;
 import android.widget.FrameLayout;
+import android.widget.GridLayout;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ProgressBar;
@@ -39,6 +41,7 @@ import com.bumptech.glide.request.RequestOptions;
 import com.bumptech.glide.request.target.Target;
 
 import java.io.File;
+import java.io.FileOutputStream;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -51,6 +54,7 @@ import java.util.List;
 public class LeopardPickerActivity extends AppCompatActivity {
 
     private static final int PICK_LOCAL_REQUEST = 41;
+    private static final int FIT_EDITOR_REQUEST = 42;
     private static final String PREF_DEFAULT_SOURCE = "leopard-default-source";
     private static final String SOURCE_CLOUD = "cloud";
     private static final String SOURCE_LOCAL = "local";
@@ -60,6 +64,9 @@ public class LeopardPickerActivity extends AppCompatActivity {
     private SharedPreferences mPrefs;
 
     private LinearLayout mFilmstrip;
+    private View mFilmstripScroll, mPhonePane;
+    private GridLayout mPhoneGrid;
+    private LinearLayout mPhoneQrBox;
     private View mSourceCloud, mSourceLocal, mSourcePhone, mStateBox, mSetButton;
     private UploadServer mUploadServer;
     private TextView mStateText, mStateAction, mStatus;
@@ -80,6 +87,9 @@ public class LeopardPickerActivity extends AppCompatActivity {
     private String mLocalPick;      // content:// uri chosen from the system picker
     /** How many leading filmstrip cells are not wallpapers (the device tab's browse cell). */
     private int mStripOffset;
+    /** The image handed to the fit editor, and the screen it was framed against. */
+    private WallpaperItem mEditing;
+    private int mEditingW, mEditingH;
     /** Guards the one automatic sync, so a car that is genuinely empty does not loop. */
     private boolean mTriedAutoSync = false;
 
@@ -142,6 +152,10 @@ public class LeopardPickerActivity extends AppCompatActivity {
         }
 
         mFilmstrip = findViewById(R.id.filmstrip);
+        mFilmstripScroll = findViewById(R.id.filmstripScroll);
+        mPhonePane = findViewById(R.id.leopardPhonePane);
+        mPhoneGrid = findViewById(R.id.phoneGrid);
+        mPhoneQrBox = findViewById(R.id.phoneQrBox);
         mSourceCloud = findViewById(R.id.sourceCloud);
         mSourceLocal = findViewById(R.id.sourceLocal);
         mSourcePhone = findViewById(R.id.sourcePhone);
@@ -218,6 +232,13 @@ public class LeopardPickerActivity extends AppCompatActivity {
      * car simply could not take a photo from a customer's phone.
      */
     private void startPhoneUpload() {
+        // Re-entering this source must not restart the server. A customer may already be looking
+        // at the page this URL opened; a fresh server would move the port out from under them and
+        // their upload would fail with nothing on either screen to explain why.
+        if(mUploadServer != null && mUploadServer.getUrl() != null) {
+            showPhonePane(mUploadServer.getUrl());
+            return;
+        }
         stopUploadServer();
         final String url;
         try {
@@ -241,53 +262,271 @@ public class LeopardPickerActivity extends AppCompatActivity {
             showState(R.string.pair_no_wifi, R.string.leopard_retry, v -> selectSource(SOURCE_PHONE));
             return;
         }
-        showQr(url);
+        showPhonePane(url);
     }
 
-    /** The QR fills the strip area — this IS the content while this source is chosen. */
-    private void showQr(String url) {
-        mFilmstrip.removeAllViews();
+    /**
+     * The phone source, as two halves of one band.
+     *
+     * It used to be the QR alone, which made every picture that arrived a one-time event: it was
+     * shown once and then had nowhere to live, because this pane redrew as a bare code the next
+     * time it was opened. What comes from a phone belongs to the phone source, so the pictures
+     * are listed here — on the left, where there is room to grow — and the code keeps the right
+     * edge, pinned rather than scrolling, so scanning is always one look away.
+     */
+    private void showPhonePane(String url) {
         hideState();
-        // One box, not a strip: centre it. (buildFilmstrip puts this back for thumbnails.)
-        mFilmstrip.setGravity(Gravity.CENTER);
-        float d = getResources().getDisplayMetrics().density;
+        mFilmstripScroll.setVisibility(View.GONE);
+        mPhonePane.setVisibility(View.VISIBLE);
+        buildPhoneQr(url);
+        buildPhoneGrid();
+    }
 
-        LinearLayout box = new LinearLayout(this);
-        box.setOrientation(LinearLayout.VERTICAL);
-        box.setGravity(Gravity.CENTER);
+    /** The right half: the code, what to do with it, and the one thing that breaks it. */
+    private void buildPhoneQr(String url) {
+        mPhoneQrBox.removeAllViews();
+        float d = getResources().getDisplayMetrics().density;
+        final int colW = Math.round(210 * d);
 
         ImageView qr = new ImageView(this);
-        int px = Math.round(190 * d);
+        int px = Math.round(140 * d);
         qr.setLayoutParams(new LinearLayout.LayoutParams(px, px));
         qr.setImageBitmap(QrCode.generate(url, 600));
-        box.addView(qr);
+        mPhoneQrBox.addView(qr);
 
-        TextView hint = new TextView(this);
-        hint.setText(R.string.leopard_phone_hint);
-        hint.setGravity(Gravity.CENTER);
-        hint.setTextSize(12);
-        hint.setTextColor(ContextCompat.getColor(this, R.color.aurora_muted));
-        LinearLayout.LayoutParams hlp = new LinearLayout.LayoutParams(
-                Math.round(420 * d), LinearLayout.LayoutParams.WRAP_CONTENT);
-        hlp.topMargin = Math.round(12 * d);
-        hint.setLayoutParams(hlp);
-        box.addView(hint);
+        // Numbered, because "scan this" is not the whole job — the page that opens has two more
+        // steps on it, and someone standing at a car with a customer's phone should not have to
+        // guess which of them the car is waiting on.
+        int[] steps = { R.string.leopard_phone_step1, R.string.leopard_phone_step2,
+                R.string.leopard_phone_step3 };
+        for(int i = 0; i < steps.length; i++) {
+            TextView step = new TextView(this);
+            step.setText(getString(steps[i]));
+            step.setTextSize(11);
+            step.setTextColor(ContextCompat.getColor(this, R.color.aurora_muted));
+            LinearLayout.LayoutParams slp = new LinearLayout.LayoutParams(
+                    colW, LinearLayout.LayoutParams.WRAP_CONTENT);
+            slp.topMargin = Math.round((i == 0 ? 10 : 3) * d);
+            step.setLayoutParams(slp);
+            mPhoneQrBox.addView(step);
+        }
 
-        mFilmstrip.addView(box);
+        // The server lives with this pane: leaving the phone source stops it, and a phone that
+        // uploads after that gets nothing but an error it cannot explain. That has already cost
+        // one real attempt, so it is stated on the screen rather than left to be discovered.
+        TextView warn = new TextView(this);
+        warn.setText(R.string.leopard_phone_keep_open);
+        warn.setTextSize(11);
+        warn.setTypeface(warn.getTypeface(), android.graphics.Typeface.BOLD);
+        warn.setTextColor(ContextCompat.getColor(this, R.color.gold));
+        LinearLayout.LayoutParams wlp = new LinearLayout.LayoutParams(
+                colW, LinearLayout.LayoutParams.WRAP_CONTENT);
+        wlp.topMargin = Math.round(9 * d);
+        warn.setLayoutParams(wlp);
+        mPhoneQrBox.addView(warn);
+    }
+
+    /**
+     * The left half: every picture that has come over from a phone, newest first.
+     *
+     * Newest first because the one someone just sent is the one they are looking for, and this
+     * list only ever grows. Where a picture has been through the editor it is the framed version
+     * that is listed — that is the one they said yes to, and re-picking it must not quietly hand
+     * back the raw photo instead.
+     */
+    private void buildPhoneGrid() {
+        mPhoneGrid.removeAllViews();
+        mShown.clear();
+        mStripOffset = 0;
+
+        for(File f : phoneUploads()) {
+            String url = f.getAbsolutePath();
+            File edited = bakedFileFor(url);
+            mShown.add(edited != null
+                    ? new WallpaperItem(WallpaperItem.TYPE_IMAGE, edited.getAbsolutePath())
+                    : new WallpaperItem(WallpaperItem.guessType(url), url));
+        }
+
+        if(mShown.isEmpty()) {
+            TextView empty = new TextView(this);
+            empty.setText(R.string.leopard_phone_empty);
+            empty.setTextSize(13);
+            empty.setTextColor(ContextCompat.getColor(this, R.color.aurora_muted));
+            mPhoneGrid.addView(empty);
+            return;
+        }
+
+        float d = getResources().getDisplayMetrics().density;
+        final int cellW = Math.round(190 * d), cellH = Math.round(107 * d);   // 16:9
+        final int gap = Math.round(8 * d);
+        // The pane has not been measured the first time through, so fall back to the width the
+        // band has once the sources and the QR are taken out of it.
+        int paneW = mPhoneGrid.getWidth();
+        if(paneW <= 0) paneW = getResources().getDisplayMetrics().widthPixels - Math.round(560 * d);
+        mPhoneGrid.setColumnCount(Math.max(1, paneW / (cellW + gap)));
+
+        String currentUri = samePath(mPrefs.getString(MediaWallpaperService.PREF_URI, ""));
+        for(final WallpaperItem item : mShown) {
+            View cell = thumbCell(item, cellW, cellH, d, currentUri, false);
+            GridLayout.LayoutParams lp = new GridLayout.LayoutParams();
+            lp.width = cellW;
+            lp.height = cellH;
+            lp.setMargins(0, 0, gap, gap);
+            cell.setLayoutParams(lp);
+            mPhoneGrid.addView(cell);
+        }
+        refreshSelection();
+    }
+
+    /** The grid's own copy of an item, so the selection ring lands on a cell that exists. */
+    private WallpaperItem pickFromGrid(WallpaperItem wanted) {
+        for(WallpaperItem it : mShown) {
+            if(samePath(it.url).equals(samePath(wanted.url))) return it;
+        }
+        return wanted;
+    }
+
+    /** Files in the wallpaper folder that came from a phone, newest first. */
+    private List<File> phoneUploads() {
+        List<File> out = new ArrayList<>();
+        File[] files = mRepo.getLocalFolder().listFiles();
+        if(files == null) return out;
+        for(File f : files) {
+            // UploadServer names every received file "upload_…", which is the only durable mark
+            // of where a file came from — nothing else on disk remembers.
+            if(f.isFile() && f.getName().startsWith(UploadServer.RECEIVED_PREFIX)) out.add(f);
+        }
+        java.util.Collections.sort(out, (a, b) -> Long.compare(b.lastModified(), a.lastModified()));
+        return out;
+    }
+
+    /** The framed version of this picture, if it has been through the editor. */
+    private File bakedFileFor(String url) {
+        File f = new File(new File(getCacheDir(), "leopard"), bakedName(url));
+        return (f.exists() && f.length() > 0) ? f : null;
+    }
+
+    /** One file per source image, overwritten on every re-edit: a history here would fill a
+     *  head unit's cache with dead wallpapers nobody can see or delete. */
+    private static String bakedName(String url) {
+        return "edit_" + Integer.toHexString(samePath(url).hashCode()) + ".jpg";
+    }
+
+    /** True for a file this screen rendered from an edit — already exactly screen-shaped. */
+    private boolean isBaked(String url) {
+        if(url == null) return false;
+        File f = new File(samePath(url));
+        return f.getName().startsWith("edit_")
+                && new File(getCacheDir(), "leopard").equals(f.getParentFile());
     }
 
     private void onPhoneUpload(String savedPath) {
         if(savedPath == null) return;
-        // Straight into the preview: unlike the Settings flow, whoever opened this picker is
-        // standing at the head unit waiting for exactly this.
-        WallpaperItem item = new WallpaperItem(WallpaperItem.guessType(savedPath), "file://" + savedPath);
-        mShown.clear();
-        mShown.add(item);
-        mSelected = item;
+        toast(R.string.leopard_phone_received);
+
+        WallpaperItem item = new WallpaperItem(WallpaperItem.guessType(savedPath), savedPath);
+        // The server outlives the tab, so a picture can land while another source is on screen.
+        // Come back to the phone source rather than dropping the new picture into a list it does
+        // not belong to.
+        if(!SOURCE_PHONE.equals(mSource)) selectSource(SOURCE_PHONE);
         hideState();
-        buildFilmstrip();
-        showPreview(item);
-        toast(R.string.pair_uploaded);
+        buildPhoneGrid();
+        mSelected = pickFromGrid(item);
+        refreshSelection();
+
+        // A photo off a phone is portrait as often as not, and the dashboard is extremely wide —
+        // dropping it straight onto the screen is where the framing question gets decided badly
+        // and silently. So the editor opens first: crop, edges, rotation, then Done brings back
+        // the preview with the picture as it will actually land. A video has nothing to frame
+        // here (the fit is applied while it plays), so it keeps the old straight-to-preview path.
+        if(item.isVideo()) { showPreview(item); return; }
+        openFitEditor(item);
+    }
+
+    /** Frame this image against the real screen before it is previewed or applied. */
+    private void openFitEditor(WallpaperItem item) {
+        android.util.DisplayMetrics dm = new android.util.DisplayMetrics();
+        getWindowManager().getDefaultDisplay().getRealMetrics(dm);
+        mEditing = item;
+        mEditingW = dm.widthPixels;
+        mEditingH = dm.heightPixels;
+        try {
+            startActivityForResult(
+                    FitEditorActivity.intent(this, item.url, mEditingW, mEditingH), FIT_EDITOR_REQUEST);
+        } catch(ActivityNotFoundException e) {
+            // Nothing is lost by skipping it — the unedited image is still a usable wallpaper.
+            mEditing = null;
+            showPreview(item);
+        }
+    }
+
+    /**
+     * Turn the editor's numbers into a real picture.
+     *
+     * The editor saves a fit and a focal point keyed by url, which the slideshow reads at draw
+     * time. Leopard has no draw time — it hands a finished bitmap to Android's wallpaper system —
+     * so unless the framing is burnt into a file here, the editor would be a screen that changes
+     * nothing. The result is written screen-sized, which is also all the wallpaper will ever use.
+     */
+    private void bakeEdit(final WallpaperItem item) {
+        setBusy(true, R.string.leopard_preparing);
+        final int outW = mEditingW, outH = mEditingH;
+        final String url = item.url;
+        new Thread(() -> {
+            String baked = null;
+            try {
+                Bitmap src = decodeForBake(url, outW, outH);
+                if(src != null) {
+                    Bitmap out = FitRenderer.bake(src, mRepo.getFit(url), mRepo.getFocal(url)[0],
+                            mRepo.getFocal(url)[1], outW, outH, false);
+                    if(src != out) src.recycle();
+                    if(out != null) {
+                        File dir = new File(getCacheDir(), "leopard");
+                        if(dir.exists() || dir.mkdirs()) {
+                            File f = new File(dir, bakedName(url));
+                            FileOutputStream fos = new FileOutputStream(f);
+                            out.compress(Bitmap.CompressFormat.JPEG, 95, fos);
+                            fos.close();
+                            baked = f.getAbsolutePath();
+                        }
+                        out.recycle();
+                    }
+                }
+            } catch(Throwable ignored) {
+            }
+            final String result = baked;
+            runOnUiThread(() -> {
+                setBusy(false, 0);
+                // A failed bake is not a failed upload: fall back to the picture as it arrived
+                // rather than leaving the user with nothing to set.
+                WallpaperItem shown = result == null ? item
+                        : new WallpaperItem(WallpaperItem.TYPE_IMAGE, result);
+                // Back to the phone pane the picture came from — rebuilt, so it now holds this
+                // one too — and then straight into the preview, which is what the person
+                // standing at the head unit is waiting for.
+                buildPhoneGrid();
+                mSelected = pickFromGrid(shown);
+                refreshSelection();
+                showPreview(mSelected);
+            });
+        }).start();
+    }
+
+    /** Decode no larger than the screen needs — a 12MP phone photo would blow the heap here. */
+    private Bitmap decodeForBake(String url, int outW, int outH) throws Exception {
+        String path = samePath(url);
+        BitmapFactory.Options bounds = new BitmapFactory.Options();
+        bounds.inJustDecodeBounds = true;
+        BitmapFactory.decodeFile(path, bounds);
+        if(bounds.outWidth <= 0 || bounds.outHeight <= 0) return null;
+        // Twice the target, so a zoomed-in crop still has pixels to spend.
+        int sample = 1;
+        while(bounds.outWidth / (sample * 2) >= outW * 2 && bounds.outHeight / (sample * 2) >= outH * 2) {
+            sample *= 2;
+        }
+        BitmapFactory.Options opts = new BitmapFactory.Options();
+        opts.inSampleSize = sample;
+        return BitmapFactory.decodeFile(path, opts);
     }
 
     private void stopUploadServer() {
@@ -387,7 +626,12 @@ public class LeopardPickerActivity extends AppCompatActivity {
         mRepo.load();
         mShown.clear();
         for(WallpaperItem it : mRepo.allItems()) {
-            if(!LeopardCache.isRemote(it.url)) mShown.add(it);
+            if(LeopardCache.isRemote(it.url)) continue;
+            // Phone uploads live on this same disk but belong to the phone source, where they
+            // are shown next to the code that produced them. Listing them twice would make the
+            // two circles look like copies of each other.
+            if(new File(it.url).getName().startsWith(UploadServer.RECEIVED_PREFIX)) continue;
+            mShown.add(it);
         }
         if(mShown.isEmpty()) {
             // Nothing stored yet — the browse cell has no strip to live in, so the state box
@@ -419,6 +663,18 @@ public class LeopardPickerActivity extends AppCompatActivity {
     @Override
     protected void onActivityResult(int req, int res, Intent data) {
         super.onActivityResult(req, res, data);
+
+        if(req == FIT_EDITOR_REQUEST) {
+            WallpaperItem edited = mEditing;
+            mEditing = null;
+            if(edited == null) return;
+            // The editor is auto-save and has no Cancel, so any way back from it means "this is
+            // how I want it" — including the back button. Bake either way; the only difference on
+            // a plain back is that the settings are the ones it opened with.
+            bakeEdit(edited);
+            return;
+        }
+
         if(req != PICK_LOCAL_REQUEST) return;
 
         // The system picker is a screen we do not control and cannot style. What we DO own is
@@ -460,8 +716,9 @@ public class LeopardPickerActivity extends AppCompatActivity {
 
     private void buildFilmstrip() {
         mFilmstrip.removeAllViews();
-        // Undo the centring showQr() applies: a strip of thumbnails starts at the edge and
-        // scrolls, and fillViewport would otherwise centre a short strip on its own.
+        // Whatever the phone pane was showing, this is the strip's band now.
+        mPhonePane.setVisibility(View.GONE);
+        mFilmstripScroll.setVisibility(View.VISIBLE);
         mFilmstrip.setGravity(Gravity.START | Gravity.CENTER_VERTICAL);
         float d = getResources().getDisplayMetrics().density;
         // Height is the fixed dimension; width follows each picture's own proportions (see
@@ -484,103 +741,134 @@ public class LeopardPickerActivity extends AppCompatActivity {
         if(mStripOffset == 1) mFilmstrip.addView(browseCell(cellH, gap, d, radius));
 
         for(final WallpaperItem item : mShown) {
-            final FrameLayout cell = new FrameLayout(this);
+            View cell = thumbCell(item, cellW, cellH, d, currentUri, true);
             LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(cellW, cellH);
             lp.setMarginEnd(gap);
             cell.setLayoutParams(lp);
-            cell.setFocusable(true);
-            cell.setClickable(true);
-            cell.setBackgroundColor(0xFF241c11);
+            mFilmstrip.addView(cell);
+        }
+        refreshSelection();
+    }
 
-            // The ring drawn on top has rounded corners, but the image underneath is a plain
-            // rectangle — so its square corners poked out through the curve. Clip the cell to
-            // the same shape the ring draws, and everything inside follows it.
-            cell.setOutlineProvider(new ViewOutlineProvider() {
-                @Override
-                public void getOutline(View v, Outline outline) {
-                    outline.setRoundRect(0, 0, v.getWidth(), v.getHeight(), radius);
-                }
-            });
-            cell.setClipToOutline(true);
+    /**
+     * One tappable picture, sized {@code cellW} x {@code cellH}.
+     *
+     * Shared by the strip and the phone grid: the two arrange cells differently but a cell is a
+     * cell, and having built it twice once already, the second copy is where the badge or the
+     * selection ring quietly stops matching.
+     */
+    private View thumbCell(final WallpaperItem item, final int cellW, final int cellH,
+                           float d, String currentUri, final boolean shapeToImage) {
+        final int radius = Math.round(16 * d);
+        final FrameLayout cell = new FrameLayout(this);
+        cell.setFocusable(true);
+        cell.setClickable(true);
+        cell.setBackgroundColor(0xFF241c11);
 
-            ImageView img = new ImageView(this);
-            img.setLayoutParams(new FrameLayout.LayoutParams(
-                    FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
-            // FIT_CENTER never distorts, and once the cell has been resized to the picture's own
-            // proportions it has nothing left to letterbox either — the frame ends where the
-            // photo ends. It still matters for the moment before the image arrives, and for a
-            // video whose frame we never got.
-            img.setScaleType(ImageView.ScaleType.FIT_CENTER);
-            cell.addView(img);
+        // The ring drawn on top has rounded corners, but the image underneath is a plain
+        // rectangle — so its square corners poked out through the curve. Clip the cell to
+        // the same shape the ring draws, and everything inside follows it.
+        cell.setOutlineProvider(new ViewOutlineProvider() {
+            @Override
+            public void getOutline(View v, Outline outline) {
+                outline.setRoundRect(0, 0, v.getWidth(), v.getHeight(), radius);
+            }
+        });
+        cell.setClipToOutline(true);
 
-            if(item.isVideo()) {
-                // The playlist pre-downloads videos for smooth looping, so when the file is
-                // already cached we can pull frame 0 out of it locally. Only a video that has
-                // not been fetched yet falls back to the flat placeholder.
-                String local = mRepo.localVideoPath(item);
-                if(local != null) {
-                    Glide.with(this)
-                            .asBitmap()
-                            .load(new File(local))
-                            .apply(RequestOptions.frameOf(0))
-                            .override(cellW, cellH)
-                            .listener(new RequestListener<Bitmap>() {
-                                @Override
-                                public boolean onLoadFailed(GlideException e, Object model,
-                                                            Target<Bitmap> t, boolean first) {
-                                    return false;   // keep the 2.67:1 guess
-                                }
-                                @Override
-                                public boolean onResourceReady(Bitmap res, Object model,
-                                                               Target<Bitmap> t, DataSource src,
-                                                               boolean first) {
-                                    fitCellToImage(cell, res.getWidth(), res.getHeight());
-                                    return false;
-                                }
-                            })
-                            .into(img);
-                }
-                cell.addView(typeBadge(R.drawable.ic_badge_video_20dp, d));
-            } else {
-                // Full-size originals over a weak link: let Glide downsample to the cell.
-                Object model = item.url.startsWith("content://") ? Uri.parse(item.url)
-                        : (item.url.startsWith("http") ? item.url : new File(item.url));
-                Glide.with(this).load(model).override(cellW, cellH)
-                        .listener(new RequestListener<Drawable>() {
+        ImageView img = new ImageView(this);
+        img.setLayoutParams(new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
+        // Two different jobs. In the strip the cell is reshaped to the picture, so FIT_CENTER
+        // has nothing left to letterbox and the frame ends where the photo ends. In the grid
+        // the cells must stay on their rows, so the picture fills its box instead and takes a
+        // small crop — a ragged grid is worse than a trimmed thumbnail, and a tap opens the
+        // whole picture anyway.
+        img.setScaleType(shapeToImage ? ImageView.ScaleType.FIT_CENTER
+                : ImageView.ScaleType.CENTER_CROP);
+        cell.addView(img);
+
+        if(item.isVideo()) {
+            // The playlist pre-downloads videos for smooth looping, so when the file is
+            // already cached we can pull frame 0 out of it locally. Only a video that has
+            // not been fetched yet falls back to the flat placeholder.
+            String local = mRepo.localVideoPath(item);
+            if(local != null) {
+                Glide.with(this)
+                        .asBitmap()
+                        .load(new File(local))
+                        .apply(RequestOptions.frameOf(0))
+                        .override(cellW, cellH)
+                        .listener(new RequestListener<Bitmap>() {
                             @Override
-                            public boolean onLoadFailed(GlideException e, Object m,
-                                                        Target<Drawable> t, boolean first) {
-                                return false;
+                            public boolean onLoadFailed(GlideException e, Object model,
+                                                        Target<Bitmap> t, boolean first) {
+                                return false;   // keep the 2.67:1 guess
                             }
                             @Override
-                            public boolean onResourceReady(Drawable res, Object m,
-                                                           Target<Drawable> t, DataSource src,
+                            public boolean onResourceReady(Bitmap res, Object model,
+                                                           Target<Bitmap> t, DataSource src,
                                                            boolean first) {
-                                fitCellToImage(cell, res.getIntrinsicWidth(), res.getIntrinsicHeight());
+                                if(shapeToImage) fitCellToImage(cell, res.getWidth(), res.getHeight());
                                 return false;
                             }
                         })
                         .into(img);
-                cell.addView(typeBadge(R.drawable.ic_badge_image_20dp, d));
             }
-
-            if(!currentUri.isEmpty() && currentUri.equals(samePath(item.url))) {
-                cell.addView(badge(getString(R.string.leopard_badge_current), Gravity.TOP | Gravity.END, d));
-            }
-
-            View ring = new View(this);
-            ring.setLayoutParams(new FrameLayout.LayoutParams(
-                    FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
-            ring.setBackgroundResource(R.drawable.leopard_cell_bg);
-            ring.setDuplicateParentStateEnabled(true);
-            cell.addView(ring);
-
-            // Tap opens the full-screen preview rather than just ticking the cell: a 326x122
-            // thumbnail is too small to commit a whole dashboard to.
-            cell.setOnClickListener(v -> { mSelected = item; refreshSelection(); showPreview(item); });
-            mFilmstrip.addView(cell);
+            cell.addView(typeBadge(R.drawable.ic_badge_video_20dp, d));
+        } else {
+            // Full-size originals over a weak link: let Glide downsample to the cell.
+            Glide.with(this).load(glideModel(item.url)).override(cellW, cellH)
+                    .listener(new RequestListener<Drawable>() {
+                        @Override
+                        public boolean onLoadFailed(GlideException e, Object m,
+                                                    Target<Drawable> t, boolean first) {
+                            return false;
+                        }
+                        @Override
+                        public boolean onResourceReady(Drawable res, Object m,
+                                                       Target<Drawable> t, DataSource src,
+                                                       boolean first) {
+                            if(shapeToImage) {
+                                fitCellToImage(cell, res.getIntrinsicWidth(), res.getIntrinsicHeight());
+                            }
+                            return false;
+                        }
+                    })
+                    .into(img);
+            cell.addView(typeBadge(R.drawable.ic_badge_image_20dp, d));
         }
-        refreshSelection();
+
+        if(!currentUri.isEmpty() && currentUri.equals(samePath(item.url))) {
+            cell.addView(badge(getString(R.string.leopard_badge_current), Gravity.TOP | Gravity.END, d));
+        }
+
+        View ring = new View(this);
+        ring.setLayoutParams(new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
+        ring.setBackgroundResource(R.drawable.leopard_cell_bg);
+        ring.setDuplicateParentStateEnabled(true);
+        cell.addView(ring);
+
+        // Tap opens the full-screen preview rather than just ticking the cell: a 326x122
+        // thumbnail is too small to commit a whole dashboard to.
+        cell.setOnClickListener(v -> { mSelected = item; refreshSelection(); showPreview(item); });
+        return cell;
+    }
+
+    /**
+     * What Glide should load for a wallpaper url.
+     *
+     * The phone upload spells a local file "file:///storage/…" while the folder scan spells the
+     * same file "/storage/…", and handing the first spelling to {@code new File(...)} produces a
+     * path that cannot exist — which is exactly why a picture that had just arrived from a phone
+     * previewed as a black rectangle.
+     */
+    private Object glideModel(String url) {
+        if(url == null) return null;
+        if(url.startsWith("content://")) return Uri.parse(url);
+        if(url.startsWith("http")) return url;
+        return new File(samePath(url));
     }
 
     /**
@@ -689,11 +977,13 @@ public class LeopardPickerActivity extends AppCompatActivity {
     }
 
     private void refreshSelection() {
+        // Whichever container is showing holds the cells; mShown is the same list either way.
+        ViewGroup cells = mPhonePane.getVisibility() == View.VISIBLE ? mPhoneGrid : mFilmstrip;
         // Cells and items are no longer 1:1 — the device strip opens with a browse cell that
         // stands for no wallpaper, so every item sits mStripOffset places to the right.
-        for(int i = 0; i < mFilmstrip.getChildCount(); i++) {
+        for(int i = 0; i < cells.getChildCount(); i++) {
             int item = i - mStripOffset;
-            mFilmstrip.getChildAt(i).setSelected(
+            cells.getChildAt(i).setSelected(
                     item >= 0 && item < mShown.size() && mShown.get(item) == mSelected);
         }
         mSetButton.setAlpha(mSelected == null ? 0.5f : 1f);
@@ -716,9 +1006,7 @@ public class LeopardPickerActivity extends AppCompatActivity {
             mPreviewVideo.setVisibility(View.GONE);
             mPreviewLoading.setVisibility(View.GONE);
             mPreviewProgress.setVisibility(View.GONE);
-            Object model = item.url.startsWith("content://") ? Uri.parse(item.url)
-                    : (item.url.startsWith("http") ? item.url : new File(item.url));
-            Glide.with(this).load(model).into(mPreviewImage);
+            Glide.with(this).load(glideModel(item.url)).into(mPreviewImage);
         }
         findViewById(R.id.buttonPreviewSet).requestFocus();
     }
@@ -845,8 +1133,11 @@ public class LeopardPickerActivity extends AppCompatActivity {
         if(mSelected == null) { toast(R.string.leopard_pick_first); return; }
 
         // Lynk & Co images: the theme app's own crop/fit preview is unreliable, so we ask here and
-        // bake the framing in ourselves. Video skips this (it rides the Leopard live-wallpaper path).
-        if(OperatingMode.isLynkco(mPrefs) && !mSelected.isVideo()) {
+        // bake the framing in ourselves. Video skips this (it rides the Leopard live-wallpaper
+        // path), and so does anything that has already been through the fit editor — it is
+        // exactly screen-shaped now, and asking "fill or fit?" about it would only offer to undo
+        // the framing the user just chose.
+        if(OperatingMode.isLynkco(mPrefs) && !mSelected.isVideo() && !isBaked(mSelected.url)) {
             new AlertDialog.Builder(this)
                     .setTitle(R.string.lynkco_frame_title)
                     .setItems(new CharSequence[]{
@@ -889,7 +1180,8 @@ public class LeopardPickerActivity extends AppCompatActivity {
         final android.util.DisplayMetrics dm = new android.util.DisplayMetrics();
         getWindowManager().getDefaultDisplay().getRealMetrics(dm);
         final int canvasW = dm.widthPixels, canvasH = dm.heightPixels;
-        final int scaleMode = mLynkcoScaleMode;
+        // A baked image is already the size of the screen, so the theme app is handed it raw.
+        final int scaleMode = isBaked(url) ? LynkcoApplier.SCALE_NONE : mLynkcoScaleMode;
         new Thread(() -> {
             // Lynkco hands the image to the head unit's own theme app, which reads a plain file
             // path off shared storage. LynkcoApplier stages the download/copy there itself and
@@ -995,6 +1287,10 @@ public class LeopardPickerActivity extends AppCompatActivity {
 
     private void showState(int textRes, int actionRes, View.OnClickListener action) {
         mFilmstrip.removeAllViews();
+        // This box is a sibling of both containers, so a phone pane left visible underneath would
+        // show a dead QR behind the very message explaining that the server could not start.
+        mPhonePane.setVisibility(View.GONE);
+        mFilmstripScroll.setVisibility(View.VISIBLE);
         mStateBox.setVisibility(View.VISIBLE);
         mStateText.setText(textRes);
         if(actionRes != 0 && action != null) {

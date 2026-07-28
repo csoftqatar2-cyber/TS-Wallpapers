@@ -380,7 +380,7 @@
     <string name="leopard_applied_video">تم التعيين ✓ — الشاشة الرئيسية</string>
     <string name="leopard_apply_failed">تعذّر تعيين الخلفية دي</string>
     <string name="leopard_local_none">مفيش ملف متختار</string>
-    <string name="leopard_local_empty">مفيش صور متخزّنة على الشاشة لسه</string>
+    <string name="leopard_local_empty">لا توجد صور مخزّنة على الشاشة بعد</string>
     <string name="leopard_local_browse">تصفّح ملفات الجهاز</string>
     <string name="leopard_video_first_title">إعداد لمرة واحدة</string>
     <string name="leopard_video_first_message">هتفتح شاشة أندرويد لتأكيد الخلفية الحيّة — اضغط زر «Set wallpaper» بتاعها.\n\nده بيحصل مرة واحدة بس. أي فيديو بعد كده بيتطبّق فوراً.</string>
@@ -419,6 +419,12 @@
     <string name="leopard_download_failed">تعذّر تنزيل الخلفية دي</string>
     <string name="leopard_source_phone">من الهاتف</string>
     <string name="leopard_phone_hint">امسح الكود ده بموبايل على نفس شبكة الواي‑فاي، وبعدين ارفع الصورة.</string>
+    <string name="leopard_phone_step1">١ — امسح الرمز بكاميرا الهاتف (على شبكة الواي‑فاي نفسها)</string>
+    <string name="leopard_phone_step2">٢ — ستُفتح صفحة على الهاتف: اختر الصورة</string>
+    <string name="leopard_phone_step3">٣ — اضغط «رفع الصورة» لتظهر هنا على الشاشة</string>
+    <string name="leopard_phone_keep_open">⚠ اترك هذه الشاشة مفتوحة حتى ينتهي الرفع من الهاتف — إذا أغلقت التطبيق فلن تصل الصورة.</string>
+    <string name="leopard_phone_received">تم استلام الصورة ✓ — اضبط الإطار ثم عيّنها خلفية</string>
+    <string name="leopard_phone_empty">لم تُرسَل أي صورة من الهاتف بعد — امسح الرمز لإضافة صورة</string>
     <string name="chip_mode_leopard">الوضع: Leopard</string>
     <string name="chip_mode_gwm">الوضع: GWM</string>
     <string name="chip_mode_lynkco">الوضع: Lynk &amp; Co</string>

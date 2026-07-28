@@ -37,8 +37,8 @@
         <!-- red dot: only visible when an app update is available -->
         <View
             android:id="@+id/viewUpdateBadge"
-            android:layout_width="12dp"
-            android:layout_height="12dp"
+            android:layout_width="7dp"
+            android:layout_height="7dp"
             android:layout_gravity="center_vertical"
             android:layout_marginStart="2dp"
             android:layout_marginLeft="2dp"

@@ -132,6 +132,42 @@
                     android:padding="4dp" />
             </HorizontalScrollView>
 
+            <!-- the phone source is two things at once: what has already come over from a phone,
+                 and the code for sending one more. A strip cannot hold both — the QR would scroll
+                 away exactly when someone wants to scan it — so this pane splits the band:
+                 uploads on the left, the code pinned on the right where it cannot move. -->
+            <LinearLayout
+                android:id="@+id/leopardPhonePane"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:orientation="horizontal"
+                android:visibility="gone">
+
+                <ScrollView
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    android:layout_weight="1"
+                    android:paddingStart="10dp"
+                    android:paddingEnd="10dp"
+                    android:clipToPadding="false"
+                    android:scrollbars="none">
+                    <GridLayout
+                        android:id="@+id/phoneGrid"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:padding="4dp" />
+                </ScrollView>
+
+                <LinearLayout
+                    android:id="@+id/phoneQrBox"
+                    android:layout_width="wrap_content"
+                    android:layout_height="match_parent"
+                    android:orientation="vertical"
+                    android:gravity="center"
+                    android:paddingStart="16dp"
+                    android:paddingEnd="6dp" />
+            </LinearLayout>
+
             <ProgressBar
                 android:id="@+id/leopardProgress"
                 android:layout_width="48dp"
