@@ -1330,7 +1330,10 @@ public class BaseSettingsActivity extends AppCompatActivity {
         text.setGravity(sideBySide
                 ? android.view.Gravity.START | android.view.Gravity.CENTER_VERTICAL
                 : android.view.Gravity.CENTER_HORIZONTAL);
-        text.addView(hint);
+        // Only side-by-side keeps the hint inside the text column; stacked puts it above the
+        // square, so it is added to the row itself below. Adding it here first and moving it
+        // after the fact throws — a view has to leave its parent before it joins another.
+        if(sideBySide) text.addView(hint);
         if(codeView != null) {
             codeView.setGravity(sideBySide ? android.view.Gravity.START : android.view.Gravity.CENTER);
             text.addView(codeView);
@@ -1360,7 +1363,6 @@ public class BaseSettingsActivity extends AppCompatActivity {
             qr.setLayoutParams(qlp);
             // Hint above the code, as before: text, square, rest.
             row.addView(hint);
-            text.removeView(hint);
             row.addView(qr);
             row.addView(text);
         }
