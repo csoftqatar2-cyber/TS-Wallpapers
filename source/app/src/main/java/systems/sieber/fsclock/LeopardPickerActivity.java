@@ -6,12 +6,15 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.res.Configuration;
+import android.graphics.Bitmap;
 import android.graphics.Outline;
+import android.graphics.drawable.Drawable;
 import android.media.MediaPlayer;
 import android.net.Uri;
 import android.os.Bundle;
 import android.view.Gravity;
 import android.view.View;
+import android.view.ViewGroup;
 import android.view.ViewOutlineProvider;
 import android.widget.FrameLayout;
 import android.widget.ImageView;
@@ -29,7 +32,11 @@ import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowInsetsCompat;
 
 import com.bumptech.glide.Glide;
+import com.bumptech.glide.load.DataSource;
+import com.bumptech.glide.load.engine.GlideException;
+import com.bumptech.glide.request.RequestListener;
 import com.bumptech.glide.request.RequestOptions;
+import com.bumptech.glide.request.target.Target;
 
 import java.io.File;
 import java.util.ArrayList;
@@ -457,11 +464,12 @@ public class LeopardPickerActivity extends AppCompatActivity {
         // scrolls, and fillViewport would otherwise centre a short strip on its own.
         mFilmstrip.setGravity(Gravity.START | Gravity.CENTER_VERTICAL);
         float d = getResources().getDisplayMetrics().density;
-        // 2.67:1, the shape of the screen the wallpaper lands on, so a cell reads as a preview of
-        // the result. Bigger than it was: at 122dp tall you could not tell two dark photos apart
-        // across a cabin. Held at 165dp rather than filling the band because the body is only
+        // Height is the fixed dimension; width follows each picture's own proportions (see
+        // fitCellToImage). Held at 165dp rather than filling the band because the body is only
         // ~185dp tall once the header and the button bar are taken out on a 2x-density panel —
         // anything taller would be clipped on exactly the head units this mode exists for.
+        // 440dp is 2.67:1, the shape of the screen the wallpaper lands on: the right guess to
+        // draw before the real proportions are known, and what a cell keeps if they never arrive.
         int cellW = Math.round(440 * d), cellH = Math.round(165 * d), gap = Math.round(16 * d);
         // The same local file reaches us under two spellings — "file:///storage/…" from the phone
         // upload, bare "/storage/…" from the folder scan — so compare them stripped, or the
@@ -476,7 +484,7 @@ public class LeopardPickerActivity extends AppCompatActivity {
         if(mStripOffset == 1) mFilmstrip.addView(browseCell(cellH, gap, d, radius));
 
         for(final WallpaperItem item : mShown) {
-            FrameLayout cell = new FrameLayout(this);
+            final FrameLayout cell = new FrameLayout(this);
             LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(cellW, cellH);
             lp.setMarginEnd(gap);
             cell.setLayoutParams(lp);
@@ -498,10 +506,10 @@ public class LeopardPickerActivity extends AppCompatActivity {
             ImageView img = new ImageView(this);
             img.setLayoutParams(new FrameLayout.LayoutParams(
                     FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
-            // FIT_CENTER: the whole picture, in its own proportions. FIT_XY also showed all of it
-            // but squashed a portrait photo into a 2.67:1 slot, which reads as a badly cropped
-            // image even though nothing was cut. Letterbox bars are the honest answer — you are
-            // choosing by what the picture is, so it must not be distorted.
+            // FIT_CENTER never distorts, and once the cell has been resized to the picture's own
+            // proportions it has nothing left to letterbox either — the frame ends where the
+            // photo ends. It still matters for the moment before the image arrives, and for a
+            // video whose frame we never got.
             img.setScaleType(ImageView.ScaleType.FIT_CENTER);
             cell.addView(img);
 
@@ -516,6 +524,20 @@ public class LeopardPickerActivity extends AppCompatActivity {
                             .load(new File(local))
                             .apply(RequestOptions.frameOf(0))
                             .override(cellW, cellH)
+                            .listener(new RequestListener<Bitmap>() {
+                                @Override
+                                public boolean onLoadFailed(GlideException e, Object model,
+                                                            Target<Bitmap> t, boolean first) {
+                                    return false;   // keep the 2.67:1 guess
+                                }
+                                @Override
+                                public boolean onResourceReady(Bitmap res, Object model,
+                                                               Target<Bitmap> t, DataSource src,
+                                                               boolean first) {
+                                    fitCellToImage(cell, res.getWidth(), res.getHeight());
+                                    return false;
+                                }
+                            })
                             .into(img);
                 }
                 cell.addView(typeBadge(R.drawable.ic_badge_video_20dp, d));
@@ -523,7 +545,22 @@ public class LeopardPickerActivity extends AppCompatActivity {
                 // Full-size originals over a weak link: let Glide downsample to the cell.
                 Object model = item.url.startsWith("content://") ? Uri.parse(item.url)
                         : (item.url.startsWith("http") ? item.url : new File(item.url));
-                Glide.with(this).load(model).override(cellW, cellH).into(img);
+                Glide.with(this).load(model).override(cellW, cellH)
+                        .listener(new RequestListener<Drawable>() {
+                            @Override
+                            public boolean onLoadFailed(GlideException e, Object m,
+                                                        Target<Drawable> t, boolean first) {
+                                return false;
+                            }
+                            @Override
+                            public boolean onResourceReady(Drawable res, Object m,
+                                                           Target<Drawable> t, DataSource src,
+                                                           boolean first) {
+                                fitCellToImage(cell, res.getIntrinsicWidth(), res.getIntrinsicHeight());
+                                return false;
+                            }
+                        })
+                        .into(img);
                 cell.addView(typeBadge(R.drawable.ic_badge_image_20dp, d));
             }
 
@@ -564,6 +601,31 @@ public class LeopardPickerActivity extends AppCompatActivity {
         v.setImageResource(iconRes);
         v.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
         return v;
+    }
+
+    /**
+     * Narrow (or widen) a cell so its frame ends exactly where the picture does.
+     *
+     * Every cell used to be 2.67:1, the shape of the car's screen, and the photo was fitted
+     * inside it — so a 16:9 wallpaper sat in the middle of its frame with a bar of dead
+     * background down each side. The border was drawn around the slot, not around the image.
+     *
+     * The height is what the strip has to hold constant (they must line up), so the width is
+     * what moves: height x the picture's own aspect ratio. The clamps only catch the extremes —
+     * a panorama that would otherwise fill the whole strip on its own, and a tall portrait that
+     * would shrink to a stripe too narrow to recognise across a cabin.
+     */
+    private void fitCellToImage(View cell, int imgW, int imgH) {
+        if(imgW <= 0 || imgH <= 0) return;
+        ViewGroup.LayoutParams lp = cell.getLayoutParams();
+        if(lp == null) return;
+        float d = getResources().getDisplayMetrics().density;
+        int h = lp.height > 0 ? lp.height : Math.round(165 * d);
+        int w = Math.round(h * (imgW / (float) imgH));
+        w = Math.max(Math.round(h * 0.62f), Math.min(Math.round(h * 3.2f), w));
+        if(w == lp.width) return;
+        lp.width = w;
+        cell.setLayoutParams(lp);
     }
 
     /** "Browse the device" — the old system-picker route, now a cell instead of the whole tab. */
