@@ -270,6 +270,8 @@ Roboto Font Copyright (c) Christian Robertson. Licensed under the Apache License
     <string name="leopard_applied_video">Set ✓ — home screen</string>
     <string name="leopard_apply_failed">Could not set this wallpaper</string>
     <string name="leopard_local_none">No file chosen</string>
+    <string name="leopard_local_empty">Nothing stored on this screen yet</string>
+    <string name="leopard_local_browse">Browse device files</string>
     <string name="leopard_video_first_title">One-time setup</string>
     <string name="leopard_video_first_message">An Android screen will open to confirm the live wallpaper — press its "Set wallpaper" button.\n\nThis happens only once. Every video after this is applied instantly.</string>
     <string name="leopard_video_first_ok">Got it, continue</string>

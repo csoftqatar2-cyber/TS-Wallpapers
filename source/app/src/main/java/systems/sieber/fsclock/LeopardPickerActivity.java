@@ -71,6 +71,8 @@ public class LeopardPickerActivity extends AppCompatActivity {
     private WallpaperItem mSelected;
     private String mSource = SOURCE_CLOUD;
     private String mLocalPick;      // content:// uri chosen from the system picker
+    /** How many leading filmstrip cells are not wallpapers (the device tab's browse cell). */
+    private int mStripOffset;
     /** Guards the one automatic sync, so a car that is genuinely empty does not loop. */
     private boolean mTriedAutoSync = false;
 
@@ -196,7 +198,7 @@ public class LeopardPickerActivity extends AppCompatActivity {
         } else if(SOURCE_PHONE.equals(source)) {
             startPhoneUpload();
         } else {
-            openLocalPicker();
+            showLocal();
         }
     }
 
@@ -361,6 +363,35 @@ public class LeopardPickerActivity extends AppCompatActivity {
         return false;
     }
 
+    /**
+     * Everything stored on the head unit itself: files dropped in the wallpaper folder AND every
+     * picture a customer sent over with the QR code.
+     *
+     * This circle used to jump straight to the system file picker, which meant a phone upload had
+     * exactly one moment of existence — the preview it landed in. Close the app and the picture
+     * was unreachable: the cloud circle filters itself down to remote urls, and the QR circle only
+     * ever draws a new code. The file was on disk the whole time with no screen that would list
+     * it. This is that screen; "browse the device" moved into the strip as its first cell.
+     */
+    private void showLocal() {
+        // The upload writes into the folder without telling the playlist, so re-read it here or a
+        // picture that arrived a moment ago would still be missing from the list that exists to
+        // show it.
+        mRepo.load();
+        mShown.clear();
+        for(WallpaperItem it : mRepo.allItems()) {
+            if(!LeopardCache.isRemote(it.url)) mShown.add(it);
+        }
+        if(mShown.isEmpty()) {
+            // Nothing stored yet — the browse cell has no strip to live in, so the state box
+            // carries the same action instead.
+            showState(R.string.leopard_local_empty, R.string.leopard_local_browse, v -> openLocalPicker());
+            return;
+        }
+        hideState();
+        buildFilmstrip();
+    }
+
     private void openLocalPicker() {
         Intent i = new Intent(Intent.ACTION_OPEN_DOCUMENT);
         i.addCategory(Intent.CATEGORY_OPENABLE);
@@ -387,7 +418,9 @@ public class LeopardPickerActivity extends AppCompatActivity {
         // the seam: landing back here with nothing shown would repeat the existing defect where
         // an import gives no confirmation at all.
         if(res != RESULT_OK || data == null || data.getData() == null) {
-            if(mShown.isEmpty()) showState(R.string.leopard_local_none, 0, null);
+            // Backing out of the system picker returns to the stored list rather than to an empty
+            // screen — cancelling a browse is not a reason to lose sight of what is on the car.
+            showLocal();
             return;
         }
         Uri uri = data.getData();
@@ -430,9 +463,17 @@ public class LeopardPickerActivity extends AppCompatActivity {
         // ~185dp tall once the header and the button bar are taken out on a 2x-density panel —
         // anything taller would be clipped on exactly the head units this mode exists for.
         int cellW = Math.round(440 * d), cellH = Math.round(165 * d), gap = Math.round(16 * d);
-        String currentUri = mPrefs.getString(MediaWallpaperService.PREF_URI, "");
+        // The same local file reaches us under two spellings — "file:///storage/…" from the phone
+        // upload, bare "/storage/…" from the folder scan — so compare them stripped, or the
+        // "Current" badge never lands on the picture that is actually on screen.
+        String currentUri = samePath(mPrefs.getString(MediaWallpaperService.PREF_URI, ""));
 
         final int radius = Math.round(16 * d);   // must match the corners in leopard_cell_bg
+
+        // The device strip keeps the old behaviour available as its first cell: the list is what
+        // you normally want, browsing the file system is the exception.
+        mStripOffset = SOURCE_LOCAL.equals(mSource) ? 1 : 0;
+        if(mStripOffset == 1) mFilmstrip.addView(browseCell(cellH, gap, d, radius));
 
         for(final WallpaperItem item : mShown) {
             FrameLayout cell = new FrameLayout(this);
@@ -486,7 +527,7 @@ public class LeopardPickerActivity extends AppCompatActivity {
                 cell.addView(typeBadge(R.drawable.ic_badge_image_20dp, d));
             }
 
-            if(!currentUri.isEmpty() && currentUri.equals(item.url)) {
+            if(!currentUri.isEmpty() && currentUri.equals(samePath(item.url))) {
                 cell.addView(badge(getString(R.string.leopard_badge_current), Gravity.TOP | Gravity.END, d));
             }
 
@@ -525,6 +566,45 @@ public class LeopardPickerActivity extends AppCompatActivity {
         return v;
     }
 
+    /** "Browse the device" — the old system-picker route, now a cell instead of the whole tab. */
+    private View browseCell(int cellH, int gap, float d, final int radius) {
+        FrameLayout cell = new FrameLayout(this);
+        // Half width: it is an action, not a wallpaper, and it must not read as one of the images.
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(Math.round(220 * d), cellH);
+        lp.setMarginEnd(gap);
+        cell.setLayoutParams(lp);
+        cell.setFocusable(true);
+        cell.setClickable(true);
+        cell.setBackgroundColor(0xFF241c11);
+        cell.setOutlineProvider(new ViewOutlineProvider() {
+            @Override
+            public void getOutline(View v, Outline outline) {
+                outline.setRoundRect(0, 0, v.getWidth(), v.getHeight(), radius);
+            }
+        });
+        cell.setClipToOutline(true);
+
+        TextView label = new TextView(this);
+        FrameLayout.LayoutParams tlp = new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT);
+        tlp.gravity = Gravity.CENTER;
+        label.setLayoutParams(tlp);
+        label.setGravity(Gravity.CENTER);
+        label.setText(R.string.leopard_local_browse);
+        label.setTextSize(15);
+        label.setTextColor(ContextCompat.getColor(this, R.color.gold));
+        cell.addView(label);
+
+        View ring = new View(this);
+        ring.setLayoutParams(new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
+        ring.setBackgroundResource(R.drawable.leopard_cell_bg);
+        cell.addView(ring);
+
+        cell.setOnClickListener(v -> openLocalPicker());
+        return cell;
+    }
+
     private TextView badge(String text, int gravity, float d) {
         TextView t = new TextView(this);
         FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(
@@ -540,9 +620,19 @@ public class LeopardPickerActivity extends AppCompatActivity {
         return t;
     }
 
+    /** One spelling for a local file, so "file:///storage/x" and "/storage/x" compare equal. */
+    private static String samePath(String url) {
+        if(url == null) return "";
+        return url.startsWith("file://") ? url.substring("file://".length()) : url;
+    }
+
     private void refreshSelection() {
+        // Cells and items are no longer 1:1 — the device strip opens with a browse cell that
+        // stands for no wallpaper, so every item sits mStripOffset places to the right.
         for(int i = 0; i < mFilmstrip.getChildCount(); i++) {
-            mFilmstrip.getChildAt(i).setSelected(i < mShown.size() && mShown.get(i) == mSelected);
+            int item = i - mStripOffset;
+            mFilmstrip.getChildAt(i).setSelected(
+                    item >= 0 && item < mShown.size() && mShown.get(item) == mSelected);
         }
         mSetButton.setAlpha(mSelected == null ? 0.5f : 1f);
     }
@@ -765,6 +855,13 @@ public class LeopardPickerActivity extends AppCompatActivity {
                     return;
                 }
                 applyUrl = local.toString();
+            } else if(!applyUrl.startsWith("content://")
+                    && (WallpaperItem.TYPE_VIDEO.equals(type) || WallpaperItem.TYPE_GIF.equals(type))) {
+                // A clip stored on the head unit: the engine resolves its type through the
+                // ContentResolver, so hand it the same content:// shape a cloud video gets rather
+                // than a bare path it cannot ask about. Stills skip this — they are read as files.
+                Uri shared = LeopardCache.localFile(this, applyUrl);
+                if(shared != null) applyUrl = shared.toString();
             }
             final int result = LeopardApplier.apply(this, applyUrl, type);
             runOnUiThread(() -> { setBusy(false, 0); onApplied(result, type); });

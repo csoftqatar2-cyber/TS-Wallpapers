@@ -65,6 +65,29 @@ class LeopardCache {
         }
     }
 
+    /**
+     * A content:// for a file that is already on the head unit (the wallpaper folder, or our own
+     * cache), or null when it cannot be shared that way.
+     *
+     * Same reasoning as {@link #materialise}, one step earlier: the wallpaper engine reads the
+     * MIME from the ContentResolver, and a bare "/storage/…" path has no scheme for it to resolve
+     * — a local video applied under that spelling decodes as nothing and draws a black screen.
+     * Stills do not need this (they are opened as a plain file), so callers only pay it for the
+     * moving formats that go through the engine.
+     */
+    static Uri localFile(Context ctx, String url) {
+        try {
+            if(url == null) return null;
+            String path = url.startsWith("file://") ? url.substring("file://".length()) : url;
+            File f = new File(path);
+            if(!f.exists()) return null;
+            return FileProvider.getUriForFile(ctx, ctx.getPackageName() + ".fileprovider", f);
+        } catch(Throwable t) {
+            // Outside every path declared in file_paths.xml. The caller keeps what it had.
+            return null;
+        }
+    }
+
     /** The cached file for a URL, or null when it has not been downloaded yet. */
     static File cachedFile(Context ctx, String url) {
         try {

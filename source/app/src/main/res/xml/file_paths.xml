@@ -8,4 +8,9 @@
          from the system file picker. It reads the type from the resolver, and an https:// URL
          has none, which is why the cloud source needs this detour and the local one does not. -->
     <cache-path name="leopard" path="leopard/" />
+
+    <!-- The on-device wallpaper folder (phone/QR uploads and files dropped by the shop). Same
+         reason as above: a video stored here is applied by handing the engine a URI, and the
+         engine asks the resolver for the MIME — which a bare /storage/… path cannot answer. -->
+    <external-files-path name="wallpapers" path="Wallpapers/" />
 </paths>

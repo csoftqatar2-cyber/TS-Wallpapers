@@ -1281,6 +1281,95 @@ public class BaseSettingsActivity extends AppCompatActivity {
     }
 
     /** Show a dialog with a QR code that encodes the device linking code (Device ID). */
+    /**
+     * The QR panel behind every pairing dialog (MAC, GWM, phone upload).
+     *
+     * All three used to stack a fixed 240dp square with the text under it, which assumed a screen
+     * tall enough to hold it. An FSE head unit is 1920x720: take out the dialog title and the
+     * button bar and there is barely enough body left for the square alone, so the code came out
+     * clipped — on the one element in the dialog whose whole job is to be photographed.
+     *
+     * Three things follow from that. The square is measured against the height the window
+     * actually has instead of an assumed one; on a wide, short screen the layout turns
+     * side-by-side, because width is the room such a screen has to spare; and the panel scrolls,
+     * so even a screen shorter than anything we have seen can still reach the whole dialog.
+     *
+     * @param codeView the readable form under/next to the code (MAC or URL), already styled.
+     * @param statusView optional live status line ("waiting for a phone…"), or null.
+     */
+    private View qrPanel(String data, CharSequence hintText, TextView codeView, TextView statusView) {
+        float d = getResources().getDisplayMetrics().density;
+        int pad = (int) (20 * d);
+
+        android.util.DisplayMetrics dm = new android.util.DisplayMetrics();
+        getWindowManager().getDefaultDisplay().getMetrics(dm);
+        final int winW = dm.widthPixels, winH = dm.heightPixels;
+
+        // What the dialog frame costs us before any content: title, button bar and its margins.
+        final int chrome = (int) (170 * d);
+        final int avail = Math.max((int) (120 * d), winH - chrome);
+        // Wide and short — an ultra-wide head unit. Anything roughly square keeps the stacked
+        // layout, which reads better when there is height to use.
+        final boolean sideBySide = winW > winH * 3 / 2 && winH < (int) (560 * d);
+
+        int qrPx = sideBySide
+                ? Math.min((int) (240 * d), avail - 2 * pad)
+                : Math.min((int) (240 * d), avail - (int) (120 * d));   // leave room for the text
+        // Below this a phone camera starts to struggle, so we would rather scroll than shrink on.
+        qrPx = Math.max((int) (110 * d), qrPx);
+
+        ImageView qr = new ImageView(this);
+        qr.setImageBitmap(QrCode.generate(data, 600));
+
+        TextView hint = new TextView(this);
+        hint.setText(hintText);
+        hint.setGravity(sideBySide ? android.view.Gravity.START : android.view.Gravity.CENTER);
+
+        LinearLayout text = new LinearLayout(this);
+        text.setOrientation(LinearLayout.VERTICAL);
+        text.setGravity(sideBySide
+                ? android.view.Gravity.START | android.view.Gravity.CENTER_VERTICAL
+                : android.view.Gravity.CENTER_HORIZONTAL);
+        text.addView(hint);
+        if(codeView != null) {
+            codeView.setGravity(sideBySide ? android.view.Gravity.START : android.view.Gravity.CENTER);
+            text.addView(codeView);
+        }
+        if(statusView != null) {
+            statusView.setGravity(sideBySide ? android.view.Gravity.START : android.view.Gravity.CENTER);
+            text.addView(statusView);
+        }
+
+        LinearLayout row = new LinearLayout(this);
+        row.setPadding(pad, pad, pad, pad);
+        if(sideBySide) {
+            row.setOrientation(LinearLayout.HORIZONTAL);
+            row.setGravity(android.view.Gravity.CENTER_VERTICAL);
+            LinearLayout.LayoutParams qlp = new LinearLayout.LayoutParams(qrPx, qrPx);
+            qlp.setMarginEnd(pad);
+            qr.setLayoutParams(qlp);
+            row.addView(qr);
+            // Weighted, so a long URL wraps in the column instead of pushing the code off-screen.
+            row.addView(text, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+        } else {
+            row.setOrientation(LinearLayout.VERTICAL);
+            row.setGravity(android.view.Gravity.CENTER_HORIZONTAL);
+            LinearLayout.LayoutParams qlp = new LinearLayout.LayoutParams(qrPx, qrPx);
+            qlp.topMargin = pad;
+            qlp.bottomMargin = pad;
+            qr.setLayoutParams(qlp);
+            // Hint above the code, as before: text, square, rest.
+            row.addView(hint);
+            text.removeView(hint);
+            row.addView(qr);
+            row.addView(text);
+        }
+
+        ScrollView scroll = new ScrollView(this);
+        scroll.addView(row);
+        return scroll;
+    }
+
     public void onClickShowMacQr(View v) {
         if(mWallpaperRepo == null) return;
         String mac = mWallpaperRepo.getDeviceId();
@@ -1289,40 +1378,14 @@ public class BaseSettingsActivity extends AppCompatActivity {
             return;
         }
 
-        float d = getResources().getDisplayMetrics().density;
-        int pad = (int) (20 * d);
-        int qrPx = (int) (240 * d);
-
-        LinearLayout ll = new LinearLayout(this);
-        ll.setOrientation(LinearLayout.VERTICAL);
-        ll.setPadding(pad, pad, pad, pad);
-        ll.setGravity(android.view.Gravity.CENTER_HORIZONTAL);
-
-        TextView hint = new TextView(this);
-        hint.setText(getString(R.string.mac_qr_hint));
-        hint.setGravity(android.view.Gravity.CENTER);
-
-        ImageView qr = new ImageView(this);
-        Bitmap bmp = QrCode.generate(mac, 600);
-        qr.setImageBitmap(bmp);
-        LinearLayout.LayoutParams qlp = new LinearLayout.LayoutParams(qrPx, qrPx);
-        qlp.topMargin = pad;
-        qlp.bottomMargin = pad;
-        qr.setLayoutParams(qlp);
-
         TextView macText = new TextView(this);
         macText.setText(mac);
-        macText.setGravity(android.view.Gravity.CENTER);
         macText.setTextIsSelectable(true);
         macText.setTextSize(18);
 
-        ll.addView(hint);
-        ll.addView(qr);
-        ll.addView(macText);
-
         new AlertDialog.Builder(this)
                 .setTitle(R.string.mac_qr_title)
-                .setView(ll)
+                .setView(qrPanel(mac, getString(R.string.mac_qr_hint), macText, null))
                 .setPositiveButton(R.string.ok, null)
                 .show();
     }
@@ -2232,29 +2295,12 @@ public class BaseSettingsActivity extends AppCompatActivity {
             return;
         }
 
-        float d = getResources().getDisplayMetrics().density;
-        int pad = (int) (20 * d);
-        int qrPx = (int) (240 * d);
-        LinearLayout ll = new LinearLayout(this);
-        ll.setOrientation(LinearLayout.VERTICAL);
-        ll.setPadding(pad, pad, pad, pad);
-        ll.setGravity(android.view.Gravity.CENTER_HORIZONTAL);
-        TextView hint = new TextView(this);
-        hint.setText(getString(R.string.pair_scan_hint));
-        hint.setGravity(android.view.Gravity.CENTER);
-        ImageView qr = new ImageView(this);
-        qr.setImageBitmap(QrCode.generate(url, 600));
-        LinearLayout.LayoutParams qlp = new LinearLayout.LayoutParams(qrPx, qrPx);
-        qlp.topMargin = pad; qlp.bottomMargin = pad;
-        qr.setLayoutParams(qlp);
         TextView urlText = new TextView(this);
         urlText.setText(url);
-        urlText.setGravity(android.view.Gravity.CENTER);
         urlText.setTextIsSelectable(true);
-        ll.addView(hint); ll.addView(qr); ll.addView(urlText);
         new AlertDialog.Builder(this)
                 .setTitle(R.string.gwm_pair_phone)
-                .setView(ll)
+                .setView(qrPanel(url, getString(R.string.pair_scan_hint), urlText, null))
                 .setPositiveButton(R.string.ok, null)
                 .setOnDismissListener(new DialogInterface.OnDismissListener() {
                     @Override public void onDismiss(DialogInterface dialog) { stopUploadServer(); }
@@ -2511,44 +2557,19 @@ public class BaseSettingsActivity extends AppCompatActivity {
 
         float d = getResources().getDisplayMetrics().density;
         int pad = (int) (20 * d);
-        int qrPx = (int) (240 * d);
-
-        LinearLayout ll = new LinearLayout(this);
-        ll.setOrientation(LinearLayout.VERTICAL);
-        ll.setPadding(pad, pad, pad, pad);
-        ll.setGravity(android.view.Gravity.CENTER_HORIZONTAL);
-
-        TextView hint = new TextView(this);
-        hint.setText(getString(R.string.pair_scan_hint));
-        hint.setGravity(android.view.Gravity.CENTER);
-
-        ImageView qr = new ImageView(this);
-        Bitmap bmp = QrCode.generate(url, 600);
-        qr.setImageBitmap(bmp);
-        LinearLayout.LayoutParams qlp = new LinearLayout.LayoutParams(qrPx, qrPx);
-        qlp.topMargin = pad;
-        qlp.bottomMargin = pad;
-        qr.setLayoutParams(qlp);
 
         TextView urlText = new TextView(this);
         urlText.setText(url);
-        urlText.setGravity(android.view.Gravity.CENTER);
         urlText.setTextIsSelectable(true);
 
         mPairStatus = new TextView(this);
-        mPairStatus.setGravity(android.view.Gravity.CENTER);
         mPairStatus.setPadding(0, pad, 0, 0);
         mPairStatus.setTextColor(ContextCompat.getColor(this, R.color.aurora_muted));
         mPairStatus.setText(R.string.pair_waiting);
 
-        ll.addView(hint);
-        ll.addView(qr);
-        ll.addView(urlText);
-        ll.addView(mPairStatus);
-
         AlertDialog dlg = new AlertDialog.Builder(this)
                 .setTitle(R.string.wallpaper_pair_phone)
-                .setView(ll)
+                .setView(qrPanel(url, getString(R.string.pair_scan_hint), urlText, mPairStatus))
                 .setPositiveButton(R.string.ok, null)
                 .setOnDismissListener(new DialogInterface.OnDismissListener() {
                     @Override

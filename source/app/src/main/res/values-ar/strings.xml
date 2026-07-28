@@ -380,6 +380,8 @@
     <string name="leopard_applied_video">تم التعيين ✓ — الشاشة الرئيسية</string>
     <string name="leopard_apply_failed">تعذّر تعيين الخلفية دي</string>
     <string name="leopard_local_none">مفيش ملف متختار</string>
+    <string name="leopard_local_empty">مفيش صور متخزّنة على الشاشة لسه</string>
+    <string name="leopard_local_browse">تصفّح ملفات الجهاز</string>
     <string name="leopard_video_first_title">إعداد لمرة واحدة</string>
     <string name="leopard_video_first_message">هتفتح شاشة أندرويد لتأكيد الخلفية الحيّة — اضغط زر «Set wallpaper» بتاعها.\n\nده بيحصل مرة واحدة بس. أي فيديو بعد كده بيتطبّق فوراً.</string>
     <string name="leopard_video_first_ok">فهمت، متابعة</string>
