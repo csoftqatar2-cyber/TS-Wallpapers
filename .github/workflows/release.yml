@@ -7,8 +7,13 @@ name: Build & Publish APK Update
 #      itself refuses to update to a same/lower versionCode, so you MUST
 #      bump `versionCode` in source/app/build.gradle before pushing.
 #   3. Otherwise: builds the signed "standalone" release APK, uploads it to
-#      the Supabase `apk` storage bucket, and inserts the app_versions row.
-#      Every device on an older versionCode is then offered the update in-app.
+#      the Cloudflare R2 `ts-wallpapers` bucket, and inserts the app_versions
+#      row. Every device on an older versionCode is then offered the update
+#      in-app, and downloads it from R2.
+#
+# The APK and the wallpaper library live on R2, not Supabase Storage: the fleet
+# re-downloading them blew past the Supabase free bandwidth quota. Supabase still
+# owns the database, the RPCs and activation — none of which moved.
 #
 # Required repository secrets (Settings -> Secrets and variables -> Actions):
 #   SIGNING_KEYSTORE_BASE64    - base64 of source/thabthaba.jks
@@ -16,7 +21,9 @@ name: Build & Publish APK Update
 #   KEY_ALIAS                  - signing key alias
 #   KEY_PASSWORD               - signing key password
 #   SUPABASE_SERVICE_ROLE_KEY  - Supabase service_role key (bypasses RLS to
-#                                write storage + app_versions)
+#                                write the app_versions row)
+#   R2_ACCESS_KEY_ID           - Cloudflare R2 S3 access key id
+#   R2_SECRET_ACCESS_KEY       - Cloudflare R2 S3 secret access key
 
 on:
   push:
@@ -27,6 +34,11 @@ env:
   SUPABASE_URL: https://ihgmqwzdpugdzddobhbc.supabase.co
   # anon key is public (already shipped in the manager page) — used only to READ the latest version
   SUPABASE_ANON_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImloZ21xd3pkcHVnZHpkZG9iaGJjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI2NTI4ODAsImV4cCI6MjA5ODIyODg4MH0.xG0ch3u5rcbb81pSa8wmybeEYj8kz2LjCGQM_-Xg6Yk
+  # Cloudflare R2 — where the APKs and the wallpaper library are actually served from.
+  # The public base is world-readable by design; the credentials that write to it are secrets.
+  R2_BUCKET: ts-wallpapers
+  R2_ENDPOINT: https://55fcc89e908cd6972e88eb8dc8ab58d2.r2.cloudflarestorage.com
+  R2_PUBLIC_BASE: https://pub-3108628f0bc04bb4a97214eb7732e284.r2.dev
 
 jobs:
   build-publish:
@@ -84,25 +96,29 @@ jobs:
           chmod +x gradlew
           ./gradlew :app:assembleStandaloneRelease --no-daemon --console=plain
 
-      - name: Upload APK to Supabase storage
+      # Cloudflare R2, not Supabase Storage: 450 cars pulling every release off Supabase is
+      # what blew through the bandwidth quota and put the project one warning away from being
+      # cut off. R2 charges nothing for egress. The app follows this automatically — it only
+      # ever reads apk_url out of the app_versions row written below.
+      - name: Upload APK to Cloudflare R2
         if: steps.gate.outputs.publish == 'true'
         id: upload
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: auto
         run: |
           VN="${{ steps.gate.outputs.version_name }}"
           VC="${{ steps.gate.outputs.version_code }}"
           SAFE_VN=$(echo "$VN" | sed 's/[^a-zA-Z0-9._-]/_/g')
           NAME="ts-wallpapers-${SAFE_VN}-${VC}.apk"
           SRC="source/app/build/outputs/apk/standalone/release/TS Wallpapers.apk"
-          HTTP=$(curl -s -o /tmp/up.json -w "%{http_code}" -X POST \
-            "${SUPABASE_URL}/storage/v1/object/apk/${NAME}" \
-            -H "apikey: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
-            -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
-            -H "Content-Type: application/vnd.android.package-archive" \
-            -H "x-upsert: true" \
-            --data-binary @"$SRC")
-          echo "Storage upload HTTP $HTTP"; cat /tmp/up.json; echo
-          if [ "$HTTP" -lt 200 ] || [ "$HTTP" -ge 300 ]; then exit 1; fi
-          echo "apk_url=${SUPABASE_URL}/storage/v1/object/public/apk/${NAME}" >> "$GITHUB_OUTPUT"
+          # The content type matters: DownloadManager hands the file to the package installer
+          # based on it, so a wrong one turns "update" into "downloaded a file you can't open".
+          aws s3 cp "$SRC" "s3://${R2_BUCKET}/apk/${NAME}" \
+            --endpoint-url "$R2_ENDPOINT" \
+            --content-type application/vnd.android.package-archive
+          echo "apk_url=${R2_PUBLIC_BASE}/apk/${NAME}" >> "$GITHUB_OUTPUT"
 
       - name: Publish version row to app_versions
         if: steps.gate.outputs.publish == 'true'

@@ -1742,10 +1742,11 @@
         const REST_DEVICES = `${SUPABASE_URL}/rest/v1/devices`;
         const REST_WP_HIDES = `${SUPABASE_URL}/rest/v1/wallpaper_hides`;
         const REST_APP_VERSIONS = `${SUPABASE_URL}/rest/v1/app_versions`;
-        const APK_STORAGE_API = `${SUPABASE_URL}/storage/v1/object/apk`;
-        const APK_PUBLIC_PREFIX = `${SUPABASE_URL}/storage/v1/object/public/apk`;
         const AUTH_URL = `${SUPABASE_URL}/auth/v1`;
-        const FUNCTIONS_URL = `${SUPABASE_URL}/functions/v1`;
+        // Wallpaper bytes live on Cloudflare R2 — Supabase Storage egress is what the fleet
+        // exhausted. This Worker is the only thing allowed to write into that bucket, and it
+        // checks the caller's Supabase session is the admin before it does.
+        const R2_UPLOAD_URL = "https://ts-wallpapers-upload.tsdash-qatar.workers.dev";
 
         // ---- Auth session ----
         // Fixed admin identity: the user only ever types the password.
@@ -2617,10 +2618,18 @@
             await loadWallpapers();
         }
 
-        // Upload one file + create its DB record through the admin-upload Edge
-        // Function. The function verifies the caller is the admin and performs the
-        // storage write with the service role, which sidesteps the fact that the
-        // Storage service does not accept this project's user JWTs directly.
+        // Upload one file to Cloudflare R2, then record it in the database.
+        //
+        // Two steps, two services, on purpose. The bytes go to R2 through our own Worker
+        // (which checks this session belongs to the admin before it writes) because the fleet
+        // re-downloading the library off Supabase Storage is what exhausted the bandwidth
+        // quota; R2 serves it for free. The row is then inserted straight through PostgREST
+        // under this same admin session — the "wp admin insert" RLS policy allows it, so no
+        // service-role key has to exist anywhere outside Supabase itself.
+        //
+        // A failed insert after a successful upload leaves an orphan object in R2. That is the
+        // harmless direction: an unreferenced file costs a few KB and no car ever learns of it,
+        // whereas a row pointing at a file that was never stored is a broken wallpaper.
         async function uploadViaFunction(file, isGlobal, hardwareId, channel, targetMode) {
             // Classify every video container the app can play (case-insensitive);
             // previously .mkv / uppercase .MP4 were stored as type "image" and the
@@ -2640,17 +2649,12 @@
                 ? crypto.randomUUID()
                 : (Date.now() + '-' + Math.random().toString(36).slice(2))) + ext;
 
-            const response = await fetch(`${FUNCTIONS_URL}/admin-upload`, {
+            const response = await fetch(R2_UPLOAD_URL, {
                 method: "POST",
                 headers: {
                     "Authorization": `Bearer ${SESSION_TOKEN}`,
-                    "apikey": ANON_KEY,
                     "Content-Type": file.type || "application/octet-stream",
-                    "x-file-name": encodeURIComponent(uniqueName),
-                    "x-file-type": fileType,
-                    "x-is-global": String(isGlobal),
-                    "x-hardware-id": hardwareId || "",
-                    "x-channel": channel || "app"
+                    "x-file-name": encodeURIComponent(uniqueName)
                 },
                 body: file
             });
@@ -2664,25 +2668,36 @@
                 throw new Error(`فشل الرفع (HTTP ${response.status})${msg ? ": " + msg.slice(0, 200) : ""}`);
             }
 
-            // Lynk & Co images ride the same 'app' channel as the normal library; what keeps them
-            // to Lynk & Co cars is target_mode. The upload function does not take it, so set it here
-            // on the freshly-created row, matched by its unique UUID url.
-            if (targetMode) {
-                const okData = await response.json().catch(() => ({}));
-                const createdUrl = okData && okData.url;
-                if (createdUrl) {
-                    const patchRes = await fetch(`${REST_WALLPAPERS}?url=eq.${encodeURIComponent(createdUrl)}`, {
-                        method: "PATCH",
-                        headers: {
-                            "apikey": ANON_KEY,
-                            "Authorization": `Bearer ${SESSION_TOKEN}`,
-                            "Content-Type": "application/json",
-                            "Prefer": "return=minimal"
-                        },
-                        body: JSON.stringify({ target_mode: targetMode })
-                    });
-                    if (!patchRes.ok) throw new Error(`تعذّر توجيه الخلفية لسيارات Lynk & Co (HTTP ${patchRes.status})`);
-                }
+            const uploaded = await response.json().catch(() => ({}));
+            const publicUrl = uploaded && uploaded.url;
+            if (!publicUrl) throw new Error("الرفع تم لكن الخادم لم يُرجع رابط الملف.");
+
+            // target_mode goes in with the insert rather than as a follow-up PATCH: a Lynk & Co
+            // image that existed for even one sync without its mode would be handed to every
+            // car in the fleet, and there is no taking it back once a car has cached it.
+            const row = {
+                url: publicUrl,
+                type: fileType,
+                is_global: isGlobal,
+                hardware_id: hardwareId || null,
+                channel: channel || "app"
+            };
+            if (targetMode) row.target_mode = targetMode;
+
+            const insertRes = await fetch(REST_WALLPAPERS, {
+                method: "POST",
+                headers: {
+                    "apikey": ANON_KEY,
+                    "Authorization": `Bearer ${SESSION_TOKEN}`,
+                    "Content-Type": "application/json",
+                    "Prefer": "return=minimal"
+                },
+                body: JSON.stringify(row)
+            });
+            if (!insertRes.ok) {
+                let msg = "";
+                try { msg = (await insertRes.text()).slice(0, 200); } catch (e) {}
+                throw new Error(`تم رفع الملف لكن تعذّر تسجيله (HTTP ${insertRes.status})${msg ? ": " + msg : ""}`);
             }
             return true;
         }
@@ -2724,22 +2739,25 @@
             Swal.fire({ title: 'جاري رفع التحديث...', html: 'يرجى الانتظار حتى يكتمل الرفع', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
 
             try {
-                // 1. Upload APK to the "apk" storage bucket (versioned filename to avoid overwrites)
+                // 1. Upload the APK to R2 (versioned filename). Same Worker the wallpapers go
+                //    through — every car in the fleet downloads this file, so it must not be
+                //    served from Supabase Storage or one release refills the bandwidth quota.
                 const safeName = `ts-wallpapers-${versionName.replace(/[^a-zA-Z0-9._-]/g, "_")}-${versionCode}.apk`;
-                const uploadUrl = `${APK_STORAGE_API}/${encodeURIComponent(safeName)}`;
-                const uploadRes = await fetch(uploadUrl, {
+                const uploadRes = await fetch(R2_UPLOAD_URL, {
                     method: "POST",
                     headers: {
                         "Authorization": `Bearer ${SESSION_TOKEN}`,
-                        "apikey": ANON_KEY,
                         "Content-Type": "application/vnd.android.package-archive",
-                        "x-upsert": "true"
+                        "x-file-name": encodeURIComponent(safeName),
+                        "x-prefix": "apk"
                     },
                     body: file
                 });
                 if (!uploadRes.ok) throw new Error("فشل رفع ملف الـ APK إلى التخزين");
 
-                const apkUrl = `${APK_PUBLIC_PREFIX}/${encodeURIComponent(safeName)}`;
+                const uploadedApk = await uploadRes.json().catch(() => ({}));
+                const apkUrl = uploadedApk && uploadedApk.url;
+                if (!apkUrl) throw new Error("الرفع تم لكن الخادم لم يُرجع رابط الـ APK.");
 
                 // 2. Insert the version record
                 const insertRes = await fetch(REST_APP_VERSIONS, {

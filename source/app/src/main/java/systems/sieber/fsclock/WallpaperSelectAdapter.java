@@ -63,8 +63,18 @@ public class WallpaperSelectAdapter extends BaseAdapter {
         mInflater = LayoutInflater.from(context);
         mRepo = repo;
         mItems = items;
+        // The stored hide list may have been written against the host the library used to be
+        // served from, so match on the wallpaper's identity rather than on the raw url —
+        // otherwise every tick the shop set would silently clear the day we move hosts.
+        Set<String> hiddenKeys = new HashSet<>();
+        for(String h : hiddenUrls) {
+            String k = WallpaperRepo.wallpaperKey(h);
+            if(k != null) hiddenKeys.add(k);
+        }
         for(WallpaperItem it : items) {
-            if(it.url != null && !hiddenUrls.contains(it.url)) mVisibleUrls.add(it.url);
+            if(it.url != null && !hiddenKeys.contains(WallpaperRepo.wallpaperKey(it.url))) {
+                mVisibleUrls.add(it.url);
+            }
         }
     }
 

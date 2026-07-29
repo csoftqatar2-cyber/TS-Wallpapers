@@ -1,3 +1,9 @@
+// SUPERSEDED — nothing calls this any more. The wallpaper library moved to Cloudflare R2
+// (the fleet re-downloading it off Supabase Storage exhausted the bandwidth quota), so the
+// manager now uploads through cloudflare/wallpaper-upload/worker.js and inserts the row
+// itself under the admin's own session. Left deployed only as a rollback path; if you wire
+// it back up, note that anything it writes is served from Supabase and billed as egress.
+
 import { createClient } from 'jsr:@supabase/supabase-js@2'
 
 // The single admin account. Only this user id may upload.

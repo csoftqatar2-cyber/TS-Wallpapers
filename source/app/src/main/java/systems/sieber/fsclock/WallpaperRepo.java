@@ -333,6 +333,7 @@ public class WallpaperRepo {
         mContext = c.getApplicationContext();
         mPref = mContext.getSharedPreferences(SettingsActivity.SHARED_PREF_DOMAIN, Context.MODE_PRIVATE);
         mSecurePref = new SecurePrefs(mContext, mPref);
+        migrateRemoteKeys();   // must precede load(): the hide list is read through wallpaperKey
         load();
     }
 
@@ -344,11 +345,16 @@ public class WallpaperRepo {
         }
         all.addAll(parse(mPref.getString(PREF_CACHE, "")));
 
-        // drop the wallpapers this device was told to hide (see PREF_HIDDEN)
-        java.util.Set<String> hidden = getHiddenUrls();
+        // drop the wallpapers this device was told to hide (see PREF_HIDDEN). Matched by
+        // wallpaperKey, not by raw url, so a hide survives the library moving to another host.
+        java.util.Set<String> hidden = new java.util.HashSet<>();
+        for(String h : getHiddenUrls()) {
+            String k = wallpaperKey(h);
+            if(k != null) hidden.add(k);
+        }
         List<WallpaperItem> merged = new ArrayList<>();
         for(WallpaperItem it : all) {
-            if(it.url == null || !hidden.contains(it.url)) merged.add(it);
+            if(it.url == null || !hidden.contains(wallpaperKey(it.url))) merged.add(it);
         }
 
         int index = mPref.getInt(PREF_INDEX, 0);
@@ -363,7 +369,7 @@ public class WallpaperRepo {
         boolean resumed = false;
         if(!last.isEmpty()) {
             for(int i = 0; i < merged.size(); i++) {
-                if(last.equals(merged.get(i).url)) { index = i; resumed = true; break; }
+                if(sameWallpaper(last, merged.get(i).url)) { index = i; resumed = true; break; }
             }
         }
         // nothing to resume (first run, or that wallpaper is gone/hidden now): fall back to
@@ -372,7 +378,7 @@ public class WallpaperRepo {
             String def = mPref.getString(PREF_DEFAULT, "");
             if(!def.isEmpty()) {
                 for(int i = 0; i < merged.size(); i++) {
-                    if(def.equals(merged.get(i).url)) { index = i; break; }
+                    if(sameWallpaper(def, merged.get(i).url)) { index = i; break; }
                 }
             }
         }
@@ -461,23 +467,79 @@ public class WallpaperRepo {
     private static final String FOCAL_PREFIX = "wp-focal:";
 
     /**
-     * The key a wallpaper's fit and focal are stored under.
+     * The identity a wallpaper is remembered by — its fit, focal point, hide entry and
+     * "resume here" pointer all hang off this, not off the raw url.
      *
      * The same local image reaches us under two spellings: the import and phone-upload paths
      * open the editor with "file:///storage/…", while localItems() builds its WallpaperItems
      * from File.getAbsolutePath(), which is bare "/storage/…". Unnormalised, the editor wrote
      * one key and the renderer read the other, so every edit made on import was silently
-     * thrown away. Remote urls have no scheme to strip and pass through untouched.
+     * thrown away.
+     *
+     * A remote wallpaper is keyed by its FILE NAME alone, never by the full url. The library
+     * has already moved hosts once (Supabase Storage -> Cloudflare R2) and will move again the
+     * day we put a custom domain in front of it. Keyed by url, every such move silently throws
+     * away the crop, rotation and hide the technician set on all 450 cars — the pictures come
+     * back uncropped and the ones they hid reappear. The buckets are flat, so the file name
+     * identifies the image on its own; see {@link #migrateRemoteKeys()} for the one-time
+     * rewrite of what the url-keyed builds left behind.
      */
-    private static String fitKey(String url) {
+    static String wallpaperKey(String url) {
         if(url == null) return null;
+        if(isRemoteUrl(url)) {
+            String path = url;
+            int q = path.indexOf('?');
+            if(q != -1) path = path.substring(0, q);
+            int slash = path.lastIndexOf('/');
+            return (slash == -1 || slash == path.length() - 1) ? path : path.substring(slash + 1);
+        }
         return url.startsWith("file://") ? url.substring("file://".length()) : url;
+    }
+
+    /** Whether two urls name the same wallpaper, no matter which host each was written for. */
+    private static boolean sameWallpaper(String a, String b) {
+        if(a == null || b == null) return false;
+        String ka = wallpaperKey(a);
+        return ka != null && ka.equals(wallpaperKey(b));
+    }
+
+    /** Set once the url-keyed -> name-keyed rewrite below has run on this device. */
+    private static final String PREF_KEYS_BY_NAME = "wallpaper-keys-by-name";
+
+    /**
+     * Move every per-image setting a url-keyed build left behind onto its file-name key, so a
+     * car that upgrades keeps the crops, rotations and focal points its technician set before
+     * the library moved off Supabase Storage.
+     *
+     * Runs once per device. The old entries are deliberately NOT deleted: they are a few
+     * hundred bytes, and they are the only copy of those settings if this ever has to run
+     * again. An existing name-keyed value always wins — a car that was edited after the move
+     * must not have that work overwritten by the stale pre-move value.
+     */
+    private void migrateRemoteKeys() {
+        if(mPref.getBoolean(PREF_KEYS_BY_NAME, false)) return;
+        SharedPreferences.Editor e = mPref.edit();
+        for(java.util.Map.Entry<String, ?> entry : mPref.getAll().entrySet()) {
+            String key = entry.getKey();
+            String prefix;
+            if(key.startsWith(FIT_PREFIX)) prefix = FIT_PREFIX;
+            else if(key.startsWith(FOCAL_PREFIX)) prefix = FOCAL_PREFIX;
+            else continue;
+            String oldUrl = key.substring(prefix.length());
+            if(!isRemoteUrl(oldUrl)) continue;                  // local paths are already the key
+            String renamed = prefix + wallpaperKey(oldUrl);
+            if(renamed.equals(key) || mPref.contains(renamed)) continue;
+            if(entry.getValue() instanceof String) {
+                e.putString(renamed, (String) entry.getValue());
+            }
+        }
+        e.putBoolean(PREF_KEYS_BY_NAME, true).apply();
     }
 
     /** Saved focal point for a wallpaper, or the image center (0.5,0.5) if none. */
     public float[] getFocal(String url) {
         if(url != null) {
-            String v = mPref.getString(FOCAL_PREFIX + fitKey(url), "");
+            String v = mPref.getString(FOCAL_PREFIX + wallpaperKey(url), "");
             if(!v.isEmpty()) {
                 try {
                     String[] p = v.split(",");
@@ -490,7 +552,7 @@ public class WallpaperRepo {
 
     public void setFocal(String url, float fx, float fy) {
         if(url == null || url.isEmpty()) return;
-        mPref.edit().putString(FOCAL_PREFIX + fitKey(url), clamp01(fx) + "," + clamp01(fy)).apply();
+        mPref.edit().putString(FOCAL_PREFIX + wallpaperKey(url), clamp01(fx) + "," + clamp01(fy)).apply();
     }
 
     private static float clamp01(float v) {
@@ -535,18 +597,18 @@ public class WallpaperRepo {
     /** This wallpaper's fit settings, falling back to the defaults when it has none of its own. */
     public FitSettings getFit(String url) {
         if(url == null || url.isEmpty()) return getFitDefaults();
-        return FitSettings.parse(mPref.getString(FIT_PREFIX + fitKey(url), ""), getFitDefaults());
+        return FitSettings.parse(mPref.getString(FIT_PREFIX + wallpaperKey(url), ""), getFitDefaults());
     }
 
     public void setFit(String url, FitSettings s) {
         if(url == null || url.isEmpty()) return;
-        mPref.edit().putString(FIT_PREFIX + fitKey(url), s.serialize()).apply();
+        mPref.edit().putString(FIT_PREFIX + wallpaperKey(url), s.serialize()).apply();
     }
 
     /** Drop this wallpaper's override so it follows the defaults again. */
     public void clearFit(String url) {
         if(url == null || url.isEmpty()) return;
-        mPref.edit().remove(FIT_PREFIX + fitKey(url)).apply();
+        mPref.edit().remove(FIT_PREFIX + wallpaperKey(url)).apply();
     }
 
     /**
@@ -560,7 +622,7 @@ public class WallpaperRepo {
         SharedPreferences.Editor e = mPref.edit();
         for(WallpaperItem item : mItems) {
             if(item.url == null || item.url.isEmpty()) continue;
-            String key = fitKey(item.url);
+            String key = wallpaperKey(item.url);
             FitSettings copy = new FitSettings(s.mode, s.blur, s.barColor, s.zoom, s.fade);
             copy.rotation = getFit(item.url).rotation;
             e.putString(FIT_PREFIX + key, copy.serialize());
@@ -620,10 +682,10 @@ public class WallpaperRepo {
     public boolean jumpTo(String url) {
         if(url == null || url.isEmpty()) return false;
         List<WallpaperItem> items = mItems;
-        String key = fitKey(url);
+        String key = wallpaperKey(url);
         for(int i = 0; i < items.size(); i++) {
             WallpaperItem it = items.get(i);
-            if(it.url != null && key.equals(fitKey(it.url))) {
+            if(it.url != null && key.equals(wallpaperKey(it.url))) {
                 mIndex = i;
                 savePosition(it);
                 return true;
@@ -650,7 +712,7 @@ public class WallpaperRepo {
      */
     public boolean deleteLocal(String url) {
         if(url == null || url.isEmpty() || isRemoteUrl(url)) return false;
-        String key = fitKey(url);
+        String key = wallpaperKey(url);
         File f = new File(key);
         if(f.exists() && !f.delete()) return false;
         if(f.exists()) return false;      // delete() lied, or something re-created it
@@ -660,9 +722,9 @@ public class WallpaperRepo {
         // name does not inherit a stranger's crop.
         e.remove(FIT_PREFIX + key).remove(FOCAL_PREFIX + key);
         String last = mPref.getString(PREF_LAST_URL, "");
-        if(!last.isEmpty() && key.equals(fitKey(last))) e.remove(PREF_LAST_URL);
+        if(!last.isEmpty() && key.equals(wallpaperKey(last))) e.remove(PREF_LAST_URL);
         String def = mPref.getString(PREF_DEFAULT, "");
-        if(!def.isEmpty() && key.equals(fitKey(def))) e.remove(PREF_DEFAULT);
+        if(!def.isEmpty() && key.equals(wallpaperKey(def))) e.remove(PREF_DEFAULT);
         e.apply();
 
         // Drop any hide entry as well, or the pref grows a tail of urls to files that no
@@ -671,7 +733,7 @@ public class WallpaperRepo {
         List<String> keep = new ArrayList<>();
         boolean wasHidden = false;
         for(String h : hidden) {
-            if(key.equals(fitKey(h))) wasHidden = true;
+            if(key.equals(wallpaperKey(h))) wasHidden = true;
             else keep.add(h);
         }
         if(wasHidden) setHiddenUrls(keep);
@@ -679,10 +741,17 @@ public class WallpaperRepo {
         return true;
     }
 
-    /** The playlist as a set of urls — hand it to {@link #newSince} after a reload. */
+    /**
+     * The playlist as a set of wallpaper identities — hand it to {@link #newSince} after a
+     * reload. Identities, not raw urls: the sync that moved the library to another host would
+     * otherwise look like 99 brand-new wallpapers arriving at once on every car.
+     */
     public java.util.Set<String> urlSnapshot() {
         java.util.Set<String> set = new java.util.HashSet<>();
-        for(WallpaperItem it : mItems) if(it.url != null) set.add(it.url);
+        for(WallpaperItem it : mItems) {
+            String k = wallpaperKey(it.url);
+            if(k != null) set.add(k);
+        }
         return set;
     }
 
@@ -695,7 +764,8 @@ public class WallpaperRepo {
         List<String> fresh = new ArrayList<>();
         if(before == null || before.isEmpty()) return fresh;   // first build: everything is "new"
         for(WallpaperItem it : mItems) {
-            if(it.url != null && !before.contains(it.url)) fresh.add(it.url);
+            String k = wallpaperKey(it.url);
+            if(k != null && !before.contains(k)) fresh.add(it.url);
         }
         return fresh;
     }
@@ -841,10 +911,14 @@ public class WallpaperRepo {
 
     // ---- video caching -------------------------------------------------------
 
+    /** Cache name keyed by the wallpaper's identity, so moving hosts does not force every car
+     *  to pull the videos down again — at 50 MB apiece that is the most expensive thing we
+     *  could make them re-fetch. Files left over under an older naming scheme are swept up by
+     *  the orphan cleanup in {@link #sync}. */
     private File videoCacheFile(WallpaperItem item) {
         File dir = new File(mContext.getCacheDir(), "wallpapers");
         if(!dir.exists()) dir.mkdirs();
-        return new File(dir, "vid_" + Integer.toHexString(item.url.hashCode()) + ".bin");
+        return new File(dir, "vid_" + Integer.toHexString(wallpaperKey(item.url).hashCode()) + ".bin");
     }
 
     private void ensureVideoCached(WallpaperItem item) throws Exception {
