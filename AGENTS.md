@@ -55,6 +55,20 @@ the single most important thing to know before touching backend behavior).
   write to the `wallpapers` storage bucket); metadata rows go to the `wallpapers` table.
 - Device admin (block/rename/activate/delete) PATCHes the `devices` table.
 
+### Fleet check-in: mode, build, dates (device → Supabase → dashboard)
+- `report_device_mode` is the one check-in call. It carries mode + `app_version` +
+  `app_version_code` and stamps `devices.last_seen_at`. Called from every screen that opens
+  and from `BootReceiver` on each car start — the boot one exists for Leopard/Lynkco cars,
+  where nobody opens the app for weeks.
+- `devices.activated_at` is stamped by `activate_device`. Rows predating the column were
+  backfilled from `created_at` (right for the normal path — the row IS created by activation).
+- The dashboard shows a per-device version badge + activation/last-seen line, and a
+  clickable fleet-by-build breakdown at the top of the devices modal.
+- **The RPC has 5 args with defaults and the old 3-arg version was DROPPED.** Never
+  `create or replace` it into a new signature while the old one lives: a 3-arg call from a
+  pre-3.5 APK would match both and Postgres answers "function is not unique" — mode
+  reporting breaks on every car in the field at once.
+
 ### Crash reports (device → Supabase → dashboard)
 - `CrashReporter` installs an uncaught-exception handler in `FsClockApp.onCreate`
   (first line, so a crash during setup is caught too). Every crash is written to
@@ -71,7 +85,10 @@ the single most important thing to know before touching backend behavior).
 ### Self-update (CI → Supabase → devices)
 1. Bump `versionCode`/`versionName` in `source/app/build.gradle`, push to `main`.
 2. `release.yml` reads the version; **gate:** publishes only if `versionCode` > the
-   highest in the `app_versions` table. Builds `:app:assembleStandaloneRelease`,
+   highest in the `app_versions` table. A manual run with input `republish=true`
+   also allows an EQUAL versionCode, replacing the published APK in place — only safe
+   before the build has reached any car, since a device that already installed that
+   versionCode is never offered the replacement. Builds `:app:assembleStandaloneRelease`,
    signed with `source/thabthaba.jks` (from GitHub secret).
 3. Uploads APK to the public `apk` storage bucket; inserts a row in `app_versions`
    (changelog = last commit subject line — **commit messages on version bumps are user-visible**).
