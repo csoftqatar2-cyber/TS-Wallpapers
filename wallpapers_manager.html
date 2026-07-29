@@ -1785,8 +1785,6 @@
         const ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImloZ21xd3pkcHVnZHpkZG9iaGJjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI2NTI4ODAsImV4cCI6MjA5ODIyODg4MH0.xG0ch3u5rcbb81pSa8wmybeEYj8kz2LjCGQM_-Xg6Yk";
         
         const SUPABASE_URL = `https://${PROJECT_REF}.supabase.co`;
-        const STORAGE_API = `${SUPABASE_URL}/storage/v1/object/wallpapers`;
-        const PUBLIC_URL_PREFIX = `${SUPABASE_URL}/storage/v1/object/public/wallpapers`;
         const REST_WALLPAPERS = `${SUPABASE_URL}/rest/v1/wallpapers`;
         const REST_DEVICES = `${SUPABASE_URL}/rest/v1/devices`;
         const REST_WP_HIDES = `${SUPABASE_URL}/rest/v1/wallpaper_hides`;
@@ -3046,18 +3044,21 @@
                     throw new Error("لم يُحذف أي سجل من قاعدة البيانات. على الأرجح سياسات الصلاحيات (RLS) على جدول wallpapers تمنع الحذف بمفتاح anon. أضف سياسة DELETE للجدول في Supabase.");
                 }
 
-                // 2. Delete the actual file from the Storage bucket so it's gone for everyone.
-                //    A 404 here is fine (file already removed); other errors are non-fatal
-                //    because the DB rows — what the apps read — are already gone.
+                // 2. Delete the actual file from R2 so it stops taking up space. This is
+                //    housekeeping, not what makes the wallpaper disappear — the row deleted
+                //    above is the only thing the cars read, so they have already lost it
+                //    whatever happens here. A failure is therefore a warning, never an error.
+                //    (Files still sitting in the old Supabase bucket are left alone: they are
+                //    the rollback copy of the move to R2 and nothing references them.)
                 let storageWarning = "";
-                const storageResponse = await fetch(`${STORAGE_API}/${encodeURIComponent(filename)}`, {
+                const storageResponse = await fetch(R2_UPLOAD_URL, {
                     method: "DELETE",
                     headers: {
                         "Authorization": `Bearer ${SESSION_TOKEN}`,
-                        "apikey": ANON_KEY
+                        "x-file-name": encodeURIComponent(filename)
                     }
                 });
-                if (!storageResponse.ok && storageResponse.status !== 404) {
+                if (!storageResponse.ok) {
                     storageWarning = " (ملاحظة: تعذّر حذف الملف من التخزين، لكن تمت إزالته من قاعدة البيانات فلن يظهر للمستخدمين.)";
                     console.warn("Storage delete failed:", storageResponse.status, await storageResponse.text());
                 }

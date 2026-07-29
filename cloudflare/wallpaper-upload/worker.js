@@ -1,5 +1,8 @@
 /**
- * Wallpaper upload endpoint — the write half of the Cloudflare R2 library.
+ * Wallpaper upload/delete endpoint — the write half of the Cloudflare R2 library.
+ *
+ *   POST   + x-file-name [+ x-prefix: wallpapers|apk]  -> stores the body, returns its url
+ *   DELETE + x-file-name [+ x-prefix]                  -> removes that object
  *
  * The manager page used to POST files at the `admin-upload` Supabase Edge Function, which
  * wrote them into Supabase Storage. The fleet re-downloading that library is what blew past
@@ -23,7 +26,7 @@ const PUBLIC_BASE = 'https://pub-3108628f0bc04bb4a97214eb7732e284.r2.dev';
 const CORS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, content-type, x-file-name, x-prefix',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  'Access-Control-Allow-Methods': 'POST, DELETE, OPTIONS',
   'Access-Control-Max-Age': '86400',
 };
 
@@ -37,7 +40,9 @@ function json(body, status = 200) {
 export default {
   async fetch(req, env) {
     if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS });
-    if (req.method !== 'POST') return json({ error: 'method not allowed' }, 405);
+    if (req.method !== 'POST' && req.method !== 'DELETE') {
+      return json({ error: 'method not allowed' }, 405);
+    }
 
     const token = (req.headers.get('Authorization') || '').replace('Bearer ', '').trim();
     if (!token) return json({ error: 'no token' }, 401);
@@ -81,11 +86,21 @@ export default {
       return json({ error: 'bad prefix' }, 400);
     }
 
+    const key = `${prefix}/${name}`;
+
+    // Deleting a wallpaper the manager already dropped from the database. Idempotent on
+    // purpose: R2 reports no error for a key that is not there, and the caller reaches this
+    // point only after the row is gone, so "it was already deleted" is a success, not a
+    // failure to report at someone who is watching a spinner.
+    if (req.method === 'DELETE') {
+      await env.BUCKET.delete(key);
+      return json({ ok: true, deleted: key });
+    }
+
     const contentType = req.headers.get('content-type') || 'application/octet-stream';
     const body = await req.arrayBuffer();
     if (body.byteLength === 0) return json({ error: 'empty file' }, 400);
 
-    const key = `${prefix}/${name}`;
     if (prefix === 'wallpapers' && (await env.BUCKET.head(key))) {
       return json({ error: 'file already exists' }, 409);
     }
