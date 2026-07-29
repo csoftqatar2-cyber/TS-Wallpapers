@@ -281,6 +281,19 @@ public class WallpaperRepo {
             body.put("device_mode", OperatingMode.wire(mPref));
             String legacy = getLegacyDeviceId();
             if (legacy != null && !legacy.isEmpty()) body.put("legacy_hw_id", legacy);
+            // Which build this car is actually running. Publishing a version only ever said an
+            // APK existed; without this nobody could tell whether the fleet had taken it, so
+            // every release went out blind. Reported on the same call that already runs on every
+            // launch — no extra request, and the server also stamps last_seen_at from it.
+            try {
+                android.content.pm.PackageInfo pi = mContext.getPackageManager()
+                        .getPackageInfo(mContext.getPackageName(), 0);
+                body.put("app_version", pi.versionName);
+                body.put("app_version_code", pi.versionCode);
+            } catch (Throwable ignored) {
+                // Reporting the mode still matters on a device that will not tell us its own
+                // version; the server treats the missing fields as "leave what you had".
+            }
             httpPost(sbUrl + "/rest/v1/rpc/report_device_mode", body.toString());
         } catch (Exception e) {
             Log.w(TAG, "reportOperatingMode failed", e);

@@ -1308,6 +1308,9 @@
         }
         .dev-filter-btn:hover { color: #fff; border-color: var(--panel-border-hover); }
         .dev-filter-btn.active { background: var(--primary); border-color: var(--primary); color: #fff; }
+        /* The chip for the newest published build, so "how many cars are current" is readable
+           without comparing numbers. :not(.active) keeps the selected chip on its normal style. */
+        .dev-filter-btn.is-latest:not(.active) { color: #38bdf8; border-color: rgba(56,189,248,0.35); }
 
         .dev-row {
             display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
@@ -1333,6 +1336,8 @@
         .dev-badge.off { background: rgba(148,163,184,0.12); color: #94a3b8; border: 1px solid rgba(148,163,184,0.25); }
         .dev-badge.blk { background: rgba(239,68,68,0.12); color: var(--danger); border: 1px solid rgba(239,68,68,0.3); }
         .dev-badge.mode { background: rgba(245,158,11,0.12); color: #f59e0b; border: 1px solid rgba(245,158,11,0.3); }
+        .dev-badge.ver    { background: rgba(56,189,248,0.12); color: #38bdf8; border: 1px solid rgba(56,189,248,0.3); }
+        .dev-badge.verold { background: rgba(239,68,68,0.10); color: #f87171; border: 1px solid rgba(239,68,68,0.28); }
         .dev-row-actions { display: flex; gap: 8px; flex-wrap: wrap; }
         .dev-act {
             padding: 8px 12px; border-radius: 10px; cursor: pointer; font-size: 0.8rem;
@@ -1705,6 +1710,9 @@
                         <button type="button" class="dev-filter-btn" data-filter="blocked" onclick="setDevicesFilter('blocked')">المحظورة</button>
                     </div>
                 </div>
+                <!-- The fleet by build. This is the answer to "did the update actually land?" —
+                     one line, and each chip filters the list to exactly those cars. -->
+                <div class="devices-filter" id="devices-version-summary" style="margin-top:8px;"></div>
             </div>
             <div class="modal-body" id="devices-modal-body">
                 <!-- Device rows injected here -->
@@ -2760,6 +2768,9 @@
                     label.innerText = "لا يوجد إصدار منشور بعد";
                 } else {
                     label.innerText = `${rows[0].version_name} (code ${rows[0].version_code})`;
+                    // Kept so every device row can say "up to date" or "behind" rather than
+                    // just printing a number the reader has to compare in their head.
+                    latestVersionCode = rows[0].version_code;
                 }
             } catch (err) {
                 console.error("loadLatestVersion error:", err);
@@ -3308,6 +3319,7 @@
 
         function openDevicesModal() {
             document.getElementById("devices-search").value = "";
+            devicesVersionFilter = 'ALL';
             setDevicesFilter('all');
             document.getElementById("devices-modal").style.display = "flex";
             renderDevicesModal();
@@ -3319,7 +3331,9 @@
 
         function setDevicesFilter(f) {
             devicesModalFilter = f;
-            document.querySelectorAll('.dev-filter-btn').forEach(b =>
+            // Scoped to the status row: the version chips share this class and carry no
+            // data-filter, so an unscoped query would strip their selected state on every click.
+            document.querySelectorAll('#devices-modal .modal-toolbar-row .dev-filter-btn').forEach(b =>
                 b.classList.toggle('active', b.dataset.filter === f));
             renderDevicesModal();
         }
@@ -3459,6 +3473,7 @@
             fse:     ['fa-tv', 'FSE'],
             leopard: ['fa-image', 'ليوبارد'],
             gwm:     ['fa-folder-tree', 'GWM'],
+            lynkco:  ['fa-car', 'Lynk & Co'],
         };
         function modeBadge(mode) {
             const m = MODE_LABELS[mode];
@@ -3466,9 +3481,97 @@
             return `<span class="dev-badge mode"><i class="fa-solid ${m[0]}"></i> ${m[1]}</span>`;
         }
 
+        /** The newest published build, so a device row can say "up to date" instead of a number. */
+        let latestVersionCode = 0;
+
+        /**
+         * Which build this car is running.
+         *
+         * "Not reported" is its own state and must not read as "old": it means the car has not
+         * opened the app since version reporting shipped, which is a different problem from a car
+         * that is genuinely behind. Guessing between the two is how you go chasing cars that are
+         * perfectly fine.
+         */
+        function versionBadge(d) {
+            if (!d.app_version) {
+                return '<span class="dev-badge off" title="لم تُبلّغ السيارة عن نسختها بعد">'
+                     + '<i class="fa-solid fa-circle-question"></i> نسخة غير معروفة</span>';
+            }
+            const behind = latestVersionCode && d.app_version_code < latestVersionCode;
+            return `<span class="dev-badge ${behind ? 'verold' : 'ver'}"
+                          title="${behind ? 'أقدم من آخر إصدار منشور' : 'على آخر إصدار'}">
+                        <i class="fa-solid ${behind ? 'fa-circle-arrow-up' : 'fa-circle-check'}"></i>
+                        v${escapeHtml(d.app_version)}</span>`;
+        }
+
+        /** Short local date, or "—" when there is nothing to show. */
+        function shortDate(value) {
+            if (!value) return '—';
+            const t = new Date(value);
+            return isNaN(t) ? '—' : t.toLocaleDateString('ar-EG',
+                { year: 'numeric', month: 'short', day: 'numeric' });
+        }
+
+        function activationLine(d) {
+            const bits = [`التفعيل: ${shortDate(d.activated_at)}`];
+            // Only shown once it exists: an empty "last seen" on every row would be noise, and
+            // the cars that have not checked in yet are already marked "نسخة غير معروفة".
+            if (d.last_seen_at) bits.push(`آخر ظهور: ${shortDate(d.last_seen_at)}`);
+            return escapeHtml(bits.join('  ·  '));
+        }
+
+        /**
+         * The fleet broken down by build, newest first, "unknown" last.
+         *
+         * Counted over every registered car rather than over what the current filter shows, so
+         * the numbers mean the same thing whichever way the list is filtered — a breakdown that
+         * changes under you is worse than none.
+         */
+        function renderVersionSummary() {
+            const box = document.getElementById("devices-version-summary");
+            if (!box) return;
+            const buckets = new Map();
+            devicesList.forEach(d => {
+                const key = d.app_version || null;
+                const b = buckets.get(key) || { key, code: d.app_version_code || 0, n: 0 };
+                b.n++;
+                buckets.set(key, b);
+            });
+            const rows = [...buckets.values()].sort((a, b) => {
+                if (a.key === null) return 1;
+                if (b.key === null) return -1;
+                return b.code - a.code;
+            });
+
+            const chip = (label, value, active, cls) =>
+                `<button type="button" class="dev-filter-btn ${active ? 'active' : ''} ${cls || ''}"
+                         onclick="setDevicesVersionFilter(${value === null ? 'null' : `'${value}'`})">${label}</button>`;
+
+            let html = chip(`كل النسخ (${devicesList.length})`, 'ALL', devicesVersionFilter === 'ALL');
+            rows.forEach(b => {
+                if (b.key === null) {
+                    html += chip(`غير معروفة (${b.n})`, null, devicesVersionFilter === null);
+                } else {
+                    const behind = latestVersionCode && b.code < latestVersionCode;
+                    html += chip(`v${escapeHtml(b.key)} (${b.n})`, b.key,
+                        devicesVersionFilter === b.key, behind ? '' : 'is-latest');
+                }
+            });
+            box.innerHTML = html;
+        }
+
+        /** null is a real value here ("never reported"), so 'ALL' is the no-filter sentinel. */
+        let devicesVersionFilter = 'ALL';
+
+        function setDevicesVersionFilter(v) {
+            devicesVersionFilter = v;
+            renderDevicesModal();
+        }
+
         function renderDevicesModal() {
             const body = document.getElementById("devices-modal-body");
             const q = (document.getElementById("devices-search").value || "").toLowerCase().trim();
+            renderVersionSummary();
 
             // count private wallpapers per device (app channel only — GWM Split has its own view)
             const wpCount = {};
@@ -3482,6 +3585,9 @@
                 if (devicesModalFilter === 'blocked') return d.is_blocked;
                 return true;
             });
+            if (devicesVersionFilter !== 'ALL') {
+                list = list.filter(d => (d.app_version || null) === devicesVersionFilter);
+            }
             if (q) {
                 list = list.filter(d => {
                     const modeText = (MODE_LABELS[d.mode] ? MODE_LABELS[d.mode][1] : '') + ' ' + (d.mode || '');
@@ -3496,7 +3602,7 @@
                 body.innerHTML = `
                     <div class="empty-state">
                         <i class="fa-solid fa-mobile-screen-button"></i>
-                        <p>${q || devicesModalFilter !== 'all' ? 'لا توجد أجهزة تطابق هذا الفلتر/البحث.' : 'لا توجد أجهزة مسجّلة بعد.'}</p>
+                        <p>${q || devicesModalFilter !== 'all' || devicesVersionFilter !== 'ALL' ? 'لا توجد أجهزة تطابق هذا الفلتر/البحث.' : 'لا توجد أجهزة مسجّلة بعد.'}</p>
                     </div>`;
                 return;
             }
@@ -3527,9 +3633,11 @@
                         <span class="dev-row-serial">${escapeHtml(d.serial_number || 'بدون كود')}${nameBit}</span>
                         ${statusBadge}
                         ${modeBadge(d.mode)}
+                        ${versionBadge(d)}
                         <span class="dev-badge off">${count} صورة</span>
                     </div>
-                    <div class="dev-row-mac">${escapeHtml(hwId)}</div>`;
+                    <div class="dev-row-mac">${escapeHtml(hwId)}</div>
+                    <div class="dev-row-mac">${activationLine(d)}</div>`;
 
                 const actions = document.createElement("div");
                 actions.className = "dev-row-actions";

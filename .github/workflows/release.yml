@@ -29,6 +29,15 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      republish:
+        description: >-
+          Replace the APK already published under THIS versionCode instead of
+          requiring a higher one. Only for a build that has not reached the cars
+          yet: Android will not update a device that already installed this
+          versionCode, so any car that took the old copy stays on it forever.
+        type: boolean
+        default: false
 
 env:
   SUPABASE_URL: https://ihgmqwzdpugdzddobhbc.supabase.co
@@ -62,9 +71,19 @@ jobs:
           echo "This build: versionCode=$VC versionName=$VN | latest published=$LATEST"
           echo "version_code=$VC" >> "$GITHUB_OUTPUT"
           echo "version_name=$VN" >> "$GITHUB_OUTPUT"
+          # Manual re-publish: allow the SAME versionCode to be replaced. The publish step
+          # already deletes the matching app_versions row before inserting, so this only needs
+          # the gate to stop refusing. Never available on a push — it must be a deliberate act,
+          # because a car that already installed this versionCode will never be offered the
+          # replacement (Android compares version codes, and they are equal).
+          REPUBLISH="${{ github.event.inputs.republish }}"
           if [ -n "$VC" ] && [ "$VC" -gt "$LATEST" ]; then
             echo "publish=true" >> "$GITHUB_OUTPUT"
             echo "✅ versionCode $VC > $LATEST — will build & publish."
+          elif [ "$REPUBLISH" = "true" ] && [ -n "$VC" ] && [ "$VC" -eq "$LATEST" ]; then
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+            echo "♻️  Re-publishing versionCode $VC in place (manual run, republish=true)."
+            echo "⚠️  Cars that already installed $VC will NOT receive this build."
           else
             echo "publish=false" >> "$GITHUB_OUTPUT"
             echo "⏭️  versionCode not increased — nothing to deliver. Bump versionCode to publish an update."

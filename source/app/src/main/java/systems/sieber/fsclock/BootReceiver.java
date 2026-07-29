@@ -84,6 +84,14 @@ public class BootReceiver extends BroadcastReceiver {
         // coming back on with the picture it was left with instead of a black dashboard.
         LeopardApplier.reassert(context);
 
+        // Check in with the backend on every car start, so "which cars are on which build" has
+        // an answer for a Leopard car too. In that mode the app is a tool somebody opens for
+        // fifteen seconds a month — every other place that reports rides a screen being opened,
+        // which for these cars may simply never happen. Off the main thread: the repo's
+        // constructor reads and re-parses the cached playlist, which is not something to do in
+        // a boot broadcast.
+        reportCheckIn(context);
+
         maybeStart(context, TAG + "/" + action, action);
     }
 
@@ -136,6 +144,23 @@ public class BootReceiver extends BroadcastReceiver {
                 public void run() { launch(context, attempt); }
             }, ATTEMPTS_MS[i]);
         }
+    }
+
+    /** Tell the backend this car is alive, which mode it is in, and which build it runs. */
+    private static void reportCheckIn(final Context context) {
+        final Context app = context.getApplicationContext();
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    new WallpaperRepo(app).reportModeAsync();
+                } catch(Throwable t) {
+                    // A car with no network on boot is the normal case, not an error worth
+                    // taking the rest of the receiver down for.
+                    Log.w(TAG, "check-in failed", t);
+                }
+            }
+        }).start();
     }
 
     private static void launch(Context context, int attempt) {
