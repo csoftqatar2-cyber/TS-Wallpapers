@@ -100,6 +100,16 @@
 -renamesourcefileattribute SourceFile
 -keepattributes SourceFile,LineNumberTable
 
+# Our own class and method names survive obfuscation, because a crash report is
+# worthless without them: a stack trace reading "a.b.c(SourceFile:214)" from a car
+# in another city cannot be acted on, and the mapping file for the build that car
+# is running is not something anyone will still have months later. The classes that
+# actually protect anything (IntegrityGuard, SecurePrefs, WallpaperRepo) are already
+# kept by name above, and the secrets are protected by StringObfuscator's contents
+# rather than by what its class is called — so this costs nothing real and is what
+# makes CrashReporter's output usable. Shrinking is unaffected: unused code still goes.
+-keepnames class systems.sieber.fsclock.** { *; }
+
 # ── Suppress common harmless warnings ────────────────────────────────
 -dontwarn java.lang.invoke.**
 -dontwarn javax.annotation.**

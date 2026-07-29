@@ -1431,6 +1431,20 @@
                     <i class="fa-solid fa-mobile-screen-button"></i>
                 </div>
             </div>
+
+            <!-- Crashes. A card rather than a menu item because the number is the point: at zero
+                 it is a daily reassurance, and the day it is not zero it is the first thing on the
+                 screen — which is the only way a fault on one car out of hundreds gets noticed. -->
+            <div class="stat-card clickable" onclick="openCrashesModal()" title="اضغط لعرض تقارير الأعطال الواردة من السيارات">
+                <div class="stat-info">
+                    <h3>أعطال آخر ٧ أيام</h3>
+                    <p id="stat-crashes">-</p>
+                    <span class="stat-hint"><i class="fa-solid fa-arrow-pointer"></i> اضغط لقراءة تفاصيل العطل</span>
+                </div>
+                <div class="stat-icon purple">
+                    <i class="fa-solid fa-bug"></i>
+                </div>
+            </div>
         </div>
 
         <!-- Main Workspace Grid -->
@@ -1698,6 +1712,33 @@
         </div>
     </div>
 
+    <!-- Crash reports coming in from the fleet -->
+    <div id="crashes-modal" class="modal-overlay" style="display: none;" onclick="if(event.target === this) closeCrashesModal()">
+        <div class="modal-box">
+            <div class="modal-header">
+                <h2><i class="fa-solid fa-bug"></i> تقارير الأعطال من السيارات</h2>
+                <button class="modal-close" onclick="closeCrashesModal()" title="إغلاق">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+            <div class="modal-toolbar">
+                <div class="modal-toolbar-row">
+                    <div class="search-box modal-search-box" style="flex:1;">
+                        <i class="fa-solid fa-magnifying-glass"></i>
+                        <input type="text" id="crashes-search" class="form-control"
+                               placeholder="ابحث بكود الجهاز أو اسم العميل أو نص الخطأ..." oninput="renderCrashesModal()">
+                    </div>
+                </div>
+                <div style="padding:8px 4px;font-size:0.85rem;color:var(--text-muted);">
+                    كل عطل بيتسجّل على السيارة نفسها كمان، وبيتبعت هنا أول ما التطبيق يفتح بعد العطل — يعني لو السيارة كانت أوفلاين ساعة المشكلة، التقرير بيوصل بعدين مش بيضيع.
+                </div>
+            </div>
+            <div class="modal-body" id="crashes-modal-body">
+                <!-- Crash rows injected here -->
+            </div>
+        </div>
+    </div>
+
     <!-- Hide one global wallpaper on specific cars -->
     <div id="hide-modal" class="modal-overlay" style="display: none;" onclick="if(event.target === this) closeHideModal()">
         <div class="modal-box">
@@ -1742,6 +1783,7 @@
         const REST_DEVICES = `${SUPABASE_URL}/rest/v1/devices`;
         const REST_WP_HIDES = `${SUPABASE_URL}/rest/v1/wallpaper_hides`;
         const REST_APP_VERSIONS = `${SUPABASE_URL}/rest/v1/app_versions`;
+        const REST_CRASHES = `${SUPABASE_URL}/rest/v1/device_crashes`;
         const AUTH_URL = `${SUPABASE_URL}/auth/v1`;
         // Wallpaper bytes live on Cloudflare R2 — Supabase Storage egress is what the fleet
         // exhausted. This Worker is the only thing allowed to write into that bucket, and it
@@ -1925,7 +1967,8 @@
                     loadDevices(),
                     loadWallpaperHides(),
                     loadWallpapers(),
-                    loadLatestVersion()
+                    loadLatestVersion(),
+                    loadCrashes()
                 ]);
 
                 // Update connection status UI
@@ -3151,6 +3194,113 @@
             } finally {
                 btn.disabled = false;
             }
+        }
+
+        // ============ Crash reports ============
+        // The app records every crash on the car AND posts it here on its next launch. This is
+        // the whole of our visibility into 450 head units we cannot reach: without it a fault
+        // arrives as "الشاشة سودا" and leaves as a guess.
+        let crashesList = [];
+
+        async function loadCrashes() {
+            try {
+                const response = await fetch(
+                    `${REST_CRASHES}?order=received_at.desc&limit=300`, {
+                    headers: {
+                        "apikey": ANON_KEY,
+                        "Authorization": `Bearer ${SESSION_TOKEN}`
+                    }
+                });
+                if (!response.ok) throw new Error("Failed to load crashes");
+                crashesList = await response.json();
+            } catch (err) {
+                // A backend without the table yet must not break the whole dashboard load.
+                console.warn("crash reports unavailable:", err);
+                crashesList = [];
+            }
+            const weekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+            const recent = crashesList.filter(c => new Date(c.received_at).getTime() >= weekAgo);
+            document.getElementById("stat-crashes").innerText = recent.length;
+        }
+
+        function openCrashesModal() {
+            document.getElementById("crashes-search").value = "";
+            document.getElementById("crashes-modal").style.display = "flex";
+            renderCrashesModal();
+            // Refresh in the background: the dashboard may have been open for hours.
+            loadCrashes().then(renderCrashesModal);
+        }
+
+        function closeCrashesModal() {
+            document.getElementById("crashes-modal").style.display = "none";
+        }
+
+        /** The car this report came from, named the way the operator knows it. */
+        function crashDeviceLabel(hwId) {
+            const d = devicesList.find(x => x.hardware_id === hwId);
+            if (!d) return escapeHtml(hwId) + ' <span style="color:var(--text-muted)">(غير مسجّل)</span>';
+            const parts = [d.serial_number || 'بدون كود'];
+            if (d.client_name) parts.push(d.client_name);
+            return escapeHtml(parts.join(' · '));
+        }
+
+        /** The one line anyone reads first: the exception and where it was thrown. */
+        function crashHeadline(text) {
+            const lines = (text || '').split('\n');
+            const start = lines.findIndex(l => l.startsWith('--- stack trace ---'));
+            if (start < 0) return lines.find(l => l.includes('Exception') || l.includes('Error')) || '(بدون تفاصيل)';
+            const ex = (lines[start + 1] || '').trim();
+            const at = (lines.slice(start + 2).find(l => l.trim().startsWith('at ')) || '').trim();
+            return at ? `${ex}\n${at}` : ex;
+        }
+
+        function renderCrashesModal() {
+            const body = document.getElementById("crashes-modal-body");
+            const q = (document.getElementById("crashes-search").value || '').trim().toLowerCase();
+
+            let rows = crashesList;
+            if (q) {
+                rows = rows.filter(c => {
+                    const d = devicesList.find(x => x.hardware_id === c.hardware_id);
+                    return (c.hardware_id || '').toLowerCase().includes(q)
+                        || (c.crash_text || '').toLowerCase().includes(q)
+                        || (d && (d.serial_number || '').toLowerCase().includes(q))
+                        || (d && (d.client_name || '').toLowerCase().includes(q));
+                });
+            }
+
+            if (!rows.length) {
+                body.innerHTML = `<div style="padding:32px;text-align:center;color:var(--text-muted);">
+                    ${crashesList.length ? 'لا نتائج للبحث ده.' : 'لا توجد أي أعطال — كل السيارات شغالة تمام. 🎉'}
+                </div>`;
+                return;
+            }
+
+            body.innerHTML = rows.map((c, i) => {
+                const when = new Date(c.received_at).toLocaleString('ar-EG');
+                const ver = c.app_version ? `v${escapeHtml(c.app_version)}` : '';
+                const mode = c.device_mode ? escapeHtml(c.device_mode) : '';
+                return `
+                <div style="border:1px solid var(--panel-border);border-radius:14px;margin-bottom:10px;overflow:hidden;">
+                    <div style="padding:12px 14px;cursor:pointer;display:flex;gap:12px;align-items:flex-start;"
+                         onclick="toggleCrash(${i})">
+                        <i class="fa-solid fa-bug" style="color:#a78bfa;margin-top:4px;"></i>
+                        <div style="flex:1;min-width:0;">
+                            <div style="font-weight:600;">${crashDeviceLabel(c.hardware_id)}</div>
+                            <div style="font-size:0.8rem;color:var(--text-muted);margin:2px 0 6px;">
+                                ${escapeHtml(when)} ${ver ? '· ' + ver : ''} ${mode ? '· ' + mode : ''}
+                            </div>
+                            <pre dir="ltr" style="margin:0;white-space:pre-wrap;word-break:break-word;font-size:0.78rem;color:#f0a8a8;">${escapeHtml(crashHeadline(c.crash_text))}</pre>
+                        </div>
+                    </div>
+                    <pre id="crash-full-${i}" dir="ltr" style="display:none;margin:0;padding:12px 14px;background:rgba(0,0,0,0.35);white-space:pre-wrap;word-break:break-word;font-size:0.72rem;max-height:420px;overflow:auto;">${escapeHtml(c.crash_text || '')}</pre>
+                </div>`;
+            }).join('');
+        }
+
+        function toggleCrash(i) {
+            const el = document.getElementById(`crash-full-${i}`);
+            if (el) el.style.display = el.style.display === 'none' ? 'block' : 'none';
         }
 
         // ============ Devices / Users management ============

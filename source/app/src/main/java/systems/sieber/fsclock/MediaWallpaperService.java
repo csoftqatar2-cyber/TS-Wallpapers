@@ -141,18 +141,49 @@ public class MediaWallpaperService extends WallpaperService {
             if(targetW <= 0 || targetH <= 0) return;
             String uriStr = prefs.getString(PREF_URI, null);
             if(uriStr == null) return;
-            Uri uri = Uri.parse(uriStr);
+            Uri uri = normalise(uriStr);
 
             String type = getContentResolver().getType(uri);
             type = type == null ? "" : type.toLowerCase();
 
-            if(type.startsWith("video/")) {
+            boolean video, gif;
+            if(type.isEmpty()) {
+                // The resolver has nothing to say about a plain file. Fall back to the extension
+                // rather than treating it as an image by default — that is how a local video used
+                // to come up as a black screen.
+                String guess = WallpaperItem.guessType(uriStr);
+                video = WallpaperItem.TYPE_VIDEO.equals(guess);
+                gif = WallpaperItem.TYPE_GIF.equals(guess);
+            } else {
+                video = type.startsWith("video/");
+                gif = type.equals("image/gif");
+            }
+
+            if(video) {
                 loadVideo(uri);
-            } else if(type.equals("image/gif") && Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            } else if(gif && Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
                 loadGif(uri);
             } else {
                 loadImage(uri, targetW, targetH);   // best-effort fallback too
             }
+        }
+
+        /**
+         * A URI the ContentResolver will actually answer for.
+         *
+         * The still path stores what it was handed, and a file on the head unit reaches it as a
+         * bare "/data/…/edit_1a2b.jpg" — no scheme, so {@code getType} returns null and
+         * {@code openInputStream} throws "Unknown URI". Every load then failed silently and the
+         * engine drew nothing, which on a wallpaper surface is a black screen: exactly what a
+         * Leopard car showed after a restart put this service back on top of the picture. The
+         * same path spelled file:// answers both questions.
+         */
+        private Uri normalise(String s) {
+            if(s.startsWith("content://") || s.startsWith("file://")
+                    || s.startsWith("android.resource://") || s.startsWith("http")) {
+                return Uri.parse(s);
+            }
+            return Uri.fromFile(new java.io.File(s));
         }
 
         private void loadImage(Uri uri, int targetW, int targetH) {
@@ -173,8 +204,15 @@ public class MediaWallpaperService extends WallpaperService {
                 if(in != null) { bitmap = BitmapFactory.decodeStream(in, null, opts); in.close(); }
 
                 mode = Mode.IMAGE;
+                if(bitmap == null) {
+                    // The one failure that looks like nothing: no exception, no picture, and a
+                    // wallpaper surface that was never drawn on is black. Say so, so the next
+                    // crash report from this car carries the reason rather than the symptom.
+                    CrashReporter.breadcrumb("wallpaper engine: could not decode " + uri);
+                }
                 drawImageOrGif();
             } catch(Exception e) {
+                CrashReporter.breadcrumb("wallpaper engine: cannot read " + uri + " — " + e);
                 mode = Mode.NONE;
             }
         }

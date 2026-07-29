@@ -233,6 +233,18 @@ public class BaseSettingsActivity extends AppCompatActivity {
             );
         } catch(PackageManager.NameNotFoundException ignored) { }
 
+        // The crash log button only exists on a car that has actually crashed. A technician who
+        // has been told "it goes black sometimes" can read what happened right here, offline,
+        // instead of the report reaching us as a description of a symptom.
+        try {
+            int crashes = CrashReporter.count(this);
+            View crashButton = findViewById(R.id.buttonCrashLog);
+            if(crashes > 0) {
+                ((TextView) crashButton).setText(getString(R.string.crash_log_open_count, crashes));
+                crashButton.setVisibility(View.VISIBLE);
+            }
+        } catch(Throwable ignored) { }
+
         // automatically check for an app update once when settings are opened
         checkForUpdate(true);
 
@@ -2660,6 +2672,51 @@ public class BaseSettingsActivity extends AppCompatActivity {
     public void onClickCheckUpdate(View v) {
         // manual check: also notify the user when already up to date / on error
         checkForUpdate(false);
+    }
+
+    /**
+     * The last crash, in full, on the car's own screen.
+     *
+     * Monospace and scrollable because a stack trace read as wrapped prose is unreadable, and
+     * someone standing at a head unit with no laptop is exactly who this is for. "Send" is there
+     * for the case the crash happened while the car was offline: the automatic upload rides the
+     * next launch, and this is the manual retry when someone is watching.
+     */
+    public void onClickCrashLog(View v) {
+        final String text = CrashReporter.latest(this);
+        if(text.isEmpty()) {
+            infoDialog("", getString(R.string.crash_log_empty));
+            return;
+        }
+        final TextView body = new TextView(this);
+        body.setText(text);
+        body.setTypeface(Typeface.MONOSPACE);
+        body.setTextSize(11);
+        body.setTextIsSelectable(true);
+        body.setTextDirection(View.TEXT_DIRECTION_LTR);
+        int pad = Math.round(16 * getResources().getDisplayMetrics().density);
+        body.setPadding(pad, pad, pad, pad);
+        ScrollView scroll = new ScrollView(this);
+        scroll.addView(body);
+
+        new AlertDialog.Builder(this)
+                .setTitle(getString(R.string.crash_log_title, CrashReporter.count(this)))
+                .setView(scroll)
+                .setPositiveButton(R.string.ok, null)
+                .setNeutralButton(R.string.crash_log_send, new DialogInterface.OnClickListener() {
+                    @Override public void onClick(DialogInterface d, int w) {
+                        CrashReporter.uploadPendingAsync(BaseSettingsActivity.this);
+                        Toast.makeText(BaseSettingsActivity.this,
+                                R.string.crash_log_sending, Toast.LENGTH_SHORT).show();
+                    }
+                })
+                .setNegativeButton(R.string.crash_log_clear, new DialogInterface.OnClickListener() {
+                    @Override public void onClick(DialogInterface d, int w) {
+                        CrashReporter.clear(BaseSettingsActivity.this);
+                        findViewById(R.id.buttonCrashLog).setVisibility(View.GONE);
+                    }
+                })
+                .show();
     }
 
     /**

@@ -1892,6 +1892,26 @@
                                 android:textStyle="bold"
                                 android:text="@string/update_check" />
 
+                            <!-- Crash log. Deliberately in the Updates card: whoever opens this
+                                 card is already asking "what version is this and is it broken?",
+                                 and the answer to the second half is the log. Hidden when the car
+                                 has never crashed — an empty diagnostic is only noise. -->
+                            <TextView
+                                android:id="@+id/buttonCrashLog"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_marginTop="8dp"
+                                android:background="@drawable/fit_secondary_btn"
+                                android:gravity="center"
+                                android:padding="14dp"
+                                android:focusable="true"
+                                android:clickable="true"
+                                android:visibility="gone"
+                                android:onClick="onClickCrashLog"
+                                android:textColor="@color/gold"
+                                android:textSize="15sp"
+                                android:text="@string/crash_log_open" />
+
                             <TextView
                                 android:id="@+id/textViewBuildInfo"
                                 android:layout_width="match_parent"

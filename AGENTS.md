@@ -55,6 +55,19 @@ the single most important thing to know before touching backend behavior).
   write to the `wallpapers` storage bucket); metadata rows go to the `wallpapers` table.
 - Device admin (block/rename/activate/delete) PATCHes the `devices` table.
 
+### Crash reports (device → Supabase → dashboard)
+- `CrashReporter` installs an uncaught-exception handler in `FsClockApp.onCreate`
+  (first line, so a crash during setup is caught too). Every crash is written to
+  `filesDir/crashes/crash-<ms>.txt` — internal storage, not cache — with app version,
+  operating mode, hardware id, stack trace, breadcrumbs (`CrashReporter.breadcrumb`,
+  which survives the release build's `Log.i/d/v/w` stripping) and the tail of logcat.
+- The next launch POSTs each unsent file to RPC `report_crash`; a sent file is renamed
+  `.sent` and kept on the car so a technician can still read it offline
+  (Settings → Updates → "سجل الأعطال", shown only when count > 0).
+- The dashboard reads `device_crashes` (admin-only RLS) in the "أعطال آخر ٧ أيام" card.
+- **`-keepnames class systems.sieber.fsclock.**` in proguard-rules.pro is what makes the
+  traces readable.** Removing it turns every fleet crash report back into `a.b.c(SourceFile:1)`.
+
 ### Self-update (CI → Supabase → devices)
 1. Bump `versionCode`/`versionName` in `source/app/build.gradle`, push to `main`.
 2. `release.yml` reads the version; **gate:** publishes only if `versionCode` > the
@@ -161,6 +174,10 @@ shared secret (lives only in the live functions — never commit it).
   in ANY program activates all of them on that device (shared hardware id).
 - `app_versions` columns `version_code, version_name, apk_url, changelog` (anon-readable);
   hardware-id prefix format; serial prefix `7078` (also enforced server-side).
+- RPC `report_crash(device_hw_id, crash_text, app_version, app_version_code, device_mode,
+  crash_at, legacy_hw_id)` — deliberately forgiving (unknown device still stored, bad input
+  is a silent no-op): a crash report must never be the thing that errors on a car that is
+  already broken. Keeps the newest 50 reports per car.
 
 The Supabase MCP server is usually connected in this workspace — use it
 (`list_tables`, `execute_sql`, `get_advisors`) to inspect the live schema instead of guessing.

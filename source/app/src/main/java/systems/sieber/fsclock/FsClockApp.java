@@ -13,11 +13,20 @@ public class FsClockApp extends Application {
 
     @Override
     public void onCreate() {
+        // First line of the process: a crash during any of the setup below is exactly the kind
+        // this exists to catch, and a handler installed afterwards would miss it.
+        CrashReporter.install(this);
         migrateSettings();
         setAppTheme(getAppTheme(getApplicationContext()));
         IntegrityGuard.init(getApplicationContext());
         super.onCreate();
         kickGwmSync();
+        // Anything the car could not send while it was crashing goes now.
+        CrashReporter.uploadPendingAsync(getApplicationContext());
+        // Second chance for a Leopard car whose wallpaper the ROM dropped: the boot broadcast is
+        // the main repair, but a head unit that never sends one still gets its picture back the
+        // moment anything opens the app. Throttled, so this costs nothing when it is not needed.
+        LeopardApplier.reassert(getApplicationContext());
     }
 
     /**

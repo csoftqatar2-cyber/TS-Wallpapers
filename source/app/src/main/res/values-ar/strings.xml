@@ -428,4 +428,13 @@
     <string name="chip_mode_leopard">الوضع: Leopard</string>
     <string name="chip_mode_gwm">الوضع: GWM</string>
     <string name="chip_mode_lynkco">الوضع: Lynk &amp; Co</string>
+
+    <!-- سجل الأعطال (الإعدادات ← التحديثات). لا يظهر إلا في سيارة حصل فيها عطل فعلاً. -->
+    <string name="crash_log_open">سجل الأعطال</string>
+    <string name="crash_log_open_count">سجل الأعطال (%1$d)</string>
+    <string name="crash_log_title">آخر عطل — %1$d مُسجَّل</string>
+    <string name="crash_log_empty">لا يوجد أي عطل مسجَّل على هذه السيارة.</string>
+    <string name="crash_log_send">إرسال الآن</string>
+    <string name="crash_log_clear">مسح السجل</string>
+    <string name="crash_log_sending">جارٍ إرسال سجل الأعطال…</string>
 </resources>

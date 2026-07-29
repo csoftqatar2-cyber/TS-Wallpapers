@@ -454,4 +454,13 @@ Roboto Font Copyright (c) Christian Robertson. Licensed under the Apache License
     <string name="chip_mode_leopard">Mode: Leopard</string>
     <string name="chip_mode_gwm">Mode: GWM</string>
     <string name="chip_mode_lynkco">Mode: Lynk &amp; Co</string>
+
+    <!-- Crash log (Settings -> Updates). Only shown on a car that has actually crashed. -->
+    <string name="crash_log_open">Crash log</string>
+    <string name="crash_log_open_count">Crash log (%1$d)</string>
+    <string name="crash_log_title">Last crash — %1$d recorded</string>
+    <string name="crash_log_empty">No crash has been recorded on this car.</string>
+    <string name="crash_log_send">Send now</string>
+    <string name="crash_log_clear">Clear</string>
+    <string name="crash_log_sending">Sending the crash log…</string>
 </resources>

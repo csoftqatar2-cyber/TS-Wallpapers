@@ -78,6 +78,12 @@ public class BootReceiver extends BroadcastReceiver {
         Log.i(TAG, "received: " + action);
         if(!isStartTrigger(action)) return;
 
+        // Before anything else, and regardless of the auto-start option: in Leopard the wallpaper
+        // IS the product, and these head units lose it across a restart (see
+        // LeopardApplier.reassert). Auto-start is about opening a screen; this is about the car
+        // coming back on with the picture it was left with instead of a black dashboard.
+        LeopardApplier.reassert(context);
+
         maybeStart(context, TAG + "/" + action, action);
     }
 
