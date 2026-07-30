@@ -714,7 +714,23 @@ public class LeopardPickerActivity extends AppCompatActivity {
 
     // ---------------------------------------------------------------- filmstrip
 
+    /**
+     * True once this screen is on its way out.
+     *
+     * Everything that applies a wallpaper runs on a background thread and comes back through
+     * runOnUiThread, and the picker can be gone by then: "close after set" finishes it 900ms
+     * after an apply, and a video apply hands over to the system live-wallpaper screen entirely.
+     * Glide refuses to start a load against a destroyed activity — it throws — so a callback
+     * that repaints the strip was killing the app right after a successful apply
+     * (3 crashes on one car in 15 minutes, LeopardPickerActivity.buildFilmstrip → thumbCell).
+     * Repainting a screen nobody is looking at has no value, so the callbacks just stand down.
+     */
+    private boolean gone() {
+        return isFinishing() || isDestroyed();
+    }
+
     private void buildFilmstrip() {
+        if(gone()) return;
         mFilmstrip.removeAllViews();
         // Whatever the phone pane was showing, this is the strip's band now.
         mPhonePane.setVisibility(View.GONE);
@@ -993,6 +1009,7 @@ public class LeopardPickerActivity extends AppCompatActivity {
 
     /** Show the chosen wallpaper full-screen before committing it. */
     private void showPreview(WallpaperItem item) {
+        if(gone()) return;   // reached from the bake thread too — see gone()
         mPreview.setVisibility(View.VISIBLE);
         mStatus.setText("");
         mPreviewBadge.setVisibility(item.isVideo() ? View.VISIBLE : View.GONE);
