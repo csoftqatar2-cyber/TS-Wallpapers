@@ -48,6 +48,13 @@ public class WallpaperRepo {
     static final String PREF_LAST_URL = "wallpaper-last-url";
     static final String PREF_DEVICE_ID = "device-id";
     static final String PREF_ACTIVE = "device-active";
+    /** The last VIN this car ever reported. A head unit that answers the VIN query today and
+     *  comes up empty tomorrow (the settings row is written late in the boot, and on some Geely
+     *  builds not at all until the car has been driven) would otherwise fall all the way back to
+     *  ANDROID_ID and register itself as a brand new, unactivated device — the customer sees
+     *  "0 wallpapers" and re-entering the serial fails with serial_already_used. Once a VIN has
+     *  been seen it is the car's identity for good. */
+    static final String PREF_VIN_SEEN = "device-vin-seen";
     static final String PREF_AUTO_SWITCH = "wallpaper-auto-switch";
 
     /** How long one wallpaper stays on screen before the slideshow moves on, in seconds. */
@@ -153,7 +160,60 @@ public class WallpaperRepo {
                 if (isPlausibleVin(v)) return v.trim();
             } catch (Throwable ignored) { }
         }
+        return scanSettingsForVin(context);
+    }
+
+    /**
+     * Last resort before the legacy chain: walk the settings tables and take any row whose NAME
+     * mentions a VIN and whose VALUE is shaped like one.
+     *
+     * The named key above is what one Lynk & Co build (ULAUT012…) calls it. A car of the same
+     * model on a different build answered nothing for it and identified itself by ANDROID_ID
+     * instead — which is per-user and per-signing-key, so the car dropped out of its activation
+     * and was told it had no wallpapers. Guessing the next vendor's spelling one key at a time
+     * repeats that outage per ROM; reading the table does not.
+     *
+     * Deliberately stricter than {@link #isPlausibleVin}: a key we did not choose ourselves can
+     * hold anything, so only a real 17-character VIN counts here. Cars that already answer on a
+     * known key never reach this method, so no id in the field can move because of it.
+     */
+    private static String scanSettingsForVin(Context context) {
+        android.net.Uri[] tables = {
+            android.provider.Settings.Global.CONTENT_URI,
+            android.provider.Settings.System.CONTENT_URI,
+            android.provider.Settings.Secure.CONTENT_URI
+        };
+        for (android.net.Uri table : tables) {
+            android.database.Cursor c = null;
+            try {
+                c = context.getContentResolver().query(
+                        table, new String[]{"name", "value"}, null, null, null);
+                if (c == null) continue;
+                while (c.moveToNext()) {
+                    String name = c.getString(0);
+                    if (name == null || !name.toLowerCase().contains("vin")) continue;
+                    if (isStrictVin(c.getString(1))) return c.getString(1).trim();
+                }
+            } catch (Throwable ignored) {
+                // A locked-down provider is a reason to try the next table, not to lose the app.
+            } finally {
+                if (c != null) try { c.close(); } catch (Throwable ignored) { }
+            }
+        }
         return "";
+    }
+
+    /** The ISO 3779 shape: 17 characters, alphanumeric, never I/O/Q. */
+    private static boolean isStrictVin(String v) {
+        if (v == null) return false;
+        v = v.trim();
+        if (v.length() != 17) return false;
+        for (int i = 0; i < 17; i++) {
+            char ch = Character.toUpperCase(v.charAt(i));
+            if (ch == 'I' || ch == 'O' || ch == 'Q') return false;
+            if (!((ch >= '0' && ch <= '9') || (ch >= 'A' && ch <= 'Z'))) return false;
+        }
+        return true;
     }
 
     /** Guards against the placeholders these fields carry before the car has been provisioned. */
@@ -173,10 +233,41 @@ public class WallpaperRepo {
         String vin = getVinFromSettings(context);
         if (vin.isEmpty()) vin = getVin();
         if (!vin.isEmpty()) {
+            rememberVin(context, vin);
             return "VIN-" + vin;
         }
-        // No VIN (non-vehicle device) -> fall back to the legacy identifier chain.
+        // Nothing answered this time. If this car has ever answered, it is still the same car:
+        // keep the identity it was activated under instead of turning into a new device the
+        // moment the head unit is slow to publish its VIN (see PREF_VIN_SEEN).
+        String remembered = rememberedVin(context);
+        if (!remembered.isEmpty()) {
+            return "VIN-" + remembered;
+        }
+        // No VIN, and none ever seen (non-vehicle device) -> fall back to the legacy chain.
         return getLegacyHardwareId(context);
+    }
+
+    /** Store the VIN this car answered with, so a later empty answer cannot change its id. */
+    private static void rememberVin(Context context, String vin) {
+        try {
+            SharedPreferences pref = context.getSharedPreferences(
+                    BaseSettingsActivity.SHARED_PREF_DOMAIN, Context.MODE_PRIVATE);
+            if (!vin.equals(pref.getString(PREF_VIN_SEEN, ""))) {
+                pref.edit().putString(PREF_VIN_SEEN, vin).apply();
+            }
+        } catch (Throwable ignored) { }
+    }
+
+    /** The VIN this car last answered with, "" if it never has. */
+    private static String rememberedVin(Context context) {
+        try {
+            String vin = context.getSharedPreferences(
+                    BaseSettingsActivity.SHARED_PREF_DOMAIN, Context.MODE_PRIVATE)
+                    .getString(PREF_VIN_SEEN, "");
+            return isPlausibleVin(vin) ? vin.trim() : "";
+        } catch (Throwable ignored) {
+            return "";
+        }
     }
 
     /** The identifier used by builds before VIN support. Kept byte-for-byte identical
