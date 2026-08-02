@@ -1,0 +1,31 @@
+# Activation decision service. See worker.js for what this is and why.
+#
+# The shared secret is NOT here — set it out of band, once per environment:
+#   npx wrangler secret put SHARED_SECRET
+#
+# Apply the D1 schema:
+#   npx wrangler d1 execute ts-activation --remote --file=./schema.sql
+#
+# database_id is an identifier, not a credential: reaching the database still
+# requires an account API token. It is committed so the binding is reproducible.
+
+name = "ts-activation"
+main = "worker.js"
+compatibility_date = "2026-08-02"
+
+# No public route on purpose. Only Supabase Postgres calls this, over the
+# workers.dev hostname, with the shared secret.
+workers_dev = true
+
+# Off deliberately. Preview URLs would publish every version of this Worker on
+# its own guessable hostname; for a service that owns activation, one reachable
+# surface is enough.
+preview_urls = false
+
+[[d1_databases]]
+binding = "DB"
+database_name = "ts-activation"
+database_id = "978813d3-eeb3-4697-9d73-241242d0cfde"
+
+[observability]
+enabled = true
