@@ -13,7 +13,11 @@ name: Build & Publish APK Update
 #
 # The APK and the wallpaper library live on R2, not Supabase Storage: the fleet
 # re-downloading them blew past the Supabase free bandwidth quota. Supabase still
-# owns the database, the RPCs and activation — none of which moved.
+# owns the database and the RPCs the cars call — including app_versions, which
+# this workflow writes to. Since 2026-08-02 the activation DECISION (serial
+# uniqueness, blocking, identity renames) is answered by Cloudflare D1 behind
+# those same RPCs; see supabase/migrations/20260802_cf_activation_*.sql. The
+# request/response contract the cars see did not change.
 #
 # Required repository secrets (Settings -> Secrets and variables -> Actions):
 #   SIGNING_KEYSTORE_BASE64    - base64 of source/thabthaba.jks
