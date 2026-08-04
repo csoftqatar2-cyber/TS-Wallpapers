@@ -18,24 +18,18 @@ import java.io.InputStream;
 /**
  * Hands a chosen file to Android's wallpaper system.
  *
- * Both a still and a live wallpaper go through the system's own screen now, each with its own
- * "Set wallpaper" button:
+ * The asymmetry here is a platform boundary, not a design choice:
  *
+ *  - A still image can be set on home AND lock in one silent call. No system screen, no
+ *    question. Exactly what was asked for.
  *  - Anything moving must be a live wallpaper, and Android will not let an app install itself
  *    as the live wallpaper silently — it must go through ACTION_CHANGE_LIVE_WALLPAPER, where
  *    the user presses the system's own button. There is no API to skip this.
- *  - A still USED to be set with one silent wm.setBitmap() call. On the head units this mode
- *    ships on that turned out not to be safe: a vendor theme service can quietly re-assert its
- *    own wallpaper moments after ours lands, and a silent set had nothing to race that with —
- *    the picture would vanish until the app was reopened, which put it back via {@link
- *    #reassert} after the vendor had settled. Handing the still to ACTION_CROP_AND_SET_WALLPAPER
- *    instead means the vendor is never fighting a set it did not itself initiate.
  *
- * A live wallpaper's hand-off happens once: after our service is the active live wallpaper it
- * stays active and reloads itself when the stored selection changes, so every later video is
- * instant. A still has no equivalent "already active" state — every still goes through the
- * screen again. Also: a live wallpaper generally cannot cover the lock screen, while whether a
- * still covers both is now up to the system screen, not a promise this class makes.
+ * The second case happens once. After our service is the active live wallpaper it stays
+ * active and reloads itself when the stored selection changes, so every later video is
+ * instant. Also: a live wallpaper generally cannot cover the lock screen, so a video is
+ * home-only while an image is both. The copy must not promise otherwise.
  */
 class LeopardApplier {
 
@@ -54,17 +48,22 @@ class LeopardApplier {
     /** Several wake signals arrive together on one start; one re-assert covers them all. */
     private static final long REASSERT_THROTTLE_MS = 60 * 1000L;
 
+    /**
+     * How long to give the vendor theme service to finish whatever it does right after a still
+     * is set, before we set it again. See {@link #apply} for why a second write exists at all.
+     */
+    private static final long SETTLE_REAPPLY_MS = 1500L;
+
     /** What applying this file will actually do, so the UI can warn before it happens. */
-    static final int RESULT_NEEDS_SYSTEM_SCREEN = 1; // launch the system picker
+    static final int RESULT_APPLIED_BOTH = 0;      // image: home + lock, silently
+    static final int RESULT_NEEDS_SYSTEM_SCREEN = 1; // moving: launch the system picker
     static final int RESULT_APPLIED_LIVE = 2;      // moving, service already active: silent
+    static final int RESULT_FAILED = 3;
 
     /** True when applying this item would throw the user into the system's own screen. */
     static boolean needsSystemScreen(Context ctx, String type) {
         boolean moving = WallpaperItem.TYPE_VIDEO.equals(type) || WallpaperItem.TYPE_GIF.equals(type);
-        // A live wallpaper only needs the hand-off once — while our own service is not yet the
-        // active one — and can reload itself silently after that. A still has no such shortcut;
-        // see the class comment for why it goes through the screen every time now.
-        return moving ? !isOurServiceActive(ctx) : true;
+        return moving && !isOurServiceActive(ctx);
     }
 
     /**
@@ -94,9 +93,8 @@ class LeopardApplier {
 
     /**
      * Store the selection, then apply it.
-     * @return one of the RESULT_* constants — always a hand-off now, either to
-     *         {@link #systemPickerIntent} (moving, not yet active) or {@link #stillPickerIntent}
-     *         (a still, every time). The caller launches whichever one after warning the user.
+     * @return one of the RESULT_* constants. RESULT_NEEDS_SYSTEM_SCREEN means the caller must
+     *         launch {@link #systemPickerIntent} after warning the user.
      */
     static int apply(Context ctx, String uriStr, String type) {
         // Persist first, unconditionally: the service reads this, and on the
@@ -117,15 +115,25 @@ class LeopardApplier {
         // that restores its wallpaper component at boot, that is exactly the picture that
         // disappears on the next start. Stand the live wallpaper down first, every time.
         clearOurLiveWallpaper(ctx);
-        // Used to write the bitmap ourselves here — one silent wm.setBitmap() call. That is what
-        // used to go missing after a restart: a video survives reboot because Android itself owns
-        // and re-binds the live-wallpaper component, the same official record the vendor's own
-        // boot routine respects, while a still set by a third-party app apparently is not enough
-        // for that routine to recognise as "the user's wallpaper" — it reverts to its own default
-        // on the next boot regardless of what {@link #reassert} tries afterwards. Handing the
-        // still to the system's own crop-and-set screen instead means the OS's own official path
-        // is what records it, the same path a video already had no choice but to use.
-        return RESULT_NEEDS_SYSTEM_SCREEN;
+        boolean ok = applyStill(ctx, uriStr, true);
+        CrashReporter.breadcrumb("leopard: apply still " + (ok ? "ok" : "FAILED") + " " + uriStr);
+        // The picker leaves (and often tears itself down) a second or two after this call
+        // returns — see onApplied()/goHome() in LeopardPickerActivity. On these head units that
+        // window overlaps the vendor theme service's own post-boot-like re-assert of whatever
+        // wallpaper it last knew about, which silently wins the race and the picture the user
+        // just chose never actually shows — until the app is reopened, which runs reassert()
+        // and sets it again after the vendor has settled. Do that same second write here,
+        // proactively, on this same background thread, instead of making the user do it by hand.
+        if(ok) {
+            try {
+                Thread.sleep(SETTLE_REAPPLY_MS);
+            } catch(InterruptedException ignored) {
+                Thread.currentThread().interrupt();
+            }
+            boolean reok = applyStill(ctx, uriStr, false);
+            CrashReporter.breadcrumb("leopard: settle re-apply " + (reok ? "ok" : "FAILED"));
+        }
+        return ok ? RESULT_APPLIED_BOTH : RESULT_FAILED;
     }
 
     /**
@@ -233,31 +241,6 @@ class LeopardApplier {
         }
     }
 
-    /**
-     * After the system's own crop-and-set screen has applied a still, keep our own copy of it —
-     * the same bookkeeping {@link #applyStill} used to do itself when it wrote the bitmap
-     * directly. {@link #reassert} needs this file to put the wallpaper back after a restart;
-     * without it a still applied through the system screen would be invisible to that repair.
-     */
-    static void keepCopyFromUri(Context context, String uriStr) {
-        final Context ctx = context.getApplicationContext();
-        new Thread(() -> {
-            InputStream in = null;
-            try {
-                in = openAny(ctx, Uri.parse(uriStr));
-                if(in == null) return;
-                Bitmap bmp = BitmapFactory.decodeStream(in);
-                if(bmp == null) return;
-                keepCopy(ctx, bmp);
-                bmp.recycle();
-            } catch(Throwable t) {
-                Log.w(TAG, "could not keep a copy after the system screen applied a still", t);
-            } finally {
-                if(in != null) try { in.close(); } catch(Exception ignored) {}
-            }
-        }).start();
-    }
-
     private static boolean applyStill(Context ctx, String uriStr, boolean remember) {
         InputStream in = null;
         try {
@@ -319,20 +302,6 @@ class LeopardApplier {
     }
 
     /**
-     * The system's own screen for putting a still on as the wallpaper — its own crop preview and
-     * its own "Set wallpaper" button, the same kind of hand-off {@link #systemPickerIntent}
-     * already forces for a live wallpaper. The read permission grant is required: the activity
-     * that answers this intent runs in a different app and would otherwise not be able to open a
-     * content:// URI that belongs to us.
-     */
-    static Intent stillPickerIntent(Uri uri) {
-        Intent i = new Intent(WallpaperManager.ACTION_CROP_AND_SET_WALLPAPER);
-        i.setDataAndType(uri, "image/*");
-        i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
-        return i;
-    }
-
-    /**
      * Start a hand-off screen on the SAME display the caller is running on.
      *
      * These cars have more than one screen — the L946 runs this picker on a 1280x640 passenger
@@ -348,17 +317,6 @@ class LeopardApplier {
      * Falls back to a plain start on anything older than O, or when the display cannot be read.
      */
     static void startOnSameDisplay(Context ctx, Intent intent) {
-        ctx.startActivity(intent, sameDisplayOptions(ctx));
-    }
-
-    /** Same reasoning as {@link #startOnSameDisplay}, for a hand-off we need a result back from —
-     *  the still's crop-and-set screen reports success or cancel, unlike the fire-and-forget live
-     *  wallpaper hand-off. */
-    static void startOnSameDisplayForResult(android.app.Activity act, Intent intent, int requestCode) {
-        act.startActivityForResult(intent, requestCode, sameDisplayOptions(act));
-    }
-
-    private static android.os.Bundle sameDisplayOptions(Context ctx) {
         android.os.Bundle opts = null;
         if(Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             int displayId = displayIdOf(ctx);
@@ -372,7 +330,7 @@ class LeopardApplier {
                 }
             }
         }
-        return opts;
+        ctx.startActivity(intent, opts);
     }
 
     /** Which screen this context is on, or -1 when it cannot be told. */
