@@ -153,13 +153,79 @@ public class WallpaperRepo {
             // BYD DiLink (Leopard / 豹5 and friends) – same value in all four,
             // the persist.* ones survive a factory reset of the head unit.
             "persist.sys.dms.config.vin", "persist.sys.cloud.last_vin",
-            "sys.dms.config.vin", "sys.virtual.vin"
+            "sys.dms.config.vin", "sys.virtual.vin",
+            // Chery (gen4_gvm / cheryidcpro). Filed under the navigation stack rather than
+            // anything vehicle-shaped, which is why the first Chery on the fleet identified
+            // itself by ANDROID_ID — an id that a factory reset or a head-unit swap changes.
+            "persist.sys.navi.vin"
         };
         for (String k : keys) {
             String v = getSystemProperty(k);
             if (isPlausibleVin(v)) return v.trim();
         }
         return "";
+    }
+
+    /**
+     * The property equivalent of {@link #scanSettingsForVin}: read every system property and
+     * take one whose NAME mentions a VIN and whose VALUE is shaped like one.
+     *
+     * The named list above is a list of vendors we have already met. Each new brand files the
+     * VIN somewhere of its own — Chery under the navigation stack, BYD under the driver
+     * monitoring config, Geely not in properties at all — and learning that spelling one
+     * outage at a time is the process this replaces: until the key is known, the car identifies
+     * itself by ANDROID_ID and quietly falls out of its own activation the first time the head
+     * unit is reset.
+     *
+     * There is no API to enumerate properties, so this shells out to {@code getprop}, which is
+     * a plain world-executable binary and needs no permission. That is a process spawn, hence
+     * the cache in {@link #scannedVin}, and it is the LAST thing tried — a car answering on a
+     * known key never reaches it, so no id already in the field can move because of this.
+     *
+     * Strict 17-character VINs only, for the same reason as the settings scan: the key was
+     * chosen by somebody else and can hold anything.
+     */
+    private static String scanPropertiesForVin() {
+        java.io.BufferedReader r = null;
+        Process p = null;
+        try {
+            p = new ProcessBuilder("getprop").redirectErrorStream(true).start();
+            r = new java.io.BufferedReader(new java.io.InputStreamReader(p.getInputStream()));
+            String line;
+            while ((line = r.readLine()) != null) {
+                // getprop prints one property per line as: [name]: [value]
+                int sep = line.indexOf("]: [");
+                if (sep < 1 || !line.endsWith("]")) continue;
+                String name = line.substring(1, sep);
+                if (!name.toLowerCase().contains("vin")) continue;
+                String value = line.substring(sep + 4, line.length() - 1);
+                if (isStrictVin(value)) return value.trim();
+            }
+        } catch (Throwable ignored) {
+            // No getprop, no permission, a ROM that blocks exec: fall through to the legacy id.
+        } finally {
+            if (r != null) try { r.close(); } catch (Throwable ignored) { }
+            if (p != null) try { p.destroy(); } catch (Throwable ignored) { }
+        }
+        return "";
+    }
+
+    /** The scan above, at most once a minute — getHardwareId is called on every request. */
+    private static volatile String sScannedVin = "";
+    private static volatile long sScannedAt = 0;
+
+    private static String scannedVin() {
+        String found = sScannedVin;
+        if (!found.isEmpty()) return found;
+        // Not cached negatively for good: a head unit can publish its VIN a little after boot,
+        // and a car that answers on the second attempt must not be stuck as an ANDROID_ID device
+        // for the rest of the session.
+        long now = android.os.SystemClock.elapsedRealtime();
+        if (sScannedAt != 0 && now - sScannedAt < 60_000) return "";
+        sScannedAt = now;
+        String v = scanPropertiesForVin();
+        if (!v.isEmpty()) sScannedVin = v;
+        return v;
     }
 
     /**
@@ -254,6 +320,8 @@ public class WallpaperRepo {
         //    source is consulted, and the settings value is the one Geely keeps current.
         String vin = getVinFromSettings(context);
         if (vin.isEmpty()) vin = getVin();
+        // Last resort before giving up on the VIN entirely: a key no vendor has told us about.
+        if (vin.isEmpty()) vin = scannedVin();
         if (!vin.isEmpty()) {
             rememberVin(context, vin);
             return "VIN-" + vin;
