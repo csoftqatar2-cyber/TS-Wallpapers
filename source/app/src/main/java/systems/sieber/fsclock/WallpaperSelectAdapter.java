@@ -7,6 +7,7 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.BaseAdapter;
 import android.widget.CheckBox;
+import android.widget.GridLayout;
 import android.widget.ImageView;
 import android.widget.TextView;
 
@@ -93,12 +94,21 @@ public class WallpaperSelectAdapter extends BaseAdapter {
         return position;
     }
 
-    /** Flip one row between shown and hidden. */
-    void toggle(int position) {
+    /**
+     * Flip one cell between shown and hidden, repainting only that cell.
+     *
+     * Deliberately not notifyDataSetChanged(). The grid is built once from getView() and a
+     * broadcast change rebuilds every cell, which means re-requesting every thumbnail — on a
+     * head unit, a visible stutter and a flash of empty frames every time somebody ticks a box.
+     * Nothing about the other cells has changed, so nothing else is touched.
+     */
+    void toggle(int position, View cell, CheckBox check) {
         WallpaperItem item = getItem(position);
         if(item.url == null) return;
         if(!mVisibleUrls.remove(item.url)) mVisibleUrls.add(item.url);
-        notifyDataSetChanged();
+        boolean visible = mVisibleUrls.contains(item.url);
+        if(check != null) check.setChecked(visible);
+        if(cell != null) cell.setActivated(visible);
     }
 
     /** Check or uncheck every row at once. */
@@ -138,16 +148,28 @@ public class WallpaperSelectAdapter extends BaseAdapter {
             holder.title = convertView.findViewById(R.id.textViewWallpaperName);
             holder.edit = convertView.findViewById(R.id.buttonWallpaperEdit);
             holder.delete = convertView.findViewById(R.id.buttonWallpaperDelete);
+            clipToCellShape(convertView);
             convertView.setTag(holder);
         } else {
             holder = (ViewHolder) convertView.getTag();
         }
 
+        // Size the cell BEFORE loading anything into it. Glide answers a memory-cache hit
+        // synchronously, from inside loadThumb below — so if the host set the LayoutParams
+        // afterwards, sizeCellToImage would run against a view that had none yet, find nothing to
+        // resize, and then be overwritten by the 16:9 placeholder. Every picture that was not 16:9
+        // then sat letterboxed inside a border that was wider than it was. It looked right the
+        // first time the dialog opened (nothing cached, so the callbacks were late and landed on a
+        // sized cell) and wrong on every open after that, which is what made it look like a
+        // scrolling bug.
+        applyCellSize(convertView);
+
         final WallpaperItem item = getItem(position);
+        final View cell = convertView;
         boolean visible = item.url != null && mVisibleUrls.contains(item.url);
         holder.check.setChecked(visible);
         holder.title.setText(describe(item));
-        loadThumb(holder.thumb, item);
+        loadThumb(holder.thumb, item, cell);
         // Drives the cell outline through the state list, so a ticked cell is readable from
         // across the cabin and not just by a 20px box in its corner.
         convertView.setActivated(visible);
@@ -164,10 +186,19 @@ public class WallpaperSelectAdapter extends BaseAdapter {
         //
         // Rebound every getView, because cells are recycled — a listener that captured the old
         // item would act on whatever used to be in this cell.
-        convertView.setOnClickListener(v -> toggle(position));
-        holder.edit.setOnClickListener(v -> {
+        final ViewHolder bound = holder;
+        convertView.setOnClickListener(v -> toggle(position, v, bound.check));
+
+        // The pencil is for stills only. Every control on the fit editor — crop, zoom, rotation,
+        // the blurred or coloured bars — describes how ONE frame is laid onto the screen, and a
+        // clip has no single frame to lay out; its framing is decided by the player while it
+        // runs. So on a video the button opened a screen that could not change anything about it.
+        // Hidden rather than disabled: a greyed pencil still says "there is an edit here".
+        final boolean editable = !item.isVideo();
+        holder.edit.setVisibility(editable ? View.VISIBLE : View.GONE);
+        holder.edit.setOnClickListener(editable ? v -> {
             if(mEditListener != null) mEditListener.onEdit(item);
-        });
+        } : null);
 
         // The bin only exists for a file this device owns. A cloud wallpaper (public or
         // assigned to this car) belongs to the shop's library — the car can hide it or edit a
@@ -177,6 +208,75 @@ public class WallpaperSelectAdapter extends BaseAdapter {
         holder.delete.setVisibility(deletable ? View.VISIBLE : View.GONE);
         holder.delete.setOnClickListener(deletable ? v -> mDeleteListener.onDelete(item) : null);
         return convertView;
+    }
+
+    /**
+     * Reshape a cell so its frame ends exactly where the picture does.
+     *
+     * The column decides the width, so the height is the free dimension: width x the picture's own
+     * aspect ratio. This is the whole answer to "the border is wider than the wallpaper inside
+     * it" — the outline is drawn around the cell, so the only way to make it trace the photo is
+     * to make the cell the photo's shape.
+     *
+     * The clamps catch the extremes only. Left unbounded, a portrait phone snap would make a cell
+     * several times the height of its neighbours, and in a two-column grid that is a hole in the
+     * layout rather than a big picture.
+     */
+    private static void sizeCellToImage(View cell, int imgW, int imgH) {
+        if(cell == null || imgW <= 0 || imgH <= 0) return;
+        ViewGroup.LayoutParams lp = cell.getLayoutParams();
+        if(lp == null || lp.width <= 0) return;
+        int h = Math.round(lp.width * (imgH / (float) imgW));
+        h = Math.max(Math.round(lp.width * 0.30f), Math.min(Math.round(lp.width * 1.20f), h));
+        if(h == lp.height) return;
+        lp.height = h;
+        cell.setLayoutParams(lp);
+    }
+
+    /**
+     * The column width the host grid wants, and the gap it wants between cells.
+     *
+     * The adapter owns the cell's LayoutParams rather than the caller, purely so they can be in
+     * place before the thumbnail request starts. See the note in getView.
+     */
+    private int mCellWidth, mCellGap;
+
+    void setCellSize(int width, int gap) {
+        mCellWidth = width;
+        mCellGap = gap;
+    }
+
+    /** The starting shape of a cell: one column wide, 16:9, because most wallpapers are. */
+    private void applyCellSize(View cell) {
+        if(mCellWidth <= 0) return;
+        ViewGroup.LayoutParams existing = cell.getLayoutParams();
+        GridLayout.LayoutParams lp = existing instanceof GridLayout.LayoutParams
+                ? (GridLayout.LayoutParams) existing : new GridLayout.LayoutParams();
+        lp.width = mCellWidth;
+        lp.height = Math.round(mCellWidth / 1.78f);
+        lp.setMargins(0, 0, mCellGap, mCellGap);
+        cell.setLayoutParams(lp);
+    }
+
+    /**
+     * Clip a cell to the same rounded rectangle its ring draws.
+     *
+     * The ring is a 16dp-radius stroke drawn over the top of the picture; the picture itself is a
+     * plain rectangle. Without this its square corners are drawn outside the curve — four small
+     * nubs of image poking out of a rounded frame. Set once per inflated cell, not per bind: the
+     * shape does not depend on which wallpaper is currently in it.
+     *
+     * Must stay in step with the corner radius in wp_grid_cell_ring.xml.
+     */
+    private static void clipToCellShape(View cell) {
+        final float radius = 16 * cell.getResources().getDisplayMetrics().density;
+        cell.setOutlineProvider(new android.view.ViewOutlineProvider() {
+            @Override
+            public void getOutline(View v, android.graphics.Outline outline) {
+                outline.setRoundRect(0, 0, v.getWidth(), v.getHeight(), radius);
+            }
+        });
+        cell.setClipToOutline(true);
     }
 
     /** "name.jpg — فيديو (من السيرفر)" */
@@ -212,11 +312,22 @@ public class WallpaperSelectAdapter extends BaseAdapter {
     }
 
     /**
+     * How large a thumbnail is decoded, in pixels.
+     *
+     * An explicit box rather than "size it to the view". Sizing to the view is circular here: the
+     * cell's height is what we are trying to derive FROM the picture, so asking Glide to fit the
+     * picture to the cell first would hand back a bitmap in whatever shape the cell happened to
+     * start at. A fixed box breaks the loop, and because it is a box (not a rectangle) the bitmap
+     * that comes back keeps the picture's OWN ratio, which is exactly what the cell needs.
+     */
+    private static final int THUMB_PX = 480;
+
+    /**
      * Videos have no thumbnail unless the file is already on disk (Glide decodes a frame
      * from a local file, not from a remote stream), so a not-yet-cached remote video falls
      * back to a plain icon rather than an endless spinner.
      */
-    private void loadThumb(ImageView view, WallpaperItem item) {
+    private void loadThumb(ImageView view, WallpaperItem item, final View cell) {
         Object model = null;
         if(item.isVideo()) {
             String local = (mRepo != null) ? mRepo.localVideoPath(item) : null;
@@ -231,19 +342,41 @@ public class WallpaperSelectAdapter extends BaseAdapter {
         if(model == null) {
             Glide.with(mContext.getApplicationContext()).clear(view);
             view.setImageResource(R.drawable.ic_play_pause_white);
+            // Nothing to take a shape from, so the cell keeps whatever the grid gave it and the
+            // icon is centred in it rather than stretched across it.
+            view.setScaleType(ImageView.ScaleType.CENTER);
             return;
         }
-        // Show it the way the car will: straighten first, then crop to the cell. Rotating after
-        // the crop would turn the cell's own framing, not the picture inside it.
+        view.setScaleType(ImageView.ScaleType.FIT_CENTER);
+        // The WHOLE wallpaper, never a crop — and the cell reshaped to match it, which is what
+        // makes the outline land on the photo instead of around a box the photo sits inside.
+        //
+        // Rotation goes first: turning the picture after it was framed would rotate the framing,
+        // not the contents. It also changes the ratio, which is why the cell is sized from the
+        // delivered drawable rather than from the file's own dimensions.
         int rot = (mRepo != null && item.url != null)
                 ? FitSettings.clampRotation(mRepo.getFit(item.url).rotation) : 0;
         com.bumptech.glide.RequestBuilder<android.graphics.drawable.Drawable> req =
-                Glide.with(mContext.getApplicationContext()).load(model);
+                Glide.with(mContext.getApplicationContext()).load(model).override(THUMB_PX, THUMB_PX);
         req = rot == 0
-                ? req.centerCrop()
+                ? req.fitCenter()
                 : req.transform(new RotateTransformation(rot),
-                                new com.bumptech.glide.load.resource.bitmap.CenterCrop());
-        req.into(view);
+                                new com.bumptech.glide.load.resource.bitmap.FitCenter());
+        req.listener(new com.bumptech.glide.request.RequestListener<android.graphics.drawable.Drawable>() {
+            @Override
+            public boolean onLoadFailed(com.bumptech.glide.load.engine.GlideException e, Object m,
+                                        com.bumptech.glide.request.target.Target<android.graphics.drawable.Drawable> t,
+                                        boolean first) {
+                return false;   // the cell keeps the provisional shape the grid gave it
+            }
+            @Override
+            public boolean onResourceReady(android.graphics.drawable.Drawable res, Object m,
+                                           com.bumptech.glide.request.target.Target<android.graphics.drawable.Drawable> t,
+                                           com.bumptech.glide.load.DataSource src, boolean first) {
+                sizeCellToImage(cell, res.getIntrinsicWidth(), res.getIntrinsicHeight());
+                return false;
+            }
+        }).into(view);
     }
 
     /**

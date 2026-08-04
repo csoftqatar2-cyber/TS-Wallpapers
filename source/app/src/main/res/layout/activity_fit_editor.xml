@@ -117,6 +117,31 @@
                 android:visibility="gone" />
 
         </FrameLayout>
+
+        <!-- Help sits OUTSIDE the preview, in the band beside it.
+             The preview is the car's screen shape centred in a much wider box, so there is always
+             empty room down both sides — and a button parked on top of the picture is a button
+             covering the one thing this screen exists to show. Green because everything else here
+             is gold-on-black brand furniture: an eighth gold badge is not findable by someone who
+             does not know the screen yet, which is exactly who needs this. -->
+        <TextView
+            android:id="@+id/buttonFitHelp"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="top|end"
+            android:layout_margin="12dp"
+            android:background="@drawable/fit_help_btn"
+            android:paddingStart="18dp"
+            android:paddingEnd="18dp"
+            android:paddingTop="9dp"
+            android:paddingBottom="9dp"
+            android:focusable="true"
+            android:clickable="true"
+            android:textColor="#ffffff"
+            android:textSize="13sp"
+            android:textStyle="bold"
+            android:text="@string/fit_help" />
+
     </FrameLayout>
 
     <!-- ===================== controls =====================

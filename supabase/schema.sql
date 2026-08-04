@@ -37,7 +37,10 @@
 -- what makes "activate one program, all of them unlock" work.
 create table if not exists public.devices (
     hardware_id   text primary key,
-    serial_number text unique check (serial_number like '7078%'),
+    -- Two issued prefixes: '7078' for every code up to 2026-08-02 (~530 cars in
+    -- the field), '578' for everything issued after. Length is not constrained;
+    -- serials in the field run from 5 to 14 characters.
+    serial_number text unique check (serial_number like '7078%' or serial_number like '578%'),
     client_name   text,
     is_active     boolean default false,
     created_at    timestamptz not null default timezone('utc', now()),
@@ -314,6 +317,14 @@ $function$;
 
 -- Serial activation. Returns 'success' | 'blocked' | 'invalid_format' | 'serial_already_used'.
 -- Called by all three programs. Stamps activated_at since 2026-07-29.
+--
+-- !!! SUPERSEDED LIVE on 2026-08-02. The body below is the pure-Postgres logic,
+-- kept here because it is still the disaster-recovery definition and is still
+-- what runs whenever the kill switch is off. In production this function is now
+-- a dispatcher that asks Cloudflare D1 for the decision and falls back to this
+-- exact body (as cf.activate_device_legacy) when cf_activation_write_enabled is
+-- false. See supabase/migrations/20260802_cf_activation_*.sql for the live
+-- definition; the request/response contract is identical either way.
 CREATE OR REPLACE FUNCTION public.activate_device(device_hw_id text, activation_serial text, legacy_hw_id text DEFAULT NULL::text)
  RETURNS text
  LANGUAGE plpgsql
@@ -334,7 +345,7 @@ begin
         return 'blocked';
     end if;
 
-    if activation_serial not like '7078%' then
+    if activation_serial not like '7078%' and activation_serial not like '578%' then
         return 'invalid_format';
     end if;
 

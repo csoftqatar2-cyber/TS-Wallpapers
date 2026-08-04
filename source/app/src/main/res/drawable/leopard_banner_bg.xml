@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The "wallpaper set" banner, at the foot of the picker.
+
+     White on purpose, and not a system toast. A toast is drawn in the platform's own dark grey
+     at the platform's own small size, which on a dashboard — read at arm's length, in daylight,
+     over a photograph that is usually dark itself — is a grey smudge on a dark picture. White
+     is the one background that separates from every wallpaper in the library. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <solid android:color="#FFFFFFFF" />
+    <corners android:radius="16dp" />
+    <stroke
+        android:width="2dp"
+        android:color="#33000000" />
+</shape>

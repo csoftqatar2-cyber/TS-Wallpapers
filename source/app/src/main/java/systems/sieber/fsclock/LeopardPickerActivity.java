@@ -9,11 +9,15 @@ import android.content.res.Configuration;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Outline;
+import android.graphics.Rect;
+import android.graphics.SurfaceTexture;
 import android.graphics.drawable.Drawable;
 import android.media.MediaPlayer;
 import android.net.Uri;
 import android.os.Bundle;
 import android.view.Gravity;
+import android.view.Surface;
+import android.view.TextureView;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.ViewOutlineProvider;
@@ -63,7 +67,8 @@ public class LeopardPickerActivity extends AppCompatActivity {
     private WallpaperRepo mRepo;
     private SharedPreferences mPrefs;
 
-    private LinearLayout mFilmstrip;
+    /** The library grid: two columns, scrolling down. Named for the strip it replaced. */
+    private GridLayout mFilmstrip;
     private View mFilmstripScroll, mPhonePane;
     private GridLayout mPhoneGrid;
     private LinearLayout mPhoneQrBox;
@@ -90,8 +95,95 @@ public class LeopardPickerActivity extends AppCompatActivity {
     /** The image handed to the fit editor, and the screen it was framed against. */
     private WallpaperItem mEditing;
     private int mEditingW, mEditingH;
+
+    /**
+     * The picture in hand arrived from a phone over the QR code, so setting it is the end of a
+     * whole errand — somebody sent a photo and is waiting to see it on the car — rather than one
+     * step in browsing the library.
+     */
+    private boolean mFromPhoneUpload;
+
+    /** "تم" was pressed in the editor: bake it, set it, and show it. A back press does not. */
+    private boolean mApplyAfterBake;
     /** Guards the one automatic sync, so a car that is genuinely empty does not loop. */
     private boolean mTriedAutoSync = false;
+
+    /** Set while the one-shot "grid has a width now" listener is attached. See awaitGridWidth(). */
+    private boolean mAwaitingGridWidth = false;
+
+    /**
+     * Videos playing inside the library grid, so a clip can be judged before it is opened.
+     *
+     * Capped, and that cap is not a nicety. A head unit has a handful of hardware video decoders
+     * — on the cheaper ones, very few — and they are shared with everything else the car is
+     * doing. Exhausting them does not fail the tile that asked; it fails the NEXT thing to want
+     * one, which here is the full-screen preview or the live wallpaper itself. So the grid takes
+     * a few and no more, and every other video keeps the still frame it had before.
+     *
+     * Which few is the part that matters. The cap used to be handed out in grid order — the first
+     * three video cells built took the players and kept them for the life of the screen, so
+     * scrolling down led into a library where nothing moved, which is precisely the complaint the
+     * moving tiles exist to answer. The pool now follows the viewport: a clip that scrolls out
+     * hands its decoder back and one that scrolls in takes it.
+     */
+    private static final class VideoTile {
+        final FrameLayout cell;
+        final String path;
+        MediaPlayer player;
+        TextureView surface;
+        VideoTile(FrameLayout cell, String path) { this.cell = cell; this.path = path; }
+    }
+    private final List<VideoTile> mVideoTiles = new ArrayList<>();
+    /**
+     * Enough to cover a full band of visible cells, which is the point — a cap that stops short
+     * of what is on screen just moves the "this one does not move" complaint further down the
+     * page. Six is two more than the four rows the tallest panel shows at once, and the grid now
+     * gives its decoders back the moment an apply or a preview starts, which is what the cap was
+     * really protecting.
+     */
+    private static final int MAX_LIVE_TILES = 6;
+    /** Coalesces the burst of scroll and resize callbacks into one pass over the tiles. */
+    private final Runnable mBindTiles = this::bindVisibleTiles;
+
+    /** onPause released the grid's players; the strip needs rebuilding to get them back. */
+    private boolean mTilesReleased;
+
+    /**
+     * "This screen has done its job and should leave" — kept in prefs, not in a field.
+     *
+     * It has to survive the activity, and that is not a theoretical worry: setting a wallpaper
+     * changes the configuration, and the system answers a configuration change by destroying
+     * this activity and building a new one. Anything held in memory at the moment of the apply
+     * is gone — the field that remembered we were waiting on the system screen, and the delayed
+     * "now go home" that was posted to a view belonging to the old instance. That is the whole
+     * reason "the app closes after setting the wallpaper" worked for one case (a video on a car
+     * whose live wallpaper was already ours — the one path that changes no configuration) and
+     * silently did nothing for the rest.
+     *
+     * {@link #LEAVE_NOW} the wallpaper is set; go as soon as the message has been read.
+     * {@link #LEAVE_AFTER_SYSTEM_SCREEN} the system's live-wallpaper screen is up and the answer
+     * is unknown; on the way back, leave only if it took.
+     */
+    private static final String PREF_LEAVE = "leopard-leave-after-apply";
+    private static final String PREF_LEAVE_AT = "leopard-leave-after-apply-at";
+    /** The string resource the departing instance wanted shown. See markLeaveAfterApply. */
+    private static final String PREF_LEAVE_MSG = "leopard-leave-after-apply-msg";
+    private static final String LEAVE_NOW = "now";
+    private static final String LEAVE_AFTER_SYSTEM_SCREEN = "system";
+    /** Stand down without jumping to the launcher — something else is already in front. */
+    private static final String LEAVE_QUIET = "quiet";
+    /**
+     * How long the intention stays good for. Long enough for the slowest hand-off (the system
+     * screen, a human reading it, and a wallpaper engine starting up), short enough that a
+     * request abandoned mid-way cannot close the app on somebody who opens it tomorrow.
+     */
+    private static final long LEAVE_VALID_MS = 3 * 60_000;
+
+    /** The bottom-of-screen message panel. Built on first use — see toast(int). */
+    private TextView mBanner;
+    private final Runnable mHideBanner = () -> {
+        if(mBanner != null) mBanner.setVisibility(View.GONE);
+    };
 
     /** Chosen framing for the next Lynk & Co image apply (fill vs fit). Defaults to fill. */
     private int mLynkcoScaleMode = LynkcoApplier.SCALE_FILL;
@@ -182,6 +274,11 @@ public class LeopardPickerActivity extends AppCompatActivity {
         findViewById(R.id.buttonLeopardSettings).setOnClickListener(v ->
                 startActivity(new Intent(this, SettingsActivity.class)));
 
+        // Scrolling changes which clips are on screen, and the pool of decoders has to follow.
+        // A tree-wide scroll listener rather than View.setOnScrollChangeListener: this runs on
+        // ROMs older than the API that added it, and the band is not always the view that moves.
+        mFilmstripScroll.getViewTreeObserver().addOnScrollChangedListener(this::scheduleTileBind);
+
         mSource = mPrefs.getString(PREF_DEFAULT_SOURCE, SOURCE_CLOUD);
         selectSource(mSource);
     }
@@ -198,19 +295,30 @@ public class LeopardPickerActivity extends AppCompatActivity {
             finish();
             return;
         }
+        // An apply that is already finished, or a system screen we are coming back from. Read
+        // before anything else touches the screen: in the common case this instance was built a
+        // moment ago by the configuration change the apply itself caused, and it exists only to
+        // find this note and leave.
+        if(resumeAfterApply()) return;
         // onPause tore the player down. Coming back — most often from the system's live-wallpaper
         // screen, which every video apply passes through — the preview would otherwise be a black
         // rectangle where a playing clip was. The file is cached by now, so this is instant.
         if(mPreview != null && mPreview.getVisibility() == View.VISIBLE
                 && mSelected != null && mSelected.isVideo()) {
             preparePreviewVideo(mSelected);
+            return;   // the grid is behind the preview; rebuilding it now would be for nobody
         }
+        restartTilePlayers();
     }
 
     // ---------------------------------------------------------------- sources
 
     private void selectSource(String source) {
         mSource = source;
+        // Moving off the phone source ends that errand: what is set from the library afterwards
+        // is browsing, and browsing must not throw anyone out to the launcher. (The upload
+        // listener sets the flag before it switches back here, so this cannot undo its own case.)
+        if(!SOURCE_PHONE.equals(source)) mFromPhoneUpload = false;
         mSourceCloud.setSelected(SOURCE_CLOUD.equals(source));
         mSourceLocal.setSelected(SOURCE_LOCAL.equals(source));
         mSourcePhone.setSelected(SOURCE_PHONE.equals(source));
@@ -367,13 +475,7 @@ public class LeopardPickerActivity extends AppCompatActivity {
 
         String currentUri = samePath(mPrefs.getString(MediaWallpaperService.PREF_URI, ""));
         for(final WallpaperItem item : mShown) {
-            View cell = thumbCell(item, cellW, cellH, d, currentUri, false);
-            GridLayout.LayoutParams lp = new GridLayout.LayoutParams();
-            lp.width = cellW;
-            lp.height = cellH;
-            lp.setMargins(0, 0, gap, gap);
-            cell.setLayoutParams(lp);
-            mPhoneGrid.addView(cell);
+            mPhoneGrid.addView(thumbCell(item, cellW, cellH, gap, d, currentUri, false));
         }
         refreshSelection();
     }
@@ -423,6 +525,7 @@ public class LeopardPickerActivity extends AppCompatActivity {
     private void onPhoneUpload(String savedPath) {
         if(savedPath == null) return;
         toast(R.string.leopard_phone_received);
+        mFromPhoneUpload = true;
 
         WallpaperItem item = new WallpaperItem(WallpaperItem.guessType(savedPath), savedPath);
         // The server outlives the tab, so a picture can land while another source is on screen.
@@ -508,6 +611,14 @@ public class LeopardPickerActivity extends AppCompatActivity {
                 mSelected = pickFromGrid(shown);
                 refreshSelection();
                 showPreview(mSelected);
+                // Straight on to the wallpaper itself when the framing was confirmed with تم:
+                // the preview underneath is the same picture the editor was just showing, and
+                // asking for a second confirmation of the same image is how "I pressed Done and
+                // nothing happened" starts.
+                if(mApplyAfterBake) {
+                    mApplyAfterBake = false;
+                    applySelection();
+                }
             });
         }).start();
     }
@@ -541,6 +652,7 @@ public class LeopardPickerActivity extends AppCompatActivity {
         // Leaving a web server listening on the car's Wi-Fi after the screen is gone would be
         // a surprise on a device that never really shuts down.
         stopUploadServer();
+        releaseTilePlayers();
         super.onDestroy();
     }
 
@@ -584,23 +696,54 @@ public class LeopardPickerActivity extends AppCompatActivity {
     /** Sync without disturbing the visible strip; on success re-read the list so anything deleted
      *  on the manager drops out and anything new appears. Failures are ignored — the cache stands. */
     private void silentRefresh() {
-        mRepo.sync((success, count, error) -> runOnUiThread(() -> {
-            if(success) showCloud();
-        }));
+        mRepo.sync(new WallpaperRepo.SyncCallback() {
+            @Override
+            public void done(boolean success, int count, String error) {
+                runOnUiThread(() -> { if(success) showCloud(); });
+            }
+            @Override
+            public void mediaReady() { runOnUiThread(LeopardPickerActivity.this::onMediaCached); }
+        });
     }
 
     private void refreshCloud() {
         mProgress.setVisibility(View.VISIBLE);
         hideState();
-        mRepo.sync((success, count, error) -> runOnUiThread(() -> {
-            mProgress.setVisibility(View.GONE);
-            if(success) { showCloud(); return; }   // sync() reloads the list itself
-            // An offline car may still have a usable library: the last good response is cached
-            // and videos are pre-downloaded. "Offline, showing cached" and "offline with
-            // nothing" are different situations and must not share one message.
-            if(hasCloudItems()) { showCloud(); toast(R.string.leopard_offline_cached); }
-            else showState(R.string.leopard_offline_empty, R.string.leopard_retry, v -> refreshCloud());
-        }));
+        mRepo.sync(new WallpaperRepo.SyncCallback() {
+            @Override
+            public void done(boolean success, int count, String error) {
+                runOnUiThread(() -> {
+                    mProgress.setVisibility(View.GONE);
+                    if(success) { showCloud(); return; }   // sync() reloads the list itself
+                    // An offline car may still have a usable library: the last good response is
+                    // cached and videos are pre-downloaded. "Offline, showing cached" and
+                    // "offline with nothing" are different situations and must not share one
+                    // message.
+                    if(hasCloudItems()) { showCloud(); toast(R.string.leopard_offline_cached); }
+                    else showState(R.string.leopard_offline_empty, R.string.leopard_retry,
+                            v -> refreshCloud());
+                });
+            }
+            @Override
+            public void mediaReady() { runOnUiThread(LeopardPickerActivity.this::onMediaCached); }
+        });
+    }
+
+    /**
+     * The clips have finished downloading, so the cells that had nothing to show now do.
+     *
+     * sync() reports the playlist before it fetches the media — it has to, or every screen
+     * waiting on it freezes for the length of the download — which means the grid is built while
+     * some videos are still coming down and those cells draw a flat placeholder with no still
+     * frame and no movement. This is the second half arriving.
+     */
+    private void onMediaCached() {
+        if(gone()) return;
+        if(mFilmstripScroll == null || mFilmstripScroll.getVisibility() != View.VISIBLE) return;
+        if(mStateBox != null && mStateBox.getVisibility() == View.VISIBLE) return;
+        if(mPreview != null && mPreview.getVisibility() == View.VISIBLE) return;
+        if(!SOURCE_CLOUD.equals(mSource)) return;
+        buildFilmstrip();
     }
 
     /** Cached cloud wallpapers only — local files are not this circle's business. */
@@ -671,6 +814,11 @@ public class LeopardPickerActivity extends AppCompatActivity {
             // The editor is auto-save and has no Cancel, so any way back from it means "this is
             // how I want it" — including the back button. Bake either way; the only difference on
             // a plain back is that the settings are the ones it opened with.
+            //
+            // "تم" says more than that, though: it is the end of the import. The picture is
+            // framed, so it gets set and the screen it was framed for is what the user is taken
+            // to. A back press stops at the preview, where the Set button still waits.
+            mApplyAfterBake = data != null && data.getBooleanExtra(FitEditorActivity.EXTRA_DONE, false);
             bakeEdit(edited);
             return;
         }
@@ -731,19 +879,37 @@ public class LeopardPickerActivity extends AppCompatActivity {
 
     private void buildFilmstrip() {
         if(gone()) return;
+        // The cells about to be discarded own the grid's video players; drop them first or each
+        // rebuild strands another set of decoders.
+        releaseTilePlayers();
+        mTilesReleased = false;
         mFilmstrip.removeAllViews();
         // Whatever the phone pane was showing, this is the strip's band now.
         mPhonePane.setVisibility(View.GONE);
         mFilmstripScroll.setVisibility(View.VISIBLE);
-        mFilmstrip.setGravity(Gravity.START | Gravity.CENTER_VERTICAL);
         float d = getResources().getDisplayMetrics().density;
-        // Height is the fixed dimension; width follows each picture's own proportions (see
-        // fitCellToImage). Held at 165dp rather than filling the band because the body is only
-        // ~185dp tall once the header and the button bar are taken out on a 2x-density panel —
-        // anything taller would be clipped on exactly the head units this mode exists for.
-        // 440dp is 2.67:1, the shape of the screen the wallpaper lands on: the right guess to
-        // draw before the real proportions are known, and what a cell keeps if they never arrive.
-        int cellW = Math.round(440 * d), cellH = Math.round(165 * d), gap = Math.round(16 * d);
+        int gap = Math.round(16 * d);
+
+        // Two columns, so WIDTH is the fixed dimension and the height follows each picture's own
+        // proportions (see fitCellToImage) — the opposite of the strip this replaced.
+        final int columns = 2;
+        int paneW = mFilmstrip.getWidth();
+        if(paneW <= 0) {
+            // Nothing has been measured yet on the very first pass. Draw with a rough guess so
+            // the band is not empty, then rebuild once for real: this screen runs on panels from
+            // 1280x640 to 5120x1600, and any constant wide enough for one is wrong for another.
+            // The guess is the screen less the two 210dp source rails that flank this band.
+            paneW = getResources().getDisplayMetrics().widthPixels - Math.round(420 * d);
+            awaitGridWidth();
+        }
+        // Whatever is left, split in two. Deliberately no lower bound beyond a sanity floor: a
+        // minimum wide enough to be comfortable would, on the narrow panels this mode runs on,
+        // make two columns wider than the band they sit in — and cells running off the edge are
+        // worse than small ones, because the second column becomes unreachable.
+        int cellW = Math.max(Math.round(72 * d), (paneW - gap * (columns + 1)) / columns);
+        // 2.67:1 is the shape of the screen the wallpaper lands on: the right guess to draw
+        // before the real proportions are known, and what a cell keeps if they never arrive.
+        int cellH = Math.round(cellW / 2.67f);
         // The same local file reaches us under two spellings — "file:///storage/…" from the phone
         // upload, bare "/storage/…" from the folder scan — so compare them stripped, or the
         // "Current" badge never lands on the picture that is actually on screen.
@@ -751,19 +917,19 @@ public class LeopardPickerActivity extends AppCompatActivity {
 
         final int radius = Math.round(16 * d);   // must match the corners in leopard_cell_bg
 
-        // The device strip keeps the old behaviour available as its first cell: the list is what
+        // The device source keeps the old behaviour available as its first cell: the list is what
         // you normally want, browsing the file system is the exception.
+        mFilmstrip.setColumnCount(columns);
         mStripOffset = SOURCE_LOCAL.equals(mSource) ? 1 : 0;
-        if(mStripOffset == 1) mFilmstrip.addView(browseCell(cellH, gap, d, radius));
+        if(mStripOffset == 1) mFilmstrip.addView(browseCell(cellW, cellH, gap, d, radius));
 
         for(final WallpaperItem item : mShown) {
-            View cell = thumbCell(item, cellW, cellH, d, currentUri, true);
-            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(cellW, cellH);
-            lp.setMarginEnd(gap);
-            cell.setLayoutParams(lp);
-            mFilmstrip.addView(cell);
+            mFilmstrip.addView(thumbCell(item, cellW, cellH, gap, d, currentUri, true));
         }
         refreshSelection();
+        // Nothing has a size yet — the tiles can only be matched to the viewport once the grid
+        // has been laid out, which is a frame or two away.
+        scheduleTileBind();
     }
 
     /**
@@ -774,12 +940,24 @@ public class LeopardPickerActivity extends AppCompatActivity {
      * selection ring quietly stops matching.
      */
     private View thumbCell(final WallpaperItem item, final int cellW, final int cellH,
-                           float d, String currentUri, final boolean shapeToImage) {
+                           final int gap, float d, String currentUri, final boolean shapeToImage) {
         final int radius = Math.round(16 * d);
         final FrameLayout cell = new FrameLayout(this);
         cell.setFocusable(true);
         cell.setClickable(true);
         cell.setBackgroundColor(0xFF241c11);
+
+        // The size goes on BEFORE anything is loaded into the cell, and that ordering is the whole
+        // fix for a frame that did not match the picture inside it. Glide answers a memory-cache
+        // hit synchronously, inside the .into() call below — so on any rebuild, once the thumbnails
+        // were cached, fitCellToImage ran while this view still had no LayoutParams at all, found
+        // nothing to resize, and gave up. Every cell then kept the 2.67:1 placeholder shape and
+        // every picture that was not 2.67:1 sat letterboxed inside its own border.
+        GridLayout.LayoutParams lp = new GridLayout.LayoutParams();
+        lp.width = cellW;
+        lp.height = cellH;
+        lp.setMargins(0, 0, gap, gap);
+        cell.setLayoutParams(lp);
 
         // The ring drawn on top has rounded corners, but the image underneath is a plain
         // rectangle — so its square corners poked out through the curve. Clip the cell to
@@ -830,6 +1008,11 @@ public class LeopardPickerActivity extends AppCompatActivity {
                             }
                         })
                         .into(img);
+                // ...and then, in the library grid, play it in place. A still frame 0 is often a
+                // black fade-in and says nothing about the clip; the whole reason to choose a
+                // video is the movement, so it has to be visible without committing to it first.
+                // The library only — the phone pane is a short list of things you already know.
+                if(shapeToImage) mVideoTiles.add(new VideoTile(cell, local));
             }
             cell.addView(typeBadge(R.drawable.ic_badge_video_20dp, d));
         } else {
@@ -870,6 +1053,170 @@ public class LeopardPickerActivity extends AppCompatActivity {
         // thumbnail is too small to commit a whole dashboard to.
         cell.setOnClickListener(v -> { mSelected = item; refreshSelection(); showPreview(item); });
         return cell;
+    }
+
+    /**
+     * Play a cached clip inside its grid cell, muted and looping.
+     *
+     * Layered OVER the still frame rather than replacing it: everything that can go wrong here —
+     * no decoder free, a codec the ROM cannot open, a file still being written — ends with this
+     * view never becoming visible and the thumbnail that was already there carrying on. A tile
+     * that quietly does not move is a small loss; a tile that goes black is a wallpaper nobody
+     * will pick.
+     *
+     * setOpaque(false) is what makes that work, and it is the whole trick: a translucent
+     * TextureView with no frames yet draws NOTHING, so the thumbnail underneath simply stays on
+     * screen until there is genuinely something better to show. Left opaque it would paint solid
+     * black while it waited.
+     *
+     * It must also stay VISIBLE the entire time. An earlier version started it INVISIBLE and
+     * revealed it on the first frame, which sounds safer and is in fact fatal: a TextureView that
+     * is not drawn never creates its SurfaceTexture, so onSurfaceTextureAvailable never fires,
+     * the player is never given a surface, and not one tile in the grid ever moves.
+     *
+     * The cell is already shaped to the clip's own proportions by {@link #fitCellToImage}, so
+     * filling it is the right framing and no aspect maths is needed here.
+     */
+    private void startTile(final VideoTile tile) {
+        final String path = tile.path;
+        final MediaPlayer mp = new MediaPlayer();
+        tile.player = mp;
+
+        final TextureView tv = new TextureView(this);
+        tv.setLayoutParams(new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
+        tv.setOpaque(false);
+        tv.setSurfaceTextureListener(new TextureView.SurfaceTextureListener() {
+            @Override
+            public void onSurfaceTextureAvailable(SurfaceTexture st, int w, int h) {
+                if(gone()) return;
+                try {
+                    mp.setSurface(new Surface(st));
+                    mp.setDataSource(path);
+                    mp.setLooping(true);
+                    // Silent, like the wallpaper itself. A grid of clips that all started talking
+                    // at once would be its own bug report.
+                    mp.setVolume(0f, 0f);
+                    mp.setOnPreparedListener(p -> {
+                        if(gone()) return;
+                        try { p.start(); } catch(Throwable ignored) { }
+                    });
+                    mp.setOnErrorListener((p, what, extra) -> true);   // still frame stays up
+                    mp.prepareAsync();
+                } catch(Throwable ignored) {
+                    // Leave the tile invisible: the thumbnail underneath is the fallback.
+                }
+            }
+            @Override
+            public boolean onSurfaceTextureDestroyed(SurfaceTexture st) { return true; }
+            @Override
+            public void onSurfaceTextureSizeChanged(SurfaceTexture st, int w, int h) { }
+            @Override
+            public void onSurfaceTextureUpdated(SurfaceTexture st) { }
+        });
+        tile.surface = tv;
+        // Index 1: straight above the still and below everything else, because the type badge,
+        // the "current" badge and the selection ring all have to stay on top of a moving picture.
+        // (Appending would have put the clip over its own border.)
+        tile.cell.addView(tv, 1);
+    }
+
+    /** Hand one tile's decoder back and let its still frame show through again. */
+    private void stopTile(VideoTile tile) {
+        if(tile.player != null) {
+            try {
+                tile.player.reset();
+                tile.player.release();
+            } catch(Throwable ignored) { }
+            tile.player = null;
+        }
+        if(tile.surface != null) {
+            tile.cell.removeView(tile.surface);
+            tile.surface = null;
+        }
+    }
+
+    /**
+     * Lend the small pool of decoders to the clips that are actually on screen.
+     *
+     * Runs after a scroll, after the grid is laid out, after a cell is reshaped, and on the way
+     * back in from another app. Cheap enough to run often — it is a walk over the video cells and
+     * a rectangle test each — and everything it does is idempotent, so an extra pass costs
+     * nothing.
+     *
+     * "Visible" is deliberately generous (any part of the cell in the viewport) but ordered by
+     * position, so when more clips are on screen than there are slots the ones nearest the top
+     * get them. Half a moving tile at the bottom edge is still an invitation to scroll.
+     */
+    private void bindVisibleTiles() {
+        if(gone() || mTilesReleased || mVideoTiles.isEmpty()) return;
+        // Not while the library is not what the screen is showing: the phone pane, a "nothing
+        // here" box and the full-screen preview all want the decoders more than the grid does.
+        if(mFilmstripScroll == null || mFilmstripScroll.getVisibility() != View.VISIBLE
+                || (mStateBox != null && mStateBox.getVisibility() == View.VISIBLE)
+                || (mPreview != null && mPreview.getVisibility() == View.VISIBLE)) {
+            for(VideoTile t : mVideoTiles) stopTile(t);
+            return;
+        }
+
+        final Rect r = new Rect();
+        List<VideoTile> onScreen = new ArrayList<>();
+        for(VideoTile t : mVideoTiles) {
+            boolean shown = t.cell.getWidth() > 0 && t.cell.isShown() && t.cell.getGlobalVisibleRect(r);
+            if(shown) onScreen.add(t);
+            else if(t.player != null) stopTile(t);   // scrolled away: give the decoder back first
+        }
+
+        int live = 0;
+        for(VideoTile t : mVideoTiles) if(t.player != null) live++;
+        for(VideoTile t : onScreen) {
+            if(live >= MAX_LIVE_TILES) break;
+            if(t.player != null) continue;
+            startTile(t);
+            live++;
+        }
+    }
+
+    /**
+     * Coalesce a burst of callbacks into one pass.
+     *
+     * A drag fires a scroll callback per frame and a grid whose cells are being reshaped by Glide
+     * fires a layout change per picture. Starting and stopping decoders at that rate is how a
+     * head unit stutters, so the work waits for the burst to end.
+     */
+    private void scheduleTileBind() {
+        if(mFilmstrip == null) return;
+        mFilmstrip.removeCallbacks(mBindTiles);
+        mFilmstrip.postDelayed(mBindTiles, 180);
+    }
+
+    /**
+     * Hand every decoder back.
+     *
+     * Called before every rebuild and whenever this screen stops being the foreground. The grid
+     * is rebuilt often — a sync, an apply, the one-shot width measure — and each rebuild throws
+     * the old cells away; without this the players they owned would leak, and after a few
+     * rebuilds nothing on the car could open a video at all.
+     */
+    private void releaseTilePlayers() {
+        if(mFilmstrip != null) mFilmstrip.removeCallbacks(mBindTiles);
+        for(VideoTile t : mVideoTiles) stopTile(t);
+        mVideoTiles.clear();
+    }
+
+    /**
+     * Put the library's video tiles back after a pause.
+     *
+     * onPause hands the decoders back, which leaves those cells frozen on their still frames —
+     * right while another app is in front, wrong the moment this screen returns. The cells
+     * themselves were never touched, so coming back is only a matter of lending the players out
+     * again: no rebuild, which also means the scroll position and everything Glide had already
+     * drawn survive the trip.
+     */
+    private void restartTilePlayers() {
+        if(!mTilesReleased) return;
+        mTilesReleased = false;
+        scheduleTileBind();
     }
 
     /**
@@ -914,30 +1261,57 @@ public class LeopardPickerActivity extends AppCompatActivity {
      * inside it — so a 16:9 wallpaper sat in the middle of its frame with a bar of dead
      * background down each side. The border was drawn around the slot, not around the image.
      *
-     * The height is what the strip has to hold constant (they must line up), so the width is
-     * what moves: height x the picture's own aspect ratio. The clamps only catch the extremes —
-     * a panorama that would otherwise fill the whole strip on its own, and a tall portrait that
-     * would shrink to a stripe too narrow to recognise across a cabin.
+     * In the two-column grid the width is what the column dictates, so the HEIGHT is the one free
+     * dimension — the reverse of the strip this replaced, where the band's height was fixed and
+     * the width moved instead.
      */
     private void fitCellToImage(View cell, int imgW, int imgH) {
         if(imgW <= 0 || imgH <= 0) return;
         ViewGroup.LayoutParams lp = cell.getLayoutParams();
-        if(lp == null) return;
-        float d = getResources().getDisplayMetrics().density;
-        int h = lp.height > 0 ? lp.height : Math.round(165 * d);
-        int w = Math.round(h * (imgW / (float) imgH));
-        w = Math.max(Math.round(h * 0.62f), Math.min(Math.round(h * 3.2f), w));
-        if(w == lp.width) return;
-        lp.width = w;
+        if(lp == null || lp.width <= 0) return;
+        // The clamps keep one odd picture from making a row three times the height of its
+        // neighbours: GridLayout gives a whole row the tallest cell in it, so an unbounded
+        // panorama or portrait would leave a band of empty cell beside it.
+        int h = Math.round(lp.width * (imgH / (float) imgW));
+        h = Math.max(Math.round(lp.width * 0.30f), Math.min(Math.round(lp.width * 1.20f), h));
+        if(h == lp.height) return;
+        lp.height = h;
         cell.setLayoutParams(lp);
+        // Every cell that reshapes moves the ones under it, so what is on screen has changed.
+        scheduleTileBind();
+    }
+
+    /**
+     * Rebuild the grid the first time it has a real width, then stop listening.
+     *
+     * One shot on purpose: buildFilmstrip() is what registers this, so a listener that stayed
+     * attached would rebuild on the layout its own rebuild causes, forever.
+     */
+    private void awaitGridWidth() {
+        if(mAwaitingGridWidth) return;
+        mAwaitingGridWidth = true;
+        mFilmstrip.addOnLayoutChangeListener(new View.OnLayoutChangeListener() {
+            @Override
+            public void onLayoutChange(View v, int l, int t, int r, int b,
+                                       int ol, int ot, int or_, int ob) {
+                if(v.getWidth() <= 0) return;
+                v.removeOnLayoutChangeListener(this);
+                mAwaitingGridWidth = false;
+                if(gone()) return;
+                v.post(() -> { if(!gone()) buildFilmstrip(); });
+            }
+        });
     }
 
     /** "Browse the device" — the old system-picker route, now a cell instead of the whole tab. */
-    private View browseCell(int cellH, int gap, float d, final int radius) {
+    private View browseCell(int cellW, int cellH, int gap, float d, final int radius) {
         FrameLayout cell = new FrameLayout(this);
-        // Half width: it is an action, not a wallpaper, and it must not read as one of the images.
-        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(Math.round(220 * d), cellH);
-        lp.setMarginEnd(gap);
+        // It takes a whole column like any other cell, but a shorter one: it is an action, not a
+        // wallpaper, and giving it a picture's height would read as one of the images.
+        GridLayout.LayoutParams lp = new GridLayout.LayoutParams();
+        lp.width = cellW;
+        lp.height = Math.max(Math.round(64 * d), Math.round(cellH * 0.7f));
+        lp.setMargins(0, 0, gap, gap);
         cell.setLayoutParams(lp);
         cell.setFocusable(true);
         cell.setClickable(true);
@@ -1135,6 +1509,12 @@ public class LeopardPickerActivity extends AppCompatActivity {
         super.onPause();
         // Leaving a decoder running behind another app is not something a head unit forgives.
         stopPreviewVideo();
+        // Same for the grid's tiles, and for the same reason — but they have to be put back on
+        // the way in, which the preview does for itself in onResume. The cells stay: only the
+        // decoders go, so returning is a rebind rather than a rebuild.
+        mTilesReleased = true;
+        if(mFilmstrip != null) mFilmstrip.removeCallbacks(mBindTiles);
+        for(VideoTile t : mVideoTiles) stopTile(t);
     }
 
     @Override
@@ -1148,6 +1528,13 @@ public class LeopardPickerActivity extends AppCompatActivity {
 
     private void applySelection() {
         if(mSelected == null) { toast(R.string.leopard_pick_first); return; }
+
+        // Free the grid's decoders before asking for the big one. The live wallpaper engine, or
+        // the theme app on a Lynk & Co, is about to want a hardware decoder of its own, and on a
+        // head unit those run out — a tile that stops moving here is invisible (this screen is
+        // leaving anyway), while a wallpaper that cannot get one is the whole failure.
+        if(mFilmstrip != null) mFilmstrip.removeCallbacks(mBindTiles);
+        for(VideoTile t : mVideoTiles) stopTile(t);
 
         // Lynk & Co images: the theme app's own crop/fit preview is unreliable, so we ask here and
         // bake the framing in ourselves. Video skips this (it rides the Leopard live-wallpaper
@@ -1247,15 +1634,26 @@ public class LeopardPickerActivity extends AppCompatActivity {
      */
     private void onLynkcoApplied(int result) {
         if(result != LynkcoApplier.RESULT_LAUNCHED) {
-            say(R.string.leopard_apply_failed);
+            sayLoud(R.string.leopard_apply_failed);
             return;
         }
-        say(R.string.lynkco_applied);
+        sayLoud(R.string.lynkco_applied);
         hidePreview();
         buildFilmstrip();
-        if(mPrefs.getBoolean("leopard-close-after-set", false)) {
-            mSetButton.postDelayed(this::finish, 900);
-        }
+        // No home trip here, unlike Leopard: the theme app has just come to the front with this
+        // exact picture and its own Apply button, so it IS the "here is your wallpaper" screen.
+        // Jumping to the launcher now would pull the user off the tap the wallpaper still needs.
+        // The picker still stands down behind it — there is nothing left for it to do either.
+        mFromPhoneUpload = false;
+        markLeaveAfterApply(LEAVE_QUIET, R.string.lynkco_applied);
+        mSetButton.postDelayed(this::leaveQuietly, 1400);
+    }
+
+    /** finishAffinity, plus forgetting the note that asked for it. */
+    private void leaveQuietly() {
+        if(isFinishing() || isDestroyed()) return;
+        clearLeaveAfterApply();
+        finishAffinity();
     }
 
     /** The download can take real seconds on a car's link; say so rather than look frozen. */
@@ -1270,39 +1668,179 @@ public class LeopardPickerActivity extends AppCompatActivity {
     }
 
     private void onApplied(int result, String type) {
+        final int appliedMsg;
         switch(result) {
             case LeopardApplier.RESULT_NEEDS_SYSTEM_SCREEN:
                 try {
-                    startActivity(LeopardApplier.systemPickerIntent(this));
+                    // Pinned to this screen: on a two-panel car the system's own live-wallpaper
+                    // screen would otherwise open on the default display, sideways.
+                    markLeaveAfterApply(LEAVE_AFTER_SYSTEM_SCREEN, R.string.leopard_applied_video);
+                    LeopardApplier.startOnSameDisplay(this, LeopardApplier.systemPickerIntent(this));
                 } catch(ActivityNotFoundException e) {
+                    clearLeaveAfterApply();
                     // Some cheap ROMs ship without the live wallpaper picker at all.
                     say(R.string.leopard_unsupported);
+                    scheduleTileBind();
                 }
                 return;
             case LeopardApplier.RESULT_APPLIED_BOTH:
-                say(R.string.leopard_applied_image);
+                appliedMsg = R.string.leopard_applied_image;
+                sayLoud(appliedMsg);
                 break;
             case LeopardApplier.RESULT_APPLIED_LIVE:
                 // A live wallpaper cannot cover the lock screen on most versions; say home only.
-                say(R.string.leopard_applied_video);
+                appliedMsg = R.string.leopard_applied_video;
+                sayLoud(appliedMsg);
                 break;
             default:
-                say(R.string.leopard_apply_failed);
+                sayLoud(R.string.leopard_apply_failed);
+                // Nothing is leaving after all, so give the library its movement back.
+                scheduleTileBind();
                 return;
         }
-        hidePreview();
-        buildFilmstrip();   // the "Current" badge moves
+        // The app has just made itself redundant — Android owns the screen now. Leaving is the
+        // honest end to "open, choose, close", and the home screen is where the picture that was
+        // just set can actually be seen. Unconditional: this used to sit behind a "close after
+        // setting" switch, which only ever offered the choice of staying on a screen with nothing
+        // left to show.
+        //
+        // Nothing is repainted on the way out, and that is the fix for a real complaint:
+        // hidePreview() + buildFilmstrip() used to run first, which tore down the preview and
+        // rebuilt the library under it — so for the second before the screen closed, someone who
+        // had just sent a photo from their phone and pressed Set watched the app throw them back
+        // into the picker. On the phone route it read as the picture not having been taken. The
+        // last thing on screen should be the wallpaper they chose.
+        mFromPhoneUpload = false;
+        // Written before the delay, not instead of it. The delay is for the eye; the note is for
+        // the case where this instance does not live long enough to honour it — setting a still
+        // wallpaper is itself a configuration change, so more often than not the activity is
+        // torn down and rebuilt somewhere inside that 900ms.
+        markLeaveAfterApply(LEAVE_NOW, appliedMsg);
+        mSetButton.postDelayed(this::goHome, 1400);
+    }
 
-        if(mPrefs.getBoolean("leopard-close-after-set", false)) {
-            // The app has just made itself redundant — Android owns the screen now. Leaving is
-            // the honest end to "open, choose, close".
-            mSetButton.postDelayed(this::finish, 900);
+    /**
+     * Remember, across a restart of this activity, that the picker is done — and what to say.
+     *
+     * The message travels with the note for the same reason the note exists at all: the banner
+     * is drawn by an activity that is about to be destroyed by the very apply that raised it, so
+     * on the common path nobody ever sees it. The new instance puts it back up.
+     */
+    private void markLeaveAfterApply(String kind, int msgRes) {
+        mPrefs.edit()
+                .putString(PREF_LEAVE, kind)
+                .putInt(PREF_LEAVE_MSG, msgRes)
+                .putLong(PREF_LEAVE_AT, System.currentTimeMillis())
+                .apply();
+    }
+
+    private void clearLeaveAfterApply() {
+        mPrefs.edit().remove(PREF_LEAVE).remove(PREF_LEAVE_MSG).remove(PREF_LEAVE_AT).apply();
+    }
+
+    /**
+     * Act on a pending "leave" note, if there is one worth acting on.
+     *
+     * @return true when this screen is on its way out and the rest of onResume should not run.
+     */
+    private boolean resumeAfterApply() {
+        String kind = mPrefs.getString(PREF_LEAVE, null);
+        if(kind == null) return false;
+        // Stale: an apply that was interrupted, or a car left overnight on this screen. Forget
+        // it rather than close the app on somebody who has just opened it.
+        if(System.currentTimeMillis() - mPrefs.getLong(PREF_LEAVE_AT, 0) > LEAVE_VALID_MS) {
+            clearLeaveAfterApply();
+            return false;
         }
+        int msg = mPrefs.getInt(PREF_LEAVE_MSG, 0);
+        if(LEAVE_AFTER_SYSTEM_SCREEN.equals(kind)) {
+            awaitSystemScreenResult(msg, 0);
+            return true;
+        }
+        // The note deliberately stays until the screen is actually gone. Clearing it here and
+        // trusting the delay below was the last version of this bug: the wallpaper that was just
+        // set is itself a configuration change, so a second teardown lands inside that pause,
+        // takes the pending departure with it, and the new instance wakes up with nothing to
+        // tell it what it was in the middle of. goHome() is the only place that consumes it.
+        mFromPhoneUpload = false;
+        // The banner the previous instance raised died with it. Put it back, then leave — with
+        // enough of a pause to be read, which is the only reason for a delay here at all.
+        if(msg != 0) sayLoud(msg);
+        mSetButton.postDelayed(
+                LEAVE_QUIET.equals(kind) ? this::leaveQuietly : this::goHome, 1400);
+        return true;
+    }
+
+    /**
+     * Wait to find out whether the system's live-wallpaper screen actually set anything.
+     *
+     * There is no result to read, so the only answer available is the wallpaper component — and
+     * asking for it the instant we are resumed gets the OLD one. Binding a live wallpaper is
+     * asynchronous: the picker screen closes, we come back, and the service is bound a moment
+     * later. A single check on resume therefore reads "they backed out" from a car that has just
+     * had the wallpaper set on it, which is exactly what it did.
+     *
+     * So it asks repeatedly for a few seconds. Leaving early is impossible (the check is the
+     * same one either way) and the give-up path is the honest reading of a screen that really
+     * was dismissed: put the library back and carry on.
+     */
+    private static final int SYSTEM_RESULT_TRIES = 12;      // x 400ms ≈ 5s
+    private static final long SYSTEM_RESULT_POLL_MS = 400;
+
+    private void awaitSystemScreenResult(final int msg, final int attempt) {
+        if(gone()) return;
+        if(LeopardApplier.isOurServiceActive(this)) {
+            // Note left in place on purpose — see resumeAfterApply. Binding that wallpaper is
+            // itself about to restart this activity, and the note is what tells its replacement
+            // to carry on leaving.
+            mFromPhoneUpload = false;
+            if(msg != 0) sayLoud(msg);
+            mSetButton.postDelayed(this::goHome, 1400);
+            return;
+        }
+        if(attempt >= SYSTEM_RESULT_TRIES) {
+            clearLeaveAfterApply();
+            restartTilePlayers();   // the rest of onResume was skipped for this
+            return;
+        }
+        mSetButton.postDelayed(() -> awaitSystemScreenResult(msg, attempt + 1),
+                SYSTEM_RESULT_POLL_MS);
+    }
+
+    /**
+     * Leave for the head unit's home screen, which in a hand-off mode IS the wallpaper.
+     *
+     * There is nothing left for this screen to show: the picture is no longer ours to draw, it
+     * belongs to Android (or to the Flyme theme app) now. Ending on the picker would mean the
+     * one thing the user asked for — see it on the car — is a step they still have to work out
+     * for themselves, with the app's own UI in the way of the very thing it just set.
+     *
+     * The delay before this runs is so the "applied" line is read before the screen changes.
+     */
+    private void goHome() {
+        if(isFinishing() || isDestroyed()) return;
+        // Consumed. Leaving it behind would close the app on the next person to open it.
+        clearLeaveAfterApply();
+        try {
+            Intent home = new Intent(Intent.ACTION_MAIN);
+            home.addCategory(Intent.CATEGORY_HOME);
+            home.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            startActivity(home);
+        } catch(Throwable ignored) {
+            // No launcher that will take the intent: closing still beats staying on a dead screen.
+        }
+        // finishAffinity, not finish: Settings, the fit editor and the mode screens can all be
+        // stacked underneath this one, and finishing only the picker leaves the app's own UI in
+        // front of the wallpaper it just set — a back press from the launcher walks straight back
+        // into it. This is the "close the app, without force-stopping it" ending: the whole task
+        // goes, the process is left alone.
+        finishAffinity();
     }
 
     // ---------------------------------------------------------------- state view
 
     private void showState(int textRes, int actionRes, View.OnClickListener action) {
+        releaseTilePlayers();   // same reason as in buildFilmstrip: these cells are going away
         mFilmstrip.removeAllViews();
         // This box is a sibling of both containers, so a phone pane left visible underneath would
         // show a dead QR behind the very message explaining that the server could not start.
@@ -1321,7 +1859,56 @@ public class LeopardPickerActivity extends AppCompatActivity {
 
     private void hideState() { mStateBox.setVisibility(View.GONE); }
 
-    private void toast(int res) { Toast.makeText(this, res, Toast.LENGTH_SHORT).show(); }
+    /**
+     * A message at the foot of the screen — our own, not the platform's.
+     *
+     * "Wallpaper set" is the one line in this whole flow that has to land: it is the answer to
+     * the only question the user asked. A system toast answers it in small grey-on-grey text
+     * over a photograph, from a car seat, which is close to not answering at all. This is the
+     * same idea drawn to be read — white, larger, and with weight behind it.
+     *
+     * Built once and kept: it is added to the activity's own content view, so it goes away with
+     * the screen and there is nothing to leak.
+     */
+    private void toast(int res) {
+        if(gone()) return;
+        if(mBanner == null) {
+            ViewGroup root = findViewById(android.R.id.content);
+            if(root == null) {   // nothing to attach to; better silent than crashed
+                Toast.makeText(this, res, Toast.LENGTH_SHORT).show();
+                return;
+            }
+            float d = getResources().getDisplayMetrics().density;
+            mBanner = new TextView(this);
+            mBanner.setBackgroundResource(R.drawable.leopard_banner_bg);
+            mBanner.setTextColor(0xFF14161A);
+            mBanner.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 20);
+            mBanner.setTypeface(null, android.graphics.Typeface.BOLD);
+            mBanner.setGravity(Gravity.CENTER);
+            mBanner.setPadding(Math.round(28 * d), Math.round(16 * d),
+                    Math.round(28 * d), Math.round(16 * d));
+            mBanner.setElevation(12 * d);
+            FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(
+                    FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT);
+            lp.gravity = Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL;
+            // This activity draws edge to edge, so the foot of the content view is behind the
+            // navigation bar and a banner at a plain margin has its last line sliced off by it.
+            // The inset is read back off leopardRoot's padding, which the insets listener in
+            // onCreate has already set to exactly that value — asking the window again returns
+            // nothing, because that listener consumes them.
+            View insetHost = findViewById(R.id.leopardRoot);
+            int nav = insetHost != null ? insetHost.getPaddingBottom() : 0;
+            lp.bottomMargin = Math.round(24 * d) + nav;
+            lp.leftMargin = lp.rightMargin = Math.round(24 * d);
+            mBanner.setLayoutParams(lp);
+            root.addView(mBanner);
+        }
+        mBanner.setText(res);
+        mBanner.setVisibility(View.VISIBLE);
+        mBanner.bringToFront();   // the preview and the ring are added after it on a rebuild
+        mBanner.removeCallbacks(mHideBanner);
+        mBanner.postDelayed(mHideBanner, 2600);
+    }
 
     /**
      * Status that reaches the user wherever they are. The status line lives under the
@@ -1331,5 +1918,17 @@ public class LeopardPickerActivity extends AppCompatActivity {
     private void say(int res) {
         mStatus.setText(res);
         if(mPreview.getVisibility() == View.VISIBLE) toast(res);
+    }
+
+    /**
+     * The outcome of an apply — said where it cannot be missed, preview or no preview.
+     *
+     * The status line under the grid is the right place for "downloading…" and is the wrong
+     * place for "done": by the time this is said the screen is about to close, and a line of
+     * small text at the bottom edge is not what somebody who just pressed Set is looking at.
+     */
+    private void sayLoud(int res) {
+        mStatus.setText(res);
+        toast(res);
     }
 }

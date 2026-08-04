@@ -102,35 +102,33 @@
                 android:text="@string/leopard_source_cloud_sub" />
         </LinearLayout>
 
-        <!-- filmstrip: a grid would waste a 2.67:1 band, and the cells are the screen's own
-             shape so a cell reads as a preview of the result -->
+        <!-- The library: two pictures across, scrolling down.
+             It was a horizontal strip, on the reasoning that a cell shaped like the screen reads
+             as a preview of the result. In the car that traded one guess for a worse one — you
+             cannot see what is coming, and sideways flicking to hunt for a picture is the wrong
+             gesture on a head unit. Two columns put more of the library on screen at once and put
+             the scroll where a list is expected. -->
         <FrameLayout
             android:layout_width="0dp"
             android:layout_height="match_parent"
             android:layout_weight="1">
 
-            <!-- fillViewport so the strip is at least as wide as the area it sits in. Without it
-                 a HorizontalScrollView measures its child at wrap_content, so the QR — which is a
-                 single box, not a strip — was pinned to the left edge instead of the middle.
-                 (A match_parent on the strip cannot fix this: HorizontalScrollView measures its
-                 child with an UNSPECIFIED width spec and ignores it.) -->
-            <HorizontalScrollView
+            <ScrollView
                 android:id="@+id/filmstripScroll"
                 android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_gravity="center_vertical"
+                android:layout_height="match_parent"
                 android:fillViewport="true"
                 android:paddingStart="10dp"
                 android:paddingEnd="10dp"
                 android:clipToPadding="false"
                 android:scrollbars="none">
-                <LinearLayout
+                <GridLayout
                     android:id="@+id/filmstrip"
-                    android:layout_width="wrap_content"
+                    android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:orientation="horizontal"
+                    android:columnCount="2"
                     android:padding="4dp" />
-            </HorizontalScrollView>
+            </ScrollView>
 
             <!-- the phone source is two things at once: what has already come over from a phone,
                  and the code for sending one more. A strip cannot hold both — the QR would scroll

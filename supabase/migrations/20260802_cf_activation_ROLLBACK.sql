@@ -56,7 +56,9 @@ begin
         return 'blocked';
     end if;
 
-    if activation_serial not like '7078%' then
+    -- 7078 = the codes already in the field; 578 = everything issued from
+    -- 2026-08-02 on. Rolling back must not start rejecting the new codes.
+    if activation_serial not like '7078%' and activation_serial not like '578%' then
         return 'invalid_format';
     end if;
 

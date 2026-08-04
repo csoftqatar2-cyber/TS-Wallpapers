@@ -22,7 +22,8 @@ Every installed APK depends on:
   they share the device's hardware id.
 - Table `app_versions` (anon-readable) columns `version_code, version_name, apk_url, changelog`.
 - Public download URLs `/storage/v1/object/public/{apk,wallpapers}/...`.
-- Serial format `7078…` and hardware-id prefixes `VIN-/MAC-/SYS-/BOOT-/SRL-/AID-`.
+- Serial formats `7078…` (legacy) and `578…` (issued from 2026-08-02 on), and
+  hardware-id prefixes `VIN-/MAC-/SYS-/BOOT-/SRL-/AID-`.
 
 ## Privacy model (why private wallpapers stay private)
 

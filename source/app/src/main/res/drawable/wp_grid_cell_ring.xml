@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The outline of a cell in the manage grid, drawn as a RING on top of the picture rather than
+     as the picture's background.
+
+     A background stroke sits underneath the image, so it is only visible where the image is not —
+     which is exactly the dead space this dialog is not supposed to have. As an overlay the stroke
+     traces the cell itself, so it lands on the edge of the photo whatever shape the photo is, and
+     it stays visible over a bright wallpaper.
+
+     The 16dp radius must stay in step with the clip applied in WallpaperSelectAdapter.getView, or
+     the picture's square corners are drawn outside the curve. -->
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:state_activated="true">
+        <shape android:shape="rectangle">
+            <solid android:color="#00000000" />
+            <stroke android:width="3dp" android:color="@color/colorAccent" />
+            <corners android:radius="16dp" />
+        </shape>
+    </item>
+    <item android:state_pressed="true">
+        <shape android:shape="rectangle">
+            <solid android:color="#00000000" />
+            <stroke android:width="3dp" android:color="@color/gold" />
+            <corners android:radius="16dp" />
+        </shape>
+    </item>
+    <item>
+        <shape android:shape="rectangle">
+            <solid android:color="#00000000" />
+            <stroke android:width="2dp" android:color="@color/aurora_border" />
+            <corners android:radius="16dp" />
+        </shape>
+    </item>
+</selector>

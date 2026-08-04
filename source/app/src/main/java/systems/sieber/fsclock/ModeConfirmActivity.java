@@ -133,15 +133,21 @@ public class ModeConfirmActivity extends AppCompatActivity {
         OperatingMode.set(mPrefs, mode);
         OperatingMode.setConfirmed(mPrefs);
 
-        // FSE means "the car boots into this screen" — that is what the mode is, so the
-        // start-on-boot switch follows it here exactly as it does in Settings.
-        if(mode == OperatingMode.FSE) {
-            mPrefs.edit().putBoolean(BootReceiver.PREF_AUTO_START, true).apply();
-        }
-
         // Tell the manager immediately. Fire-and-forget on a background thread: an offline car
         // still gets through the gate, and the next sync reports the same mode again anyway.
         new WallpaperRepo(this).reportModeAsync();
+
+        // FSE means "the car boots into this screen" — that is what the mode is, so the
+        // start-on-boot switch follows it here exactly as it does in Settings. And boot-time
+        // start needs the overlay grant on Android 10+, so it is asked for HERE rather than
+        // left for whenever somebody next opens Settings: this gate is the last moment the
+        // technician is standing at the car, and the failure it prevents only shows up at the
+        // customer's next cold start.
+        if(mode == OperatingMode.FSE) {
+            mPrefs.edit().putBoolean(BootReceiver.PREF_AUTO_START, true).apply();
+            OverlayPermission.request(this, this::openApp);
+            return;
+        }
 
         openApp();
     }

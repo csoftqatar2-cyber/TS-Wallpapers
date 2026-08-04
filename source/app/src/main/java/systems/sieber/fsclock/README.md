@@ -35,8 +35,9 @@ applicationId is `store.thabthaba.clock`). Read this before editing any class.
   `VIN- → MAC- → SYS- → BOOT- → SRL- → AID-`) — **changing this format breaks
   server-side device matching for every fielded device**. Sync = POST RPC
   `get_wallpapers {device_hw_id, legacy_hw_id}`; response `"inactive"` de-activates.
-  Activation = POST RPC `activate_device`; serial must start `7078` (also enforced at
-  `FsClockView.java:224`). Videos pre-cached to `cacheDir/wallpapers/vid_{hex}.bin`.
+  Activation = POST RPC `activate_device`; serial must carry an issued prefix — `7078`
+  (legacy) or `578` (from 2026-08-02 on), see `WallpaperRepo.SERIAL_PREFIXES`, also
+  enforced server-side. Videos pre-cached to `cacheDir/wallpapers/vid_{hex}.bin`.
 - `WallpaperItem` — Gson model `{type,url}` (ProGuard-kept), type guessed from extension.
 - `WallpaperView` — two ping-pong slots with crossfade; Glide for image/GIF,
   TextureView+MediaPlayer (muted, looping, center-crop) for video; `sampleLuminance()`
@@ -100,7 +101,7 @@ applicationId is `store.thabthaba.clock`). Read this before editing any class.
 2. Pref domain `"CLOCK"` and every pref key string are cross-class contracts; also see
    `FsClockApp.migrateSettings()` before renaming any key (it maps legacy → new names).
 3. Server contract: RPC names/shapes (`get_wallpapers`, `activate_device`, `"inactive"`
-   sentinel), `app_versions` columns, hardware-id prefixes, serial prefix `7078`.
+   sentinel), `app_versions` columns, hardware-id prefixes, serial prefixes `7078`/`578`.
 4. ProGuard: new XML-referenced views / Gson models / reflection targets need keep rules.
    `Log.v/d/i/w` stripped in release.
 5. Release JSON in `WallpaperRepo` is built by string concatenation (`:523`, `:556`) —

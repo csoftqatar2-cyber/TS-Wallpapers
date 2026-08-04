@@ -1386,7 +1386,7 @@
             </div>
             <div id="connection-status" class="db-status pulse">
                 <i class="fa-solid fa-circle-notch fa-spin"></i>
-                <span>جاري الاتصال بقاعدة البيانات...</span>
+                <span>جارٍ الاتصال بقاعدة البيانات…</span>
             </div>
             <button onclick="logout()" title="تسجيل الخروج"
                     style="margin-inline-start:12px;padding:8px 14px;border:1px solid rgba(255,255,255,0.15);border-radius:10px;background:rgba(255,255,255,0.05);color:#cbd3ea;font-size:14px;cursor:pointer;white-space:nowrap;">
@@ -1471,13 +1471,33 @@
                                 <i class="fa-solid fa-mobile-screen"></i> تطبيق ذبذبة (خلفيات الشاشة)
                             </button>
                             <button type="button" class="toggle-btn" id="btn-channel-gwm" onclick="setChannel('gwm_split')">
-                                <i class="fa-solid fa-folder-tree"></i> GWM Split (فولدر خارجي)
-                            </button>
-                            <button type="button" class="toggle-btn" id="btn-channel-lynkco" onclick="setChannel('lynkco')">
-                                <i class="fa-solid fa-car-side"></i> Lynk &amp; Co (خلفيات السيارة)
+                                <i class="fa-solid fa-folder-tree"></i> GWM Split (مجلد خارجي)
                             </button>
                         </div>
                         <p id="channel-hint" style="margin: 8px 2px 0; font-size: 0.82rem; color: var(--text-muted);"></p>
+                    </div>
+
+                    <!-- Which operating mode this upload is for.
+                         This used to be a third "channel" button that only knew Lynk & Co, which
+                         made mode targeting look like a property of one car brand. It is not: the
+                         same one column (wallpapers.target_mode) has always been able to name any
+                         mode, and get_wallpapers has always filtered on it. So it is a list, and
+                         every mode can have a library of its own.
+
+                         The per-car assignment underneath (عام / خاص) is a different axis and is
+                         untouched: a picture can be for one car, for every car in a mode, or for
+                         everything, and those combine. -->
+                    <div class="form-group" id="target-mode-group">
+                        <label for="target-mode-select">لأي وضع تشغيل؟</label>
+                        <select id="target-mode-select" onchange="setTargetMode(this.value)">
+                            <option value="">كل الأوضاع (المكتبة العامة)</option>
+                            <option value="leopard">Leopard \ Denza فقط</option>
+                            <option value="fse">Leopard (FSE) فقط</option>
+                            <option value="normal">Others فقط</option>
+                            <option value="lynkco">Lynk and Co فقط</option>
+                            <option value="gwm">GWM فقط</option>
+                        </select>
+                        <p id="target-mode-hint" style="margin: 8px 2px 0; font-size: 0.82rem; color: var(--text-muted);"></p>
                     </div>
 
                     <!-- Target Type (Global vs Private) -->
@@ -1570,7 +1590,7 @@
                             <div class="progress-bar-fill" id="progress-bar"></div>
                         </div>
                         <div class="progress-text">
-                            <span id="progress-status">جاري الرفع...</span>
+                            <span id="progress-status">جارٍ الرفع…</span>
                             <span id="progress-percent">0%</span>
                         </div>
                     </div>
@@ -1628,7 +1648,7 @@
             </h2>
             <p style="opacity:.7; margin-bottom:18px;">
                 ارفع نسخة APK جديدة وسجّل رقم الإصدار. سيصل التحديث تلقائياً لكل الأجهزة عند فتح الإعدادات.
-                <br><b>مهم:</b> رقم الإصدار (versionCode) لازم يكون أكبر من رقم النسخة المثبّتة حالياً.
+                <br><b>مهم:</b> يجب أن يكون رقم الإصدار (versionCode) أكبر من رقم النسخة المثبَّتة حالياً.
             </p>
 
             <div id="current-version-box" style="opacity:.7; margin-bottom:14px;">
@@ -1738,7 +1758,7 @@
                     </div>
                 </div>
                 <div style="padding:8px 4px;font-size:0.85rem;color:var(--text-muted);">
-                    كل عطل بيتسجّل على السيارة نفسها كمان، وبيتبعت هنا أول ما التطبيق يفتح بعد العطل — يعني لو السيارة كانت أوفلاين ساعة المشكلة، التقرير بيوصل بعدين مش بيضيع.
+                    يُسجَّل كل عطل على السيارة نفسها أيضاً، ويُرسَل إلى هنا عند أول فتح للتطبيق بعد العطل — أي أن السيارة إذا كانت غير متصلة وقت حدوث المشكلة، فإن التقرير يصل لاحقاً ولا يضيع.
                 </div>
             </div>
             <div class="modal-body" id="crashes-modal-body">
@@ -1764,7 +1784,7 @@
                     </div>
                 </div>
                 <div id="hide-modal-note" style="padding:8px 4px;font-size:0.85rem;color:var(--text-muted);">
-                    علّم السيارات اللي <b>مش عايز</b> الخلفية دي تظهر عندها. باقي السيارات هتفضل شايفاها عادي.
+                    حدّد السيارات التي <b>لا تريد</b> أن تظهر عندها هذه الخلفية. أما بقية السيارات فتظل تراها كالمعتاد.
                 </div>
             </div>
             <div class="modal-body" id="hide-modal-body">
@@ -1862,53 +1882,92 @@
         let selectedFiles = [];
         let targetType = 'global'; // global or private
         let uploadChannel = 'app';    // 'app' (our slideshow) or 'gwm_split' (external GWM folder)
-        let uploadTargetMode = null;  // null = every car; 'lynkco' = Lynk & Co cars only
+        // null = the shared library every car sees. Otherwise one of devices.mode, and the image
+        // reaches only cars reporting that mode (wallpapers.target_mode, filtered in get_wallpapers).
+        let uploadTargetMode = null;
 
-        // Which device operating-mode the currently selected channel targets, so the
-        // device dropdown can offer only the cars that actually run that mode.
+        // Which device operating-mode the current selection targets, so the device dropdown can
+        // offer only the cars that actually run that mode. GWM Split is not a mode choice but it
+        // implies one: nothing except a GWM car ever reads that folder.
         function channelDeviceMode() {
-            if (uploadTargetMode === 'lynkco') return 'lynkco';
+            if (uploadTargetMode) return uploadTargetMode;
             if (uploadChannel === 'gwm_split') return 'gwm';
-            return null; // plain app channel reaches every car
+            return null; // the shared library reaches every car
         }
 
-        // Switch the delivery destination. Three choices, but only two are real channels: Lynk & Co
-        // rides the SAME 'app' channel as the normal library — it is not a separate delivery path,
-        // it is the app channel plus a per-mode filter (target_mode='lynkco'), applied after upload
-        // by patching the row. The global/private target below is orthogonal and stays as-is; only
-        // the copy changes so the operator knows where these images will land.
+        // Display names for devices.mode. Same text as MODE_LABELS and as the car's own screen —
+        // three places showing one fleet, so they must not drift apart.
+        const TARGET_MODE_NAMES = {
+            leopard: 'Leopard \\ Denza',
+            fse:     'Leopard (FSE)',
+            normal:  'Others',
+            lynkco:  'Lynk and Co',
+            gwm:     'GWM',
+        };
+
+        // Switch the delivery channel. Two real channels, and only two: 'app' is our own
+        // slideshow/picker, 'gwm_split' is a file drop into a folder another app on the car reads.
+        // Which MODE an upload is for is a separate axis — see setTargetMode.
         function setChannel(ch) {
-            if (ch === 'lynkco') {
-                uploadChannel = 'app';
-                uploadTargetMode = 'lynkco';
-            } else {
-                uploadChannel = (ch === 'gwm_split') ? 'gwm_split' : 'app';
-                uploadTargetMode = null;
-            }
-            document.getElementById("btn-channel-app").classList.toggle('active', uploadChannel === 'app' && !uploadTargetMode);
+            uploadChannel = (ch === 'gwm_split') ? 'gwm_split' : 'app';
+            // GWM Split is delivered by mode already (only GWM cars mirror that folder), so a
+            // second mode filter on top of it could only ever contradict the first.
+            if (uploadChannel === 'gwm_split') uploadTargetMode = null;
+            document.getElementById("btn-channel-app").classList.toggle('active', uploadChannel === 'app');
             document.getElementById("btn-channel-gwm").classList.toggle('active', uploadChannel === 'gwm_split');
-            const lynkcoBtn = document.getElementById("btn-channel-lynkco");
-            if (lynkcoBtn) lynkcoBtn.classList.toggle('active', uploadTargetMode === 'lynkco');
 
-            const globalBtn = document.getElementById("btn-target-global");
+            const modeGroup = document.getElementById("target-mode-group");
+            if (modeGroup) modeGroup.style.display = (uploadChannel === 'gwm_split') ? 'none' : '';
+            const modeSelect = document.getElementById("target-mode-select");
+            if (modeSelect) modeSelect.value = uploadTargetMode || '';
+
             const hint = document.getElementById("channel-hint");
-            if (uploadTargetMode === 'lynkco') {
-                // "Global" here means "every Lynk & Co car" — the mode filter already narrows it to
-                // that fleet, so say so rather than the misleading "all devices".
-                globalBtn.innerHTML = '<i class="fa-solid fa-globe"></i> كل عربيات Lynk &amp; Co';
-                hint.innerText = 'تظهر داخل تطبيقنا على عربيات Lynk & Co فقط (اللي مفعّل عليها وضع Lynk & Co). العربية بتفتح معاينة رسمية وتدوس «تطبيق» لتثبيت الخلفية.';
-            } else if (uploadChannel === 'gwm_split') {
-                // "Global" now means "every GWM car", because only cars with the GWM Split section
-                // enabled ever pull this channel — so relabel it to say exactly that.
-                globalBtn.innerHTML = '<i class="fa-solid fa-globe"></i> كل عربيات GWM';
-                hint.innerText = 'هذه الصور لا تظهر داخل تطبيقنا. تُنزَّل في فولدر GWMSplit_Styles على العربية ليستخدمها تطبيق GWM Split. تظهر فقط على العربيات المفعّل بها قسم GWM Split.';
-            } else {
-                globalBtn.innerHTML = '<i class="fa-solid fa-globe"></i> جميع الأجهزة (عام)';
-                hint.innerText = '';
-            }
+            hint.innerText = (uploadChannel === 'gwm_split')
+                ? 'هذه الصور لا تظهر داخل تطبيقنا. تُنزَّل في مجلد GWMSplit_Styles على السيارة ليستخدمها تطبيق GWM Split، ولا تصل إلا إلى السيارات المفعَّل بها قسم GWM Split.'
+                : '';
+            refreshTargetScopeUi();
+        }
 
-            // The channel decides which cars are eligible, so re-filter the device
-            // dropdown to match (Lynk & Co channel → only Lynk & Co cars).
+        // Which operating mode this upload belongs to. '' = the shared library.
+        //
+        // The per-car assignment below is deliberately left alone: the two combine, so "this
+        // picture, for this one Leopard car" and "this picture, for every Leopard car" are both
+        // expressible, and neither disturbs the per-car codes that already exist.
+        function setTargetMode(mode) {
+            uploadTargetMode = mode || null;
+            refreshTargetScopeUi();
+        }
+
+        // Say exactly who "عام" means right now. Left as the misleading "all devices" it would
+        // read as the whole fleet, when the mode filter has already narrowed it to one slice.
+        function refreshTargetScopeUi() {
+            const globalBtn = document.getElementById("btn-target-global");
+            const modeHint = document.getElementById("target-mode-hint");
+            const mode = channelDeviceMode();
+            const name = TARGET_MODE_NAMES[mode];
+            if (globalBtn) {
+                globalBtn.innerHTML = name
+                    ? `<i class="fa-solid fa-globe"></i> كل سيارات ${escapeHtml(name)}`
+                    : '<i class="fa-solid fa-globe"></i> جميع الأجهزة (عام)';
+            }
+            if (modeHint) {
+                if (!uploadTargetMode) {
+                    modeHint.innerText = 'تصل هذه الصور إلى جميع السيارات مهما كان وضع تشغيلها.';
+                } else {
+                    // The count matters more than the rule here. get_wallpapers matches
+                    // target_mode against devices.mode, and a car that has not reported a mode
+                    // yet has NULL there — so it matches nothing and receives no mode-targeted
+                    // image, whatever it is actually running. Most of the fleet is in that state,
+                    // and the failure is silent on both ends: the operator sees a successful
+                    // upload, the car sees no new wallpaper. So the number is stated up front.
+                    const n = devicesList.filter(d => d.mode === uploadTargetMode).length;
+                    const label = TARGET_MODE_NAMES[uploadTargetMode];
+                    modeHint.innerText = n === 0
+                        ? `⚠ لا توجد حالياً أي سيارة أبلغت عن وضع ${label}، ولن تصل هذه الصور إلى أي جهاز. تُبلِّغ السيارة عن وضعها عند أول فتح للتطبيق بعد اختيار الوضع.`
+                        : `تصل هذه الصور إلى ${n} سيارة تعمل بوضع ${label} فقط. السيارات التي لم تُبلِّغ عن وضعها بعد لن تستقبلها.`;
+                }
+            }
+            // The mode decides which cars are eligible, so re-filter the device dropdown to match.
             const searchBox = document.getElementById("device-search");
             if (searchBox) searchBox.value = "";
             renderDevicesDropdown();
@@ -1924,6 +1983,10 @@
             document.getElementById("login-overlay").style.display = "none";
             initConnection();
             setupDragAndDrop();
+            // Fill in the "who will see this" copy for the default selection. Without it the
+            // upload form opens with an empty explanation and only starts explaining itself
+            // once something is changed.
+            refreshTargetScopeUi();
         }
 
         function showLogin() {
@@ -2092,8 +2155,13 @@
             let placeholder = '-- اختر جهازاً أو اكتب كوداً مخصصاً --';
             if (matches.length === 0) {
                 if (q) placeholder = '-- لا يوجد جهاز مطابق --';
-                else if (requiredMode === 'lynkco') placeholder = '-- لا توجد عربيات Lynk & Co مفعّلة بعد --';
-                else if (requiredMode === 'gwm') placeholder = '-- لا توجد عربيات GWM مفعّلة بعد --';
+                else if (requiredMode) {
+                    // Named, not generic: "no matching device" would send the operator hunting
+                    // through a fleet that is fine, when the real answer is that no car has
+                    // reported this mode yet.
+                    const modeName = TARGET_MODE_NAMES[requiredMode] || requiredMode;
+                    placeholder = `-- لا توجد سيارات ${modeName} مفعّلة بعد --`;
+                }
             }
             selectEl.innerHTML = `<option value="">${placeholder}</option>`;
 
@@ -2361,7 +2429,7 @@
 
             resultEl.style.display = "block";
             resultEl.className = "qr-result";
-            resultEl.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> جاري قراءة الكود...';
+            resultEl.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> جارٍ قراءة الكود…';
 
             try {
                 if (typeof jsQR !== "function") throw new Error("مكتبة قراءة QR لم تُحمّل. تحقق من اتصال الإنترنت.");
@@ -2609,7 +2677,7 @@
                 const file = selectedFiles[i];
                 const filePercent = Math.round((i / totalFiles) * 100);
 
-                progressStatus.innerText = `جاري رفع: ${file.name} (${i + 1}/${totalFiles})`;
+                progressStatus.innerText = `جارٍ رفع: ${file.name} (${i + 1}/${totalFiles})`;
                 progressBar.style.width = `${filePercent}%`;
                 progressPercent.innerText = `${filePercent}%`;
 
@@ -2788,7 +2856,7 @@
                 return;
             }
 
-            Swal.fire({ title: 'جاري رفع التحديث...', html: 'يرجى الانتظار حتى يكتمل الرفع', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+            Swal.fire({ title: 'جارٍ رفع التحديث…', html: 'يرجى الانتظار حتى يكتمل الرفع', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
 
             try {
                 // 1. Upload the APK to R2 (versioned filename). Same Worker the wallpapers go
@@ -2895,11 +2963,15 @@
                 }
                 mediaWrapper.appendChild(badge);
 
-                // Mode-targeted badge: this image only reaches cars running that mode (Lynk & Co).
-                if (wp.target_mode === 'lynkco') {
+                // Mode-targeted badge: this image only reaches cars running that mode. Any mode,
+                // not just Lynk & Co — a library scoped to a mode is invisible to the rest of the
+                // fleet, and that is the single most important thing to be able to see at a glance
+                // when a picture "is not showing up" on a car.
+                if (wp.target_mode && TARGET_MODE_NAMES[wp.target_mode]) {
                     const modeBadge = document.createElement("span");
                     modeBadge.className = "wp-badge mode";
-                    modeBadge.innerHTML = '<i class="fa-solid fa-car-side"></i> Lynk & Co';
+                    modeBadge.innerHTML = '<i class="fa-solid fa-car-side"></i> '
+                        + escapeHtml(TARGET_MODE_NAMES[wp.target_mode]);
                     mediaWrapper.appendChild(modeBadge);
                 }
 
@@ -2937,7 +3009,7 @@
                     // GWM Split image: it lands in the external folder, not our slideshow. Say so,
                     // then still show whether it is for all GWM cars or one specific car.
                     if (wp.is_global) {
-                        target.innerHTML = '<i class="fa-solid fa-folder-tree"></i> GWM Split · كل عربيات GWM';
+                        target.innerHTML = '<i class="fa-solid fa-folder-tree"></i> GWM Split · كل سيارات GWM';
                     } else {
                         const device = devicesList.find(d => d.hardware_id === wp.hardware_id);
                         const serial = device ? device.serial_number : 'غير معروف';
@@ -3016,7 +3088,7 @@
         // Perform delete operations
         async function performDelete(id, filename, url) {
             // Show a blocking loader while we delete from DB + Storage
-            Swal.fire({ title: 'جاري الحذف...', html: 'يتم إزالة الصورة من قاعدة البيانات والتخزين', allowOutsideClick: false, background: '#1c160e', color: '#ffffff', didOpen: () => Swal.showLoading() });
+            Swal.fire({ title: 'جارٍ الحذف…', html: 'يتم إزالة الصورة من قاعدة البيانات والتخزين', allowOutsideClick: false, background: '#1c160e', color: '#ffffff', didOpen: () => Swal.showLoading() });
 
             try {
                 // 1. Delete EVERY DB row that references this exact file, so it disappears
@@ -3097,7 +3169,7 @@
             hideModalSelection = new Set(wallpaperHides[wpId] || []);
             document.getElementById("hide-search").value = "";
             document.getElementById("hide-modal-note").innerHTML =
-                `علّم السيارات اللي <b>مش عايز</b> الخلفية (<b>${escapeHtml(filename)}</b>) تظهر عندها. باقي السيارات هتفضل شايفاها عادي.`;
+                `حدّد السيارات التي <b>لا تريد</b> أن تظهر عندها الخلفية (<b>${escapeHtml(filename)}</b>). أما بقية السيارات فتظل تراها كالمعتاد.`;
             document.getElementById("hide-modal").style.display = "flex";
             renderHideModal();
         }
@@ -3283,7 +3355,7 @@
 
             if (!rows.length) {
                 body.innerHTML = `<div style="padding:32px;text-align:center;color:var(--text-muted);">
-                    ${crashesList.length ? 'لا نتائج للبحث ده.' : 'لا توجد أي أعطال — كل السيارات شغالة تمام. 🎉'}
+                    ${crashesList.length ? 'لا توجد نتائج لهذا البحث.' : 'لا توجد أي أعطال — جميع السيارات تعمل بلا مشكلات. 🎉'}
                 </div>`;
                 return;
             }
@@ -3443,7 +3515,7 @@
             const c = await Swal.fire({
                 icon: 'warning',
                 title: 'حذف الجهاز نهائياً؟',
-                html: `سيُحذف تسجيل الجهاز. لو شغّل التطبيق مرة أخرى سيظهر له كجهاز جديد يحتاج تفعيل.<br><br><b>${dev.serial_number || 'بدون كود'}</b><br><small style="opacity:.7;">${hwId}</small><br><br><small>ملاحظة: الصور المخصصة لهذا الجهاز لا تُحذف تلقائياً.</small>`,
+                html: `سيُحذف تسجيل الجهاز. وإذا شُغّل التطبيق عليه مرة أخرى فسيظهر كجهاز جديد يحتاج إلى تفعيل.<br><br><b>${dev.serial_number || 'بدون كود'}</b><br><small style="opacity:.7;">${hwId}</small><br><br><small>ملاحظة: الصور المخصصة لهذا الجهاز لا تُحذف تلقائياً.</small>`,
                 showCancelButton: true,
                 confirmButtonText: 'نعم، احذفه',
                 cancelButtonText: 'إلغاء',
@@ -3469,12 +3541,17 @@
 
         // Render the full devices list with block/activate/rename/delete controls
         // Operating mode the car reported (report_device_mode RPC). null = older APK / never synced.
+        // The KEYS are the values report_device_mode writes into devices.mode and are a contract
+        // with every installed APK — never rename them. Only the labels below are display text,
+        // and they follow whatever the technician sees on the car's own screen (res/values/
+        // strings.xml: mode_normal / mode_fse / mode_leopard). If the two ever disagree, the
+        // operator and the technician are filtering the same fleet by two different names.
         const MODE_LABELS = {
-            normal:  ['fa-desktop', 'عادي'],
-            fse:     ['fa-tv', 'FSE'],
-            leopard: ['fa-image', 'ليوبارد'],
+            normal:  ['fa-desktop', 'Others'],
+            fse:     ['fa-tv', 'Leopard (FSE)'],
+            leopard: ['fa-image', 'Leopard \\ Denza'],
             gwm:     ['fa-folder-tree', 'GWM'],
-            lynkco:  ['fa-car', 'Lynk & Co'],
+            lynkco:  ['fa-car', 'Lynk and Co'],
         };
         function modeBadge(mode) {
             const m = MODE_LABELS[mode];

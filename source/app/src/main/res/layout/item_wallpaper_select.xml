@@ -6,14 +6,20 @@
 
      Nothing here is `focusable`. A focusable child inside an AdapterView steals the row's click
      — which is exactly what broke the tick when this was a list with an "edit" button in it.
-     Every tap target below is wired by the adapter instead. -->
+     Every tap target below is wired by the adapter instead.
+
+     SIZING LIVES IN THE ADAPTER, not here. This used to be wrap_content + adjustViewBounds, which
+     reads well and does not work: the cell is measured before Glide has delivered anything, so it
+     settled at its minimum and the picture was then fitted into a box the wrong shape — the "the
+     border is wider than the wallpaper inside it" complaint. The adapter now sets the cell's
+     height from the picture's real proportions the moment they are known
+     (WallpaperSelectAdapter.sizeCellToImage), and everything in here just fills that cell. -->
 <FrameLayout
     xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/wallpaperCell"
     android:layout_width="match_parent"
-    android:layout_height="168dp"
-    android:layout_margin="5dp"
-    android:background="@drawable/wp_grid_cell_bg">
+    android:layout_height="match_parent"
+    android:background="#241c11">
 
     <ImageView
         android:id="@+id/imageViewWallpaperThumb"
@@ -83,5 +89,13 @@
         android:maxLines="1"
         android:textColor="@color/aurora_text"
         android:textSize="11sp" />
+
+    <!-- Last, so it is on top of the photo: the outline has to trace the edge of the picture,
+         which it cannot do from underneath it. Mirrors the Leopard picker's cell. -->
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:duplicateParentState="true"
+        android:background="@drawable/wp_grid_cell_ring" />
 
 </FrameLayout>

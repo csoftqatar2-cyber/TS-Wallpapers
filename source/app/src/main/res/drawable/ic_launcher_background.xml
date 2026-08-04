@@ -1,7 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- Icon background: the logo's own black plate, not the cream of the old mark.
-     The logo is a black clock face with a gold bezel, so a light background would ring it with
-     a bright halo on every launcher that applies a mask. -->
+     The logo is a gold skyline on a black plate, so a light background would ring it with a
+     bright halo on every launcher that applies a mask.
+
+     The two stops are sampled straight off app-icon-1024.png's own plate (top-left #17171B,
+     bottom-right #0F0F12) and run along the same diagonal. The foreground sits inside the 72dp
+     safe zone, so its plate edge lands in the middle of this one - match the colours and the
+     seam disappears; guess at them and the icon reads as a card floating on a darker card. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
     android:height="108dp"
@@ -15,8 +20,8 @@
                 android:type="linear"
                 android:startX="0" android:startY="0"
                 android:endX="108" android:endY="108">
-                <item android:offset="0.0" android:color="#FF16151A" />
-                <item android:offset="1.0" android:color="#FF07070A" />
+                <item android:offset="0.0" android:color="#FF17171B" />
+                <item android:offset="1.0" android:color="#FF0F0F12" />
             </gradient>
         </aapt:attr>
     </path>

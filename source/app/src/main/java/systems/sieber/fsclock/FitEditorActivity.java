@@ -41,6 +41,16 @@ public class FitEditorActivity extends AppCompatActivity {
     public static final String EXTRA_TARGET_W = "target_w";
     public static final String EXTRA_TARGET_H = "target_h";
 
+    /**
+     * Result extra: true only when the user left through the Done button.
+     *
+     * Back and Done both save — there is no Cancel in this app — but they do not mean the same
+     * thing. Done is "this is the picture I want", and the caller answers it by showing the
+     * picture in place: the clock screen in Normal, the applied wallpaper in Leopard/Lynk &amp; Co.
+     * Back is "I am finished looking at this screen" and must not move anybody anywhere.
+     */
+    public static final String EXTRA_DONE = "done_pressed";
+
     /** Longest edge we decode to. A 10MP phone photo at full size is pointless here and slow. */
     private static final int MAX_DECODE = 1600;
 
@@ -118,6 +128,15 @@ public class FitEditorActivity extends AppCompatActivity {
         mPreview.setFocal(focal[0], focal[1]);
         mPreview.setOnFocalChangeListener((fx, fy) -> mRepo.setFocal(mUrl, fx, fy));
 
+        // Pinch on the preview is the same zoom the slider drives, so the slider has to move with
+        // it — a control that disagrees with the picture reads as broken. setProgress fires the
+        // listener with fromUser=false, which updates the label and skips the redraw the gesture
+        // has already done. Saving waits for the fingers to lift.
+        mPreview.setOnZoomChangeListener((zoom, settled) -> {
+            mSeekZoom.setProgress(progressOfZoom(zoom));
+            if(settled) applyAndSave();
+        });
+
         mTileFill.setOnClickListener(v -> pickMode(FitSettings.MODE_FILL));
         mTileBlur.setOnClickListener(v -> pickMode(FitSettings.MODE_BLUR));
         mTileColor.setOnClickListener(v -> pickMode(FitSettings.MODE_COLOR));
@@ -170,15 +189,34 @@ public class FitEditorActivity extends AppCompatActivity {
         });
 
         findViewById(R.id.buttonFitRotate).setOnClickListener(v -> rotate());
-        findViewById(R.id.buttonFitDone).setOnClickListener(v -> { save(); finish(); });
+        findViewById(R.id.buttonFitDone).setOnClickListener(v -> done());
         findViewById(R.id.buttonFitReset).setOnClickListener(v -> reset());
         findViewById(R.id.buttonFitDelete).setOnClickListener(v -> confirmDelete());
         findViewById(R.id.buttonFitApplyAll).setOnClickListener(v -> confirmApplyAll());
+        findViewById(R.id.buttonFitHelp).setOnClickListener(v -> showHelp());
         findViewById(R.id.repositionPad).setOnClickListener(v ->
                 Toast.makeText(this, R.string.fit_reposition_hint, Toast.LENGTH_SHORT).show());
 
         buildPresets();
         loadImage();
+    }
+
+    /**
+     * What this screen is and how to work it.
+     *
+     * Everything here is discoverable only by trying it: pinching zooms, dragging repositions,
+     * the three tiles decide what fills the space a picture does not cover. A technician meeting
+     * the screen for the first time, in a car, with a customer waiting, has no reason to guess
+     * any of it — and the screen itself has no room to say it permanently, because it must stay
+     * one unscrollable page (see the note at the top of activity_fit_editor.xml). A dialog is the
+     * only place the explanation can live without costing the preview its height.
+     */
+    private void showHelp() {
+        new AlertDialog.Builder(this)
+                .setTitle(R.string.fit_help_title)
+                .setMessage(R.string.fit_help_body)
+                .setPositiveButton(R.string.ok, null)
+                .show();
     }
 
     // The slider is 0..450 and the zoom is 0.5..5.0 — one step is one percent either way.
@@ -296,6 +334,20 @@ public class FitEditorActivity extends AppCompatActivity {
     private void save() {
         mRepo.setFit(mUrl, mFit);
         setResult(RESULT_OK);
+    }
+
+    /**
+     * Leave through Done — the end of the import, not just the end of this screen.
+     *
+     * Everything is already on disk by now, so this saves nothing new; what it adds is the flag
+     * the caller needs to tell a deliberate "yes, this one" from a back press, and to take the
+     * user to the picture where it now lives. setResult runs after save() on purpose: save()
+     * sets a bare RESULT_OK and would drop the extra if it came second.
+     */
+    private void done() {
+        save();
+        setResult(RESULT_OK, new Intent().putExtra(EXTRA_DONE, true));
+        finish();
     }
 
     private Runnable mPendingBlur;

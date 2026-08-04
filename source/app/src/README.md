@@ -6,7 +6,7 @@ is `appstore`; flavors differ **only** in two classes (+ one manifest addition):
 | Source set | `FeatureCheck` behavior | `SettingsActivity` behavior |
 |---|---|---|
 | `main/` | `BaseFeatureCheck` — holds `unlockedSettings`, persisted as pref `purchased-settings` | `BaseSettingsActivity` — the whole 1600-line settings screen |
-| `standalone/` | **unconditionally unlocked** (`unlockedSettings = true`). This is the flavor sold to customers | no billing; manual unlock box accepts any 6-digit code starting `7078` (client-side only, `SettingsActivity.java:83`) |
+| `standalone/` | **unconditionally unlocked** (`unlockedSettings = true`). This is the flavor sold to customers | no billing; manual unlock box accepts any 6-digit code carrying an issued prefix (`7078` or `578`, see `WallpaperRepo.SERIAL_PREFIXES`) — client-side only, `SettingsActivity.java` |
 | `google/` | queries Play Billing for SKU `"settings"` | Play purchase flow + hidden long-press manual unlock via HTTP `R.string.unlock_api` |
 | `amazon/` | marks ready only (no query) | Amazon IAP (`PurchasingService`) unlock flow; depends on the `com.amazon.device.iap.ResponseReceiver` declared in the **main** manifest |
 

@@ -37,7 +37,13 @@
  * anywhere in here on purpose: no browser is meant to reach this.
  */
 
-const SERIAL_PREFIX = '7078';
+/**
+ * Accepted activation-code prefixes.
+ *   '7078' — the ~530 codes already in the field. Never remove this.
+ *   '578'  — everything issued from 2026-08-02 onward (578001, 578002, ...).
+ * Codes vary in length; only the prefix is checked, as it always has been.
+ */
+const SERIAL_PREFIXES = ['7078', '578'];
 
 /** Response values, byte-identical to what activate_device has always returned. */
 const RESULT = {
@@ -158,7 +164,7 @@ async function handleActivate(db, body) {
     return json({ status: RESULT.BLOCKED, row: shape(before) });
   }
 
-  if (!serial.startsWith(SERIAL_PREFIX)) {
+  if (!SERIAL_PREFIXES.some((p) => serial.startsWith(p))) {
     return json({ status: RESULT.INVALID_FORMAT, row: shape(before) });
   }
 

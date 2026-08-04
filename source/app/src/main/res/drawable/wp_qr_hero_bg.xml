@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The QR upload tile at the top of the Wallpapers section.
+
+     Deliberately the loudest control on the screen: sending a picture over from a customer's
+     phone is by far the most-used thing in here, and it used to be one of two equal tiles buried
+     below four switches and a folder path. Lit gold rather than the flat card every other tile
+     uses, so it is the first thing found rather than the thing looked for. -->
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <item android:state_pressed="true">
+        <shape android:shape="rectangle">
+            <corners android:radius="14dp" />
+            <solid android:color="#ffd27a" />
+            <stroke android:width="2dp" android:color="#fff0c8" />
+        </shape>
+    </item>
+
+    <item>
+        <shape android:shape="rectangle">
+            <corners android:radius="14dp" />
+            <gradient
+                android:angle="315"
+                android:startColor="@color/colorAccent"
+                android:endColor="@color/gold"
+                android:type="linear" />
+            <!-- The "glow": a pale inner rim, which reads as light coming off the tile on a
+                 black screen far better than a shadow does at this size. -->
+            <stroke android:width="2dp" android:color="#80fff0c8" />
+        </shape>
+    </item>
+
+</selector>

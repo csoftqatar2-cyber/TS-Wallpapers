@@ -278,4 +278,52 @@ class LeopardApplier {
                 new ComponentName(ctx, MediaWallpaperService.class));
         return i;
     }
+
+    /**
+     * Start a hand-off screen on the SAME display the caller is running on.
+     *
+     * These cars have more than one screen — the L946 runs this picker on a 1280x640 passenger
+     * panel while the driver's is 5120x1600 — and a plain startActivity with NEW_TASK does not
+     * inherit the caller's display: the system picks the default one. An activity that lands on
+     * a display whose natural orientation is not the one it was built for comes up turned on its
+     * side, which is what "the set-wallpaper screen opens rotated 90°" looks like from the seat.
+     *
+     * Naming the display is the only part of this we control. If the target screen is the right
+     * one and the other app still draws sideways, that is its own layout on that panel and no
+     * flag of ours will straighten it.
+     *
+     * Falls back to a plain start on anything older than O, or when the display cannot be read.
+     */
+    static void startOnSameDisplay(Context ctx, Intent intent) {
+        android.os.Bundle opts = null;
+        if(Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            int displayId = displayIdOf(ctx);
+            if(displayId >= 0) {
+                try {
+                    android.app.ActivityOptions o = android.app.ActivityOptions.makeBasic();
+                    o.setLaunchDisplayId(displayId);
+                    opts = o.toBundle();
+                } catch(Throwable t) {
+                    Log.w(TAG, "could not pin the launch to display " + displayId, t);
+                }
+            }
+        }
+        ctx.startActivity(intent, opts);
+    }
+
+    /** Which screen this context is on, or -1 when it cannot be told. */
+    private static int displayIdOf(Context ctx) {
+        try {
+            android.view.Display d = null;
+            if(Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                // Throws on a context with no display (application, service) — hence the catch.
+                d = ctx.getDisplay();
+            } else if(ctx instanceof android.app.Activity) {
+                d = ((android.app.Activity) ctx).getWindowManager().getDefaultDisplay();
+            }
+            return d == null ? -1 : d.getDisplayId();
+        } catch(Throwable t) {
+            return -1;
+        }
+    }
 }

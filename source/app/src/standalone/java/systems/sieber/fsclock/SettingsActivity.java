@@ -77,10 +77,14 @@ public class SettingsActivity extends BaseSettingsActivity {
 
     /**
      * Validates the activation code locally.
-     * Valid codes: any 6-digit code starting with "7078"
+     * Valid codes: any 6-digit code carrying one of the issued prefixes
+     * ({@link WallpaperRepo#SERIAL_PREFIXES}: "7078" for older codes, "578" for
+     * everything issued from 2026-08-02 on). This box is the offline settings
+     * unlock, separate from cloud activation, but it takes the same codes — a
+     * customer handed "578001" reasonably expects it to work in both places.
      */
     private void validateLocalCode(String code) {
-        if (code != null && code.length() == 6 && code.startsWith("7078")) {
+        if (code != null && code.length() == 6 && WallpaperRepo.hasValidSerialPrefix(code)) {
             // Valid code – unlock settings permanently
             runOnUiThread(new Runnable() {
                 @Override

@@ -242,8 +242,8 @@ Roboto Font Copyright (c) Christian Robertson. Licensed under the Apache License
     <!-- Leopard: the app hands the wallpaper to Android and steps out of the way. -->
     <string name="leopard_wallpaper_description">TS Wallpapers — the image or video you picked</string>
     <string name="leopard_title">Choose device wallpaper</string>
-    <string name="leopard_chip">Leopard mode</string>
-    <string name="lynkco_chip">Lynk &amp; Co mode</string>
+    <string name="leopard_chip">Leopard \\ Denza mode</string>
+    <string name="lynkco_chip">Lynk and Co mode</string>
     <string name="lynkco_scale">Lynk &amp; Co interface size</string>
     <string name="lynkco_scale_hint">Enlarge or shrink the whole wallpaper picker on Lynk &amp; Co screens.</string>
     <string name="lynkco_frame_title">How should it fit the screen?</string>
@@ -280,24 +280,24 @@ Roboto Font Copyright (c) Christian Robertson. Licensed under the Apache License
 
     <!-- Operating mode picker, on the activation screen and in Settings. -->
     <string name="mode_title">Operating mode</string>
-    <string name="mode_exclusive_note">FSE and Leopard cannot be combined — pick one.</string>
-    <string name="mode_normal">Normal</string>
+    <string name="mode_exclusive_note">Leopard (FSE) and Leopard \\ Denza cannot be combined — pick one.</string>
+    <string name="mode_normal">Others</string>
     <string name="mode_normal_desc">The app shows wallpapers and the clock on its own screen.</string>
-    <string name="mode_fse">FSE</string>
+    <string name="mode_fse">Leopard (FSE)</string>
     <string name="mode_fse_desc">Forces a fixed 1920×720 window for very wide screens.</string>
-    <string name="mode_leopard">Leopard</string>
+    <string name="mode_leopard">Leopard \\ Denza</string>
     <string name="mode_leopard_desc">The app hands the wallpaper to Android and disappears — no clock, no switching.</string>
     <string name="mode_gwm">GWM</string>
-    <string name="mode_gwm_desc">Same as Normal, plus a \"Manage GWM images\" section that mirrors the GWM channel into the shared folder the GWM dashboard app reads.</string>
-    <string name="mode_lynkco">Lynk &amp; Co</string>
+    <string name="mode_gwm_desc">Same as Others, plus a \"Manage GWM images\" section that mirrors the GWM channel into the shared folder the GWM dashboard app reads.</string>
+    <string name="mode_lynkco">Lynk and Co</string>
     <string name="mode_lynkco_desc">For Lynk &amp; Co / Flyme head units. The app is just a picker — the chosen wallpaper is handed to the car\'s own theme app, which opens a preview with an \"Apply\" button.</string>
     <string name="lynkco_unsupported">Not a Lynk &amp; Co / Flyme head unit</string>
     <string name="lynkco_applied">Opening the wallpaper preview — tap \"Apply\" on the car\'s screen to set it.</string>
-    <string name="mode_leopard_unsupported_note">Some screens do not support Leopard — the option is disabled automatically on those.</string>
+    <string name="mode_leopard_unsupported_note">Some screens do not support Leopard \\ Denza — the option is disabled automatically on those.</string>
     <string name="mode_new_badge">New</string>
 
     <!-- Settings, in Leopard mode. -->
-    <string name="leopard_settings_banner_title">Leopard mode is on</string>
+    <string name="leopard_settings_banner_title">Leopard \\ Denza mode is on</string>
     <string name="leopard_settings_banner_body">Android draws the wallpaper on the home screen — the app is just a picker. Open it, choose, close it.</string>
     <string name="leopard_settings_hidden_note">Hidden: the analog and digital clocks, clock layout, weather and auto-switching — they have no meaning while Android draws the wallpaper.</string>
     <string name="leopard_open_picker">Open the picker</string>
@@ -308,6 +308,12 @@ Roboto Font Copyright (c) Christian Robertson. Licensed under the Apache License
     <string name="leopard_back_to_normal_desc">Restores the clock and the in-app wallpapers.</string>
 
     <!-- Fit Editor: how an imported image is fitted to the very wide screen. -->
+    <string name="fit_help">Help</string>
+    <string name="fit_help_title">How to adjust the picture</string>
+    <!-- Ordered the way the screen is used, not the way it is laid out: look, move, then decide
+         what fills the rest. The gestures come first because they are the only part of this page
+         with nothing on screen to announce them. -->
+    <string name="fit_help_body">The box at the top shows exactly what the car will display, at the screen\'s real proportions.\n\n• Drag the picture with one finger to choose the visible part.\n• Pinch with two fingers to zoom in and out — the Zoom slider follows your fingers.\n• Rotate (top corner) turns the picture a quarter turn each tap.\n\nA picture that does not cover the whole screen leaves space on both sides. The three buttons decide what goes there:\n• Fill — enlarge the picture until it covers everything. No sides, but the top and bottom of the picture are cropped.\n• Blur — a blurred copy of the picture itself on both sides.\n• Solid colour — one colour on both sides, which you choose.\n\nFade edges softens the join between the picture and the sides.\n\nApply to all images gives every picture in the library these same settings. Reset returns this picture to automatic. Done saves and closes — everything is saved as you go, so nothing is lost either way.</string>
     <string name="fit_mode_fill">Fill (crop)</string>
     <string name="fit_mode_blur">Blur</string>
     <string name="fit_mode_color">Solid color</string>
@@ -318,7 +324,7 @@ Roboto Font Copyright (c) Christian Robertson. Licensed under the Apache License
     <string name="fit_percent">%1$d%%</string>
     <string name="fit_bar_color">Colour of the two sides</string>
     <string name="fit_reposition">Reposition</string>
-    <string name="fit_reposition_hint">Drag the image to choose the visible part.</string>
+    <string name="fit_reposition_hint">Drag the image to choose the visible part. Pinch with two fingers to zoom.</string>
     <string name="fit_reposition_dpad">Adjust with the d-pad</string>
     <string name="fit_dpad_hint">D-pad: left/right to adjust</string>
     <string name="fit_rotate">Rotate</string>
@@ -377,8 +383,8 @@ Roboto Font Copyright (c) Christian Robertson. Licensed under the Apache License
     <!-- Settings header: title, and the three status chips on the trailing side. -->
     <string name="settings_header_title">TS Wallpapers Settings</string>
     <string name="chip_auto_save">Auto-save</string>
-    <string name="chip_mode_normal">Mode: Normal</string>
-    <string name="chip_mode_fse">Mode: FSE</string>
+    <string name="chip_mode_normal">Mode: Others</string>
+    <string name="chip_mode_fse">Mode: Leopard (FSE)</string>
     <string name="chip_activated">Device activated</string>
     <string name="chip_not_activated">Not activated</string>
 
@@ -451,9 +457,9 @@ Roboto Font Copyright (c) Christian Robertson. Licensed under the Apache License
     <string name="leopard_phone_keep_open">⚠ Leave this screen open until the phone has finished uploading — if you close the app the picture will not arrive.</string>
     <string name="leopard_phone_received">Image received ✓ — frame it, then set it</string>
     <string name="leopard_phone_empty">Nothing sent from a phone yet — scan the code to add an image</string>
-    <string name="chip_mode_leopard">Mode: Leopard</string>
+    <string name="chip_mode_leopard">Mode: Leopard \\ Denza</string>
     <string name="chip_mode_gwm">Mode: GWM</string>
-    <string name="chip_mode_lynkco">Mode: Lynk &amp; Co</string>
+    <string name="chip_mode_lynkco">Mode: Lynk and Co</string>
 
     <!-- Crash log (Settings -> Updates). Only shown on a car that has actually crashed. -->
     <string name="crash_log_open">Crash log</string>
@@ -463,4 +469,10 @@ Roboto Font Copyright (c) Christian Robertson. Licensed under the Apache License
     <string name="crash_log_send">Send now</string>
     <string name="crash_log_clear">Clear</string>
     <string name="crash_log_sending">Sending the crash log…</string>
+
+    <!-- Others-mode first-run download screen. -->
+    <string name="download_progress_title">Downloading the wallpapers</string>
+    <string name="download_progress_count">%1$d of %2$d</string>
+    <string name="download_progress_hint">Please wait until the download finishes so the wallpapers run smoothly.</string>
+    <string name="download_progress_skip">Skip and use the app now</string>
 </resources>

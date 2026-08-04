@@ -43,8 +43,9 @@ the single most important thing to know before touching backend behavior).
 4. Local files in `externalFilesDir/Wallpapers/` (file picker or LAN upload) are merged in.
 
 ### Activation (device → Supabase)
-- User enters a serial (must start with `7078` — enforced client-side in
-  `FsClockView.java:224` and `WallpaperRepo.java:224`) → POST RPC `activate_device` →
+- User enters a serial (must start with `7078` or `578` — the single source is
+  `WallpaperRepo.SERIAL_PREFIXES` / `hasValidSerialPrefix()`, used by `FsClockView`
+  and the standalone `SettingsActivity` unlock box) → POST RPC `activate_device` →
   on `"success"`, `device-active=true` is stored via `SecurePrefs` (HMAC-signed,
   keyed off the APK signing cert — re-signing the APK invalidates activation).
 
@@ -190,7 +191,8 @@ shared secret (lives only in the live functions — never commit it).
 - RPC `is_device_activated(device_hw_id)` — used by the companion programs; activation
   in ANY program activates all of them on that device (shared hardware id).
 - `app_versions` columns `version_code, version_name, apk_url, changelog` (anon-readable);
-  hardware-id prefix format; serial prefix `7078` (also enforced server-side).
+  hardware-id prefix format; serial prefixes `7078` (legacy) and `578` (issued from
+  2026-08-02 on) — both also enforced server-side.
 - RPC `report_crash(device_hw_id, crash_text, app_version, app_version_code, device_mode,
   crash_at, legacy_hw_id)` — deliberately forgiving (unknown device still stored, bad input
   is a silent no-op): a crash report must never be the thing that errors on a car that is
@@ -257,8 +259,10 @@ The Supabase MCP server is usually connected in this workspace — use it
   if it ever mismatched; the real gate is server-side (`devices.is_active`). Leave it.
 - **StringObfuscator is trivially reversible** — fine: it only hides the public anon key.
   Never route real secrets through it.
-- **Client-side `7078` serial prefix check** is UX-only; the server enforces the same rule
-  (`activate_device` + a DB CHECK constraint on `devices.serial_number`).
+- **Client-side serial prefix check** (`7078`, `578`) is UX-only; the server enforces the
+  same rule (`activate_device` + a DB CHECK constraint on `devices.serial_number`). Note
+  TS Back Button and ذبذبة ستور do NO client-side check — they post whatever is typed, so a
+  new prefix works there as soon as the server accepts it, with no app update.
 - **Cleartext traffic enabled** (`usesCleartextTraffic="true"`) — required for
   `http://ip-api.com` weather fallback and possible http manifest/LAN-upload URLs.
   Restricting it risks breaking fielded devices with http wallpaper URLs.

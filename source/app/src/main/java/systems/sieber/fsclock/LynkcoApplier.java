@@ -91,7 +91,10 @@ class LynkcoApplier {
             i.putExtra(EXTRA_PATH, toSend.getAbsolutePath());
             i.putExtra(EXTRA_SOURCE_TYPE, SOURCE_TYPE_GALLERY);
             i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-            ctx.startActivity(i);
+            // On the same screen the picker is on. These cars have two, and NEW_TASK does not
+            // carry the caller's display — the theme app was landing on the default one and
+            // coming up turned on its side. See LeopardApplier.startOnSameDisplay.
+            LeopardApplier.startOnSameDisplay(ctx, i);
             return RESULT_LAUNCHED;
         } catch(Throwable t) {
             Log.e(TAG, "theme app rejected the wallpaper intent", t);

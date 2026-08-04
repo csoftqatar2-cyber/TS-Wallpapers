@@ -37,6 +37,28 @@ public class WallpaperRepo {
     static String getSupabaseUrl()  { return StringObfuscator.supabaseUrl(); }
     static String getSupabaseKey()  { return StringObfuscator.supabaseKey(); }
 
+    /**
+     * Activation-code prefixes. The check here is UX only — it saves a round trip on an
+     * obvious typo — and the server enforces the same rule for real. Keep the two in step:
+     * the backend accepts exactly these (see activate_device / the activation Worker).
+     *
+     *   "7078" — every code issued up to 2026-08-02, ~530 of them already in the field.
+     *            Never remove it; those cars re-send their serial when they re-activate.
+     *   "578"  — everything issued from 2026-08-02 onward (578001, 578002, ...).
+     *
+     * Length is deliberately not checked: codes in the field run from 5 to 14 characters.
+     */
+    static final String[] SERIAL_PREFIXES = { "7078", "578" };
+
+    /** True if the serial looks like one we issue. See {@link #SERIAL_PREFIXES}. */
+    static boolean hasValidSerialPrefix(String serial) {
+        if(serial == null) return false;
+        for(String p : SERIAL_PREFIXES) {
+            if(serial.startsWith(p)) return true;
+        }
+        return false;
+    }
+
     static final String PREF_URL = "wallpaper-manifest-url";
     static final String PREF_ENABLED = "wallpaper-enabled";
     static final String PREF_LOCAL_ENABLED = "wallpaper-local-enabled";
@@ -907,7 +929,28 @@ public class WallpaperRepo {
     }
 
     public interface SyncCallback {
+        /**
+         * The playlist is known and saved. Fired as soon as the manifest has been parsed —
+         * BEFORE the media behind it has been downloaded, because everything a caller needs to
+         * decide something (is this car registered, how many wallpapers are there, did the
+         * server answer at all) is already settled at that point.
+         */
         void done(boolean success, int count, String error);
+
+        /**
+         * Every video and image in that playlist is now in the local cache.
+         *
+         * Optional, and only worth implementing by a screen that shows the media itself: a
+         * thumbnail grid that drew placeholders for clips that had not arrived yet, or a
+         * progress screen waiting for the download to end.
+         */
+        default void mediaReady() { }
+
+        /**
+         * How the download is going, {@code done} of {@code total} files. Called on the sync
+         * thread after each file, so a listener has to hop to the UI thread itself.
+         */
+        default void mediaProgress(int done, int total) { }
     }
 
     /** Download the manifest in a background thread and refresh the cached playlist. */
@@ -938,11 +981,6 @@ public class WallpaperRepo {
 
                     load();
 
-                    // Tell the backend which mode this car runs, so the manager can see it.
-                    // Best-effort telemetry on the same thread; runs after the manifest fetch
-                    // already migrated any VIN, so the device row is under the current id.
-                    reportOperatingMode();
-
                     // Clean up video cache files that are no longer used
                     try {
                         java.util.HashSet<String> activeCacheFiles = new java.util.HashSet<>();
@@ -966,21 +1004,50 @@ public class WallpaperRepo {
                         }
                     } catch(Exception ignored) {}
 
-                    // pre-download videos so looping playback is smooth and works offline
-                    for(WallpaperItem it : parsed) {
-                        if(it.isVideo()) {
-                            try { ensureVideoCached(it); } catch(Exception ignored) {}
-                        }
-                    }
-                    // report the playlist as soon as it is known; the images keep
-                    // downloading in the background
+                    // The answer, the moment it is known — and before a byte of media is
+                    // fetched. This ordering is load-bearing. It used to sit after the video
+                    // pre-download, which meant every caller waiting on this callback was
+                    // really waiting on tens of megabytes over a car's link: the "already
+                    // registered? re-check" button sat on "checking the servers…" until every
+                    // clip had come down, which on a slow connection is minutes and reads as a
+                    // frozen app — the only way out being a force stop.
                     if(cb != null) cb.done(true, parsed.size(), null);
+
+                    // Tell the backend which mode this car runs, so the manager can see it.
+                    // Best-effort telemetry on the same thread; runs after the manifest fetch
+                    // already migrated any VIN, so the device row is under the current id.
+                    reportOperatingMode();
+
+                    // Everything below is the slow half: the caller has its answer and the UI
+                    // is alive, so this can take as long as the link makes it take.
+                    int total = 0;
+                    for(WallpaperItem it : parsed) if(needsDownload(it)) total++;
+                    int done = 0;
+                    if(cb != null) cb.mediaProgress(done, total);
+
+                    // Videos first: they are the big files and the ones that cannot be shown at
+                    // all until they are local, while an image at least loads on demand.
+                    for(WallpaperItem it : parsed) {
+                        if(!it.isVideo()) continue;
+                        boolean counted = needsDownload(it);
+                        try { ensureVideoCached(it); } catch(Exception ignored) {}
+                        if(counted && cb != null) cb.mediaProgress(++done, total);
+                    }
 
                     // Pull every image/GIF into Glide's disk cache right away. Without this
                     // each wallpaper is only fetched the first time it is actually shown, so
                     // a freshly activated car had to be swiped through picture by picture
                     // before they were all available offline.
-                    prefetchImages(parsed);
+                    for(WallpaperItem it : parsed) {
+                        if(it == null || it.isVideo()) continue;
+                        boolean counted = needsDownload(it);
+                        prefetchImage(it);
+                        if(counted && cb != null) cb.mediaProgress(++done, total);
+                    }
+                    if(cb != null) {
+                        cb.mediaProgress(total, total);
+                        cb.mediaReady();
+                    }
                 } catch(Exception e) {
                     Log.w(TAG, "sync failed", e);
                     if(cb != null) cb.done(false, 0, e.getMessage());
@@ -997,20 +1064,34 @@ public class WallpaperRepo {
      * working with no network). Runs on the sync thread, one file after the other, and
      * simply skips whatever fails — the wallpaper still loads on demand in that case.
      */
-    private void prefetchImages(List<WallpaperItem> items) {
-        for(WallpaperItem it : items) {
-            if(it == null || it.isVideo() || it.url == null) continue;
-            String url = it.url.trim();
-            if(!url.startsWith("http://") && !url.startsWith("https://")) continue; // local file
-            try {
-                com.bumptech.glide.Glide.with(mContext)
-                        .download(url)
-                        .submit()
-                        .get();
-            } catch(Exception e) {
-                Log.w(TAG, "prefetch failed: " + url, e);
-            }
+    private void prefetchImage(WallpaperItem it) {
+        if(it == null || it.isVideo() || it.url == null) return;
+        String url = it.url.trim();
+        if(!url.startsWith("http://") && !url.startsWith("https://")) return; // local file
+        try {
+            com.bumptech.glide.Glide.with(mContext)
+                    .download(url)
+                    .submit()
+                    .get();
+        } catch(Exception e) {
+            Log.w(TAG, "prefetch failed: " + url, e);
         }
+    }
+
+    /**
+     * Is this wallpaper still to be fetched? Used only to size the progress bar.
+     *
+     * Exact for video, where the cache file is ours and its absence is the whole question.
+     * Deliberately loose for images: Glide owns that cache and asking it whether a key is on
+     * disk means going through its engine, so an image already on disk is counted as work and
+     * then completes in the few milliseconds a disk hit takes. A progress bar that briefly
+     * over-counts is a fair price for not reaching into another library's internals.
+     */
+    private boolean needsDownload(WallpaperItem it) {
+        if(it == null || it.url == null) return false;
+        String url = it.url.trim();
+        if(!url.startsWith("http://") && !url.startsWith("https://")) return false;
+        return !it.isVideo() || localVideoPath(it) == null;
     }
 
     // ---- video caching -------------------------------------------------------

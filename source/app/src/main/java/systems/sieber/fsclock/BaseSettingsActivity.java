@@ -42,7 +42,7 @@ import android.widget.CheckBox;
 import android.widget.CompoundButton;
 import android.widget.EditText;
 import android.widget.LinearLayout;
-import android.widget.GridView;
+import android.widget.GridLayout;
 import android.widget.NumberPicker;
 import android.widget.RadioButton;
 import android.widget.RadioGroup;
@@ -103,8 +103,8 @@ public class BaseSettingsActivity extends AppCompatActivity {
     Button mButtonUnlockSettings;
     CompoundButton mCheckBoxFse;
     CompoundButton mCheckBoxAutoStartOnBoot;
-    /** Live "grant overlay access" dialog, so two routes on one tap cannot stack two of them. */
-    private AlertDialog mOverlayPermissionDialog;
+    /** A "grant overlay access" dialog is up, so two routes on one tap cannot stack two of them. */
+    private boolean mOverlayPermissionShowing;
     /** Whether this visit already asked, so onResume re-checks without nagging in a loop. */
     private boolean mOverlayPermissionAsked;
     CompoundButton mCheckBoxAnalogClockShow;
@@ -837,12 +837,21 @@ public class BaseSettingsActivity extends AppCompatActivity {
                     importPickedWallpapers(data);
                 }
                 break;
-            case(FIT_EDITOR_REQUEST):
+            case(FIT_EDITOR_REQUEST): {
+                boolean done = data != null && data.getBooleanExtra(FitEditorActivity.EXTRA_DONE, false);
+                boolean fromImport = mFitFromImport;
+                mFitFromImport = false;
                 // Coming back from editing one image of an unconfirmed batch: put the review
                 // screen back up so the customer can carry on through the rest. Without this the
                 // batch would be silently accepted the moment they edited any single image.
                 if(mPendingBatch != null && !mPendingBatch.isEmpty()) {
                     reopenBatchReview();
+                } else if(done && fromImport && mLastEditedUrl != null) {
+                    // The picture was just added and the framing has just been confirmed. Nothing
+                    // is left to do on this screen, so stop making the technician find their own
+                    // way out of Settings: go and show it.
+                    revealWallpaper(mLastEditedUrl);
+                    return;
                 } else if(mLastEditedUrl != null) {
                     // Editing one image ends with "Done" and no other feedback, so leave the
                     // slideshow standing on it — pressing back then shows the result of the
@@ -852,6 +861,7 @@ public class BaseSettingsActivity extends AppCompatActivity {
                     mLastEditedUrl = null;
                 }
                 break;
+            }
             case(PICK_CLOCK_FACE_REQUEST):
                 if(resultCode == RESULT_OK) {
                     mStorage.processImage(StorageControl.FILENAME_CLOCK_FACE, data);
@@ -900,34 +910,17 @@ public class BaseSettingsActivity extends AppCompatActivity {
      * That is why this is asked for insistently rather than once.
      */
     private void requestOverlayPermissionIfNeeded() {
-        if(Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return;
-        if(Settings.canDrawOverlays(this)) return;
+        if(OverlayPermission.isGranted(this)) return;
         // Two routes can fire on one tap (the checkbox listener and applyMode); never stack
-        // a second dialog on top of the first.
-        if(mOverlayPermissionDialog != null && mOverlayPermissionDialog.isShowing()) return;
+        // a second dialog on top of the first. The flag is cleared when the dialog closes, so
+        // a later decline-then-retry still asks.
+        if(mOverlayPermissionShowing) return;
+        mOverlayPermissionShowing = true;
         mOverlayPermissionAsked = true;
-        mOverlayPermissionDialog = new AlertDialog.Builder(this)
-                .setTitle(R.string.auto_start_overlay_title)
-                .setMessage(R.string.auto_start_overlay_message)
-                .setPositiveButton(R.string.ok, new DialogInterface.OnClickListener() {
-                    @Override
-                    public void onClick(DialogInterface dialogInterface, int i) {
-                        try {
-                            Intent intent = new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-                                    Uri.parse("package:" + getPackageName()));
-                            startActivity(intent);
-                        } catch(ActivityNotFoundException e) {
-                            // Some head units ship no overlay settings screen. The old comment
-                            // here claimed auto-start "usually still works" then — it does not on
-                            // Android 10+, which is the whole reason this permission is needed.
-                            // Say so instead of leaving a dead setting behind.
-                            Toast.makeText(BaseSettingsActivity.this,
-                                    R.string.auto_start_overlay_unavailable, Toast.LENGTH_LONG).show();
-                        }
-                    }
-                })
-                .setNegativeButton(R.string.update_cancel, null)
-                .show();
+        // The dialog itself lives in OverlayPermission, shared with the activation overlay and
+        // the mode gate — the two screens that pick FSE for a brand new car and used to grant
+        // nothing at all. One copy means one wording and one behaviour on every route in.
+        OverlayPermission.request(this, () -> mOverlayPermissionShowing = false);
     }
 
     @Override
@@ -1101,16 +1094,8 @@ public class BaseSettingsActivity extends AppCompatActivity {
         // No setOnItemClickListener here on purpose — the cells carry their own (see
         // WallpaperSelectAdapter.getView), because a cell with a button in it never receives the
         // AdapterView's row click.
-        GridView grid = new GridView(this);
-        grid.setAdapter(adapter);
-        grid.setNumColumns(2);
-        grid.setLayoutParams(new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
-        grid.setPadding(pad / 2, 0, pad / 2, 0);
-        grid.setClipToPadding(false);
-
         ll.addView(hint);
-        ll.addView(grid);
+        ll.addView(buildWallpaperGrid(adapter));
 
         final AlertDialog dialog = new AlertDialog.Builder(this)
                 .setTitle(R.string.wallpaper_manage_title)
@@ -1162,6 +1147,81 @@ public class BaseSettingsActivity extends AppCompatActivity {
                 }
             });
         }
+    }
+
+    /**
+     * Two columns of wallpapers, each cell shaped to its own picture.
+     *
+     * A hand-built GridLayout rather than the GridView this replaced, and the reason is the one
+     * defect this dialog kept producing: an AdapterView measures its cells when it lays them out,
+     * which is before Glide has delivered anything. The cell settled at its minimum, the picture
+     * arrived afterwards and was fitted into a box the wrong shape, and the outline ended up
+     * wider than the wallpaper inside it. A child asking to re-measure from an async callback is
+     * exactly what AbsListView is least willing to honour.
+     *
+     * Here the cells are ordinary views: {@link WallpaperSelectAdapter} sets a cell's height the
+     * moment it knows the picture's proportions, and the layout simply follows. The gap is a
+     * margin on the cell, and because the grid is not handing out fixed slots that margin is real
+     * space between the frames rather than padding inside them.
+     */
+    private View buildWallpaperGrid(final WallpaperSelectAdapter adapter) {
+        final float d = getResources().getDisplayMetrics().density;
+        final int gap = Math.round(14 * d);
+        final int columns = 2;
+
+        final GridLayout grid = new GridLayout(this);
+        grid.setColumnCount(columns);
+        grid.setPadding(gap, 0, 0, gap);
+
+        ScrollView scroll = new ScrollView(this);
+        scroll.setLayoutParams(new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
+        scroll.addView(grid, new ViewGroup.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+
+        final Runnable build = new Runnable() {
+            @Override
+            public void run() {
+                if(isFinishing() || isDestroyed()) return;
+                grid.removeAllViews();
+                int paneW = grid.getWidth();
+                // Nothing measured on the first pass; the dialog is 92% of the screen, so that is
+                // the honest guess until the real width arrives below.
+                if(paneW <= 0) {
+                    paneW = Math.round(getResources().getDisplayMetrics().widthPixels * 0.92f);
+                }
+                int cellW = Math.max(Math.round(100 * d), (paneW - gap * (columns + 1)) / columns);
+                // The adapter puts the size on each cell itself, and it has to: a cached
+                // thumbnail is delivered from inside getView, before anything the caller does
+                // afterwards could have taken effect.
+                adapter.setCellSize(cellW, gap);
+                for(int i = 0; i < adapter.getCount(); i++) {
+                    grid.addView(adapter.getView(i, null, grid));
+                }
+            }
+        };
+
+        // "Select all" and a delete still repaint everything; a tick no longer does (see
+        // WallpaperSelectAdapter.toggle), so this fires rarely.
+        adapter.registerDataSetObserver(new android.database.DataSetObserver() {
+            @Override
+            public void onChanged() { build.run(); }
+        });
+
+        // One shot: rebuild at the real column width, then stop listening — the rebuild itself
+        // causes a layout, and a listener that stayed attached would rebuild on its own rebuild.
+        grid.addOnLayoutChangeListener(new View.OnLayoutChangeListener() {
+            @Override
+            public void onLayoutChange(View v, int l, int t, int r, int b,
+                                       int ol, int ot, int or_, int ob) {
+                if(v.getWidth() <= 0) return;
+                v.removeOnLayoutChangeListener(this);
+                v.post(build);
+            }
+        });
+
+        build.run();
+        return scroll;
     }
 
     /**
@@ -1910,7 +1970,7 @@ public class BaseSettingsActivity extends AppCompatActivity {
         // technician loading a customer's 40 reels) that most needs to be fast. Those get the
         // defaults applied silently and can be edited one by one from the list later.
         if(ok == 1 && lastImported != null && mWallpaperRepo.isEditOnImport()) {
-            openFitEditor("file://" + lastImported.getAbsolutePath());
+            openFitEditor("file://" + lastImported.getAbsolutePath(), true);
         }
     }
 
@@ -1967,13 +2027,8 @@ public class BaseSettingsActivity extends AppCompatActivity {
         if(openPicker != null) {
             openPicker.setOnClickListener(v -> startActivity(new Intent(this, LeopardPickerActivity.class)));
         }
-        CompoundButton closeAfter = findViewById(R.id.checkBoxLeopardCloseAfterSet);
-        if(closeAfter != null) {
-            closeAfter.setChecked(mSharedPref.getBoolean("leopard-close-after-set", false));
-            mAutoSaveExcluded.add(closeAfter);
-            closeAfter.setOnCheckedChangeListener((b, checked) ->
-                    mSharedPref.edit().putBoolean("leopard-close-after-set", checked).apply());
-        }
+        // No "close after setting" switch any more — see the note in activity_settings.xml.
+        // The picker always leaves once the wallpaper is applied.
     }
 
     private static int radioFor(int mode) {
@@ -2338,9 +2393,21 @@ public class BaseSettingsActivity extends AppCompatActivity {
     /** The image the fit editor was last opened on, so the return trip can land on it. */
     private String mLastEditedUrl;
 
+    /**
+     * True when the editor now on screen was opened by an import rather than by the pencil in
+     * the manage list. Only an import ends with the picture being shown; editing an existing
+     * wallpaper leaves the technician in the list they were working through.
+     */
+    private boolean mFitFromImport;
+
     /** Open the fit editor against the screen the wallpaper will actually be shown on. */
     protected void openFitEditor(String url) {
+        openFitEditor(url, false);
+    }
+
+    protected void openFitEditor(String url, boolean fromImport) {
         mLastEditedUrl = url;
+        mFitFromImport = fromImport;
         int w, h;
         if(mCheckBoxFse != null && mCheckBoxFse.isChecked()) {
             // FSE pins the wallpaper window to 1920x720 regardless of the panel's real size.
@@ -2351,6 +2418,42 @@ public class BaseSettingsActivity extends AppCompatActivity {
             if(w < h) { int t = w; w = h; h = t; }   // the clock screen is always landscape
         }
         startActivityForResult(FitEditorActivity.intent(this, url, w, h), FIT_EDITOR_REQUEST);
+    }
+
+    /**
+     * End an import by showing the picture where it now lives.
+     *
+     * Adding an image used to end on this screen: the file was on the car, the fit was chosen,
+     * and the last thing the technician saw was a settings page — the same page they were on
+     * before. Whether the picture actually landed was something they had to go and check, and
+     * the customer standing at the car saw nothing at all.
+     *
+     * So "تم" leaves. In Normal/FSE/GWM the clock screen is the wallpaper, and it is directly
+     * below this one: save, put the slideshow on this image, and finish — FullscreenActivity
+     * reloads on RESULT_OK and comes up showing it. In Leopard/Lynk &amp; Co the app draws
+     * nothing, so what is below is the picker, which is where the image is handed to the head
+     * unit — {@link LeopardPickerActivity} takes it from there and goes Home once it is applied.
+     *
+     * The two wallpaper switches are forced on for the same reason the upload server forces
+     * them: showing the technician a bare clock screen after they imported a picture is not an
+     * honest answer to "here is your picture". The QR path already did this; a device import
+     * did not, which is why an import into a car with the slideshow off looked like a no-op.
+     */
+    private void revealWallpaper(String url) {
+        mLastEditedUrl = null;
+        if(mCheckBoxWallpaperEnabled != null) mCheckBoxWallpaperEnabled.setChecked(true);
+        if(!isRemoteUrl(url) && mCheckBoxWallpaperLocal != null) mCheckBoxWallpaperLocal.setChecked(true);
+
+        save();                 // the switches above have to be on disk before the repo reloads
+        mWallpaperRepo.load();
+        mWallpaperRepo.jumpTo(url);
+        setResult(RESULT_OK);   // FullscreenActivity reloads its playlist on this
+
+        // Settings is always opened from somewhere — the clock screen or the Leopard picker — so
+        // finishing lands on the screen that shows wallpapers. Unless it somehow is the task
+        // root, in which case there is nothing underneath and the clock screen is started.
+        if(isTaskRoot()) startActivity(new Intent(this, FullscreenActivity.class));
+        finish();
     }
 
     private String queryDisplayName(Uri uri) {
@@ -2410,16 +2513,8 @@ public class BaseSettingsActivity extends AppCompatActivity {
         hint.setPadding(pad, pad, pad, pad / 2);
         hint.setTextSize(12);
 
-        GridView grid = new GridView(this);
-        grid.setAdapter(adapter);
-        grid.setNumColumns(2);
-        grid.setLayoutParams(new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
-        grid.setPadding(pad / 2, 0, pad / 2, 0);
-        grid.setClipToPadding(false);
-
         ll.addView(hint);
-        ll.addView(grid);
+        ll.addView(buildWallpaperGrid(adapter));
 
         final AlertDialog dialog = new AlertDialog.Builder(this)
                 .setTitle(getString(R.string.batch_review_title, items.size()))
@@ -2487,6 +2582,10 @@ public class BaseSettingsActivity extends AppCompatActivity {
         Toast.makeText(this, getString(R.string.batch_review_added, kept), Toast.LENGTH_LONG).show();
         setResult(RESULT_OK);
         autoSave(); // makes the clock screen reload the playlist on return
+
+        // "تم" on the review is the same promise as "تم" in the editor: the pictures are in, so
+        // show them rather than leaving the customer looking at a settings page.
+        if(firstKept != null) revealWallpaper(firstKept);
     }
 
     /** Cancelling throws away files the customer already sent, so make them say it twice. */

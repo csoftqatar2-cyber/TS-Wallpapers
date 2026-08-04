@@ -1,34 +1,26 @@
--- Applied live as 20260802170040_cf_activation_scaffold_disabled
+-- Applied live as 20260802173958_accept_578_serial_prefix
 --
--- Scaffolding for routing the activation DECISION to Cloudflare D1.
--- Applied with the kill switch OFF: after this migration the system behaves
--- exactly as it did before it, and touches Cloudflare not at all.
+-- New activation codes are issued as 578001, 578002, ... The ~530 codes already
+-- in the field all start with 7078 and must keep working forever, so this widens
+-- the rule rather than replacing it.
 --
--- Everything lives in schema `cf`, which PostgREST does not expose, so none of
--- it is reachable over the API by the fleet or by anyone holding the anon key.
-
-create schema if not exists cf;
-revoke all on schema cf from anon, authenticated;
-
-create table if not exists cf.feature_flags (
-    name       text primary key,
-    enabled    boolean not null default false,
-    updated_at timestamptz not null default now()
-);
-
--- OFF. Turning this on is a separate, deliberate act.
-insert into cf.feature_flags(name, enabled)
-values ('cf_activation_write_enabled', false)
-on conflict (name) do nothing;
-
--- A byte-for-byte copy of the activate_device body as it stands today (verified
--- by comparing the md5 of both function bodies after creation). This is the
--- fallback the dispatcher calls whenever the flag is off, and it is what makes
--- rollback instant: the old code path never stops existing.
+-- Note the existing serials vary in length (5 to 14 characters), so only the
+-- prefix is constrained here, exactly as before.
 --
--- SUPERSEDED later the same day by 20260802_accept_578_serial_prefix.sql, which
--- rewrites this function to also accept the new '578' codes. Left as applied —
--- migrations are a record of what ran, not a description of current state.
+-- Where else this prefix lives, all three kept in step:
+--   * cloudflare/activation-worker/worker.js  -> SERIAL_PREFIXES (the authority)
+--   * cf.activate_device_legacy               -> below, the kill-switch fallback
+--   * WallpaperRepo.SERIAL_PREFIXES (Android) -> UX-only pre-check
+-- TS Back Button and ذبذبة ستور do no client-side prefix check at all, so the
+-- new codes work there the moment this lands — no app update needed.
+
+alter table public.devices drop constraint if exists devices_serial_number_check;
+alter table public.devices add constraint devices_serial_number_check
+    check (serial_number like '7078%' or serial_number like '578%');
+
+-- Keep the rollback path in step: if the kill switch is ever flipped, activation
+-- falls back to this function, and it must accept the new codes too or issuing
+-- 578 codes would silently start failing the moment we rolled back.
 create or replace function cf.activate_device_legacy(
     device_hw_id text, activation_serial text, legacy_hw_id text default null
 ) returns text
@@ -48,7 +40,8 @@ begin
         return 'blocked';
     end if;
 
-    if activation_serial not like '7078%' then
+    -- 7078 = the codes already in the field; 578 = everything issued from now on.
+    if activation_serial not like '7078%' and activation_serial not like '578%' then
         return 'invalid_format';
     end if;
 

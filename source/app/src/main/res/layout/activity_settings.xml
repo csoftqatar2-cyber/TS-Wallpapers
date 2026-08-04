@@ -732,10 +732,11 @@
                                     android:textStyle="bold"
                                     android:text="@string/leopard_open_picker" />
 
-                                <com.google.android.material.switchmaterial.SwitchMaterial
-                                    android:id="@+id/checkBoxLeopardCloseAfterSet"
-                                    style="@style/SettingsSwitch"
-                                    android:text="@string/leopard_close_after_set" />
+                                <!-- "Close after setting" was a switch here. It is not a
+                                     preference: in a hand-off mode the app has nothing left to
+                                     show the moment a wallpaper is applied, so leaving is the
+                                     only sensible end and it now always happens. A switch for it
+                                     only offered the option of staying on a dead screen. -->
 
                             </LinearLayout>
                         </LinearLayout>
@@ -1032,6 +1033,47 @@
                                 style="@style/SectionHeader"
                                 android:text="@string/wallpapers_section" />
 
+                            <!-- FIRST, and loud. Sending a picture over from a customer's phone is
+                                 what this section is opened for nearly every time; it used to be
+                                 one of two equal tiles below four switches, a device id, a MAC and
+                                 a folder path. Order is the strongest signal a settings page has,
+                                 so the most-used action gets the top of it. -->
+                            <LinearLayout
+                                android:id="@+id/buttonPairPhone"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_marginTop="4dp"
+                                android:layout_marginBottom="14dp"
+                                android:orientation="horizontal"
+                                android:gravity="center_vertical"
+                                android:background="@drawable/wp_qr_hero_bg"
+                                android:paddingStart="20dp"
+                                android:paddingEnd="20dp"
+                                android:paddingTop="18dp"
+                                android:paddingBottom="18dp"
+                                android:focusable="true"
+                                android:clickable="true"
+                                android:onClick="onClickPairPhone">
+
+                                <ImageView
+                                    android:layout_width="44dp"
+                                    android:layout_height="44dp"
+                                    android:src="@drawable/ic_tile_phone_upload_32dp"
+                                    android:tint="#1a1204"
+                                    android:importantForAccessibility="no" />
+
+                                <TextView
+                                    android:layout_width="0dp"
+                                    android:layout_weight="1"
+                                    android:layout_height="wrap_content"
+                                    android:layout_marginStart="16dp"
+                                    android:textColor="#1a1204"
+                                    android:textSize="18sp"
+                                    android:textStyle="bold"
+                                    android:text="@string/wallpaper_pair_phone" />
+
+                            </LinearLayout>
+
                             <TextView
                                 android:id="@+id/textViewSettingsDeviceId"
                                 android:layout_width="match_parent"
@@ -1187,43 +1229,21 @@
                                 android:id="@+id/checkBoxWallpaperLocal"
                                 android:text="@string/wallpaper_local_enable" />
 
+                            <!-- The phone upload used to be the second tile here. It is now the
+                                 first thing in the section, so this row carries the one route
+                                 that is left: files already on the head unit. -->
                             <LinearLayout
-                                style="@style/WallpaperTileRow">
+                                android:id="@+id/buttonAddLocalWallpapers"
+                                style="@style/WallpaperTileWide"
+                                android:onClick="onClickAddLocalWallpapers">
 
-                                <LinearLayout
-                                    android:id="@+id/buttonAddLocalWallpapers"
-                                    style="@style/WallpaperTile"
-                                    android:layout_width="0dp"
-                                    android:layout_weight="1"
-                                    android:onClick="onClickAddLocalWallpapers">
+                                <ImageView
+                                    style="@style/WallpaperTileIcon"
+                                    android:src="@drawable/ic_tile_add_32dp" />
 
-                                    <ImageView
-                                        style="@style/WallpaperTileIcon"
-                                        android:src="@drawable/ic_tile_add_32dp" />
-
-                                    <TextView
-                                        style="@style/WallpaperTileLabel"
-                                        android:text="@string/wallpaper_add_local" />
-
-                                </LinearLayout>
-
-                                <LinearLayout
-                                    android:id="@+id/buttonPairPhone"
-                                    style="@style/WallpaperTile"
-                                    android:layout_marginStart="10dp"
-                                    android:layout_width="0dp"
-                                    android:layout_weight="1"
-                                    android:onClick="onClickPairPhone">
-
-                                    <ImageView
-                                        style="@style/WallpaperTileIcon"
-                                        android:src="@drawable/ic_tile_phone_upload_32dp" />
-
-                                    <TextView
-                                        style="@style/WallpaperTileLabel"
-                                        android:text="@string/wallpaper_pair_phone" />
-
-                                </LinearLayout>
+                                <TextView
+                                    style="@style/WallpaperTileLabel"
+                                    android:text="@string/wallpaper_add_local" />
 
                             </LinearLayout>
 

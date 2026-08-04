@@ -165,6 +165,12 @@ public class FsClockView extends FrameLayout {
         postDelayed(mPeriodicSyncRunnable, PERIODIC_SYNC_INTERVAL_MS);
     }
     View mLayoutActivation;
+    /** The Others-mode "downloading the wallpapers" cover. See showDownloadProgress(). */
+    View mLayoutDownloadProgress;
+    TextView mTextViewDownloadPercent, mTextViewDownloadCount;
+    android.widget.ProgressBar mProgressBarDownload;
+    /** Someone pressed "use the app now"; do not put the cover back up this run. */
+    private boolean mDownloadProgressDismissed;
     android.widget.RadioGroup mRadioGroupActivationMode;
     TextView mTextViewActivationDeviceId;
     EditText mEditTextActivationSerial;
@@ -238,6 +244,20 @@ public class FsClockView extends FrameLayout {
             mWallpaper.setRepo(mWallpaperRepo);
         }
         mLayoutActivation = findViewById(R.id.layoutActivation);
+
+        mLayoutDownloadProgress = findViewById(R.id.layoutDownloadProgress);
+        mTextViewDownloadPercent = findViewById(R.id.textViewDownloadPercent);
+        mTextViewDownloadCount = findViewById(R.id.textViewDownloadCount);
+        mProgressBarDownload = findViewById(R.id.progressBarDownload);
+        View skip = findViewById(R.id.buttonDownloadSkip);
+        if(skip != null) {
+            skip.setOnClickListener(v -> {
+                // Dismissed for this run only. The download carries on behind it — skipping is
+                // about not being held up, not about cancelling.
+                mDownloadProgressDismissed = true;
+                hideDownloadProgress();
+            });
+        }
         mRadioGroupActivationMode = findViewById(R.id.radioGroupActivationMode);
         initActivationModePicker();
         mTextViewActivationDeviceId = findViewById(R.id.textViewActivationDeviceId);
@@ -257,7 +277,7 @@ public class FsClockView extends FrameLayout {
                         mTextViewActivationStatus.setVisibility(View.VISIBLE);
                         return;
                     }
-                    if (!serial.startsWith("7078")) {
+                    if (!WallpaperRepo.hasValidSerialPrefix(serial)) {
                         mTextViewActivationStatus.setText(R.string.activation_error_invalid_serial);
                         mTextViewActivationStatus.setVisibility(View.VISIBLE);
                         return;
@@ -471,7 +491,66 @@ public class FsClockView extends FrameLayout {
                     }
                 });
             }
+            @Override
+            public void mediaProgress(final int done, final int total) {
+                post(new Runnable() {
+                    @Override
+                    public void run() { showDownloadProgress(done, total); }
+                });
+            }
+            @Override
+            public void mediaReady() {
+                post(new Runnable() {
+                    @Override
+                    public void run() {
+                        hideDownloadProgress();
+                        // The pictures are local now, so redraw from the cache rather than
+                        // leaving whatever placeholder the slideshow settled on.
+                        loadSettings();
+                    }
+                });
+            }
         });
+    }
+
+    /**
+     * The "downloading the wallpapers" screen, Others mode only.
+     *
+     * Why it exists: sync() reports the playlist first and downloads the files afterwards, so
+     * for the length of that download the slideshow is swiping through pictures that are not on
+     * the car yet and each one is fetched mid-gesture. On a workshop connection that is a
+     * wallpaper that lurches and sticks under the finger, and it looks like the app is broken
+     * rather than busy. Saying so, with a number, is the honest version.
+     *
+     * Only Others: the hand-off modes never run a slideshow — Leopard and Lynk & Co show the
+     * picker, which has its own progress and its own way of coping with a clip that has not
+     * arrived — and FSE is the same slideshow but is chosen for panels where covering the screen
+     * at boot is exactly what must not happen.
+     *
+     * Never shown for a car that is already up to date: nothing is counted as pending unless it
+     * genuinely is, so an unchanged library reports 0 of 0 and this stays hidden.
+     */
+    private void showDownloadProgress(int done, int total) {
+        if(mLayoutDownloadProgress == null) return;
+        if(mDownloadProgressDismissed) return;
+        if(mSharedPref == null || OperatingMode.get(mSharedPref) != OperatingMode.NORMAL) return;
+        // Not over the activation card: a car that is not registered yet has nothing to
+        // download, and burying the serial field would be the worse bug of the two.
+        if(mLayoutActivation != null && mLayoutActivation.getVisibility() == View.VISIBLE) return;
+        if(total <= 0 || done >= total) { hideDownloadProgress(); return; }
+
+        int percent = Math.max(0, Math.min(100, Math.round(done * 100f / total)));
+        mLayoutDownloadProgress.setVisibility(View.VISIBLE);
+        if(mTextViewDownloadPercent != null) mTextViewDownloadPercent.setText(percent + "%");
+        if(mProgressBarDownload != null) mProgressBarDownload.setProgress(percent);
+        if(mTextViewDownloadCount != null) {
+            mTextViewDownloadCount.setText(
+                    getContext().getString(R.string.download_progress_count, done, total));
+        }
+    }
+
+    private void hideDownloadProgress() {
+        if(mLayoutDownloadProgress != null) mLayoutDownloadProgress.setVisibility(View.GONE);
     }
 
     @Override
@@ -1065,9 +1144,14 @@ public class FsClockView extends FrameLayout {
     private void updateActivationModeDesc(android.widget.TextView desc, int mode, boolean supported) {
         if(desc == null) return;
         int res = mode == OperatingMode.LEOPARD ? R.string.mode_leopard_desc
+                : mode == OperatingMode.LYNKCO ? R.string.mode_lynkco_desc
                 : mode == OperatingMode.FSE ? R.string.mode_fse_desc : R.string.mode_normal_desc;
         String text = getContext().getString(res);
-        if(!supported) text += "\n" + getContext().getString(R.string.mode_leopard_unsupported_note);
+        // The note is about the live-wallpaper support Leopard needs; Lynk & Co hands the file
+        // to the theme app instead and does not care either way.
+        if(!supported && mode != OperatingMode.LYNKCO) {
+            text += "\n" + getContext().getString(R.string.mode_leopard_unsupported_note);
+        }
         desc.setText(text);
     }
 
@@ -1078,6 +1162,7 @@ public class FsClockView extends FrameLayout {
         }
         int id = mRadioGroupActivationMode.getCheckedRadioButtonId();
         if(id == R.id.radioActivationLeopard) return OperatingMode.LEOPARD;
+        if(id == R.id.radioActivationLynkco) return OperatingMode.LYNKCO;
         if(id == R.id.radioActivationFse) return OperatingMode.FSE;
         return OperatingMode.NORMAL;
     }
@@ -1116,9 +1201,19 @@ public class FsClockView extends FrameLayout {
         if(mActivity instanceof FullscreenActivity) {
             ((FullscreenActivity) mActivity).applyFseScreenSize();
         }
-        if(mode == OperatingMode.LEOPARD) {
+
+        // FSE is "the car boots into this screen", and Android 10+ silently refuses the boot-time
+        // start without the overlay grant. Ask on the spot rather than waiting for somebody to
+        // open Settings and toggle auto-start: this screen is where FSE is chosen for a brand new
+        // car, the technician is standing in front of it right now, and the failure it prevents
+        // does not appear until the customer's next cold start — by which time nobody is here.
+        if(mode == OperatingMode.FSE && mActivity != null) {
+            mSharedPref.edit().putBoolean(BootReceiver.PREF_AUTO_START, true).apply();
+            OverlayPermission.request(mActivity, null);
+        }
+        if(mode == OperatingMode.LEOPARD || mode == OperatingMode.LYNKCO) {
             // Nothing left for this screen to draw — hand over to the picker rather than sit on a
-            // dead clock.
+            // dead clock. Both hand-off modes share it.
             getContext().startActivity(
                     new android.content.Intent(getContext(), LeopardPickerActivity.class));
             if(mActivity != null) mActivity.finish();

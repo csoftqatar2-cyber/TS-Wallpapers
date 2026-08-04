@@ -168,7 +168,7 @@ public class UploadServer extends NanoHTTPD {
                 }
                 if(sawFile) {
                     return newFixedLengthResponse(Response.Status.INTERNAL_ERROR, "text/plain; charset=utf-8",
-                            "تعذّر حفظ الملف على الجهاز — تأكد من وجود مساحة كافية");
+                            "تعذّر حفظ الملف على الجهاز — تأكّد من وجود مساحة كافية");
                 }
                 return newFixedLengthResponse(Response.Status.BAD_REQUEST, "text/plain; charset=utf-8",
                         "لم يتم اختيار ملف");
@@ -348,7 +348,7 @@ public class UploadServer extends NanoHTTPD {
 
                 + "<div class='card'>"
                 + "<p style='margin:0 0 14px'>اختر صورة أو أكثر من هاتفك لتظهر على الشاشة كخلفية"
-                + " — تقدر تختار أكتر من صورة مرة واحدة</p>"
+                + " — يمكنك اختيار أكثر من صورة في المرة الواحدة</p>"
                 + "<form id='f' method='post' action='/' enctype='multipart/form-data'>"
                 + "<input id='file' type='file' name='image' accept='image/*,video/*' multiple required>"
                 + "<label id='pick' class='pick' for='file'>اضغط هنا لاختيار الصور أو الفيديو</label>"
@@ -363,14 +363,14 @@ public class UploadServer extends NanoHTTPD {
                 // so it reads as a short process with an end, and it sits UNDER the button so it
                 // never pushes the thing they came to press below the fold.
                 + "<div class='steps'>"
-                + "<b>إزاي تحطّ صورتك على الشاشة</b>"
+                + "<b>كيف تضع صورتك على الشاشة</b>"
                 + "<ol>"
-                + "<li>اضغط <b>اختيار الصور</b> واختر من ألبوم هاتفك — تقدر تختار أكتر من صورة.</li>"
-                + "<li>اضغط <b>رفع الصور</b> واستنى شريط التقدّم لحد ما يكمّل.</li>"
-                + "<li>الصورة هتظهر على شاشة السيارة على طول، وتقدر تظبّط مكانها وحجمها من الشاشة نفسها.</li>"
+                + "<li>اضغط <b>اختيار الصور</b> واختر من ألبوم هاتفك — ويمكنك اختيار أكثر من صورة.</li>"
+                + "<li>اضغط <b>رفع الصور</b> وانتظر حتى يكتمل شريط التقدّم.</li>"
+                + "<li>ستظهر الصورة على شاشة السيارة فوراً، ويمكنك ضبط موضعها وحجمها من الشاشة نفسها.</li>"
                 + "</ol>"
-                + "<p class='note'>خلّي هاتفك على نفس شبكة الواي‑فاي بتاعة السيارة، وما تقفلش الصفحة"
-                + " دي وانت بترفع. الصور بتفضل موجودة على الشاشة حتى بعد ما تقفل الصفحة.</p>"
+                + "<p class='note'>أبقِ هاتفك على شبكة الواي‑فاي نفسها الخاصة بالسيارة، ولا تغلق هذه"
+                + " الصفحة أثناء الرفع. وتبقى الصور محفوظة على الشاشة حتى بعد إغلاق الصفحة.</p>"
                 + "</div>"
 
                 + "</div><script>"
@@ -385,9 +385,9 @@ public class UploadServer extends NanoHTTPD {
                 + "function reset(t){b.disabled=false;b.textContent='رفع الصور';bar.style.display='none';"
                 + "fill.style.width='0';m.className='err';m.textContent=t;}"
                 + "f.onsubmit=function(e){e.preventDefault();"
-                + "if(!fi.files.length){m.className='err';m.textContent='اختر ملف أولاً';return;}"
+                + "if(!fi.files.length){m.className='err';m.textContent='اختر ملفاً أولاً';return;}"
                 + "if(fi.files.length>" + MAX_BATCH + "){m.className='err';"
-                + "m.textContent='أقصى عدد " + MAX_BATCH + " ملف في المرة الواحدة';return;}"
+                + "m.textContent='الحد الأقصى " + MAX_BATCH + " ملفات في المرة الواحدة';return;}"
                 // Numbered field names: a repeated name would collapse to one file server-side.
                 + "var fd=new FormData();"
                 + "for(var i=0;i<fi.files.length;i++){fd.append('image'+i,fi.files[i]);}"
@@ -403,8 +403,8 @@ public class UploadServer extends NanoHTTPD {
                 + "x.onload=function(){"
                 + "if(x.status===200){document.open();document.write(x.responseText);document.close();}"
                 + "else{reset(x.responseText||('خطأ '+x.status));}};"
-                + "x.onerror=function(){reset('انقطع الاتصال بالجهاز — تأكد إن الموبايل والشاشة على نفس شبكة الواي‑فاي وحاول تاني');};"
-                + "x.ontimeout=function(){reset('الرفع أخذ وقتاً طويلاً — جرّب ملفاً أصغر أو قرّب من الراوتر');};"
+                + "x.onerror=function(){reset('انقطع الاتصال بالجهاز — تأكّد من أن الهاتف والشاشة على شبكة الواي‑فاي نفسها ثم أعد المحاولة');};"
+                + "x.ontimeout=function(){reset('استغرق الرفع وقتاً طويلاً — جرّب ملفاً أصغر أو اقترب من الراوتر');};"
                 + "x.send(fd);};"
                 + "</" + "script></body></html>";
     }
@@ -412,8 +412,8 @@ public class UploadServer extends NanoHTTPD {
     private String successPage(int count) {
         String headline = count == 1 ? "تم الرفع بنجاح" : ("تم رفع " + count + " صور بنجاح");
         String detail = count == 1
-                ? "الصورة وصلت للشاشة — كمّل عليها من الشاشة نفسها."
-                : "الصور وصلت للشاشة — كمّل عليها من الشاشة نفسها.";
+                ? "وصلت الصورة إلى الشاشة — أكمِل ضبطها من الشاشة نفسها."
+                : "وصلت الصور إلى الشاشة — أكمِل ضبطها من الشاشة نفسها.";
         return "<!doctype html><html dir='rtl' lang='ar'><head><meta charset='utf-8'>"
                 + "<meta name='viewport' content='width=device-width,initial-scale=1'>"
                 + "<meta name='theme-color' content='#14100b'>"

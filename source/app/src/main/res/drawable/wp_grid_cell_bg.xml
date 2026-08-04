@@ -1,26 +1,30 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- The cell behind the image: dark, so a fitCenter image that does not fill the cell has
-     something to sit on rather than a hole. Gold outline when ticked/focused. -->
+     something to sit on rather than a hole. Gold outline when ticked/focused.
+
+     The resting outline is 2dp rather than a hairline: the cell now hugs the picture, so this
+     stroke is what separates one photo from the next, and at 1dp it disappeared against a busy
+     image. The ticked state stays a step heavier so the two are still told apart at a glance. -->
 <selector xmlns:android="http://schemas.android.com/apk/res/android">
     <item android:state_activated="true">
         <shape android:shape="rectangle">
             <solid android:color="#241c11" />
             <corners android:radius="12dp" />
-            <stroke android:width="2dp" android:color="@color/colorAccent" />
+            <stroke android:width="3dp" android:color="@color/colorAccent" />
         </shape>
     </item>
     <item android:state_pressed="true">
         <shape android:shape="rectangle">
             <solid android:color="#241c11" />
             <corners android:radius="12dp" />
-            <stroke android:width="2dp" android:color="@color/gold" />
+            <stroke android:width="3dp" android:color="@color/gold" />
         </shape>
     </item>
     <item>
         <shape android:shape="rectangle">
             <solid android:color="#241c11" />
             <corners android:radius="12dp" />
-            <stroke android:width="1dp" android:color="@color/aurora_border" />
+            <stroke android:width="2dp" android:color="@color/aurora_border" />
         </shape>
     </item>
 </selector>
