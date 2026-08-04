@@ -288,25 +288,30 @@ CREATE OR REPLACE FUNCTION public.get_wallpapers(device_hw_id text, legacy_hw_id
  SECURITY DEFINER
  SET search_path TO 'public'
 AS $function$
+declare
+    hw text;
 begin
     -- An already-registered device that now reports a VIN keeps its row
     -- (activation, wallpapers, hides, block status) under the new id.
     perform public.migrate_device_hardware_id(legacy_hw_id, device_hw_id);
+    -- ...and an app that has not learned the new id yet is still asking about the
+    -- same car. See device_id_aliases.
+    hw := public.resolve_device_id(device_hw_id);
 
     if exists (
         select 1 from public.devices d
-        where d.hardware_id = device_hw_id and d.is_active = true and d.is_blocked = false
+        where d.hardware_id = hw and d.is_active = true and d.is_blocked = false
     ) then
         return query
         select w.url, w.type
         from public.wallpapers w
-        join public.devices d on d.hardware_id = device_hw_id
+        join public.devices d on d.hardware_id = hw
         where w.channel = 'app'
-          and (w.is_global = true or w.hardware_id = device_hw_id)
+          and (w.is_global = true or w.hardware_id = hw)
           and (w.target_mode is null or w.target_mode = d.mode)
           and not exists (
               select 1 from public.wallpaper_hides h
-              where h.wallpaper_id = w.id and h.hardware_id = device_hw_id
+              where h.wallpaper_id = w.id and h.hardware_id = hw
           )
         order by w.created_at desc;
     else
@@ -396,6 +401,19 @@ begin
     update public.devices        set hardware_id = new_id where hardware_id = old_id;
     update public.wallpapers     set hardware_id = new_id where hardware_id = old_id;
     update public.wallpaper_hides set hardware_id = new_id where hardware_id = old_id;
+    -- The forwarding address, in the same transaction as the rename it describes. See
+    -- device_id_aliases: the OTHER two apps keep asking under the id they were activated
+    -- with, and one of them can never be updated to learn the new one.
+    --
+    -- Delete-then-insert rather than ON CONFLICT, and the alias `a` is not decoration: this
+    -- function's parameters are called old_id and new_id, which are also column names here.
+    -- plpgsql resolves a bare `old_id` to the PARAMETER, so `on conflict (old_id)` is an
+    -- outright error and `where old_id = old_id` would silently be `where 'X' = 'X'` and
+    -- empty the table. Every reference below therefore says which one it means.
+    delete from public.device_id_aliases a
+     where a.old_id = migrate_device_hardware_id.old_id;
+    insert into public.device_id_aliases (old_id, current_id)
+    values (migrate_device_hardware_id.old_id, migrate_device_hardware_id.new_id);
 end;
 $function$;
 
@@ -407,18 +425,23 @@ CREATE OR REPLACE FUNCTION public.get_gwm_wallpapers(device_hw_id text, legacy_h
  SECURITY DEFINER
  SET search_path TO 'public'
 AS $function$
+declare
+    hw text;
 begin
     perform public.migrate_device_hardware_id(legacy_hw_id, device_hw_id);
+    -- ...and an app that has not learned the new id yet is still asking about the
+    -- same car. See device_id_aliases.
+    hw := public.resolve_device_id(device_hw_id);
 
     if exists (
         select 1 from public.devices d
-        where d.hardware_id = device_hw_id and d.is_active = true and d.is_blocked = false
+        where d.hardware_id = hw and d.is_active = true and d.is_blocked = false
     ) then
         return query
         select w.url, w.type
         from public.wallpapers w
         where w.channel = 'gwm_split'
-          and (w.is_global = true or w.hardware_id = device_hw_id)
+          and (w.is_global = true or w.hardware_id = hw)
         order by w.created_at desc;
     else
         return query select 'inactive'::text, 'image'::text;
@@ -446,7 +469,7 @@ AS $function$
   select exists (
     select 1
     from public.devices d
-    where d.hardware_id = is_device_activated.device_hw_id
+    where d.hardware_id = public.resolve_device_id(is_device_activated.device_hw_id)
       and d.is_active = true
       and d.is_blocked = false
   );
