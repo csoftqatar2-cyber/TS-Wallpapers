@@ -48,6 +48,12 @@ class LeopardApplier {
     /** Several wake signals arrive together on one start; one re-assert covers them all. */
     private static final long REASSERT_THROTTLE_MS = 60 * 1000L;
 
+    /**
+     * How long to give the vendor theme service to finish whatever it does right after a still
+     * is set, before we set it again. See {@link #apply} for why a second write exists at all.
+     */
+    private static final long SETTLE_REAPPLY_MS = 1500L;
+
     /** What applying this file will actually do, so the UI can warn before it happens. */
     static final int RESULT_APPLIED_BOTH = 0;      // image: home + lock, silently
     static final int RESULT_NEEDS_SYSTEM_SCREEN = 1; // moving: launch the system picker
@@ -111,6 +117,22 @@ class LeopardApplier {
         clearOurLiveWallpaper(ctx);
         boolean ok = applyStill(ctx, uriStr, true);
         CrashReporter.breadcrumb("leopard: apply still " + (ok ? "ok" : "FAILED") + " " + uriStr);
+        // The picker leaves (and often tears itself down) a second or two after this call
+        // returns — see onApplied()/goHome() in LeopardPickerActivity. On these head units that
+        // window overlaps the vendor theme service's own post-boot-like re-assert of whatever
+        // wallpaper it last knew about, which silently wins the race and the picture the user
+        // just chose never actually shows — until the app is reopened, which runs reassert()
+        // and sets it again after the vendor has settled. Do that same second write here,
+        // proactively, on this same background thread, instead of making the user do it by hand.
+        if(ok) {
+            try {
+                Thread.sleep(SETTLE_REAPPLY_MS);
+            } catch(InterruptedException ignored) {
+                Thread.currentThread().interrupt();
+            }
+            boolean reok = applyStill(ctx, uriStr, false);
+            CrashReporter.breadcrumb("leopard: settle re-apply " + (reok ? "ok" : "FAILED"));
+        }
         return ok ? RESULT_APPLIED_BOTH : RESULT_FAILED;
     }
 
