@@ -379,7 +379,7 @@
     <string name="leopard_retry">أعد المحاولة</string>
     <string name="leopard_pick_first">اختر خلفية أولاً</string>
     <string name="leopard_applying">جارٍ التطبيق…</string>
-    <string name="leopard_applied_image">تم التعيين ✓ — الشاشة الرئيسية واللوك</string>
+    <string name="leopard_applied_image">تم التعيين ✓</string>
     <string name="leopard_applied_video">تم التعيين ✓ — الشاشة الرئيسية</string>
     <string name="leopard_apply_failed">تعذّر تعيين هذه الخلفية</string>
     <string name="leopard_local_none">لم يُختَر أي ملف</string>
@@ -388,6 +388,8 @@
     <string name="leopard_video_first_title">إعداد لمرة واحدة</string>
     <string name="leopard_video_first_message">ستُفتح شاشة أندرويد لتأكيد الخلفية الحيّة — اضغط زر «Set wallpaper» فيها.\n\nيحدث هذا مرة واحدة فقط، وأي فيديو بعد ذلك يُطبَّق مباشرة.</string>
     <string name="leopard_video_first_ok">فهمت، متابعة</string>
+    <string name="leopard_image_first_title">تأكيد الخلفية</string>
+    <string name="leopard_image_first_message">ستُفتح شاشة أندرويد لتأكيد الخلفية — اضغط زر «Set wallpaper» فيها لإتمام التعيين.</string>
     <string name="leopard_unsupported">هذه الشاشة لا تدعم وضع Leopard \\ Denza.</string>
     <string name="leopard_gif_static_note">يعرض هذا الجهاز الصور المتحركة كصورة ثابتة.</string>
     <string name="mode_title">وضع التشغيل</string>

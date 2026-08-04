@@ -264,9 +264,9 @@ Roboto Font Copyright (c) Christian Robertson. Licensed under the Apache License
     <string name="leopard_retry">Try again</string>
     <string name="leopard_pick_first">Choose a wallpaper first</string>
     <string name="leopard_applying">Applying…</string>
-    <!-- Honest copy: an image covers both surfaces, a video cannot cover the lock screen on
-         most Android versions. One string cannot claim both. -->
-    <string name="leopard_applied_image">Set ✓ — home and lock screen</string>
+    <!-- A still is now set by the system's own crop-and-set screen, not by us, so which
+         surfaces it covers is up to that screen — this string no longer claims "home and lock". -->
+    <string name="leopard_applied_image">Set ✓</string>
     <string name="leopard_applied_video">Set ✓ — home screen</string>
     <string name="leopard_apply_failed">Could not set this wallpaper</string>
     <string name="leopard_local_none">No file chosen</string>
@@ -275,6 +275,8 @@ Roboto Font Copyright (c) Christian Robertson. Licensed under the Apache License
     <string name="leopard_video_first_title">One-time setup</string>
     <string name="leopard_video_first_message">An Android screen will open to confirm the live wallpaper — press its "Set wallpaper" button.\n\nThis happens only once. Every video after this is applied instantly.</string>
     <string name="leopard_video_first_ok">Got it, continue</string>
+    <string name="leopard_image_first_title">Confirm the wallpaper</string>
+    <string name="leopard_image_first_message">An Android screen will open to confirm the wallpaper — press its "Set wallpaper" button to finish.</string>
     <string name="leopard_unsupported">This screen does not support Leopard mode.</string>
     <string name="leopard_gif_static_note">This device shows GIFs as a still image.</string>
 

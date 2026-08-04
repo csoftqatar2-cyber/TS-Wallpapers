@@ -59,6 +59,8 @@ public class LeopardPickerActivity extends AppCompatActivity {
 
     private static final int PICK_LOCAL_REQUEST = 41;
     private static final int FIT_EDITOR_REQUEST = 42;
+    /** The system's own crop-and-set screen for a still — see {@link LeopardApplier#stillPickerIntent}. */
+    private static final int STILL_SYSTEM_REQUEST = 43;
     private static final String PREF_DEFAULT_SOURCE = "leopard-default-source";
     private static final String SOURCE_CLOUD = "cloud";
     private static final String SOURCE_LOCAL = "local";
@@ -102,6 +104,10 @@ public class LeopardPickerActivity extends AppCompatActivity {
      * step in browsing the library.
      */
     private boolean mFromPhoneUpload;
+
+    /** The URL sent to {@link LeopardApplier#stillPickerIntent}, kept for {@link #onActivityResult}
+     *  so a successful crop-and-set can be copied for {@link LeopardApplier#reassert}. */
+    private String mPendingStillUrl;
 
     /** Guards the one automatic sync, so a car that is genuinely empty does not loop. */
     private boolean mTriedAutoSync = false;
@@ -810,6 +816,22 @@ public class LeopardPickerActivity extends AppCompatActivity {
             // read as "I pressed Done and the app just closed" rather than "it's set". Landing on
             // the full preview instead gives an explicit, visible Set button to press.
             bakeEdit(edited);
+            return;
+        }
+
+        if(req == STILL_SYSTEM_REQUEST) {
+            String url = mPendingStillUrl;
+            mPendingStillUrl = null;
+            if(res == RESULT_OK) {
+                // The system's own screen wrote the bitmap, not us — but reassert() (the restart
+                // repair) reads its own kept copy, not whatever the system just did. Make one now.
+                if(url != null) LeopardApplier.keepCopyFromUri(this, url);
+                finishApplied(R.string.leopard_applied_image);
+            } else {
+                // Backed out of the system's own screen: nothing was set. Put the library back
+                // rather than leave on a screen with nothing left to show for the tap.
+                scheduleTileBind();
+            }
             return;
         }
 
@@ -1547,14 +1569,20 @@ public class LeopardPickerActivity extends AppCompatActivity {
 
         // Images in Lynkco go to the head unit's theme app (no system screen). Video does NOT —
         // the theme app's file entry point is image-only — so a Lynkco video falls back to our own
-        // MediaWallpaperService, which still needs the one-time system live-wallpaper screen.
+        // MediaWallpaperService, which needs the system live-wallpaper screen (once). A plain
+        // Leopard/Denza still now needs the system's crop-and-set screen too, every time — see
+        // LeopardApplier.
         if(LeopardApplier.needsSystemScreen(this, mSelected.type)) {
             // The worst moment in the feature: we are about to throw the user into an unstyled
-            // system screen with an English button. Warn first, and say it is one-time — an
-            // unexplained hand-off reads as the app breaking.
+            // system screen with an English button. Warn first, so an unexplained hand-off does
+            // not read as the app breaking.
+            boolean moving = WallpaperItem.TYPE_VIDEO.equals(mSelected.type)
+                    || WallpaperItem.TYPE_GIF.equals(mSelected.type);
+            int title = moving ? R.string.leopard_video_first_title : R.string.leopard_image_first_title;
+            int message = moving ? R.string.leopard_video_first_message : R.string.leopard_image_first_message;
             new AlertDialog.Builder(this)
-                    .setTitle(R.string.leopard_video_first_title)
-                    .setMessage(R.string.leopard_video_first_message)
+                    .setTitle(title)
+                    .setMessage(message)
                     .setPositiveButton(R.string.leopard_video_first_ok, (d, w) -> doApply())
                     .setNegativeButton(R.string.update_cancel, null)
                     .show();
@@ -1603,16 +1631,17 @@ public class LeopardPickerActivity extends AppCompatActivity {
                     return;
                 }
                 applyUrl = local.toString();
-            } else if(!applyUrl.startsWith("content://")
-                    && (WallpaperItem.TYPE_VIDEO.equals(type) || WallpaperItem.TYPE_GIF.equals(type))) {
-                // A clip stored on the head unit: the engine resolves its type through the
-                // ContentResolver, so hand it the same content:// shape a cloud video gets rather
-                // than a bare path it cannot ask about. Stills skip this — they are read as files.
+            } else if(!applyUrl.startsWith("content://")) {
+                // A file stored on the head unit: the live-wallpaper engine and the system's own
+                // crop-and-set screen both resolve the type through the ContentResolver, so every
+                // local file — still or moving — needs the same content:// shape a cloud item
+                // gets rather than a bare path neither can ask about.
                 Uri shared = LeopardCache.localFile(this, applyUrl);
                 if(shared != null) applyUrl = shared.toString();
             }
             final int result = LeopardApplier.apply(this, applyUrl, type);
-            runOnUiThread(() -> { setBusy(false, 0); onApplied(result, type); });
+            final String finalApplyUrl = applyUrl;
+            runOnUiThread(() -> { setBusy(false, 0); onApplied(result, type, finalApplyUrl); });
         }).start();
     }
 
@@ -1657,49 +1686,66 @@ public class LeopardPickerActivity extends AppCompatActivity {
         if(statusRes != 0) mStatus.setText(statusRes);
     }
 
-    private void onApplied(int result, String type) {
-        final int appliedMsg;
+    private void onApplied(int result, String type, String url) {
         switch(result) {
             case LeopardApplier.RESULT_NEEDS_SYSTEM_SCREEN:
                 try {
-                    // Pinned to this screen: on a two-panel car the system's own live-wallpaper
-                    // screen would otherwise open on the default display, sideways.
-                    markLeaveAfterApply(LEAVE_AFTER_SYSTEM_SCREEN, R.string.leopard_applied_video);
-                    LeopardApplier.startOnSameDisplay(this, LeopardApplier.systemPickerIntent(this));
+                    boolean moving = WallpaperItem.TYPE_VIDEO.equals(type) || WallpaperItem.TYPE_GIF.equals(type);
+                    if(moving) {
+                        // Pinned to this screen: on a two-panel car the system's own live-wallpaper
+                        // screen would otherwise open on the default display, sideways. Fire-and-
+                        // forget — there is no result to read for a live wallpaper hand-off, so the
+                        // note carries the "we're mid-apply" state across whatever restart follows.
+                        markLeaveAfterApply(LEAVE_AFTER_SYSTEM_SCREEN, R.string.leopard_applied_video);
+                        LeopardApplier.startOnSameDisplay(this, LeopardApplier.systemPickerIntent(this));
+                    } else {
+                        // A still now gets the same hand-off a video always needed: the system's
+                        // own crop-and-set screen, with its own "Set wallpaper" button — see
+                        // LeopardApplier for why a silent set stopped being good enough here. This
+                        // one DOES return a result, so it is awaited directly rather than through
+                        // the LEAVE_AFTER_SYSTEM_SCREEN poll that only makes sense for a live
+                        // wallpaper's asynchronous bind.
+                        mPendingStillUrl = url;
+                        LeopardApplier.startOnSameDisplayForResult(
+                                this, LeopardApplier.stillPickerIntent(Uri.parse(url)), STILL_SYSTEM_REQUEST);
+                    }
                 } catch(ActivityNotFoundException e) {
                     clearLeaveAfterApply();
-                    // Some cheap ROMs ship without the live wallpaper picker at all.
+                    mPendingStillUrl = null;
+                    // Some cheap ROMs ship without the live wallpaper (or wallpaper cropper) picker.
                     say(R.string.leopard_unsupported);
                     scheduleTileBind();
                 }
                 return;
-            case LeopardApplier.RESULT_APPLIED_BOTH:
-                appliedMsg = R.string.leopard_applied_image;
-                sayLoud(appliedMsg);
-                break;
             case LeopardApplier.RESULT_APPLIED_LIVE:
                 // A live wallpaper cannot cover the lock screen on most versions; say home only.
-                appliedMsg = R.string.leopard_applied_video;
-                sayLoud(appliedMsg);
-                break;
+                finishApplied(R.string.leopard_applied_video);
+                return;
             default:
                 sayLoud(R.string.leopard_apply_failed);
                 // Nothing is leaving after all, so give the library its movement back.
                 scheduleTileBind();
-                return;
         }
-        // The app has just made itself redundant — Android owns the screen now. Leaving is the
-        // honest end to "open, choose, close", and the home screen is where the picture that was
-        // just set can actually be seen. Unconditional: this used to sit behind a "close after
-        // setting" switch, which only ever offered the choice of staying on a screen with nothing
-        // left to show.
-        //
-        // Nothing is repainted on the way out, and that is the fix for a real complaint:
-        // hidePreview() + buildFilmstrip() used to run first, which tore down the preview and
-        // rebuilt the library under it — so for the second before the screen closed, someone who
-        // had just sent a photo from their phone and pressed Set watched the app throw them back
-        // into the picker. On the phone route it read as the picture not having been taken. The
-        // last thing on screen should be the wallpaper they chose.
+    }
+
+    /**
+     * The tail shared by every apply path that actually finished: say so, then leave.
+     *
+     * The app has just made itself redundant — Android owns the screen now. Leaving is the
+     * honest end to "open, choose, close", and the home screen is where the picture that was
+     * just set can actually be seen. Unconditional: this used to sit behind a "close after
+     * setting" switch, which only ever offered the choice of staying on a screen with nothing
+     * left to show.
+     *
+     * Nothing is repainted on the way out, and that is the fix for a real complaint:
+     * hidePreview() + buildFilmstrip() used to run first, which tore down the preview and
+     * rebuilt the library under it — so for the second before the screen closed, someone who
+     * had just sent a photo from their phone and pressed Set watched the app throw them back
+     * into the picker. On the phone route it read as the picture not having been taken. The
+     * last thing on screen should be the wallpaper they chose.
+     */
+    private void finishApplied(int appliedMsg) {
+        sayLoud(appliedMsg);
         mFromPhoneUpload = false;
         // Written before the delay, not instead of it. The delay is for the eye; the note is for
         // the case where this instance does not live long enough to honour it — setting a still
