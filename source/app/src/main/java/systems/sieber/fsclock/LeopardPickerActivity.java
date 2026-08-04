@@ -103,8 +103,6 @@ public class LeopardPickerActivity extends AppCompatActivity {
      */
     private boolean mFromPhoneUpload;
 
-    /** "تم" was pressed in the editor: bake it, set it, and show it. A back press does not. */
-    private boolean mApplyAfterBake;
     /** Guards the one automatic sync, so a car that is genuinely empty does not loop. */
     private boolean mTriedAutoSync = false;
 
@@ -611,14 +609,6 @@ public class LeopardPickerActivity extends AppCompatActivity {
                 mSelected = pickFromGrid(shown);
                 refreshSelection();
                 showPreview(mSelected);
-                // Straight on to the wallpaper itself when the framing was confirmed with تم:
-                // the preview underneath is the same picture the editor was just showing, and
-                // asking for a second confirmation of the same image is how "I pressed Done and
-                // nothing happened" starts.
-                if(mApplyAfterBake) {
-                    mApplyAfterBake = false;
-                    applySelection();
-                }
             });
         }).start();
     }
@@ -813,12 +803,12 @@ public class LeopardPickerActivity extends AppCompatActivity {
             if(edited == null) return;
             // The editor is auto-save and has no Cancel, so any way back from it means "this is
             // how I want it" — including the back button. Bake either way; the only difference on
-            // a plain back is that the settings are the ones it opened with.
-            //
-            // "تم" says more than that, though: it is the end of the import. The picture is
-            // framed, so it gets set and the screen it was framed for is what the user is taken
-            // to. A back press stops at the preview, where the Set button still waits.
-            mApplyAfterBake = data != null && data.getBooleanExtra(FitEditorActivity.EXTRA_DONE, false);
+            // a plain back is that the settings are the ones it opened with. Either way lands on
+            // the preview, where the Set button waits — same as every other source (cloud, local
+            // file). "تم" used to skip straight to applying, but a still on these head units can
+            // take a moment to actually render (see LeopardApplier), so a silent auto-apply here
+            // read as "I pressed Done and the app just closed" rather than "it's set". Landing on
+            // the full preview instead gives an explicit, visible Set button to press.
             bakeEdit(edited);
             return;
         }
