@@ -16,20 +16,32 @@ import java.io.FileOutputStream;
 import java.io.InputStream;
 
 /**
- * Hands a chosen file to Android's wallpaper system.
+ * Hands a chosen file to Android's wallpaper system, through {@link MediaWallpaperService} —
+ * our own live wallpaper — for everything, stills included.
  *
- * The asymmetry here is a platform boundary, not a design choice:
+ * That last part is the whole fix for "the wallpaper is gone after the car restarts", and it was
+ * arrived at from the car rather than from the docs. Measured on a BYD DiLink 5.1 unit:
  *
- *  - A still image can be set on home AND lock in one silent call. No system screen, no
- *    question. Exactly what was asked for.
- *  - Anything moving must be a live wallpaper, and Android will not let an app install itself
- *    as the live wallpaper silently — it must go through ACTION_CHANGE_LIVE_WALLPAPER, where
- *    the user presses the system's own button. There is no API to skip this.
+ *  - The ROM refuses to start a third-party app from a boot broadcast. Its BroadcastQueue logs
+ *    "Self start permission detection ... skip reciever ... ignored" and our process is simply
+ *    never created at boot, so reassert() — the repair this class used to lean on — never ran on
+ *    the one occasion it existed for.
+ *  - A still written with wm.setBitmap() is therefore on its own at boot, and the vendor's
+ *    privileged WallpaperHome (which DOES run, on LOCKED_BOOT_COMPLETED) puts its own wallpaper
+ *    back. The picture the owner chose lasts until the next start and no further.
+ *  - Wallpaper Engine, an ordinary unprivileged app on the same car, survives every restart and
+ *    declares no boot receiver at all. All it has is a live wallpaper service. That is the
+ *    mechanism: Android itself owns the wallpaper COMPONENT, persists it, and re-binds it at
+ *    boot — no self-start needed and nothing for the vendor's routine to overrule.
  *
- * The second case happens once. After our service is the active live wallpaper it stays
- * active and reloads itself when the stored selection changes, so every later video is
- * instant. Also: a live wallpaper generally cannot cover the lock screen, so a video is
- * home-only while an image is both. The copy must not promise otherwise.
+ * So a still is not set as a bitmap any more; it becomes the picture our live wallpaper draws.
+ * The one cost is Android's rule that an app may not install itself as the live wallpaper
+ * silently — it must go through ACTION_CHANGE_LIVE_WALLPAPER once, where the user presses the
+ * system's own button. That happens once per car, for the first wallpaper of any kind; after our
+ * service is the active one every later picture and video is applied instantly and silently.
+ *
+ * A live wallpaper generally cannot cover the lock screen, so what is set is the home screen.
+ * The copy must not promise otherwise.
  */
 class LeopardApplier {
 
@@ -40,30 +52,29 @@ class LeopardApplier {
      *  here so the applier can decide silent-vs-system-screen without touching the file. */
     static final String PREF_TYPE = "leopard-type";
 
-    /** Our own copy of the last still we applied — see {@link #keepCopy}. */
-    private static final String PREF_STILL_PATH = "leopard-still-path";
-    private static final String PREF_LAST_REASSERT = "leopard-reassert-ms";
+    /** Where our durable copy of the picked still lives — see {@link #keepCopyOf}. */
     private static final String KEEP_DIR = "leopard-current";
 
-    /** Several wake signals arrive together on one start; one re-assert covers them all. */
-    private static final long REASSERT_THROTTLE_MS = 60 * 1000L;
-
-    /**
-     * How long to give the vendor theme service to finish whatever it does right after a still
-     * is set, before we set it again. See {@link #apply} for why a second write exists at all.
-     */
-    private static final long SETTLE_REAPPLY_MS = 1500L;
-
     /** What applying this file will actually do, so the UI can warn before it happens. */
-    static final int RESULT_APPLIED_BOTH = 0;      // image: home + lock, silently
-    static final int RESULT_NEEDS_SYSTEM_SCREEN = 1; // moving: launch the system picker
-    static final int RESULT_APPLIED_LIVE = 2;      // moving, service already active: silent
+    static final int RESULT_NEEDS_SYSTEM_SCREEN = 1; // launch the system picker, once per car
+    static final int RESULT_APPLIED_LIVE = 2;        // our service is already active: silent
     static final int RESULT_FAILED = 3;
 
-    /** True when applying this item would throw the user into the system's own screen. */
+    /**
+     * True when applying this item would throw the user into the system's own screen: the
+     * one-time live-wallpaper hand-off, for a still exactly as for a video.
+     *
+     * Lynkco is the exception and always was — its stills go to the Flyme theme app, which is not
+     * Android's wallpaper system at all, so nothing here applies to them. Only a Lynkco VIDEO
+     * falls back to our live wallpaper, because the theme app's file entry point is image-only.
+     */
     static boolean needsSystemScreen(Context ctx, String type) {
-        boolean moving = WallpaperItem.TYPE_VIDEO.equals(type) || WallpaperItem.TYPE_GIF.equals(type);
-        return moving && !isOurServiceActive(ctx);
+        if(OperatingMode.isLynkco(prefs(ctx)) && !WallpaperItem.TYPE_VIDEO.equals(type)) return false;
+        return !isOurServiceActive(ctx);
+    }
+
+    private static SharedPreferences prefs(Context ctx) {
+        return ctx.getSharedPreferences(BaseSettingsActivity.SHARED_PREF_DOMAIN, Context.MODE_PRIVATE);
     }
 
     /**
@@ -93,196 +104,99 @@ class LeopardApplier {
 
     /**
      * Store the selection, then apply it.
+     *
+     * "Apply" is now the same act for every kind of file: point our live wallpaper at it. The
+     * engine reloads the moment the stored URI changes, so when our service is already the
+     * active wallpaper there is nothing else to do and nothing for the user to confirm.
+     *
      * @return one of the RESULT_* constants. RESULT_NEEDS_SYSTEM_SCREEN means the caller must
      *         launch {@link #systemPickerIntent} after warning the user.
      */
     static int apply(Context ctx, String uriStr, String type) {
-        // Persist first, unconditionally: the service reads this, and on the
-        // needs-system-screen path the system will start us before we get another chance.
-        ctx.getSharedPreferences(BaseSettingsActivity.SHARED_PREF_DOMAIN, Context.MODE_PRIVATE)
-                .edit()
-                .putString(MediaWallpaperService.PREF_URI, uriStr)
+        String stored = uriStr;
+        boolean moving = WallpaperItem.TYPE_VIDEO.equals(type) || WallpaperItem.TYPE_GIF.equals(type);
+        if(!moving) {
+            // Where a still is pointed at matters more than it used to: the engine re-reads this
+            // URI on every boot, so a cloud picture left pointing into the cache would come back
+            // black the first time the head unit runs itself low on space and clears it. One copy
+            // in internal storage is a source that is still there months later.
+            String kept = keepCopyOf(ctx, uriStr);
+            if(kept != null) stored = "file://" + kept;
+        }
+        // Persist before anything else: the service reads this, and on the needs-system-screen
+        // path the system will start us before we get another chance.
+        prefs(ctx).edit()
+                .putString(MediaWallpaperService.PREF_URI, stored)
                 .putString(LeopardApplier.PREF_TYPE, type)
                 .apply();
-
-        boolean moving = WallpaperItem.TYPE_VIDEO.equals(type) || WallpaperItem.TYPE_GIF.equals(type);
-        if(moving) {
-            return isOurServiceActive(ctx) ? RESULT_APPLIED_LIVE : RESULT_NEEDS_SYSTEM_SCREEN;
-        }
-        // A still and a live wallpaper are two different systems, and the live one is drawn on
-        // top. If a video was ever applied on this car our service is still the active wallpaper
-        // component, so the picture would be set into a layer nobody can see — and on a head unit
-        // that restores its wallpaper component at boot, that is exactly the picture that
-        // disappears on the next start. Stand the live wallpaper down first, every time.
-        clearOurLiveWallpaper(ctx);
-        boolean ok = applyStill(ctx, uriStr, true);
-        CrashReporter.breadcrumb("leopard: apply still " + (ok ? "ok" : "FAILED") + " " + uriStr);
-        // The picker leaves (and often tears itself down) a second or two after this call
-        // returns — see onApplied()/goHome() in LeopardPickerActivity. On these head units that
-        // window overlaps the vendor theme service's own post-boot-like re-assert of whatever
-        // wallpaper it last knew about, which silently wins the race and the picture the user
-        // just chose never actually shows — until the app is reopened, which runs reassert()
-        // and sets it again after the vendor has settled. Do that same second write here,
-        // proactively, on this same background thread, instead of making the user do it by hand.
-        if(ok) {
-            try {
-                Thread.sleep(SETTLE_REAPPLY_MS);
-            } catch(InterruptedException ignored) {
-                Thread.currentThread().interrupt();
-            }
-            boolean reok = applyStill(ctx, uriStr, false);
-            CrashReporter.breadcrumb("leopard: settle re-apply " + (reok ? "ok" : "FAILED"));
-        }
-        return ok ? RESULT_APPLIED_BOTH : RESULT_FAILED;
+        CrashReporter.breadcrumb("leopard: apply " + type + " " + stored);
+        return isOurServiceActive(ctx) ? RESULT_APPLIED_LIVE : RESULT_NEEDS_SYSTEM_SCREEN;
     }
 
-    /**
-     * Put the stored still back after a restart.
+    /*
+     * There used to be a reassert() here, called from BootReceiver and from the Application's
+     * onCreate, which re-set the stored still with wm.setBitmap() every time the app started. It
+     * is gone, and deleting it is part of this fix rather than tidying up around it.
      *
-     * Setting a wallpaper is supposed to be permanent, and on ordinary Android it is. Car head
-     * units are not ordinary Android: the ones this mode ships on run a vendor theme service that
-     * re-asserts its own wallpaper (or re-binds the last live wallpaper component) as it boots,
-     * and whatever we set silently loses. The visible result is a black screen every morning and
-     * an owner who has to open the app and press "set" again — which is the bug this exists for.
+     * It could never do its job: on these head units the app is not started at boot at all, so
+     * the one moment it existed for never arrived. What it could do was damage. An Application's
+     * onCreate runs in EVERY process of the app — including the one the system creates to host
+     * MediaWallpaperService. So the sequence on the car was: Android restores our live wallpaper
+     * at boot, starts our process to host it, our own onCreate fires, reassert asks
+     * getWallpaperInfo() whether we are the active wallpaper and is told "not yet" because the
+     * binding is still in flight, and setBitmap then REPLACES the live wallpaper it was supposed
+     * to be protecting. Measured on the car: live wallpaper bound at 15:18:36, gone by 15:18:43.
      *
-     * So the app puts it back itself: cheap, idempotent, and it costs nothing on a car where the
-     * wallpaper survived (Android is handed the same picture it already has).
-     *
-     * Leopard only. Lynk &amp; Co hands the file to the Flyme theme app, which opens ITS OWN
-     * preview screen and waits for a human to press Apply — firing that at boot would throw a
-     * system screen in the driver's face on every start, so that mode is left alone.
+     * A guard would only have narrowed the race. The mechanism does not need help — Android
+     * restores the wallpaper component by itself — so the honest fix is to stop touching it.
      */
-    static void reassert(Context context) {
-        try {
-            final Context ctx = context.getApplicationContext();
-            final SharedPreferences prefs = ctx.getSharedPreferences(
-                    BaseSettingsActivity.SHARED_PREF_DOMAIN, Context.MODE_PRIVATE);
-            if(OperatingMode.get(prefs) != OperatingMode.LEOPARD) return;
-
-            // A video IS the wallpaper component; the system restores that by itself and
-            // re-running it here would do nothing but wake a decoder.
-            String type = prefs.getString(PREF_TYPE, WallpaperItem.TYPE_IMAGE);
-            if(WallpaperItem.TYPE_VIDEO.equals(type) || WallpaperItem.TYPE_GIF.equals(type)) return;
-
-            String path = prefs.getString(PREF_STILL_PATH, null);
-            final boolean haveKeptCopy = path != null && !path.isEmpty();
-            if(!haveKeptCopy) {
-                // A car updating into this version has never kept a copy — it was set before the
-                // copy existed. Its stored selection is the next best thing, and on the common
-                // case (a picture in the wallpaper folder or the cache) it is still readable.
-                path = prefs.getString(MediaWallpaperService.PREF_URI, null);
-                if(path == null || path.startsWith("content://") || path.startsWith("http")) return;
-                if(path.startsWith("file://")) path = path.substring("file://".length());
-            }
-            File f = new File(path);
-            if(!f.exists() || f.length() == 0) {
-                Log.w(TAG, "nothing to re-assert: " + path + " is gone");
-                return;
-            }
-
-            long now = System.currentTimeMillis();
-            long last = prefs.getLong(PREF_LAST_REASSERT, 0L);
-            if(last != 0L && now >= last && now - last < REASSERT_THROTTLE_MS) return;
-            prefs.edit().putLong(PREF_LAST_REASSERT, now).apply();
-
-            // Decoding a screen-sized picture and handing it to the wallpaper service is far too
-            // much for a broadcast receiver's main thread, which is where the boot signal lands.
-            final String finalPath = f.getAbsolutePath();
-            new Thread(new Runnable() {
-                @Override
-                public void run() {
-                    // Same reasoning as the apply path: a live wallpaper the ROM brought back at
-                    // boot would sit on top of the picture we are about to set.
-                    clearOurLiveWallpaper(ctx);
-                    // On the fallback route there is no kept copy yet — make one now, so the
-                    // next restart no longer depends on a cache file still being there.
-                    boolean ok = applyStill(ctx, finalPath, !haveKeptCopy);
-                    Log.i(TAG, "wallpaper re-asserted after start: " + (ok ? "ok" : "FAILED"));
-                    CrashReporter.breadcrumb(
-                            "leopard: re-assert after start " + (ok ? "ok" : "FAILED"));
-                }
-            }).start();
-        } catch(Throwable t) {
-            // Never let this take down a boot broadcast or an app launch.
-            Log.w(TAG, "could not re-assert the wallpaper", t);
-        }
-    }
 
     /**
-     * Keep our own copy of the picture that is now the wallpaper.
+     * Copy a picked still into internal storage and return the path our live wallpaper should
+     * read from then on, or null when it could not be copied (the caller keeps the original).
      *
-     * {@link #reassert} needs a file it can count on months later, and every source it could
-     * point at is unreliable: a cloud image lives in the cache (which a full head unit deletes
-     * first), a phone photo's framed version is baked into the cache too, and a content:// from
-     * the system picker is a permission grant that any storage change can invalidate. One
-     * screen-sized JPEG in internal storage answers all three, and it is the picture as it was
-     * actually applied rather than the source it was made from.
+     * A byte copy, not a decode-and-re-encode: the engine downsamples to the screen when it
+     * loads, so there is nothing to gain from throwing quality away here, and a cheap head unit
+     * does not have to hold a 10MP bitmap in memory to file one picture away.
+     *
+     * Re-applying the picture that is already the wallpaper lands here with source and
+     * destination being the same file — which, copied naively, truncates it to nothing and leaves
+     * the car with a black screen. Hence the identity check.
      */
-    private static void keepCopy(Context ctx, Bitmap bmp) {
+    private static String keepCopyOf(Context ctx, String uriStr) {
+        InputStream in = null;
+        FileOutputStream out = null;
         try {
             File dir = new File(ctx.getFilesDir(), KEEP_DIR);
-            if(!dir.exists() && !dir.mkdirs()) return;
-            File tmp = new File(dir, "current.tmp");
+            if(!dir.exists() && !dir.mkdirs()) return null;
             File dest = new File(dir, "current.jpg");
-            FileOutputStream out = new FileOutputStream(tmp);
-            bmp.compress(Bitmap.CompressFormat.JPEG, 95, out);
+            String plain = uriStr.startsWith("file://") ? uriStr.substring("file://".length()) : uriStr;
+            if(dest.getAbsolutePath().equals(plain)) return dest.getAbsolutePath();
+
+            File tmp = new File(dir, "current.tmp");
+            in = openAny(ctx, Uri.parse(uriStr));
+            if(in == null) return null;
+            out = new FileOutputStream(tmp);
+            byte[] buf = new byte[64 * 1024];
+            int n;
+            while((n = in.read(buf)) > 0) out.write(buf, 0, n);
             out.flush();
             out.close();
+            out = null;
+            if(tmp.length() == 0) { //noinspection ResultOfMethodCallIgnored
+                tmp.delete();
+                return null;
+            }
             if(dest.exists()) //noinspection ResultOfMethodCallIgnored
                 dest.delete();
-            if(!tmp.renameTo(dest)) return;
-            ctx.getSharedPreferences(BaseSettingsActivity.SHARED_PREF_DOMAIN, Context.MODE_PRIVATE)
-                    .edit()
-                    .putString(PREF_STILL_PATH, dest.getAbsolutePath())
-                    .apply();
+            if(!tmp.renameTo(dest)) return null;
+            return dest.getAbsolutePath();
         } catch(Throwable t) {
-            // The wallpaper is already set; only the restart repair is lost.
-            Log.w(TAG, "could not keep a copy of the applied wallpaper", t);
-        }
-    }
-
-    private static boolean applyStill(Context ctx, String uriStr, boolean remember) {
-        InputStream in = null;
-        try {
-            Uri uri = Uri.parse(uriStr);
-            in = openAny(ctx, uri);
-            if(in == null) {
-                Log.e(TAG, "cannot open " + uriStr);
-                return false;
-            }
-            Bitmap bmp = BitmapFactory.decodeStream(in);
-            if(bmp == null) {
-                Log.e(TAG, "not a decodable image: " + uriStr);
-                return false;
-            }
-
-            WallpaperManager wm = WallpaperManager.getInstance(ctx);
-            if(Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-                try {
-                    // Home and lock together, in one call, with no system screen.
-                    wm.setBitmap(bmp, null, true,
-                            WallpaperManager.FLAG_SYSTEM | WallpaperManager.FLAG_LOCK);
-                } catch(Throwable t) {
-                    // Car head units regularly ship a stripped wallpaper service with no lock
-                    // screen at all, and asking for FLAG_LOCK there fails the whole call. The
-                    // home screen is the one that matters on a dashboard — set it alone rather
-                    // than report failure for a lock screen the car does not have.
-                    Log.w(TAG, "home+lock rejected, falling back to home only", t);
-                    wm.setBitmap(bmp, null, true, WallpaperManager.FLAG_SYSTEM);
-                }
-            } else {
-                // Pre-N has no per-target flags: this sets the one wallpaper there is.
-                wm.setBitmap(bmp);
-            }
-            if(remember) keepCopy(ctx, bmp);
-            return true;
-        } catch(Throwable t) {
-            // This used to be silent, which is why a missing SET_WALLPAPER permission looked
-            // like "video works, images do not" with nothing in the log to say why.
-            Log.e(TAG, "setting the still wallpaper failed", t);
-            return false;
+            Log.w(TAG, "could not keep a copy of the picked wallpaper", t);
+            return null;
         } finally {
             if(in != null) try { in.close(); } catch(Exception ignored) {}
+            if(out != null) try { out.close(); } catch(Exception ignored) {}
         }
     }
 

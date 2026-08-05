@@ -78,11 +78,10 @@ public class BootReceiver extends BroadcastReceiver {
         Log.i(TAG, "received: " + action);
         if(!isStartTrigger(action)) return;
 
-        // Before anything else, and regardless of the auto-start option: in Leopard the wallpaper
-        // IS the product, and these head units lose it across a restart (see
-        // LeopardApplier.reassert). Auto-start is about opening a screen; this is about the car
-        // coming back on with the picture it was left with instead of a black dashboard.
-        LeopardApplier.reassert(context);
+        // This used to re-assert the Leopard wallpaper here. It is gone: the head units that mode
+        // ships on refuse to start us from a boot broadcast at all ("skip reciever ... ignored"),
+        // so it never ran when it mattered, and the wallpaper now survives on its own because our
+        // live wallpaper is the component Android restores. See the note in LeopardApplier.
 
         // Check in with the backend on every car start, so "which cars are on which build" has
         // an answer for a Leopard car too. In that mode the app is a tool somebody opens for

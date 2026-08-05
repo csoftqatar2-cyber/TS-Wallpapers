@@ -1545,9 +1545,10 @@ public class LeopardPickerActivity extends AppCompatActivity {
             return;
         }
 
-        // Images in Lynkco go to the head unit's theme app (no system screen). Video does NOT —
-        // the theme app's file entry point is image-only — so a Lynkco video falls back to our own
-        // MediaWallpaperService, which still needs the one-time system live-wallpaper screen.
+        // The one-time live-wallpaper hand-off, for the first wallpaper of any kind on this car:
+        // pictures ride our own MediaWallpaperService now, exactly as videos always have, because
+        // that is the only wallpaper these head units bring back after a restart. Lynkco images
+        // are the exception — they go to the head unit's theme app and never touch this.
         if(LeopardApplier.needsSystemScreen(this, mSelected.type)) {
             // The worst moment in the feature: we are about to throw the user into an unstyled
             // system screen with an English button. Warn first, and say it is one-time — an
@@ -1673,12 +1674,9 @@ public class LeopardPickerActivity extends AppCompatActivity {
                     scheduleTileBind();
                 }
                 return;
-            case LeopardApplier.RESULT_APPLIED_BOTH:
-                appliedMsg = R.string.leopard_applied_image;
-                sayLoud(appliedMsg);
-                break;
             case LeopardApplier.RESULT_APPLIED_LIVE:
                 // A live wallpaper cannot cover the lock screen on most versions; say home only.
+                // Every kind of file arrives here now, a still included — see LeopardApplier.
                 appliedMsg = R.string.leopard_applied_video;
                 sayLoud(appliedMsg);
                 break;

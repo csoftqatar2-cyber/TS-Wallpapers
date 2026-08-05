@@ -23,10 +23,10 @@ public class FsClockApp extends Application {
         kickGwmSync();
         // Anything the car could not send while it was crashing goes now.
         CrashReporter.uploadPendingAsync(getApplicationContext());
-        // Second chance for a Leopard car whose wallpaper the ROM dropped: the boot broadcast is
-        // the main repair, but a head unit that never sends one still gets its picture back the
-        // moment anything opens the app. Throttled, so this costs nothing when it is not needed.
-        LeopardApplier.reassert(getApplicationContext());
+        // There was a LeopardApplier.reassert() here, meant to put a dropped wallpaper back. It
+        // was the opposite of harmless: this method runs in every process of the app, the wallpaper
+        // service's included, so it fired the instant Android restored our live wallpaper at boot
+        // and replaced it with a plain bitmap. See the note in LeopardApplier.
     }
 
     /**
