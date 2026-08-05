@@ -143,6 +143,11 @@ public class UploadServer extends NanoHTTPD {
                     sawFile = true;
                     String one = saveUpload(tmpPath, originalName(session, field));
                     if(one != null) saved.add(one);
+                    // The page only offers one file now (see uploadPage), but a phone may still
+                    // have the old multi-select page open from before an update. Keep the first
+                    // and stop: writing the other eleven to disk when nothing downstream will ever
+                    // show them is how the wallpaper folder filled up with pictures nobody chose.
+                    if(!mGwmFolder && !saved.isEmpty()) break;
                 }
                 if(!saved.isEmpty()) {
                     // GWM uploads belong to a different app's folder — they are not our wallpaper,
@@ -331,6 +336,16 @@ public class UploadServer extends NanoHTTPD {
      * phone, and getString() would answer in the head unit's locale, not theirs.
      */
     private String uploadPage() {
+        // One picture at a time, everywhere except the GWM folder.
+        //
+        // A wallpaper is one picture: the car shows one, the screen after this one frames one, and
+        // the person holding the phone is standing at a car choosing THE picture. Letting them send
+        // twelve only moved the choosing onto the head unit — a tick-list on a dashboard, in front
+        // of a customer, that ended with eleven pictures nobody framed. GWM is the exception and
+        // keeps the batch: there the files go into another app's slideshow folder, never through
+        // our editor, so "several" is the whole point of it.
+        final boolean many = mGwmFolder;
+        final String btn = many ? "رفع الصور" : "رفع الصورة";
         return "<!doctype html><html dir='rtl' lang='ar'><head>"
                 + "<meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'>"
                 + "<meta name='theme-color' content='#14100b'>"
@@ -347,12 +362,18 @@ public class UploadServer extends NanoHTTPD {
                 + "</div>"
 
                 + "<div class='card'>"
-                + "<p style='margin:0 0 14px'>اختر صورة أو أكثر من هاتفك لتظهر على الشاشة كخلفية"
-                + " — يمكنك اختيار أكثر من صورة في المرة الواحدة</p>"
+                + (many
+                    ? "<p style='margin:0 0 14px'>اختر صورة أو أكثر من هاتفك لتظهر على الشاشة كخلفية"
+                      + " — يمكنك اختيار أكثر من صورة في المرة الواحدة</p>"
+                    : "<p style='margin:0 0 14px'>اختر صورة واحدة من هاتفك لتظهر على شاشة السيارة"
+                      + " — وستفتح شاشة الضبط بعدها مباشرة</p>")
                 + "<form id='f' method='post' action='/' enctype='multipart/form-data'>"
-                + "<input id='file' type='file' name='image' accept='image/*,video/*' multiple required>"
-                + "<label id='pick' class='pick' for='file'>اضغط هنا لاختيار الصور أو الفيديو</label>"
-                + "<button id='btn' type='submit'>رفع الصور</button>"
+                + "<input id='file' type='file' name='image' accept='image/*,video/*'"
+                + (many ? " multiple" : "") + " required>"
+                + "<label id='pick' class='pick' for='file'>"
+                + (many ? "اضغط هنا لاختيار الصور أو الفيديو" : "اضغط هنا لاختيار صورة أو فيديو")
+                + "</label>"
+                + "<button id='btn' type='submit'>" + btn + "</button>"
                 + "</form>"
                 + "<div id='bar'><div id='fill'></div></div>"
                 + "<p id='msg'></p>"
@@ -365,8 +386,10 @@ public class UploadServer extends NanoHTTPD {
                 + "<div class='steps'>"
                 + "<b>كيف تضع صورتك على الشاشة</b>"
                 + "<ol>"
-                + "<li>اضغط <b>اختيار الصور</b> واختر من ألبوم هاتفك — ويمكنك اختيار أكثر من صورة.</li>"
-                + "<li>اضغط <b>رفع الصور</b> وانتظر حتى يكتمل شريط التقدّم.</li>"
+                + (many
+                    ? "<li>اضغط <b>اختيار الصور</b> واختر من ألبوم هاتفك — ويمكنك اختيار أكثر من صورة.</li>"
+                    : "<li>اضغط <b>اختيار صورة</b> واختر صورة واحدة من ألبوم هاتفك.</li>")
+                + "<li>اضغط <b>" + btn + "</b> وانتظر حتى يكتمل شريط التقدّم.</li>"
                 + "<li>ستظهر الصورة على شاشة السيارة فوراً، ويمكنك ضبط موضعها وحجمها من الشاشة نفسها.</li>"
                 + "</ol>"
                 + "<p class='note'>أبقِ هاتفك على شبكة الواي‑فاي نفسها الخاصة بالسيارة، ولا تغلق هذه"
@@ -382,7 +405,7 @@ public class UploadServer extends NanoHTTPD {
                 + "fi.onchange=function(){if(fi.files.length){pick.className='pick has';"
                 + "pick.textContent=fi.files.length===1?fi.files[0].name:('تم اختيار '+fi.files.length+' ملف');"
                 + "m.className='';m.textContent='';}};"
-                + "function reset(t){b.disabled=false;b.textContent='رفع الصور';bar.style.display='none';"
+                + "function reset(t){b.disabled=false;b.textContent='" + btn + "';bar.style.display='none';"
                 + "fill.style.width='0';m.className='err';m.textContent=t;}"
                 + "f.onsubmit=function(e){e.preventDefault();"
                 + "if(!fi.files.length){m.className='err';m.textContent='اختر ملفاً أولاً';return;}"

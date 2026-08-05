@@ -2649,12 +2649,17 @@ public class BaseSettingsActivity extends AppCompatActivity {
                             getString(R.string.pair_uploaded_n, savedPaths.size()),
                             Toast.LENGTH_LONG).show();
 
-                    // The images have landed, so the QR has done its job: close it. Dismissing
-                    // also stops the server (see setOnDismissListener) — a second batch arriving
-                    // while the first is being reviewed would be two batches and one screen.
+                    // The image has landed, so the QR has done its job: close it. Dismissing
+                    // also stops the server (see setOnDismissListener) — a second upload arriving
+                    // while the first is being framed would be two pictures and one editor.
                     if(holder[0] != null && holder[0].isShowing()) holder[0].dismiss();
 
-                    reviewImportedBatch(savedPaths);
+                    // One picture per upload, straight into the editor — the same route Leopard
+                    // has always taken. The tick-list that used to stand between the upload and
+                    // the framing existed only to sort a batch, and a batch is no longer a thing
+                    // this page can send (see UploadServer.uploadPage): it asked the customer to
+                    // curate pictures they had just chosen, then dropped them all in unframed.
+                    openFitEditor(savedPaths.get(savedPaths.size() - 1), true);
                 }
             });
             url = mUploadServer.getUrl();

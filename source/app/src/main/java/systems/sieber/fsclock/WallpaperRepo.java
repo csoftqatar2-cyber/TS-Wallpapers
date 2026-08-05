@@ -751,7 +751,28 @@ public class WallpaperRepo {
 
     public void setFocal(String url, float fx, float fy) {
         if(url == null || url.isEmpty()) return;
-        mPref.edit().putString(FOCAL_PREFIX + wallpaperKey(url), clamp01(fx) + "," + clamp01(fy)).apply();
+        mPref.edit()
+                .putString(FOCAL_PREFIX + wallpaperKey(url), clamp01(fx) + "," + clamp01(fy))
+                .putLong(FIT_AT_PREFIX + wallpaperKey(url), System.currentTimeMillis())
+                .apply();
+    }
+
+    /**
+     * When this image's framing was last touched — the fit, the focal point, or a reset.
+     *
+     * Leopard and Lynk &amp; Co do not read the fit at draw time; they burn it into a file once and
+     * hand that file to the head unit. Without a timestamp, an edit made anywhere ELSE than the
+     * screen that baked it — Settings ▸ إدارة الصور, most obviously — changes numbers nobody will
+     * ever read again: the baked picture is still on disk under the same name, still looks
+     * finished, and goes on being the one applied. The car then shows the FIRST framing forever
+     * while the editor cheerfully saves every later one. Comparing this against the baked file's
+     * own mtime is what tells a stale bake from a current one.
+     *
+     * @return 0 when this image has never been edited.
+     */
+    public long fitChangedAt(String url) {
+        if(url == null || url.isEmpty()) return 0L;
+        return mPref.getLong(FIT_AT_PREFIX + wallpaperKey(url), 0L);
     }
 
     private static float clamp01(float v) {
@@ -763,6 +784,8 @@ public class WallpaperRepo {
     //     global and per-car images. The defaults live under their own keys and are what the
     //     editor opens with, so the technician sets them once.
     private static final String FIT_PREFIX = "wp-fit:";
+    /** When the fit/focal above last changed — see {@link #fitChangedAt}. */
+    private static final String FIT_AT_PREFIX = "wp-fit-at:";
     private static final String PREF_FIT_DEFAULT_MODE = "wallpaper-fit-default-mode";
     private static final String PREF_FIT_DEFAULT_BLUR = "wallpaper-fit-default-blur";
     private static final String PREF_FIT_DEFAULT_COLOR = "wallpaper-fit-default-color";
@@ -801,13 +824,19 @@ public class WallpaperRepo {
 
     public void setFit(String url, FitSettings s) {
         if(url == null || url.isEmpty()) return;
-        mPref.edit().putString(FIT_PREFIX + wallpaperKey(url), s.serialize()).apply();
+        mPref.edit()
+                .putString(FIT_PREFIX + wallpaperKey(url), s.serialize())
+                .putLong(FIT_AT_PREFIX + wallpaperKey(url), System.currentTimeMillis())
+                .apply();
     }
 
     /** Drop this wallpaper's override so it follows the defaults again. */
     public void clearFit(String url) {
         if(url == null || url.isEmpty()) return;
-        mPref.edit().remove(FIT_PREFIX + wallpaperKey(url)).apply();
+        mPref.edit()
+                .remove(FIT_PREFIX + wallpaperKey(url))
+                .putLong(FIT_AT_PREFIX + wallpaperKey(url), System.currentTimeMillis())
+                .apply();
     }
 
     /**
@@ -819,12 +848,14 @@ public class WallpaperRepo {
      */
     public void applyFitToAll(FitSettings s) {
         SharedPreferences.Editor e = mPref.edit();
+        long now = System.currentTimeMillis();
         for(WallpaperItem item : mItems) {
             if(item.url == null || item.url.isEmpty()) continue;
             String key = wallpaperKey(item.url);
             FitSettings copy = new FitSettings(s.mode, s.blur, s.barColor, s.zoom, s.fade);
             copy.rotation = getFit(item.url).rotation;
             e.putString(FIT_PREFIX + key, copy.serialize());
+            e.putLong(FIT_AT_PREFIX + key, now);   // every bake made from these is now stale
         }
         e.apply();
     }

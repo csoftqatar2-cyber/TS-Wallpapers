@@ -443,6 +443,10 @@ public class LeopardPickerActivity extends AppCompatActivity {
      * back the raw photo instead.
      */
     private void buildPhoneGrid() {
+        // Anything edited elsewhere since it was last baked is redrawn first; the pass below then
+        // lists the picture the technician actually chose rather than the one they replaced.
+        rebakeStaleUploads();
+
         mPhoneGrid.removeAllViews();
         mShown.clear();
         mStripOffset = 0;
@@ -502,10 +506,22 @@ public class LeopardPickerActivity extends AppCompatActivity {
         return out;
     }
 
-    /** The framed version of this picture, if it has been through the editor. */
+    /**
+     * The framed version of this picture, if it has been through the editor AND still matches the
+     * framing saved for it.
+     *
+     * The freshness test is the whole point. Leopard burns the fit into this file once and then
+     * hands the FILE to the head unit, so an edit made anywhere that does not bake — Settings ▸
+     * إدارة الصور, most of all — leaves a finished-looking picture on disk that no longer matches
+     * what the editor just saved. Without the comparison the car goes on showing the first framing
+     * for ever while every later "تم" writes numbers nobody reads: from the seat it looks exactly
+     * like an edit that refuses to save. Stale is treated as absent, and
+     * {@link #rebakeStaleUploads()} burns it again.
+     */
     private File bakedFileFor(String url) {
         File f = new File(new File(getCacheDir(), "leopard"), bakedName(url));
-        return (f.exists() && f.length() > 0) ? f : null;
+        if(!f.exists() || f.length() == 0) return null;
+        return f.lastModified() >= mRepo.fitChangedAt(url) ? f : null;
     }
 
     /** One file per source image, overwritten on every re-edit: a history here would fill a
@@ -576,28 +592,7 @@ public class LeopardPickerActivity extends AppCompatActivity {
         final int outW = mEditingW, outH = mEditingH;
         final String url = item.url;
         new Thread(() -> {
-            String baked = null;
-            try {
-                Bitmap src = decodeForBake(url, outW, outH);
-                if(src != null) {
-                    Bitmap out = FitRenderer.bake(src, mRepo.getFit(url), mRepo.getFocal(url)[0],
-                            mRepo.getFocal(url)[1], outW, outH, false);
-                    if(src != out) src.recycle();
-                    if(out != null) {
-                        File dir = new File(getCacheDir(), "leopard");
-                        if(dir.exists() || dir.mkdirs()) {
-                            File f = new File(dir, bakedName(url));
-                            FileOutputStream fos = new FileOutputStream(f);
-                            out.compress(Bitmap.CompressFormat.JPEG, 95, fos);
-                            fos.close();
-                            baked = f.getAbsolutePath();
-                        }
-                        out.recycle();
-                    }
-                }
-            } catch(Throwable ignored) {
-            }
-            final String result = baked;
+            final String result = bakeToFile(url, outW, outH);
             runOnUiThread(() -> {
                 if(gone()) return;
                 setBusy(false, 0);
@@ -620,6 +615,86 @@ public class LeopardPickerActivity extends AppCompatActivity {
                 }
                 refreshSelection();
                 showPreview(mSelected);
+            });
+        }).start();
+    }
+
+    /**
+     * Burn this image's saved framing into one screen-sized JPEG and return its path, or null when
+     * it could not be rendered. Blocking — call from a background thread.
+     *
+     * Always the same file name for the same source (see {@link #bakedName}), so a re-edit
+     * overwrites the picture it replaces instead of leaving a second one behind for the grid to
+     * choose between.
+     */
+    private String bakeToFile(String url, int outW, int outH) {
+        try {
+            Bitmap src = decodeForBake(url, outW, outH);
+            if(src == null) return null;
+            Bitmap out = FitRenderer.bake(src, mRepo.getFit(url), mRepo.getFocal(url)[0],
+                    mRepo.getFocal(url)[1], outW, outH, false);
+            if(src != out) src.recycle();
+            if(out == null) return null;
+            String baked = null;
+            File dir = new File(getCacheDir(), "leopard");
+            if(dir.exists() || dir.mkdirs()) {
+                File f = new File(dir, bakedName(url));
+                FileOutputStream fos = new FileOutputStream(f);
+                out.compress(Bitmap.CompressFormat.JPEG, 95, fos);
+                fos.close();
+                baked = f.getAbsolutePath();
+            }
+            out.recycle();
+            return baked;
+        } catch(Throwable t) {
+            return null;
+        }
+    }
+
+    /** One re-bake attempt per (image, framing), so a picture that cannot decode does not spin. */
+    private final java.util.Set<String> mRebakeTried = new java.util.HashSet<>();
+    private boolean mRebaking;
+
+    /**
+     * Re-burn every phone upload whose framing has changed since it was last baked.
+     *
+     * This is what makes an edit made in Settings ▸ إدارة الصور reach a Leopard car at all. That
+     * screen writes the fit and stops — it has no idea Leopard needs a file — so the picture the
+     * picker lists and applies stayed the one baked the first time. The technician edited, pressed
+     * تم, set it again, and the car showed the old crop: an edit that saved everywhere except
+     * where it counted. Redoing it here keeps the fix in one place, whatever screen did the edit.
+     *
+     * Only pictures that HAVE a bake are redone: one that was never framed has nothing to redo,
+     * and baking it now would invent a decision nobody made.
+     */
+    private void rebakeStaleUploads() {
+        if(mRebaking) return;
+        final List<String> stale = new ArrayList<>();
+        File dir = new File(getCacheDir(), "leopard");
+        for(File f : phoneUploads()) {
+            String url = f.getAbsolutePath();
+            File baked = new File(dir, bakedName(url));
+            if(!baked.exists() || baked.length() == 0) continue;
+            long changed = mRepo.fitChangedAt(url);
+            if(baked.lastModified() >= changed) continue;
+            // Keyed by the edit, not by the image: a later edit of the same picture must be
+            // allowed its own attempt.
+            if(!mRebakeTried.add(url + "@" + changed)) continue;
+            stale.add(url);
+        }
+        if(stale.isEmpty()) return;
+
+        android.util.DisplayMetrics dm = new android.util.DisplayMetrics();
+        getWindowManager().getDefaultDisplay().getRealMetrics(dm);
+        final int outW = dm.widthPixels, outH = dm.heightPixels;
+        mRebaking = true;
+        new Thread(() -> {
+            for(String url : stale) bakeToFile(url, outW, outH);
+            runOnUiThread(() -> {
+                mRebaking = false;
+                if(gone()) return;
+                // Nothing is stale now, so this pass cannot start another one.
+                if(SOURCE_PHONE.equals(mSource)) buildPhoneGrid();
             });
         }).start();
     }
