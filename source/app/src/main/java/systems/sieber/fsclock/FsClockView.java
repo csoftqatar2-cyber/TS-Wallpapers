@@ -510,6 +510,20 @@ public class FsClockView extends FrameLayout {
                     }
                 });
             }
+            @Override
+            public void mediaIncomplete(int failed, int total) {
+                // Some files did not arrive. This overlay is the non-blocking one — it sits over
+                // a running slideshow — so the pass ending badly is a reason to get out of the
+                // way, not to hold the screen. The missing files load on demand and the next
+                // periodic sync tries them again.
+                post(new Runnable() {
+                    @Override
+                    public void run() {
+                        hideDownloadProgress();
+                        loadSettings();
+                    }
+                });
+            }
         });
     }
 
@@ -1222,10 +1236,21 @@ public class FsClockView extends FrameLayout {
             return;
         }
 
+        final int chosen = mode;
         postDelayed(new Runnable() {
             @Override
             public void run() {
                 loadSettings();
+                // Others and FSE hand over to the download gate, which holds the car until the
+                // whole library is local — the same screen ModeConfirmActivity routes into, so a
+                // car activated here and one confirmed there start identically. GWM has no
+                // slideshow to starve, so it just downloads in the background as before.
+                if(chosen == OperatingMode.NORMAL || chosen == OperatingMode.FSE) {
+                    getContext().startActivity(new android.content.Intent(
+                            getContext(), WallpaperDownloadActivity.class));
+                    if(mActivity != null) mActivity.finish();
+                    return;
+                }
                 // Automatically download the public wallpapers right after activation, retrying a
                 // few times so a brief network hiccup doesn't leave the screen empty.
                 autoDownloadWallpapers(3);

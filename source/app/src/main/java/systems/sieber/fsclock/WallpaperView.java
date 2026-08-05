@@ -42,6 +42,14 @@ public class WallpaperView extends FrameLayout {
 
     private static final int DURATION = 650;
 
+    /**
+     * Cap on how long a video crossfade waits for {@link MediaPlayer#prepareAsync()} before
+     * starting anyway. A new decoder session is real setup cost that Glide's image path never
+     * pays, so without this a slow prepare would leave the incoming slot invisible indefinitely
+     * on a bad clip instead of just showing it a beat late.
+     */
+    private static final int VIDEO_READY_TIMEOUT_MS = 900;
+
     private class Slot {
         FrameLayout root;
         FadingImageView image;
@@ -49,6 +57,8 @@ public class WallpaperView extends FrameLayout {
         TextureView texture;
         MediaPlayer player;
         WallpaperItem pendingVideo; // set while waiting for the surface to become available
+        Runnable pendingReady;      // fired once the surface becomes available and playback starts
+        int gen;                   // bumped on every populate(); guards stale async callbacks
         WallpaperItem item;         // content currently shown in this slot
         int contentW, contentH;     // natural pixel size of the image/video (0 until known)
         float focalX = 0.5f;        // 0..1 pan position (0.5 = center-crop, the default)
@@ -89,8 +99,10 @@ public class WallpaperView extends FrameLayout {
             public void onSurfaceTextureAvailable(SurfaceTexture surface, int width, int height) {
                 if(s.pendingVideo != null) {
                     WallpaperItem item = s.pendingVideo;
+                    Runnable ready = s.pendingReady;
                     s.pendingVideo = null;
-                    startPlayer(s, item, new Surface(surface));
+                    s.pendingReady = null;
+                    startPlayer(s, item, new Surface(surface), ready);
                 }
             }
             @Override
@@ -145,7 +157,7 @@ public class WallpaperView extends FrameLayout {
         if(item == null) { clearAll(); return; }
 
         if(direction == 0 || getWidth() == 0) {
-            populate(mFront, item);
+            populate(mFront, item, null);
             mFront.root.setTranslationX(0);
             mFront.root.setRotationY(0);
             mFront.root.setAlpha(1f);
@@ -158,12 +170,37 @@ public class WallpaperView extends FrameLayout {
 
         final Slot incoming = (mFront == mSlotA) ? mSlotB : mSlotA;
         final Slot outgoing = mFront;
-        populate(incoming, item);
+        mFront = incoming;
 
-        // Smooth crossfade: the incoming wallpaper fades in on top of the
-        // outgoing one, so both overlap and blend during the transition.
-        // No black background on the incoming slot while fading, otherwise it
-        // would darken the outgoing wallpaper showing through underneath.
+        // Images render into the ImageView fast enough (Glide, usually cached) that starting
+        // the fade immediately still lines up. Video pays for a brand new decoder session on
+        // every swipe, so starting the same fade immediately would finish it on a black/blank
+        // texture and the frame would visibly pop in late — the fade is deferred to onPrepared
+        // instead, capped by VIDEO_READY_TIMEOUT_MS so a slow or broken clip cannot strand the
+        // transition. beginCrossfade guards against firing twice (onPrepared racing the timeout).
+        final boolean[] started = {false};
+        Runnable begin = new Runnable() {
+            @Override
+            public void run() {
+                if(started[0]) return;
+                started[0] = true;
+                beginCrossfade(incoming, outgoing);
+            }
+        };
+        populate(incoming, item, item.isVideo() ? begin : null);
+        if(item.isVideo()) {
+            incoming.root.postDelayed(begin, VIDEO_READY_TIMEOUT_MS);
+        } else {
+            begin.run();
+        }
+    }
+
+    /**
+     * Smooth crossfade: the incoming wallpaper fades in on top of the outgoing one, so both
+     * overlap and blend during the transition. No black background on the incoming slot while
+     * fading, otherwise it would darken the outgoing wallpaper showing through underneath.
+     */
+    private void beginCrossfade(final Slot incoming, final Slot outgoing) {
         incoming.root.setBackgroundColor(Color.TRANSPARENT);
         incoming.root.setTranslationX(0);
         incoming.root.setRotationY(0);
@@ -186,12 +223,11 @@ public class WallpaperView extends FrameLayout {
                     }
                 })
                 .start();
-
-        mFront = incoming;
     }
 
-    private void populate(final Slot slot, WallpaperItem item) {
+    private void populate(final Slot slot, WallpaperItem item, final Runnable onReady) {
         releaseVideo(slot);
+        final int myGen = ++slot.gen;
         slot.item = item;
         slot.contentW = slot.contentH = 0;
         slot.sharp = null;
@@ -215,10 +251,19 @@ public class WallpaperView extends FrameLayout {
         if(item.isVideo()) {
             slot.image.setImageDrawable(null);
             slot.texture.setVisibility(VISIBLE);
+            // Stale guard: if this slot gets repopulated with something else before this
+            // video's callback lands, gen has moved on and the old callback is a no-op.
+            Runnable ready = onReady == null ? null : new Runnable() {
+                @Override
+                public void run() {
+                    if(slot.gen == myGen) onReady.run();
+                }
+            };
             if(slot.texture.isAvailable() && slot.texture.getSurfaceTexture() != null) {
-                startPlayer(slot, item, new Surface(slot.texture.getSurfaceTexture()));
+                startPlayer(slot, item, new Surface(slot.texture.getSurfaceTexture()), ready);
             } else {
                 slot.pendingVideo = item; // started in onSurfaceTextureAvailable
+                slot.pendingReady = ready;
             }
         } else {
             slot.pendingVideo = null;
@@ -440,7 +485,7 @@ public class WallpaperView extends FrameLayout {
         reapply(mSlotB);
     }
 
-    private void startPlayer(final Slot slot, WallpaperItem item, Surface surface) {
+    private void startPlayer(final Slot slot, WallpaperItem item, Surface surface, final Runnable onReady) {
         try {
             final MediaPlayer mp = new MediaPlayer();
             slot.player = mp;
@@ -455,17 +500,22 @@ public class WallpaperView extends FrameLayout {
                     try { p.setVolume(0f, 0f); } catch(Exception ignored) {}
                     applyVideoScale(slot, p.getVideoWidth(), p.getVideoHeight());
                     p.start();
+                    if(onReady != null) onReady.run();
                 }
             });
             mp.setOnErrorListener(new MediaPlayer.OnErrorListener() {
                 @Override
                 public boolean onError(MediaPlayer p, int what, int extra) {
-                    return true; // swallow, keep black background
+                    // swallow, keep black background — but still release the crossfade so a
+                    // broken clip does not leave the incoming slot invisible forever.
+                    if(onReady != null) onReady.run();
+                    return true;
                 }
             });
             mp.prepareAsync();
         } catch(Exception ignored) {
             releaseVideo(slot);
+            if(onReady != null) onReady.run();
         }
     }
 

@@ -125,9 +125,16 @@ class LeopardApplier {
         }
         // Persist before anything else: the service reads this, and on the needs-system-screen
         // path the system will start us before we get another chance.
-        prefs(ctx).edit()
+        //
+        // The revision is what actually reaches a running engine. Every still is copied to the
+        // same durable path, so the uri written here is usually the string that is already
+        // stored — and SharedPreferences does not call a listener for an unchanged value, so the
+        // engine slept through every apply after the first one. See MediaWallpaperService.PREF_REV.
+        SharedPreferences p = prefs(ctx);
+        p.edit()
                 .putString(MediaWallpaperService.PREF_URI, stored)
                 .putString(LeopardApplier.PREF_TYPE, type)
+                .putLong(MediaWallpaperService.PREF_REV, p.getLong(MediaWallpaperService.PREF_REV, 0) + 1)
                 .apply();
         CrashReporter.breadcrumb("leopard: apply " + type + " " + stored);
         return isOurServiceActive(ctx) ? RESULT_APPLIED_LIVE : RESULT_NEEDS_SYSTEM_SCREEN;

@@ -45,6 +45,23 @@ public class MediaWallpaperService extends WallpaperService {
     /** The chosen file. Written by LeopardApplier; the engine reloads when it changes. */
     static final String PREF_URI = "leopard-uri";
 
+    /**
+     * Bumped by {@link LeopardApplier#apply} on EVERY apply, and the reason a second wallpaper
+     * ever reaches the screen.
+     *
+     * PREF_URI alone cannot carry that news. A still is copied to one fixed path
+     * (leopard-current/current.jpg) so the engine has something durable to re-read at boot — which
+     * means the string written here is byte-identical every time, and SharedPreferences does not
+     * notify a listener for a value that did not change (SharedPreferencesImpl.commitToMemory
+     * skips keys whose existing value equals the new one). So the engine was never told, kept the
+     * bitmap it had decoded, and the car went on showing the FIRST picture ever applied: an edit
+     * made in the fit editor previewed correctly and then landed as the untouched original.
+     *
+     * The same applies to re-applying a video or a cloud picture already on screen. A counter that
+     * always changes is what makes "apply" mean apply.
+     */
+    static final String PREF_REV = "leopard-uri-rev";
+
     private enum Mode { NONE, IMAGE, GIF, VIDEO }
 
     @Override
@@ -126,11 +143,20 @@ public class MediaWallpaperService extends WallpaperService {
             release();
         }
 
-        @Override
-        public void onSharedPreferenceChanged(SharedPreferences sp, String key) {
-            if(PREF_URI.equals(key)) {
+        /** Re-read whatever is stored now. Posted rather than run inline, so one apply that
+         *  writes both the uri and the revision reloads once instead of twice. */
+        private final Runnable reload = new Runnable() {
+            @Override public void run() {
                 android.graphics.Rect frame = getSurfaceHolder().getSurfaceFrame();
                 loadMedia(frame.width(), frame.height());
+            }
+        };
+
+        @Override
+        public void onSharedPreferenceChanged(SharedPreferences sp, String key) {
+            if(PREF_URI.equals(key) || PREF_REV.equals(key)) {
+                handler.removeCallbacks(reload);
+                handler.post(reload);
             }
         }
 

@@ -156,11 +156,21 @@ public class ModeConfirmActivity extends AppCompatActivity {
         openApp();
     }
 
-    /** Enter the confirmed mode: the hand-off products open their picker, the rest the clock. */
+    /**
+     * Enter the confirmed mode: the hand-off products open their picker, GWM goes straight to
+     * the clock (nothing about it needs the wallpapers local before the screen shows), and
+     * Others/FSE stop first at {@link WallpaperDownloadActivity} so the slideshow never starts
+     * before its library is actually on the car.
+     */
     private void openApp() {
-        Intent next = OperatingMode.isHandoff(mPrefs)
-                ? new Intent(this, LeopardPickerActivity.class)
-                : new Intent(this, FullscreenActivity.class);
+        Intent next;
+        if(OperatingMode.isHandoff(mPrefs)) {
+            next = new Intent(this, LeopardPickerActivity.class);
+        } else {
+            int mode = OperatingMode.get(mPrefs);
+            boolean gated = mode == OperatingMode.NORMAL || mode == OperatingMode.FSE;
+            next = new Intent(this, gated ? WallpaperDownloadActivity.class : FullscreenActivity.class);
+        }
         next.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP);
         startActivity(next);
         finish();

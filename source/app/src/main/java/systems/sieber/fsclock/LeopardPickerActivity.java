@@ -43,9 +43,11 @@ import com.bumptech.glide.load.engine.GlideException;
 import com.bumptech.glide.request.RequestListener;
 import com.bumptech.glide.request.RequestOptions;
 import com.bumptech.glide.request.target.Target;
+import com.bumptech.glide.signature.ObjectKey;
 
 import java.io.File;
 import java.io.FileOutputStream;
+import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -597,16 +599,25 @@ public class LeopardPickerActivity extends AppCompatActivity {
             }
             final String result = baked;
             runOnUiThread(() -> {
+                if(gone()) return;
                 setBusy(false, 0);
                 // A failed bake is not a failed upload: fall back to the picture as it arrived
                 // rather than leaving the user with nothing to set.
                 WallpaperItem shown = result == null ? item
                         : new WallpaperItem(WallpaperItem.TYPE_IMAGE, result);
-                // Back to the phone pane the picture came from — rebuilt, so it now holds this
-                // one too — and then straight into the preview, which is what the person
-                // standing at the head unit is waiting for.
-                buildPhoneGrid();
-                mSelected = pickFromGrid(shown);
+                // Back to the pane the picture came from — the phone grid for a QR upload, the
+                // strip for a file browsed on the head unit — and then straight into the preview,
+                // which is what the person standing at the head unit is waiting for.
+                if(SOURCE_PHONE.equals(mSource)) {
+                    buildPhoneGrid();   // rebuilt, so it now holds this one too
+                    mSelected = pickFromGrid(shown);
+                } else {
+                    mShown.clear();
+                    mShown.add(shown);
+                    mSelected = shown;
+                    hideState();
+                    buildFilmstrip();
+                }
                 refreshSelection();
                 showPreview(mSelected);
             });
@@ -693,6 +704,11 @@ public class LeopardPickerActivity extends AppCompatActivity {
             }
             @Override
             public void mediaReady() { runOnUiThread(LeopardPickerActivity.this::onMediaCached); }
+            @Override
+            public void mediaIncomplete(int failed, int total) {
+                // Whatever did arrive still deserves a real cell instead of a placeholder.
+                runOnUiThread(LeopardPickerActivity.this::onMediaCached);
+            }
         });
     }
 
@@ -716,6 +732,11 @@ public class LeopardPickerActivity extends AppCompatActivity {
             }
             @Override
             public void mediaReady() { runOnUiThread(LeopardPickerActivity.this::onMediaCached); }
+            @Override
+            public void mediaIncomplete(int failed, int total) {
+                // Whatever did arrive still deserves a real cell instead of a placeholder.
+                runOnUiThread(LeopardPickerActivity.this::onMediaCached);
+            }
         });
     }
 
@@ -837,6 +858,73 @@ public class LeopardPickerActivity extends AppCompatActivity {
         mSelected = item;
         hideState();
         buildFilmstrip();
+
+        // A picture browsed on the head unit is in exactly the same position as one that arrived
+        // from a phone: it has just entered the app, nobody has decided how it should sit on a
+        // screen this wide, and dropping it straight into the preview is where that question gets
+        // answered badly and silently. So it takes the same route — editor, then preview with the
+        // Set button. A video skips it, as it does on the phone side (there is no still to frame).
+        if(!item.isVideo()) stageThenEdit(uri);
+    }
+
+    /**
+     * Copy a browsed content:// image to a real file, then hand it to the fit editor.
+     *
+     * The editor reads files and nothing else — it decodes with BitmapFactory.decodeFile — and
+     * the bake that follows re-reads the same path on a background thread. A document uri is
+     * neither: its grant can be revoked and its stream is not seekable twice. One copy, named
+     * after the uri so re-picking the same picture reuses it and keeps the framing set last time.
+     */
+    private void stageThenEdit(final Uri uri) {
+        setBusy(true, R.string.leopard_preparing);
+        new Thread(() -> {
+            final String path = stageForEdit(uri);
+            runOnUiThread(() -> {
+                if(gone()) return;
+                setBusy(false, 0);
+                // Could not copy it: the preview is already up with the picture as picked, which
+                // is still perfectly settable. Losing the editor is not worth losing the import.
+                if(path == null) return;
+                openFitEditor(new WallpaperItem(WallpaperItem.TYPE_IMAGE, path));
+            });
+        }).start();
+    }
+
+    /** @return the staged file's path, or null when the picture could not be copied. */
+    private String stageForEdit(Uri uri) {
+        InputStream in = null;
+        FileOutputStream out = null;
+        try {
+            File dir = new File(getCacheDir(), "leopard");
+            if(!dir.exists() && !dir.mkdirs()) return null;
+            // Always .jpg: everything downstream decodes by content, and the bake writes JPEG
+            // anyway — the name only has to be stable and to read as an image.
+            File dest = new File(dir, "pick_" + Integer.toHexString(uri.toString().hashCode()) + ".jpg");
+            File tmp = new File(dir, dest.getName() + ".part");
+            in = getContentResolver().openInputStream(uri);
+            if(in == null) return null;
+            out = new FileOutputStream(tmp);
+            byte[] buf = new byte[64 * 1024];
+            int n;
+            while((n = in.read(buf)) > 0) out.write(buf, 0, n);
+            out.flush();
+            out.close();
+            out = null;
+            // Written aside and moved into place, so a copy cut short by a card being pulled
+            // leaves the previous staging (and the fit set on it) rather than a truncated file.
+            if(tmp.length() == 0) { //noinspection ResultOfMethodCallIgnored
+                tmp.delete();
+                return null;
+            }
+            if(dest.exists()) //noinspection ResultOfMethodCallIgnored
+                dest.delete();
+            return tmp.renameTo(dest) ? dest.getAbsolutePath() : null;
+        } catch(Throwable t) {
+            return null;
+        } finally {
+            if(in != null) try { in.close(); } catch(Exception ignored) {}
+            if(out != null) try { out.close(); } catch(Exception ignored) {}
+        }
     }
 
     private String queryName(Uri uri) {
@@ -1007,7 +1095,9 @@ public class LeopardPickerActivity extends AppCompatActivity {
             cell.addView(typeBadge(R.drawable.ic_badge_video_20dp, d));
         } else {
             // Full-size originals over a weak link: let Glide downsample to the cell.
-            Glide.with(this).load(glideModel(item.url)).override(cellW, cellH)
+            Glide.with(this).load(glideModel(item.url))
+                    .signature(freshness(item.url))
+                    .override(cellW, cellH)
                     .listener(new RequestListener<Drawable>() {
                         @Override
                         public boolean onLoadFailed(GlideException e, Object m,
@@ -1225,6 +1315,22 @@ public class LeopardPickerActivity extends AppCompatActivity {
     }
 
     /**
+     * A cache key that changes when the file behind it does.
+     *
+     * Glide keys a local file by its path alone, and the fit editor deliberately keeps ONE baked
+     * file per source image, overwritten on every re-edit — so the same path names a different
+     * picture each time somebody changes the framing. Without this the grid cell and the
+     * full-screen preview both go on showing the previous bake, which reads exactly like an edit
+     * that was not saved.
+     */
+    private ObjectKey freshness(String url) {
+        if(url == null || url.startsWith("content://") || url.startsWith("http")) {
+            return new ObjectKey("");
+        }
+        return new ObjectKey(new File(samePath(url)).lastModified());
+    }
+
+    /**
      * "This is a video" / "this is a photo", bottom-left of a cell.
      *
      * An icon rather than the word: at 326x122 over a busy photo a text badge is a smear, and
@@ -1387,7 +1493,9 @@ public class LeopardPickerActivity extends AppCompatActivity {
             mPreviewVideo.setVisibility(View.GONE);
             mPreviewLoading.setVisibility(View.GONE);
             mPreviewProgress.setVisibility(View.GONE);
-            Glide.with(this).load(glideModel(item.url)).into(mPreviewImage);
+            Glide.with(this).load(glideModel(item.url))
+                    .signature(freshness(item.url))
+                    .into(mPreviewImage);
         }
         findViewById(R.id.buttonPreviewSet).requestFocus();
     }

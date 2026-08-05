@@ -87,6 +87,15 @@
             android:configChanges="orientation|screenSize|keyboardHidden"
             android:theme="@style/AppTheme" />
 
+        <!-- Others/FSE only: blocks on WallpaperRepo.sync() before FullscreenActivity ever
+             opens. Not exported and not launchable on its own — only ModeConfirmActivity routes
+             into it. -->
+        <activity
+            android:name=".WallpaperDownloadActivity"
+            android:exported="false"
+            android:configChanges="orientation|screenSize|keyboardHidden"
+            android:theme="@style/AppTheme" />
+
         <!-- Leopard: the live wallpaper Android offers in its own picker. Only ever used for
              moving content — still images go straight through WallpaperManager and never
              involve this service. -->

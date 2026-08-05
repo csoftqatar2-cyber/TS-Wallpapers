@@ -39,11 +39,16 @@ public class WallpaperRepo {
 
     /**
      * Activation-code prefixes. The check here is UX only — it saves a round trip on an
-     * obvious typo — and the server enforces the same rule for real. Keep the two in step:
-     * the backend accepts exactly these (see activate_device / the activation Worker).
+     * obvious typo — and is deliberately looser than the server: since 2026-08-05 the
+     * backend only accepts a "7078" serial that is already on file (an existing car
+     * re-activating), rejecting an unused one as invalid_format. The client can't know
+     * locally whether a given serial is already registered, so it still accepts the
+     * prefix here and lets the server make the real call (see activate_device / the
+     * activation Worker).
      *
      *   "7078" — every code issued up to 2026-08-02, ~530 of them already in the field.
      *            Never remove it; those cars re-send their serial when they re-activate.
+     *            No longer activates a NEW car server-side — see above.
      *   "578"  — everything issued from 2026-08-02 onward (578001, 578002, ...).
      *
      * Length is deliberately not checked: codes in the field run from 5 to 14 characters.
@@ -1006,13 +1011,26 @@ public class WallpaperRepo {
         void done(boolean success, int count, String error);
 
         /**
-         * Every video and image in that playlist is now in the local cache.
+         * Every video and image in that playlist is now in the local cache — all of them, with
+         * nothing skipped over a failed download. A screen that gates on the library being
+         * present may treat this as the go-ahead; {@link #mediaIncomplete} is the other outcome
+         * and exactly one of the two always fires.
          *
          * Optional, and only worth implementing by a screen that shows the media itself: a
          * thumbnail grid that drew placeholders for clips that had not arrived yet, or a
          * progress screen waiting for the download to end.
          */
         default void mediaReady() { }
+
+        /**
+         * The download pass ended with {@code failed} of the files still missing.
+         *
+         * This exists because failures here are individually survivable — a wallpaper that did
+         * not arrive still loads on demand later — but they are NOT the same as success, and a
+         * screen that blocks until the library is local has to be able to tell the difference
+         * instead of being waved through at a fake 100%.
+         */
+        default void mediaIncomplete(int failed, int total) { }
 
         /**
          * How the download is going, {@code done} of {@code total} files. Called on the sync
@@ -1062,10 +1080,14 @@ public class WallpaperRepo {
                             File[] cachedFiles = cacheDir.listFiles();
                             if (cachedFiles != null) {
                                 for (File f : cachedFiles) {
-                                    if (f.isFile() && f.getName().startsWith("vid_") && f.getName().endsWith(".bin")) {
-                                        if (!activeCacheFiles.contains(f.getName())) {
-                                            f.delete();
-                                        }
+                                    if(!f.isFile() || !f.getName().startsWith("vid_")) continue;
+                                    // A .part left behind by a process killed mid-download: it is
+                                    // never resumed, so it is pure dead weight in the cache.
+                                    if (f.getName().endsWith(".bin.part")) {
+                                        f.delete();
+                                    } else if (f.getName().endsWith(".bin")
+                                            && !activeCacheFiles.contains(f.getName())) {
+                                        f.delete();
                                     }
                                 }
                             }
@@ -1093,13 +1115,24 @@ public class WallpaperRepo {
                     int done = 0;
                     if(cb != null) cb.mediaProgress(done, total);
 
+                    // A file that did not arrive must not be counted as arrived: progress is only
+                    // advanced by a download that actually succeeded, so the bar cannot reach the
+                    // total while something is still missing.
+                    int failed = 0;
+
                     // Videos first: they are the big files and the ones that cannot be shown at
                     // all until they are local, while an image at least loads on demand.
                     for(WallpaperItem it : parsed) {
                         if(!it.isVideo()) continue;
                         boolean counted = needsDownload(it);
-                        try { ensureVideoCached(it); } catch(Exception ignored) {}
-                        if(counted && cb != null) cb.mediaProgress(++done, total);
+                        boolean ok = true;
+                        try { ensureVideoCached(it); } catch(Exception e) {
+                            Log.w(TAG, "video download failed: " + it.url, e);
+                            ok = false;
+                        }
+                        if(!counted) continue;
+                        if(ok) { if(cb != null) cb.mediaProgress(++done, total); }
+                        else failed++;
                     }
 
                     // Pull every image/GIF into Glide's disk cache right away. Without this
@@ -1109,12 +1142,17 @@ public class WallpaperRepo {
                     for(WallpaperItem it : parsed) {
                         if(it == null || it.isVideo()) continue;
                         boolean counted = needsDownload(it);
-                        prefetchImage(it);
-                        if(counted && cb != null) cb.mediaProgress(++done, total);
+                        boolean ok = prefetchImage(it);
+                        if(!counted) continue;
+                        if(ok) { if(cb != null) cb.mediaProgress(++done, total); }
+                        else failed++;
                     }
                     if(cb != null) {
-                        cb.mediaProgress(total, total);
-                        cb.mediaReady();
+                        if(failed > 0) cb.mediaIncomplete(failed, total);
+                        else {
+                            cb.mediaProgress(total, total);
+                            cb.mediaReady();
+                        }
                     }
                 } catch(Exception e) {
                     Log.w(TAG, "sync failed", e);
@@ -1132,17 +1170,19 @@ public class WallpaperRepo {
      * working with no network). Runs on the sync thread, one file after the other, and
      * simply skips whatever fails — the wallpaper still loads on demand in that case.
      */
-    private void prefetchImage(WallpaperItem it) {
-        if(it == null || it.isVideo() || it.url == null) return;
+    private boolean prefetchImage(WallpaperItem it) {
+        if(it == null || it.isVideo() || it.url == null) return true;
         String url = it.url.trim();
-        if(!url.startsWith("http://") && !url.startsWith("https://")) return; // local file
+        if(!url.startsWith("http://") && !url.startsWith("https://")) return true; // local file
         try {
             com.bumptech.glide.Glide.with(mContext)
                     .download(url)
                     .submit()
                     .get();
+            return true;
         } catch(Exception e) {
             Log.w(TAG, "prefetch failed: " + url, e);
+            return false;
         }
     }
 
@@ -1174,22 +1214,41 @@ public class WallpaperRepo {
         return new File(dir, "vid_" + Integer.toHexString(wallpaperKey(item.url).hashCode()) + ".bin");
     }
 
+    /**
+     * Downloads to a .part file and renames only once the stream has been read to the end.
+     *
+     * The cache file's mere existence is what {@link #localVideoPath} treats as "this clip is
+     * local", so writing the final name while the bytes are still arriving means a link dropped
+     * mid-download leaves a truncated file that every later pass then skips as already cached —
+     * a wallpaper permanently broken by one bad moment on the car's connection.
+     */
     private void ensureVideoCached(WallpaperItem item) throws Exception {
         File f = videoCacheFile(item);
         if(f.exists() && f.length() > 0) return;
+        File part = new File(f.getAbsolutePath() + ".part");
         HttpURLConnection conn = (HttpURLConnection) new URL(item.url).openConnection();
         conn.setConnectTimeout(15000);
         conn.setReadTimeout(30000);
         conn.setInstanceFollowRedirects(true);
-        InputStream in = conn.getInputStream();
-        FileOutputStream out = new FileOutputStream(f);
-        byte[] buf = new byte[8192];
-        int n;
-        while((n = in.read(buf)) != -1) out.write(buf, 0, n);
-        out.flush();
-        out.close();
-        in.close();
-        conn.disconnect();
+        try {
+            InputStream in = conn.getInputStream();
+            FileOutputStream out = new FileOutputStream(part);
+            try {
+                byte[] buf = new byte[8192];
+                int n;
+                while((n = in.read(buf)) != -1) out.write(buf, 0, n);
+                out.flush();
+            } finally {
+                try { out.close(); } catch(Exception ignored) {}
+                try { in.close(); } catch(Exception ignored) {}
+            }
+            if(part.length() <= 0 || !part.renameTo(f)) throw new Exception("video cache write failed");
+        } catch(Exception e) {
+            part.delete();
+            throw e;
+        } finally {
+            conn.disconnect();
+        }
     }
 
     /** Returns a local cached path for a video if available, otherwise null (caller may stream the URL). */
