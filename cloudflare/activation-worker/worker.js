@@ -39,11 +39,17 @@
 
 /**
  * Accepted activation-code prefixes.
- *   '7078' — the ~530 codes already in the field. Never remove this.
  *   '578'  — everything issued from 2026-08-02 onward (578001, 578002, ...).
+ *            Always valid for a brand-new activation.
+ *   '7078' — the ~530 codes already in the field, issued up to 2026-08-02.
+ *            Retired for NEW activations as of 2026-08-05: only honored when
+ *            the serial is already on file (an existing car re-activating).
+ *            An unused 7078 code can no longer activate a car for the first
+ *            time. See handleActivate, which checks this against serialOwner.
  * Codes vary in length; only the prefix is checked, as it always has been.
  */
-const SERIAL_PREFIXES = ['7078', '578'];
+const NEW_SERIAL_PREFIX = '578';
+const LEGACY_SERIAL_PREFIX = '7078';
 
 /** Response values, byte-identical to what activate_device has always returned. */
 const RESULT = {
@@ -164,14 +170,20 @@ async function handleActivate(db, body) {
     return json({ status: RESULT.BLOCKED, row: shape(before) });
   }
 
-  if (!SERIAL_PREFIXES.some((p) => serial.startsWith(p))) {
-    return json({ status: RESULT.INVALID_FORMAT, row: shape(before) });
-  }
-
   const serialOwner = await db
     .prepare('SELECT hardware_id FROM devices WHERE serial_number = ?')
     .bind(serial)
     .first();
+
+  // '578...' is always valid. '7078...' is valid only when it's already on
+  // file — a genuinely new (never-seen) 7078 code no longer activates anything.
+  const validFormat =
+    serial.startsWith(NEW_SERIAL_PREFIX) ||
+    (serial.startsWith(LEGACY_SERIAL_PREFIX) && !!serialOwner);
+
+  if (!validFormat) {
+    return json({ status: RESULT.INVALID_FORMAT, row: shape(before) });
+  }
 
   if (serialOwner && serialOwner.hardware_id !== hardwareId) {
     return json({ status: RESULT.SERIAL_ALREADY_USED, row: shape(before) });
