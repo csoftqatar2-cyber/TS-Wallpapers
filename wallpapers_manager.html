@@ -331,7 +331,9 @@
 
         .form-control {
             width: 100%;
-            background: rgba(0, 0, 0, 0.2);
+            /* background-color, not the shorthand: select.form-control paints a
+               chevron into background-image and the shorthand would erase it. */
+            background-color: rgba(0, 0, 0, 0.2);
             border: 1px solid var(--panel-border);
             border-radius: 12px;
             padding: 12px 42px 12px 15px;
@@ -344,25 +346,43 @@
             outline: none;
             border-color: var(--primary);
             box-shadow: 0 0 0 3px var(--primary-glow);
-            background: rgba(0, 0, 0, 0.3);
+            background-color: rgba(0, 0, 0, 0.3);
         }
 
         /* The native <select> popup inherits the control's translucent background,
            which renders as an unreadable washed-out grey. Force a solid dark
-           surface with high-contrast text on the list and each option. */
+           surface with high-contrast text on the list and each option, and drop
+           the OS arrow for a chevron on the left — the right side is where the
+           .input-wrapper icon lives, and left is the RTL-natural side anyway. */
         select.form-control {
             background-color: #1c150c;
             color: var(--text-main);
+            direction: rtl;
+            text-align: right;
+            cursor: pointer;
+            appearance: none;
+            -webkit-appearance: none;
+            -moz-appearance: none;
+            padding-left: 38px;
+            background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23ff9a3d' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: left 14px center;
+            background-size: 16px 16px;
         }
         select.form-control option {
             background-color: #1c150c;
             color: var(--text-main);
             padding: 8px;
+            direction: rtl;
+            text-align: right;
         }
         select.form-control option:checked,
         select.form-control option:hover {
             background-color: var(--primary);
             color: #1c150c;
+        }
+        select.form-control:hover {
+            border-color: rgba(255, 154, 61, 0.45);
         }
 
         /* Autocomplete suggestions (device search by activation code / MAC / client) */
@@ -1489,13 +1509,13 @@
                          everything, and those combine. -->
                     <div class="form-group" id="target-mode-group">
                         <label for="target-mode-select">لأي وضع تشغيل؟</label>
-                        <select id="target-mode-select" onchange="setTargetMode(this.value)">
+                        <select id="target-mode-select" class="form-control" onchange="setTargetMode(this.value)">
                             <option value="">كل الأوضاع (المكتبة العامة)</option>
-                            <option value="leopard">Leopard \ Denza فقط</option>
-                            <option value="fse">Leopard (FSE) فقط</option>
-                            <option value="normal">Others فقط</option>
-                            <option value="lynkco">Lynk and Co فقط</option>
-                            <option value="gwm">GWM فقط</option>
+                            <option value="leopard">Leopard / Denza</option>
+                            <option value="fse">Leopard (FSE)</option>
+                            <option value="normal">Others</option>
+                            <option value="lynkco">Lynk and Co</option>
+                            <option value="gwm">GWM</option>
                         </select>
                         <p id="target-mode-hint" style="margin: 8px 2px 0; font-size: 0.82rem; color: var(--text-muted);"></p>
                     </div>
