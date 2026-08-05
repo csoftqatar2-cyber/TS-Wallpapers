@@ -67,8 +67,10 @@ public class ModeConfirmActivity extends AppCompatActivity {
         // A head unit that cannot do Leopard/Lynk & Co must show that as a real, visible state:
         // the technician has no other way to find out, and a mode that silently does nothing is
         // the worst answer we could record for this car.
-        disableUnsupported(R.id.radioConfirmLeopard, mLeopardSupported);
-        disableUnsupported(R.id.radioConfirmLynkco, mLynkcoSupported);
+        disableUnsupported(R.id.radioConfirmLeopard, R.id.textViewConfirmLeopardNote,
+                R.string.leopard_unsupported, mLeopardSupported);
+        disableUnsupported(R.id.radioConfirmLynkco, R.id.textViewConfirmLynkcoNote,
+                R.string.lynkco_unsupported, mLynkcoSupported);
 
         TextView deviceId = findViewById(R.id.textViewModeConfirmDeviceId);
         if(deviceId != null) {
@@ -86,15 +88,17 @@ public class ModeConfirmActivity extends AppCompatActivity {
         confirm.setOnClickListener(v -> apply(selectedMode()));
     }
 
-    private void disableUnsupported(int id, boolean supported) {
+    private void disableUnsupported(int radioId, int noteId, int reasonRes, boolean supported) {
         if(supported) return;
-        RadioButton b = findViewById(id);
-        if(b == null) return;
-        b.setEnabled(false);
-        b.setAlpha(0.4f);
-        b.setText(b.getText() + " — " + getString(
-                id == R.id.radioConfirmLynkco ? R.string.lynkco_unsupported
-                        : R.string.leopard_unsupported));
+        RadioButton b = findViewById(radioId);
+        if(b != null) {
+            b.setEnabled(false);
+            b.setAlpha(0.4f);
+        }
+        TextView note = findViewById(noteId);
+        if(note == null) return;
+        note.setText(getString(reasonRes));
+        note.setVisibility(TextView.VISIBLE);
     }
 
     private void check(int mode) {

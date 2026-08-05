@@ -84,6 +84,20 @@
                     style="@style/ActivationModeRadio"
                     android:text="@string/mode_leopard" />
 
+                <!-- Disabled-reason text lives in its own TextView rather than appended onto
+                     the RadioButton's own label: on at least one head unit, a RadioButton whose
+                     text was mutated to two lines at runtime rendered with its label clipped to
+                     a sliver (bare circle, no visible text) instead of wrapping. A dedicated,
+                     always-single-line RadioButton avoids that failure mode entirely. -->
+                <TextView
+                    android:id="@+id/textViewConfirmLeopardNote"
+                    style="@style/ActivationModeRadio"
+                    android:layout_marginTop="-4dp"
+                    android:paddingTop="0dp"
+                    android:paddingStart="4dp"
+                    android:textSize="12sp"
+                    android:visibility="gone" />
+
                 <RadioButton
                     android:id="@+id/radioConfirmGwm"
                     style="@style/ActivationModeRadio"
@@ -93,6 +107,15 @@
                     android:id="@+id/radioConfirmLynkco"
                     style="@style/ActivationModeRadio"
                     android:text="@string/mode_lynkco" />
+
+                <TextView
+                    android:id="@+id/textViewConfirmLynkcoNote"
+                    style="@style/ActivationModeRadio"
+                    android:layout_marginTop="-4dp"
+                    android:paddingTop="0dp"
+                    android:paddingStart="4dp"
+                    android:textSize="12sp"
+                    android:visibility="gone" />
 
             </RadioGroup>
 

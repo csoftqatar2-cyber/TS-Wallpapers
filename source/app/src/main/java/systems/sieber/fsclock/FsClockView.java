@@ -1145,6 +1145,7 @@ public class FsClockView extends FrameLayout {
         if(desc == null) return;
         int res = mode == OperatingMode.LEOPARD ? R.string.mode_leopard_desc
                 : mode == OperatingMode.LYNKCO ? R.string.mode_lynkco_desc
+                : mode == OperatingMode.GWM ? R.string.mode_gwm_desc
                 : mode == OperatingMode.FSE ? R.string.mode_fse_desc : R.string.mode_normal_desc;
         String text = getContext().getString(res);
         // The note is about the live-wallpaper support Leopard needs; Lynk & Co hands the file
@@ -1162,6 +1163,7 @@ public class FsClockView extends FrameLayout {
         }
         int id = mRadioGroupActivationMode.getCheckedRadioButtonId();
         if(id == R.id.radioActivationLeopard) return OperatingMode.LEOPARD;
+        if(id == R.id.radioActivationGwm) return OperatingMode.GWM;
         if(id == R.id.radioActivationLynkco) return OperatingMode.LYNKCO;
         if(id == R.id.radioActivationFse) return OperatingMode.FSE;
         return OperatingMode.NORMAL;

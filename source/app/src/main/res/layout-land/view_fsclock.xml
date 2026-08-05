@@ -395,6 +395,20 @@
                             style="@style/ActivationModeRadio"
                             android:text="@string/mode_leopard" />
 
+                        <RadioButton
+                            android:id="@+id/radioActivationGwm"
+                            style="@style/ActivationModeRadio"
+                            android:text="@string/mode_gwm" />
+
+                        <!-- Same hand-off family as Leopard, and chosen here for the same
+                             reason: the technician who fits the car is the only person who
+                             knows which car it is, and every route to change it afterwards
+                             costs somebody a phone call. -->
+                        <RadioButton
+                            android:id="@+id/radioActivationLynkco"
+                            style="@style/ActivationModeRadio"
+                            android:text="@string/mode_lynkco" />
+
                     </RadioGroup>
 
                     <TextView
