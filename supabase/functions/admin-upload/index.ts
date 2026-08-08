@@ -10,9 +10,10 @@ import { createClient } from 'jsr:@supabase/supabase-js@2'
 const ADMIN_ID = '5b8e1336-ce54-4dd9-bd23-243158c178fe'
 
 // Delivery channels a wallpaper row may carry. 'app' is the historical default (our own
-// slideshow); 'gwm_split' routes the image into an external folder on GWM cars for a separate
-// app to read. Anything unrecognised is coerced to 'app' so a stale page can never invent one.
-const CHANNELS = ['app', 'gwm_split']
+// slideshow); 'gwm_split' and 'jetour_g700' route the image into an external folder on GWM /
+// Jetour cars for a separate app to read. Anything unrecognised is coerced to 'app' so a stale
+// page can never invent one.
+const CHANNELS = ['app', 'gwm_split', 'jetour_g700']
 
 const cors = {
   'Access-Control-Allow-Origin': '*',

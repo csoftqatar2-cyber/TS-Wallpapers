@@ -1482,8 +1482,9 @@
                 </h2>
 
                 <form id="upload-form" onsubmit="event.preventDefault(); startUpload();">
-                    <!-- Delivery channel: our own app, or the external GWM Split folder. The
-                         global/private choice below applies inside whichever channel is picked. -->
+                    <!-- Delivery channel: our own app, or one of the external mirrored folders.
+                         The global/private choice below applies inside whichever channel is
+                         picked. -->
                     <div class="form-group">
                         <label>وجهة التسليم</label>
                         <div class="toggle-group">
@@ -1492,6 +1493,9 @@
                             </button>
                             <button type="button" class="toggle-btn" id="btn-channel-gwm" onclick="setChannel('gwm_split')">
                                 <i class="fa-solid fa-folder-tree"></i> GWM Split (مجلد خارجي)
+                            </button>
+                            <button type="button" class="toggle-btn" id="btn-channel-jetour" onclick="setChannel('jetour_g700')">
+                                <i class="fa-solid fa-folder-tree"></i> Jetour G700 (مجلد خارجي)
                             </button>
                         </div>
                         <p id="channel-hint" style="margin: 8px 2px 0; font-size: 0.82rem; color: var(--text-muted);"></p>
@@ -1516,6 +1520,7 @@
                             <option value="normal">Others</option>
                             <option value="lynkco">Lynk and Co</option>
                             <option value="gwm">GWM</option>
+                            <option value="jetour">Jetour</option>
                         </select>
                         <p id="target-mode-hint" style="margin: 8px 2px 0; font-size: 0.82rem; color: var(--text-muted);"></p>
                     </div>
@@ -1650,6 +1655,9 @@
                     </button>
                     <button type="button" class="wp-filter-btn" id="wp-filter-gwm" onclick="setWallpaperFilter('gwm')">
                         <i class="fa-solid fa-folder-tree"></i> GWM Split
+                    </button>
+                    <button type="button" class="wp-filter-btn" id="wp-filter-jetour" onclick="setWallpaperFilter('jetour')">
+                        <i class="fa-solid fa-folder-tree"></i> Jetour G700
                     </button>
                 </div>
 
@@ -1901,17 +1909,38 @@
         let hideModalSelection = null; // Set of hardware_ids ticked in that modal
         let selectedFiles = [];
         let targetType = 'global'; // global or private
-        let uploadChannel = 'app';    // 'app' (our slideshow) or 'gwm_split' (external GWM folder)
+        // 'app' (our slideshow) or one of the mirrored-folder channels below.
+        let uploadChannel = 'app';
+
+        // The external folder channels, keyed by wallpapers.channel. Each one implies the car
+        // mode that mirrors it (nothing but a GWM car reads GWMSplit_Styles, nothing but a Jetour
+        // car reads G700), which is why the mode dropdown disappears when one is picked.
+        const FOLDER_CHANNELS = {
+            gwm_split: {
+                mode: 'gwm',
+                label: 'GWM Split',
+                folder: 'GWMSplit_Styles',
+                hint: 'هذه الصور لا تظهر داخل تطبيقنا. تُنزَّل في مجلد GWMSplit_Styles على السيارة ليستخدمها تطبيق GWM Split، ولا تصل إلا إلى سيارات وضع GWM.',
+            },
+            jetour_g700: {
+                mode: 'jetour',
+                label: 'Jetour G700',
+                folder: 'G700',
+                hint: 'هذه الصور لا تظهر داخل تطبيقنا. تُنزَّل في مجلد ‎/sdcard/Pictures/G700‎ على السيارة ليستخدمها تطبيق الشاشة، ولا تصل إلا إلى سيارات وضع Jetour.',
+            },
+        };
         // null = the shared library every car sees. Otherwise one of devices.mode, and the image
         // reaches only cars reporting that mode (wallpapers.target_mode, filtered in get_wallpapers).
         let uploadTargetMode = null;
 
         // Which device operating-mode the current selection targets, so the device dropdown can
-        // offer only the cars that actually run that mode. GWM Split is not a mode choice but it
-        // implies one: nothing except a GWM car ever reads that folder.
+        // offer only the cars that actually run that mode. A folder channel is not a mode choice
+        // but it implies one: nothing except a GWM car ever reads GWMSplit_Styles, and nothing
+        // except a Jetour car ever reads G700.
         function channelDeviceMode() {
             if (uploadTargetMode) return uploadTargetMode;
-            if (uploadChannel === 'gwm_split') return 'gwm';
+            const folder = FOLDER_CHANNELS[uploadChannel];
+            if (folder) return folder.mode;
             return null; // the shared library reaches every car
         }
 
@@ -1923,28 +1952,29 @@
             normal:  'Others',
             lynkco:  'Lynk and Co',
             gwm:     'GWM',
+            jetour:  'Jetour',
         };
 
-        // Switch the delivery channel. Two real channels, and only two: 'app' is our own
-        // slideshow/picker, 'gwm_split' is a file drop into a folder another app on the car reads.
-        // Which MODE an upload is for is a separate axis — see setTargetMode.
+        // Switch the delivery channel. 'app' is our own slideshow/picker; every other channel is
+        // a file drop into a folder another app on the car reads (see FOLDER_CHANNELS). Which
+        // MODE an upload is for is a separate axis — see setTargetMode.
         function setChannel(ch) {
-            uploadChannel = (ch === 'gwm_split') ? 'gwm_split' : 'app';
-            // GWM Split is delivered by mode already (only GWM cars mirror that folder), so a
-            // second mode filter on top of it could only ever contradict the first.
-            if (uploadChannel === 'gwm_split') uploadTargetMode = null;
+            uploadChannel = FOLDER_CHANNELS[ch] ? ch : 'app';
+            const folder = FOLDER_CHANNELS[uploadChannel];
+            // A folder channel is delivered by mode already (only that make's cars mirror the
+            // folder), so a second mode filter on top of it could only ever contradict the first.
+            if (folder) uploadTargetMode = null;
             document.getElementById("btn-channel-app").classList.toggle('active', uploadChannel === 'app');
             document.getElementById("btn-channel-gwm").classList.toggle('active', uploadChannel === 'gwm_split');
+            document.getElementById("btn-channel-jetour").classList.toggle('active', uploadChannel === 'jetour_g700');
 
             const modeGroup = document.getElementById("target-mode-group");
-            if (modeGroup) modeGroup.style.display = (uploadChannel === 'gwm_split') ? 'none' : '';
+            if (modeGroup) modeGroup.style.display = folder ? 'none' : '';
             const modeSelect = document.getElementById("target-mode-select");
             if (modeSelect) modeSelect.value = uploadTargetMode || '';
 
             const hint = document.getElementById("channel-hint");
-            hint.innerText = (uploadChannel === 'gwm_split')
-                ? 'هذه الصور لا تظهر داخل تطبيقنا. تُنزَّل في مجلد GWMSplit_Styles على السيارة ليستخدمها تطبيق GWM Split، ولا تصل إلا إلى السيارات المفعَّل بها قسم GWM Split.'
-                : '';
+            hint.innerText = folder ? folder.hint : '';
             refreshTargetScopeUi();
         }
 
@@ -2144,8 +2174,9 @@
 
         // Each channel only reaches cars actually running the matching mode, so the
         // dropdown must offer only those cars — never the whole fleet.
-        //   Lynk & Co channel  -> cars whose reported mode = 'lynkco'
+        //   Lynk & Co channel   -> cars whose reported mode = 'lynkco'
         //   GWM Split channel   -> cars whose reported mode = 'gwm'
+        //   Jetour G700 channel -> cars whose reported mode = 'jetour'
         //   plain app channel   -> every car (no mode restriction)
         function channelEligibleDevices() {
             const requiredMode = channelDeviceMode();
@@ -3022,18 +3053,18 @@
                 title.title = filename;
 
                 // Target Device or Serial
-                const isGwm = (wp.channel || 'app') === 'gwm_split';
+                const folderChannel = FOLDER_CHANNELS[wp.channel || 'app'];
                 const target = document.createElement("div");
                 target.className = "wp-target";
-                if (isGwm) {
-                    // GWM Split image: it lands in the external folder, not our slideshow. Say so,
-                    // then still show whether it is for all GWM cars or one specific car.
+                if (folderChannel) {
+                    // Folder-channel image: it lands in the external folder, not our slideshow. Say
+                    // so, then still show whether it is for all cars of that make or one specific car.
                     if (wp.is_global) {
-                        target.innerHTML = '<i class="fa-solid fa-folder-tree"></i> GWM Split · كل سيارات GWM';
+                        target.innerHTML = `<i class="fa-solid fa-folder-tree"></i> ${folderChannel.label} · كل سيارات ${TARGET_MODE_NAMES[folderChannel.mode]}`;
                     } else {
                         const device = devicesList.find(d => d.hardware_id === wp.hardware_id);
                         const serial = device ? device.serial_number : 'غير معروف';
-                        target.innerHTML = `<i class="fa-solid fa-folder-tree"></i> GWM Split · كود: ${serial}`;
+                        target.innerHTML = `<i class="fa-solid fa-folder-tree"></i> ${folderChannel.label} · كود: ${serial}`;
                         target.title = `معرف الجهاز: ${wp.hardware_id}`;
                     }
                 } else if (wp.is_global) {
@@ -3572,6 +3603,7 @@
             leopard: ['fa-image', 'Leopard \\ Denza'],
             gwm:     ['fa-folder-tree', 'GWM'],
             lynkco:  ['fa-car', 'Lynk and Co'],
+            jetour:  ['fa-folder-tree', 'Jetour'],
         };
         function modeBadge(mode) {
             const m = MODE_LABELS[mode];
@@ -3974,6 +4006,7 @@
             document.getElementById("wp-filter-global").classList.toggle('active', filter === 'global');
             document.getElementById("wp-filter-private").classList.toggle('active', filter === 'private');
             document.getElementById("wp-filter-gwm").classList.toggle('active', filter === 'gwm');
+            document.getElementById("wp-filter-jetour").classList.toggle('active', filter === 'jetour');
             filterWallpapers();
         }
 
@@ -3983,10 +4016,13 @@
 
             const filtered = wallpapersList.filter(wp => {
                 const ch = wp.channel || 'app';
-                // Channel gate: GWM Split images live in their own filter and never show up under
-                // all/global/private, so the operator's normal view stays exactly about our app.
+                // Channel gate: folder-channel images live in their own filter and never show up
+                // under all/global/private, so the operator's normal view stays exactly about our
+                // app — and the two folders never mix with each other either.
                 if (activeFilter === 'gwm') {
                     if (ch !== 'gwm_split') return false;
+                } else if (activeFilter === 'jetour') {
+                    if (ch !== 'jetour_g700') return false;
                 } else {
                     if (ch !== 'app') return false;
                     // 1) Type filter (app channel only)

@@ -20,7 +20,7 @@ public class FsClockApp extends Application {
         setAppTheme(getAppTheme(getApplicationContext()));
         IntegrityGuard.init(getApplicationContext());
         super.onCreate();
-        kickGwmSync();
+        kickFolderMirror();
         // Anything the car could not send while it was crashing goes now.
         CrashReporter.uploadPendingAsync(getApplicationContext());
         // There was a LeopardApplier.reassert() here, meant to put a dropped wallpaper back. It
@@ -30,17 +30,18 @@ public class FsClockApp extends Application {
     }
 
     /**
-     * One GWM Split mirror per process launch, independent of the operating mode (the clock view
-     * that runs the periodic sync does not exist in Leopard). No-ops instantly when the section is
-     * off or storage access is missing, so it costs nothing for the vast majority of cars.
+     * One folder-mirror pass per process launch, independent of the operating mode (the clock view
+     * that runs the periodic sync does not exist in Leopard). {@link FolderMirror#active} returns
+     * null for every car that is not GWM or Jetour, so it costs nothing for the vast majority.
      */
-    private void kickGwmSync() {
+    private void kickFolderMirror() {
         try {
             final Context app = getApplicationContext();
             SharedPreferences prefs = app.getSharedPreferences(
                     BaseSettingsActivity.SHARED_PREF_DOMAIN, Context.MODE_PRIVATE);
-            if(!GwmSync.isEnabled(prefs)) return;
-            GwmSync.syncAsync(app, new WallpaperRepo(app), null);
+            FolderMirror mirror = FolderMirror.active(prefs);
+            if(mirror == null) return;
+            mirror.syncAsync(app, new WallpaperRepo(app), null);
         } catch(Throwable ignored) { }
     }
 

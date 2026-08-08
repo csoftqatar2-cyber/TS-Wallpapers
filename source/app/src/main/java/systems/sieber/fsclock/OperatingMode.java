@@ -7,8 +7,8 @@ import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 
 /**
- * Which product this install is: Normal, FSE, Leopard, GWM, or Lynkco. The five are mutually
- * exclusive.
+ * Which product this install is: Normal, FSE, Leopard, GWM, Lynkco, or Jetour. The six are
+ * mutually exclusive.
  *
  * - NORMAL  : the app owns the screen and draws wallpaper + clock itself.
  * - FSE     : same, but the window is pinned to 1920x720 for ultra-wide head units.
@@ -18,7 +18,7 @@ import android.content.pm.PackageManager;
  * - GWM     : screen-wise IDENTICAL to NORMAL (app draws wallpaper + clock). The only thing the
  *             mode carries is the "GWM images management" section: it mirrors the 'gwm_split'
  *             cloud channel into an external folder that a SEPARATE app on GWM head units reads.
- *             The mode IS the on-switch for that mirror (see GwmSync.isEnabled).
+ *             The mode IS the on-switch for that mirror (see FolderMirror.isEnabled).
  * - LYNKCO  : same idea as LEOPARD (a hand-off product: the app draws nothing and is just a
  *             picker), but for Lynk &amp; Co / Flyme (ECARX / Geely) head units, whose live
  *             wallpaper is owned by a proprietary engine that ignores Android's WallpaperManager.
@@ -26,10 +26,13 @@ import android.content.pm.PackageManager;
  *             (com.flyme.auto.customize) via its exported "wallpaper.setting" intent — the one
  *             officially-supported way to change the wallpaper there. See {@link LynkcoApplier}.
  *             Needs no root and no privileged permissions.
+ * - JETOUR  : exactly NORMAL on screen, exactly GWM in structure — the same slideshow and clock
+ *             plus one folder mirror, this one pointed at /sdcard/Pictures/G700 for the Jetour
+ *             G700 head unit's own gallery app. Two cars, one mechanism: see {@link FolderMirror}.
  *
  * FSE stays on its original boolean key so the six places that already read it, and every
- * device already in the field, keep working untouched. In Leopard/GWM that flag reads false,
- * which is correct: there is no ultra-wide window to pin.
+ * device already in the field, keep working untouched. In Leopard/GWM/Jetour that flag reads
+ * false, which is correct: there is no ultra-wide window to pin.
  */
 class OperatingMode {
 
@@ -38,13 +41,15 @@ class OperatingMode {
     static final int LEOPARD = 2;
     static final int GWM = 3;
     static final int LYNKCO = 4;
+    static final int JETOUR = 5;
 
     private static final String PREF_LEOPARD = "leopard-mode";
     private static final String PREF_GWM = "gwm-mode";
     private static final String PREF_LYNKCO = "lynkco-mode";
+    private static final String PREF_JETOUR = "jetour-mode";
 
     /**
-     * Has a human explicitly chosen this car's mode on a build that knows all five modes?
+     * Has a human explicitly chosen this car's mode on a build that knows all six modes?
      *
      * The flag exists because the manager needs each car's mode to be the TRUTH, not a guess.
      * Cars in the field were migrated onto NORMAL/FSE by {@code migrateOperatingMode} — a
@@ -76,16 +81,18 @@ class OperatingMode {
         if(prefs.getBoolean(PREF_LEOPARD, false)) return LEOPARD;
         if(prefs.getBoolean(PREF_GWM, false)) return GWM;
         if(prefs.getBoolean(PREF_LYNKCO, false)) return LYNKCO;
+        if(prefs.getBoolean(PREF_JETOUR, false)) return JETOUR;
         if(prefs.getBoolean(FullscreenActivity.PREF_FSE_SCREEN, false)) return FSE;
         return NORMAL;
     }
 
-    /** Writes all four flags together, so no two modes can ever both be on. */
+    /** Writes all five flags together, so no two modes can ever both be on. */
     static void set(SharedPreferences prefs, int mode) {
         prefs.edit()
                 .putBoolean(PREF_LEOPARD, mode == LEOPARD)
                 .putBoolean(PREF_GWM, mode == GWM)
                 .putBoolean(PREF_LYNKCO, mode == LYNKCO)
+                .putBoolean(PREF_JETOUR, mode == JETOUR)
                 .putBoolean(FullscreenActivity.PREF_FSE_SCREEN, mode == FSE)
                 .apply();
     }
@@ -100,6 +107,21 @@ class OperatingMode {
 
     static boolean isLynkco(SharedPreferences prefs) {
         return get(prefs) == LYNKCO;
+    }
+
+    static boolean isJetour(SharedPreferences prefs) {
+        return get(prefs) == JETOUR;
+    }
+
+    /**
+     * The modes that draw our own screen — slideshow, clock, download gate, the lot. GWM and
+     * Jetour are on this list because on screen they ARE Others; all they add is a folder mirror
+     * running behind it. Everything that used to ask "is this NORMAL?" about the screen should
+     * ask this instead, or the two folder-mirror modes silently lose a piece of Others.
+     */
+    static boolean isOthersLike(SharedPreferences prefs) {
+        int m = get(prefs);
+        return m == NORMAL || m == GWM || m == JETOUR;
     }
 
     /**
@@ -119,6 +141,7 @@ class OperatingMode {
             case LEOPARD: return "leopard";
             case GWM:     return "gwm";
             case LYNKCO:  return "lynkco";
+            case JETOUR:  return "jetour";
             case FSE:     return "fse";
             default:      return "normal";
         }

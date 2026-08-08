@@ -422,7 +422,7 @@ public class BaseSettingsActivity extends AppCompatActivity {
         initTextScale();
         initLynkcoScale();
         initFitDefaults();
-        initGwmSection();
+        initMirrorSections();
         refreshHeaderChips();
         syncDependentRows();
 
@@ -448,6 +448,7 @@ public class BaseSettingsActivity extends AppCompatActivity {
                 case OperatingMode.LEOPARD: mode.setText(R.string.chip_mode_leopard); break;
                 case OperatingMode.FSE:     mode.setText(R.string.chip_mode_fse); break;
                 case OperatingMode.GWM:     mode.setText(R.string.chip_mode_gwm); break;
+                case OperatingMode.JETOUR:  mode.setText(R.string.chip_mode_jetour); break;
                 case OperatingMode.LYNKCO:  mode.setText(R.string.chip_mode_lynkco); break;
                 default:                    mode.setText(R.string.chip_mode_normal); break;
             }
@@ -492,7 +493,7 @@ public class BaseSettingsActivity extends AppCompatActivity {
     private static final int[][] NAV_RAIL_SECTIONS = {
             { R.id.sectionGeneral },
             { R.id.sectionAnalog, R.id.sectionDigital, R.id.sectionClockLayout },
-            { R.id.sectionWallpapers, R.id.sectionGwm },
+            { R.id.sectionWallpapers, R.id.sectionGwm, R.id.sectionJetour },
             { R.id.sectionAbout }
     };
 
@@ -575,15 +576,18 @@ public class BaseSettingsActivity extends AppCompatActivity {
     private void showSection(int section) {
         boolean handoff = OperatingMode.isHandoff(mSharedPref);
         boolean gwm = OperatingMode.isGwm(mSharedPref);
+        boolean jetour = OperatingMode.isJetour(mSharedPref);
         for(int i = 0; i < NAV_RAIL_ITEMS.length; i++) {
             findViewById(NAV_RAIL_ITEMS[i]).setSelected(i == section);
             for(int card : NAV_RAIL_SECTIONS[i]) {
                 // Belt and braces: in a hand-off mode the whole Clock rail entry is gone anyway,
                 // but a card must never appear just because its group happens to be selected. The
-                // GWM management card is likewise only meaningful in GWM mode.
+                // folder-management cards are likewise only meaningful in their own mode — and a
+                // GWM car must never be offered the Jetour folder, or vice versa.
                 boolean show = i == section
                         && !(handoff && isLeopardHiddenCard(card))
-                        && !(card == R.id.sectionGwm && !gwm);
+                        && !(card == R.id.sectionGwm && !gwm)
+                        && !(card == R.id.sectionJetour && !jetour);
                 findViewById(card).setVisibility(show ? View.VISIBLE : View.GONE);
             }
         }
@@ -934,13 +938,14 @@ public class BaseSettingsActivity extends AppCompatActivity {
                 && mSharedPref.getBoolean(BootReceiver.PREF_AUTO_START, false)) {
             requestOverlayPermissionIfNeeded();
         }
-        // Returning from the all-files-access grant screen: refresh the GWM section and, if the
-        // permission just arrived while the section is enabled, run the first mirror.
-        refreshGwmSection();
-        if(mGwmPendingSyncAfterGrant && mSharedPref != null && GwmSync.isEnabled(mSharedPref)
-                && GwmSync.hasStoragePermission(this)) {
-            mGwmPendingSyncAfterGrant = false;
-            runGwmSync();
+        // Returning from the all-files-access grant screen: refresh the folder-mirror cards and,
+        // if the permission just arrived while one is enabled, run its first mirror.
+        refreshMirrorSections();
+        MirrorSection pending = activeMirrorSection();
+        if(mMirrorPendingSyncAfterGrant && pending != null
+                && FolderMirror.hasStoragePermission(this)) {
+            mMirrorPendingSyncAfterGrant = false;
+            pending.runSync();
         }
     }
 
@@ -2019,6 +2024,7 @@ public class BaseSettingsActivity extends AppCompatActivity {
             int m = checkedId == R.id.radioModeLeopard ? OperatingMode.LEOPARD
                     : checkedId == R.id.radioModeFse ? OperatingMode.FSE
                     : checkedId == R.id.radioModeGwm ? OperatingMode.GWM
+                    : checkedId == R.id.radioModeJetour ? OperatingMode.JETOUR
                     : checkedId == R.id.radioModeLynkco ? OperatingMode.LYNKCO : OperatingMode.NORMAL;
             applyMode(m);
         });
@@ -2035,6 +2041,7 @@ public class BaseSettingsActivity extends AppCompatActivity {
         return mode == OperatingMode.LEOPARD ? R.id.radioModeLeopard
                 : mode == OperatingMode.FSE ? R.id.radioModeFse
                 : mode == OperatingMode.GWM ? R.id.radioModeGwm
+                : mode == OperatingMode.JETOUR ? R.id.radioModeJetour
                 : mode == OperatingMode.LYNKCO ? R.id.radioModeLynkco : R.id.radioModeNormal;
     }
 
@@ -2074,15 +2081,16 @@ public class BaseSettingsActivity extends AppCompatActivity {
             requestOverlayPermissionIfNeeded();
         }
 
-        // GWM is the on-switch for the folder mirror. Entering it does what the old enable
-        // checkbox did: get the storage grant (or run a first sync when we already have it).
-        // Leaving it needs nothing — GwmSync.isEnabled() now reads false and the mirror stops.
-        refreshGwmSection();
-        if(mode == OperatingMode.GWM) {
-            if(!GwmSync.hasStoragePermission(this)) {
-                requestGwmStoragePermission();
+        // GWM and Jetour are the on-switches for their folder mirrors. Entering one does what the
+        // old enable checkbox did: get the storage grant (or run a first sync when we already have
+        // it). Leaving needs nothing — the mirror's isEnabled() reads false and it stops.
+        refreshMirrorSections();
+        MirrorSection section = activeMirrorSection();
+        if(section != null) {
+            if(!FolderMirror.hasStoragePermission(this)) {
+                requestMirrorStoragePermission();
             } else {
-                runGwmSync();
+                section.runSync();
             }
         }
 
@@ -2100,7 +2108,8 @@ public class BaseSettingsActivity extends AppCompatActivity {
     private void showModeDialog() {
         final boolean supported = OperatingMode.isSupported(this);
         final boolean lynkcoSupported = OperatingMode.isLynkcoSupported(this);
-        final int[] modes = { OperatingMode.NORMAL, OperatingMode.FSE, OperatingMode.LEOPARD, OperatingMode.GWM, OperatingMode.LYNKCO };
+        final int[] modes = { OperatingMode.NORMAL, OperatingMode.FSE, OperatingMode.LEOPARD,
+                OperatingMode.GWM, OperatingMode.LYNKCO, OperatingMode.JETOUR };
         CharSequence[] labels = {
                 getString(R.string.mode_normal),
                 getString(R.string.mode_fse),
@@ -2108,13 +2117,15 @@ public class BaseSettingsActivity extends AppCompatActivity {
                         : getString(R.string.mode_leopard) + " — " + getString(R.string.leopard_unsupported),
                 getString(R.string.mode_gwm),
                 lynkcoSupported ? getString(R.string.mode_lynkco)
-                        : getString(R.string.mode_lynkco) + " — " + getString(R.string.lynkco_unsupported)
+                        : getString(R.string.mode_lynkco) + " — " + getString(R.string.lynkco_unsupported),
+                getString(R.string.mode_jetour)
         };
         int current = OperatingMode.get(mSharedPref);
         int checked = current == OperatingMode.LEOPARD ? 2
                 : current == OperatingMode.FSE ? 1
                 : current == OperatingMode.GWM ? 3
-                : current == OperatingMode.LYNKCO ? 4 : 0;
+                : current == OperatingMode.LYNKCO ? 4
+                : current == OperatingMode.JETOUR ? 5 : 0;
 
         new AlertDialog.Builder(this)
                 .setTitle(R.string.mode_title)
@@ -2148,6 +2159,7 @@ public class BaseSettingsActivity extends AppCompatActivity {
         int res = mode == OperatingMode.LEOPARD ? R.string.mode_leopard_desc
                 : mode == OperatingMode.FSE ? R.string.mode_fse_desc
                 : mode == OperatingMode.GWM ? R.string.mode_gwm_desc
+                : mode == OperatingMode.JETOUR ? R.string.mode_jetour_desc
                 : mode == OperatingMode.LYNKCO ? R.string.mode_lynkco_desc : R.string.mode_normal_desc;
         String text = getString(res);
         // The unsupported note is about Leopard's live-wallpaper requirement; only append it when
@@ -2238,62 +2250,164 @@ public class BaseSettingsActivity extends AppCompatActivity {
         return 0;
     }
 
-    // ===== GWM Split section =================================================================
+    // ===== External folder sections (GWM Split / Jetour G700) ================================
     // A self-contained sync into an external folder for a separate app. Independent of every
-    // other feature here; it only ever does anything when the switch below is on.
+    // other feature here; each card only appears in its own mode, and that mode IS its on-switch.
 
-    private TextView mTextViewGwmFolder;
-    private TextView mButtonGwmPermission;
-    private TextView mTextViewGwmStatus;
-    /** True after we sent the user to the all-files-access screen so onResume can start the sync. */
-    private boolean mGwmPendingSyncAfterGrant;
+    /**
+     * One settings card driving one {@link FolderMirror}.
+     *
+     * The GWM card and the Jetour card are the same card twice — a folder line, a permission
+     * button, a QR upload, a "sync now" and a status line — over different ids and different
+     * strings. They are therefore the same code twice: adding the third car should be a
+     * constructor call, not another copy of this.
+     */
+    private final class MirrorSection {
+        private final FolderMirror mirror;
+        private final int idFolder, idPermission, idStatus, idSyncNow, idPairPhone;
+        private final int strFolder, strPairTitle;
+        private TextView folderView, permissionView, statusView;
 
-    private void initGwmSection() {
-        mTextViewGwmFolder = findViewById(R.id.textViewGwmFolder);
-        mButtonGwmPermission = findViewById(R.id.buttonGwmPermission);
-        mTextViewGwmStatus = findViewById(R.id.textViewGwmStatus);
-        // The whole section only ever appears in GWM mode (see showSection); the operating-mode
-        // picker turns the mirror on and off, so there is no separate enable switch here any more.
-        if(mTextViewGwmFolder == null) return;
+        MirrorSection(FolderMirror mirror, int idFolder, int idPermission, int idStatus,
+                      int idSyncNow, int idPairPhone, int strFolder, int strPairTitle) {
+            this.mirror = mirror;
+            this.idFolder = idFolder;
+            this.idPermission = idPermission;
+            this.idStatus = idStatus;
+            this.idSyncNow = idSyncNow;
+            this.idPairPhone = idPairPhone;
+            this.strFolder = strFolder;
+            this.strPairTitle = strPairTitle;
+        }
 
-        mButtonGwmPermission.setOnClickListener(new View.OnClickListener() {
-            @Override public void onClick(View v) { requestGwmStoragePermission(); }
-        });
-        findViewById(R.id.buttonGwmSyncNow).setOnClickListener(new View.OnClickListener() {
-            @Override public void onClick(View v) {
-                if(!GwmSync.hasStoragePermission(BaseSettingsActivity.this)) {
-                    requestGwmStoragePermission();
+        void init() {
+            folderView = findViewById(idFolder);
+            permissionView = findViewById(idPermission);
+            statusView = findViewById(idStatus);
+            // The card only ever appears in its own mode (see showSection); the operating-mode
+            // picker turns the mirror on and off, so there is no separate enable switch here.
+            if(folderView == null) return;
+
+            permissionView.setOnClickListener(v -> requestMirrorStoragePermission());
+            findViewById(idSyncNow).setOnClickListener(v -> {
+                if(!FolderMirror.hasStoragePermission(BaseSettingsActivity.this)) {
+                    requestMirrorStoragePermission();
                     return;
                 }
-                runGwmSync();
+                runSync();
+            });
+            findViewById(idPairPhone).setOnClickListener(v -> pairPhone());
+
+            refresh();
+        }
+
+        boolean isEnabled() {
+            return mSharedPref != null && mirror.isEnabled(mSharedPref);
+        }
+
+        /** Keep the folder line, the permission button and the status text honest with the state. */
+        void refresh() {
+            if(folderView == null) return;
+            folderView.setText(getString(strFolder, mirror.folder(mSharedPref)));
+            boolean enabled = isEnabled();
+            boolean hasPerm = FolderMirror.hasStoragePermission(BaseSettingsActivity.this);
+            permissionView.setVisibility(enabled && !hasPerm ? View.VISIBLE : View.GONE);
+            if(enabled && !hasPerm) {
+                statusView.setText(R.string.gwm_status_no_permission);
             }
-        });
-        findViewById(R.id.buttonGwmPairPhone).setOnClickListener(new View.OnClickListener() {
-            @Override public void onClick(View v) { onClickGwmPairPhone(); }
-        });
+        }
 
-        refreshGwmSection();
-    }
+        void runSync() {
+            if(statusView != null) statusView.setText(R.string.gwm_status_syncing);
+            // force: a tap on "sync now" must always produce a real attempt, never a debounced skip.
+            mirror.syncAsync(getApplicationContext(), mWallpaperRepo, (wrote, error) ->
+                    runOnUiThread(() -> {
+                        if(isFinishing() || isDestroyed() || statusView == null) return;
+                        if(wrote < 0) {
+                            statusView.setText(getString(R.string.gwm_status_failed,
+                                    error == null ? "?" : error));
+                        } else {
+                            statusView.setText(getString(R.string.gwm_status_done, wrote));
+                        }
+                    }), true);
+        }
 
-    /** Keep the folder line, the permission button and the status text honest with current state. */
-    private void refreshGwmSection() {
-        if(mTextViewGwmFolder == null) return;
-        mTextViewGwmFolder.setText(getString(R.string.gwm_folder, GwmSync.folder(mSharedPref)));
-        boolean enabled = GwmSync.isEnabled(mSharedPref);
-        boolean hasPerm = GwmSync.hasStoragePermission(this);
-        mButtonGwmPermission.setVisibility(enabled && !hasPerm ? View.VISIBLE : View.GONE);
-        if(enabled && !hasPerm) {
-            mTextViewGwmStatus.setText(R.string.gwm_status_no_permission);
+        /** QR upload whose files land directly in this folder (never our wallpaper folder). */
+        void pairPhone() {
+            if(!FolderMirror.hasStoragePermission(BaseSettingsActivity.this)) {
+                requestMirrorStoragePermission();
+                return;
+            }
+            stopUploadServer();
+            final String url;
+            try {
+                mUploadServer = UploadServer.startNewMirror(BaseSettingsActivity.this, mWallpaperRepo,
+                        savedPaths -> {
+                            if(isFinishing() || isDestroyed() || savedPaths == null || savedPaths.isEmpty()) return;
+                            Toast.makeText(BaseSettingsActivity.this,
+                                    getString(R.string.pair_uploaded_n, savedPaths.size()), Toast.LENGTH_LONG).show();
+                            refresh();
+                        }, mirror);
+                url = mUploadServer.getUrl();
+            } catch(Exception e) {
+                Toast.makeText(BaseSettingsActivity.this, "Server error: " + e.getMessage(), Toast.LENGTH_LONG).show();
+                return;
+            }
+            if(url == null) {
+                stopUploadServer();
+                infoDialog(getString(strPairTitle), getString(R.string.pair_no_wifi));
+                return;
+            }
+
+            TextView urlText = new TextView(BaseSettingsActivity.this);
+            urlText.setText(url);
+            urlText.setTextIsSelectable(true);
+            new AlertDialog.Builder(BaseSettingsActivity.this)
+                    .setTitle(strPairTitle)
+                    .setView(qrPanel(url, getString(R.string.pair_scan_hint), urlText, null))
+                    .setPositiveButton(R.string.ok, null)
+                    .setOnDismissListener(dialog -> stopUploadServer())
+                    .show();
         }
     }
 
-    private void requestGwmStoragePermission() {
+    private MirrorSection mGwmSection;
+    private MirrorSection mJetourSection;
+    /** True after we sent the user to the all-files-access screen so onResume can start the sync. */
+    private boolean mMirrorPendingSyncAfterGrant;
+
+    private void initMirrorSections() {
+        mGwmSection = new MirrorSection(FolderMirror.GWM,
+                R.id.textViewGwmFolder, R.id.buttonGwmPermission, R.id.textViewGwmStatus,
+                R.id.buttonGwmSyncNow, R.id.buttonGwmPairPhone,
+                R.string.gwm_folder, R.string.gwm_pair_phone);
+        mJetourSection = new MirrorSection(FolderMirror.JETOUR,
+                R.id.textViewJetourFolder, R.id.buttonJetourPermission, R.id.textViewJetourStatus,
+                R.id.buttonJetourSyncNow, R.id.buttonJetourPairPhone,
+                R.string.jetour_folder, R.string.jetour_pair_phone);
+        mGwmSection.init();
+        mJetourSection.init();
+    }
+
+    private void refreshMirrorSections() {
+        if(mGwmSection != null) mGwmSection.refresh();
+        if(mJetourSection != null) mJetourSection.refresh();
+    }
+
+    /** The card for the mode this car is actually in, or null when the mode has no mirror. */
+    private MirrorSection activeMirrorSection() {
+        if(mGwmSection != null && mGwmSection.isEnabled()) return mGwmSection;
+        if(mJetourSection != null && mJetourSection.isEnabled()) return mJetourSection;
+        return null;
+    }
+
+    private void requestMirrorStoragePermission() {
         new AlertDialog.Builder(this)
                 .setTitle(R.string.gwm_permission_title)
                 .setMessage(R.string.gwm_permission_message)
                 .setPositiveButton(R.string.ok, new DialogInterface.OnClickListener() {
                     @Override public void onClick(DialogInterface d, int w) {
-                        mGwmPendingSyncAfterGrant = true;
+                        mMirrorPendingSyncAfterGrant = true;
                         try {
                             if(Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
                                 Intent i = new Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION,
@@ -2314,66 +2428,6 @@ public class BaseSettingsActivity extends AppCompatActivity {
                     }
                 })
                 .setNegativeButton(R.string.update_cancel, null)
-                .show();
-    }
-
-    private void runGwmSync() {
-        if(mTextViewGwmStatus != null) mTextViewGwmStatus.setText(R.string.gwm_status_syncing);
-        // force: a tap on "sync now" must always produce a real attempt, never a debounced skip.
-        GwmSync.syncAsync(getApplicationContext(), mWallpaperRepo, new GwmSync.Callback() {
-            @Override
-            public void done(final int wrote, final String error) {
-                runOnUiThread(new Runnable() {
-                    @Override public void run() {
-                        if(isFinishing() || isDestroyed() || mTextViewGwmStatus == null) return;
-                        if(wrote < 0) {
-                            mTextViewGwmStatus.setText(getString(R.string.gwm_status_failed,
-                                    error == null ? "?" : error));
-                        } else {
-                            mTextViewGwmStatus.setText(getString(R.string.gwm_status_done, wrote));
-                        }
-                    }
-                });
-            }
-        }, true);
-    }
-
-    /** QR upload whose files land directly in the GWM folder (never our wallpaper folder). */
-    private void onClickGwmPairPhone() {
-        if(!GwmSync.hasStoragePermission(this)) { requestGwmStoragePermission(); return; }
-        stopUploadServer();
-        final String url;
-        try {
-            mUploadServer = UploadServer.startNewGwm(this, mWallpaperRepo, new UploadServer.UploadListener() {
-                @Override
-                public void onUploaded(List<String> savedPaths) {
-                    if(isFinishing() || isDestroyed() || savedPaths == null || savedPaths.isEmpty()) return;
-                    Toast.makeText(BaseSettingsActivity.this,
-                            getString(R.string.pair_uploaded_n, savedPaths.size()), Toast.LENGTH_LONG).show();
-                    refreshGwmSection();
-                }
-            });
-            url = mUploadServer.getUrl();
-        } catch(Exception e) {
-            Toast.makeText(this, "Server error: " + e.getMessage(), Toast.LENGTH_LONG).show();
-            return;
-        }
-        if(url == null) {
-            stopUploadServer();
-            infoDialog(getString(R.string.gwm_pair_phone), getString(R.string.pair_no_wifi));
-            return;
-        }
-
-        TextView urlText = new TextView(this);
-        urlText.setText(url);
-        urlText.setTextIsSelectable(true);
-        new AlertDialog.Builder(this)
-                .setTitle(R.string.gwm_pair_phone)
-                .setView(qrPanel(url, getString(R.string.pair_scan_hint), urlText, null))
-                .setPositiveButton(R.string.ok, null)
-                .setOnDismissListener(new DialogInterface.OnDismissListener() {
-                    @Override public void onDismiss(DialogInterface dialog) { stopUploadServer(); }
-                })
                 .show();
     }
 

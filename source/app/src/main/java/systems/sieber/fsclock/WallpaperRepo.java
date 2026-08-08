@@ -486,24 +486,29 @@ public class WallpaperRepo {
         }
     }
 
-    /** RPC that returns the GWM Split channel images for this car (empty when not configured). */
-    private String getGwmSyncUrl() {
+    /**
+     * RPC that returns one folder-mirror channel's images for this car (empty when not
+     * configured). Every mirror channel has its own RPC with the same shape and the same
+     * activation gate — see get_gwm_wallpapers / get_jetour_wallpapers.
+     */
+    private String getMirrorSyncUrl(String rpcName) {
         String sbUrl = getSupabaseUrl();
         if (sbUrl.contains("YOUR_SUPABASE_PROJECT")) return "";
-        return sbUrl + "/rest/v1/rpc/get_gwm_wallpapers?device_hw_id=" + getDeviceId()
+        return sbUrl + "/rest/v1/rpc/" + rpcName + "?device_hw_id=" + getDeviceId()
                 + "&legacy_hw_id=" + getLegacyDeviceId();
     }
 
     /**
-     * Fetch the GWM Split manifest for this car: the images the operator tagged for the external
-     * folder, global-to-all-GWM plus this car's own. Blocking — call from a background thread.
+     * Fetch a folder-mirror manifest for this car: the images the operator tagged for that
+     * external folder, global-to-all-cars-of-that-make plus this car's own. Blocking — call from
+     * a background thread.
      *
      * Returns an empty list for an unactivated device (the RPC answers with a single "inactive"
      * sentinel, exactly like the normal channel), so a car that is not activated never writes
      * anything into the shared folder.
      */
-    public List<WallpaperItem> fetchGwmItems() throws Exception {
-        String url = getGwmSyncUrl();
+    public List<WallpaperItem> fetchChannelItems(String rpcName) throws Exception {
+        String url = getMirrorSyncUrl(rpcName);
         if (url.isEmpty()) return new ArrayList<>();
         String json = httpGet(url);
         if (json == null || json.trim().isEmpty()) return new ArrayList<>();
@@ -1352,10 +1357,12 @@ public class WallpaperRepo {
     }
 
     private String httpGet(String urlStr) throws Exception {
-        // Both wallpaper RPCs take the same (device_hw_id, legacy_hw_id) body, so they share this
-        // path. get_gwm_wallpapers does not contain the literal "get_wallpapers" substring, so it
-        // must be listed explicitly.
-        boolean isRpc = urlStr.contains("/rpc/get_wallpapers") || urlStr.contains("/rpc/get_gwm_wallpapers");
+        // Every wallpaper RPC takes the same (device_hw_id, legacy_hw_id) body, so they share this
+        // path. The mirror RPCs (get_gwm_wallpapers, get_jetour_wallpapers) do not contain the
+        // literal "get_wallpapers" substring, so they must be listed explicitly.
+        boolean isRpc = urlStr.contains("/rpc/get_wallpapers")
+                || urlStr.contains("/rpc/get_gwm_wallpapers")
+                || urlStr.contains("/rpc/get_jetour_wallpapers");
         URL url = new URL(isRpc ? urlStr.split("\\?")[0] : urlStr);
         HttpURLConnection conn = (HttpURLConnection) url.openConnection();
         conn.setConnectTimeout(15000);

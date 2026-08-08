@@ -45,9 +45,10 @@ create table if not exists public.devices (
     is_active     boolean default false,
     created_at    timestamptz not null default timezone('utc', now()),
     is_blocked    boolean not null default false,
-    -- Operating mode the device last reported (normal | fse | leopard | gwm | lynkco).
+    -- Operating mode the device last reported
+    -- (normal | fse | leopard | gwm | lynkco | jetour).
     -- null = an older APK that does not report yet. Set via report_device_mode RPC.
-    mode          text check (mode is null or mode in ('normal','fse','leopard','gwm','lynkco')),
+    mode          text check (mode is null or mode in ('normal','fse','leopard','gwm','lynkco','jetour')),
     -- Fleet telemetry, all written by report_device_mode (added 2026-07-29).
     app_version      text,
     app_version_code int,
@@ -70,12 +71,15 @@ create table if not exists public.wallpapers (
     -- When set, this wallpaper only reaches cars whose last reported mode matches
     -- (e.g. 'lynkco' + is_global = "every Lynk & Co car"). null = the normal
     -- library that syncs to every car. See get_wallpapers.
-    target_mode text check (target_mode is null or target_mode in ('normal','fse','leopard','gwm','lynkco')),
-    -- Delivery channel. 'app' = shown by our own slideshow. 'gwm_split' = NOT shown
-    -- by us at all: the car downloads it into /sdcard/Pictures/GWMSplit_Styles for
-    -- the head unit's own background app to read (the same folder the Cars-installer
-    -- script pushes photos to on a GWM car). The two channels have one RPC each and
-    -- must never leak into one another — see get_wallpapers / get_gwm_wallpapers.
+    target_mode text check (target_mode is null or target_mode in ('normal','fse','leopard','gwm','lynkco','jetour')),
+    -- Delivery channel. 'app' = shown by our own slideshow. The others are NOT shown
+    -- by us at all: the car downloads them into a folder the head unit's own app
+    -- reads — 'gwm_split' into /sdcard/Pictures/GWMSplit_Styles (the same folder the
+    -- Cars-installer script pushes photos to on a GWM car), 'jetour_g700' into
+    -- /sdcard/Pictures/G700. Every channel has exactly one RPC and they must never
+    -- leak into one another — see get_wallpapers / get_gwm_wallpapers /
+    -- get_jetour_wallpapers. Deliberately unconstrained text: adding a car means
+    -- adding an RPC, not migrating a check constraint.
     channel     text not null default 'app',
     created_at  timestamptz not null default timezone('utc', now())
 );
@@ -449,6 +453,38 @@ begin
 end;
 $function$;
 
+-- Jetour G700 channel playlist. The same function as get_gwm_wallpapers over a
+-- different channel: same activation gate, same alias resolution, and the same
+-- 'inactive' sentinel for a car that is not activated. One RPC per channel is
+-- what keeps a GWM image from ever landing in a Jetour folder.
+CREATE OR REPLACE FUNCTION public.get_jetour_wallpapers(device_hw_id text, legacy_hw_id text DEFAULT NULL::text)
+ RETURNS TABLE(url text, type text)
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare
+    hw text;
+begin
+    perform public.migrate_device_hardware_id(legacy_hw_id, device_hw_id);
+    hw := public.resolve_device_id(device_hw_id);
+
+    if exists (
+        select 1 from public.devices d
+        where d.hardware_id = hw and d.is_active = true and d.is_blocked = false
+    ) then
+        return query
+        select w.url, w.type
+        from public.wallpapers w
+        where w.channel = 'jetour_g700'
+          and (w.is_global = true or w.hardware_id = hw)
+        order by w.created_at desc;
+    else
+        return query select 'inactive'::text, 'image'::text;
+    end if;
+end;
+$function$;
+
 -- SECURITY: migrate_device_hardware_id is internal-only. Revoke direct REST
 -- access so it cannot be used to hijack a device by its (guessable) VIN. The
 -- `perform` calls inside the other RPCs still work because those functions are
@@ -492,7 +528,7 @@ begin
 
     update public.devices
        set mode             = case
-                                when device_mode in ('normal','fse','leopard','gwm','lynkco')
+                                when device_mode in ('normal','fse','leopard','gwm','lynkco','jetour')
                                 then device_mode else mode end,
            app_version      = coalesce(report_device_mode.app_version, devices.app_version),
            app_version_code = coalesce(report_device_mode.app_version_code, devices.app_version_code),

@@ -152,9 +152,10 @@ public class FsClockView extends FrameLayout {
                     }
                 });
             }
-            // Mirror the GWM Split folder on the same cadence. Independent of the wallpaper sync
-            // above (different channel, different destination); no-ops when the section is off.
-            kickGwmSync();
+            // Mirror this car's external folder (GWM Split / Jetour G700) on the same cadence.
+            // Independent of the wallpaper sync above (different channel, different destination);
+            // no-ops in every mode that has no mirror.
+            kickFolderMirror();
             postDelayed(this, PERIODIC_SYNC_INTERVAL_MS);
         }
     };
@@ -425,19 +426,14 @@ public class FsClockView extends FrameLayout {
         if(mWallpaperRepo != null && mWallpaperRepo.isSyncEnabled()) {
             autoDownloadWallpapers(3);
         }
-        // The GWM folder mirror gets the same treatment as the wallpapers above: pull on open,
+        // The external folder mirror gets the same treatment as the wallpapers above: pull on open,
         // not only every five minutes, so an image published while the car was parked is there
         // the moment the screen comes up. Nothing already on disk is downloaded twice.
-        kickGwmSync();
+        kickFolderMirror();
         // Keep pulling changes from the server while the app runs (see mPeriodicSyncRunnable).
         startPeriodicSync();
     }
 
-    /**
-     * One GWM Split mirror pass, if this car is in GWM mode. Cheap to call from anywhere:
-     * {@link GwmSync} itself skips the pass when the mode is off and debounces bursts, so the
-     * open/resume/timer triggers can overlap freely.
-     */
     /** One-shot: this screen is torn down by the gate, so it must never fire twice. */
     private boolean mModeGateLaunched = false;
 
@@ -453,12 +449,18 @@ public class FsClockView extends FrameLayout {
         mActivity.finish();
     }
 
-    private void kickGwmSync() {
+    /**
+     * One folder-mirror pass, if this car runs one (GWM / Jetour). Cheap to call from anywhere:
+     * {@link FolderMirror} returns null for every other mode and debounces bursts, so the
+     * open/resume/timer triggers can overlap freely.
+     */
+    private void kickFolderMirror() {
         if(mWallpaperRepo == null || getContext() == null) return;
         SharedPreferences p = getContext().getSharedPreferences(
                 BaseSettingsActivity.SHARED_PREF_DOMAIN, Context.MODE_PRIVATE);
-        if(!GwmSync.isEnabled(p)) return;
-        GwmSync.syncAsync(getContext().getApplicationContext(), mWallpaperRepo, null);
+        FolderMirror mirror = FolderMirror.active(p);
+        if(mirror == null) return;
+        mirror.syncAsync(getContext().getApplicationContext(), mWallpaperRepo, null);
     }
 
     /**
@@ -536,10 +538,11 @@ public class FsClockView extends FrameLayout {
      * wallpaper that lurches and sticks under the finger, and it looks like the app is broken
      * rather than busy. Saying so, with a number, is the honest version.
      *
-     * Only Others: the hand-off modes never run a slideshow — Leopard and Lynk & Co show the
-     * picker, which has its own progress and its own way of coping with a clip that has not
-     * arrived — and FSE is the same slideshow but is chosen for panels where covering the screen
-     * at boot is exactly what must not happen.
+     * Only the Others family (Others, GWM, Jetour — the modes that actually draw a slideshow):
+     * the hand-off modes never run one — Leopard and Lynk & Co show the picker, which has its own
+     * progress and its own way of coping with a clip that has not arrived — and FSE is the same
+     * slideshow but is chosen for panels where covering the screen at boot is exactly what must
+     * not happen.
      *
      * Never shown for a car that is already up to date: nothing is counted as pending unless it
      * genuinely is, so an unchanged library reports 0 of 0 and this stays hidden.
@@ -547,7 +550,7 @@ public class FsClockView extends FrameLayout {
     private void showDownloadProgress(int done, int total) {
         if(mLayoutDownloadProgress == null) return;
         if(mDownloadProgressDismissed) return;
-        if(mSharedPref == null || OperatingMode.get(mSharedPref) != OperatingMode.NORMAL) return;
+        if(mSharedPref == null || !OperatingMode.isOthersLike(mSharedPref)) return;
         // Not over the activation card: a car that is not registered yet has nothing to
         // download, and burying the serial field would be the worse bug of the two.
         if(mLayoutActivation != null && mLayoutActivation.getVisibility() == View.VISIBLE) return;
@@ -1160,6 +1163,7 @@ public class FsClockView extends FrameLayout {
         int res = mode == OperatingMode.LEOPARD ? R.string.mode_leopard_desc
                 : mode == OperatingMode.LYNKCO ? R.string.mode_lynkco_desc
                 : mode == OperatingMode.GWM ? R.string.mode_gwm_desc
+                : mode == OperatingMode.JETOUR ? R.string.mode_jetour_desc
                 : mode == OperatingMode.FSE ? R.string.mode_fse_desc : R.string.mode_normal_desc;
         String text = getContext().getString(res);
         // The note is about the live-wallpaper support Leopard needs; Lynk & Co hands the file
@@ -1178,6 +1182,7 @@ public class FsClockView extends FrameLayout {
         int id = mRadioGroupActivationMode.getCheckedRadioButtonId();
         if(id == R.id.radioActivationLeopard) return OperatingMode.LEOPARD;
         if(id == R.id.radioActivationGwm) return OperatingMode.GWM;
+        if(id == R.id.radioActivationJetour) return OperatingMode.JETOUR;
         if(id == R.id.radioActivationLynkco) return OperatingMode.LYNKCO;
         if(id == R.id.radioActivationFse) return OperatingMode.FSE;
         return OperatingMode.NORMAL;
@@ -1241,11 +1246,12 @@ public class FsClockView extends FrameLayout {
             @Override
             public void run() {
                 loadSettings();
-                // Others and FSE hand over to the download gate, which holds the car until the
-                // whole library is local — the same screen ModeConfirmActivity routes into, so a
-                // car activated here and one confirmed there start identically. GWM has no
-                // slideshow to starve, so it just downloads in the background as before.
-                if(chosen == OperatingMode.NORMAL || chosen == OperatingMode.FSE) {
+                // Others, FSE and Jetour hand over to the download gate, which holds the car until
+                // the whole library is local — the same screen ModeConfirmActivity routes into, so
+                // a car activated here and one confirmed there start identically. GWM keeps its
+                // original behaviour and just downloads in the background.
+                if(chosen == OperatingMode.NORMAL || chosen == OperatingMode.FSE
+                        || chosen == OperatingMode.JETOUR) {
                     getContext().startActivity(new android.content.Intent(
                             getContext(), WallpaperDownloadActivity.class));
                     if(mActivity != null) mActivity.finish();
@@ -1802,7 +1808,7 @@ public class FsClockView extends FrameLayout {
         if(mWallpaperRepo != null && mWallpaperRepo.isSyncEnabled()) {
             autoDownloadWallpapers(1);
         }
-        kickGwmSync();
+        kickFolderMirror();
         startPeriodicSync();
     }
 

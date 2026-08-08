@@ -397,6 +397,11 @@
                             style="@style/ActivationModeRadio"
                             android:text="@string/mode_lynkco" />
 
+                        <RadioButton
+                            android:id="@+id/radioActivationJetour"
+                            style="@style/ActivationModeRadio"
+                            android:text="@string/mode_jetour" />
+
                     </RadioGroup>
 
                     <TextView

@@ -289,6 +289,8 @@ Roboto Font Copyright (c) Christian Robertson. Licensed under the Apache License
     <string name="mode_leopard_desc">The app hands the wallpaper to Android and disappears — no clock, no switching.</string>
     <string name="mode_gwm">GWM</string>
     <string name="mode_gwm_desc">Same as Others, plus a \"Manage GWM images\" section that mirrors the GWM channel into the shared folder the GWM dashboard app reads.</string>
+    <string name="mode_jetour">Jetour</string>
+    <string name="mode_jetour_desc">Same as Others, plus a \"Manage Jetour images\" section that downloads the Jetour channel into /sdcard/Pictures/G700 for the head unit\'s own app to read.</string>
     <string name="mode_lynkco">Lynk and Co</string>
     <string name="mode_lynkco_desc">For Lynk &amp; Co / Flyme head units. The app is just a picker — the chosen wallpaper is handed to the car\'s own theme app, which opens a preview with an \"Apply\" button.</string>
     <string name="lynkco_unsupported">Not a Lynk &amp; Co / Flyme head unit</string>
@@ -372,6 +374,13 @@ Roboto Font Copyright (c) Christian Robertson. Licensed under the Apache License
     <string name="gwm_status_no_permission">Waiting for \"All files access\" — grant it above.</string>
     <string name="gwm_permission_title">Permission required</string>
     <string name="gwm_permission_message">To place images in a folder another app can read, enable \"Allow access to manage all files\" on the next screen.</string>
+
+    <!-- Jetour G700: the same idea as GWM Split, different folder. Permission/status strings are
+         shared with the gwm_* ones above, which say nothing GWM-specific. -->
+    <string name="jetour_section">Jetour images</string>
+    <string name="jetour_subtitle">Downloads images tagged \"Jetour\" from the cloud into /sdcard/Pictures/G700 on this car for the head unit\'s own app to use. Does not affect this app\'s own wallpapers.</string>
+    <string name="jetour_folder">Folder: %1$s</string>
+    <string name="jetour_pair_phone">Upload from phone (QR)</string>
 
     <!-- Device identity block in the Wallpapers section. These were concatenated in Java, which
          is why they stayed Arabic in every locale. -->
@@ -460,6 +469,7 @@ Roboto Font Copyright (c) Christian Robertson. Licensed under the Apache License
     <string name="chip_mode_leopard">Mode: Leopard \\ Denza</string>
     <string name="chip_mode_gwm">Mode: GWM</string>
     <string name="chip_mode_lynkco">Mode: Lynk and Co</string>
+    <string name="chip_mode_jetour">Mode: Jetour</string>
 
     <!-- Crash log (Settings -> Updates). Only shown on a car that has actually crashed. -->
     <string name="crash_log_open">Crash log</string>

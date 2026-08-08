@@ -19,51 +19,100 @@ import java.util.List;
 import java.util.Set;
 
 /**
- * The GWM Split feature — a deliberately self-contained side channel that has NOTHING to do with
- * how this app shows wallpapers.
+ * A folder mirror — a deliberately self-contained side channel that has NOTHING to do with how
+ * this app shows wallpapers.
  *
- * A separate app on some Great Wall (GWM) head units reads its background images from a fixed
- * folder on shared storage. This mirrors the "gwm_split" channel of our cloud into that folder:
- * images the operator tagged for all GWM cars, plus any tagged for this specific car. Our own
- * slideshow, the operating modes, and the normal wallpaper channel are untouched — a car only
- * ever does any of this when the technician turns the section on.
+ * Some head units run a SEPARATE app that reads its background images from a fixed folder on
+ * shared storage. This class mirrors one cloud channel into one such folder: images the operator
+ * tagged for all cars of that make, plus any tagged for this specific car. Our own slideshow, the
+ * operating modes and the normal wallpaper channel are untouched — a car only ever does any of
+ * this while it is in the matching mode.
  *
  * "Mirror" means the folder ends up holding exactly the current manifest: new images are
  * downloaded, images dropped from the cloud are deleted. To avoid ever deleting a file some other
  * app placed there, only files THIS class wrote (tracked in prefs) are eligible for deletion.
+ *
+ * Two mirrors exist, and they are the same mechanism twice over with different addresses:
+ *   {@link #GWM}    — 'gwm_split' -> /sdcard/Pictures/GWMSplit_Styles, for GWM head units.
+ *   {@link #JETOUR} — 'jetour_g700' -> /sdcard/Pictures/G700, for the Jetour G700.
+ * Everything below is shared between them on purpose: this class used to be GwmSync, and a
+ * second copy of it would have meant fixing every download bug twice. Each instance keeps its
+ * OWN pref keys — in particular its own managed-files list, or one mirror's pass would happily
+ * delete the other's pictures.
  */
-class GwmSync {
+class FolderMirror {
 
-    private static final String TAG = "GwmSync";
+    private static final String TAG = "FolderMirror";
 
-    static final String PREF_FOLDER  = "gwm-split-folder";
+    /** The GWM Split channel. Pref keys are the originals, so cars in the field carry on unchanged. */
+    static final FolderMirror GWM = new FolderMirror(
+            OperatingMode.GWM,
+            "gwm-split-folder", "gwm-split-managed-files",
+            "GWMSplit_Styles", "get_gwm_wallpapers", "gwm_");
+
+    /** Jetour G700: same idea, its own folder and its own channel. */
+    static final FolderMirror JETOUR = new FolderMirror(
+            OperatingMode.JETOUR,
+            "jetour-g700-folder", "jetour-g700-managed-files",
+            "G700", "get_jetour_wallpapers", "jetour_");
+
+    /** Every mirror there is, for the callers that just want to kick "whatever applies". */
+    static final FolderMirror[] ALL = { GWM, JETOUR };
+
+    /** The operating mode that switches this mirror on — the mode IS the enable flag. */
+    final int mode;
+    private final String prefFolder;
     /** JSON array of the file names we created in the folder, so we never delete a stranger's file. */
-    private static final String PREF_MANAGED = "gwm-split-managed-files";
+    private final String prefManaged;
+    private final String folderName;
+    private final String rpc;
+    private final String fallbackPrefix;
+
+    private FolderMirror(int mode, String prefFolder, String prefManaged,
+                         String folderName, String rpc, String fallbackPrefix) {
+        this.mode = mode;
+        this.prefFolder = prefFolder;
+        this.prefManaged = prefManaged;
+        this.folderName = folderName;
+        this.rpc = rpc;
+        this.fallbackPrefix = fallbackPrefix;
+    }
 
     /**
-     * The path the GWM Split app reads by default. Editable in settings for other integrations.
+     * The mirror this car should be running, or null for a car in a mode that has none.
      *
-     * Deliberately the SAME folder the Cars-installer script pushes photos to when a technician
-     * sets up a GWM car by cable (/sdcard/Pictures/GWMSplit_Styles — see Copy-ImagesToDevice in
-     * "Cars installer.ps1"). Cloud delivery and cable delivery must land in one place, or the
-     * head unit ends up with two half-full galleries.
+     * There is exactly one at a time because the modes are exclusive: a GWM car mirrors the GWM
+     * folder, a Jetour car the G700 folder, everybody else nothing at all.
      */
-    static String defaultFolder() {
-        File pics = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES);
-        return new File(pics, "GWMSplit_Styles").getAbsolutePath();
+    static FolderMirror active(SharedPreferences p) {
+        int m = OperatingMode.get(p);
+        for(FolderMirror f : ALL) if(f.mode == m) return f;
+        return null;
     }
 
     /**
-     * The GWM mirror runs on exactly one condition: this install is in GWM mode. The mode picker
-     * IS the on-switch — there is no separate enable flag any more. Every previous call site
-     * (boot, view, settings) keeps working unchanged; they now all mean "in GWM mode".
+     * The path the companion app reads by default. Editable in prefs for other integrations.
+     *
+     * For GWM this is deliberately the SAME folder the Cars-installer script pushes photos to
+     * when a technician sets up a car by cable (/sdcard/Pictures/GWMSplit_Styles — see
+     * Copy-ImagesToDevice in "Cars installer.ps1"). Cloud delivery and cable delivery must land
+     * in one place, or the head unit ends up with two half-full galleries.
      */
-    static boolean isEnabled(SharedPreferences p) {
-        return OperatingMode.get(p) == OperatingMode.GWM;
+    String defaultFolder() {
+        File pics = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES);
+        return new File(pics, folderName).getAbsolutePath();
     }
 
-    static String folder(SharedPreferences p) {
-        String f = p.getString(PREF_FOLDER, "").trim();
+    /**
+     * The mirror runs on exactly one condition: this install is in the matching mode. The mode
+     * picker IS the on-switch — there is no separate enable flag.
+     */
+    boolean isEnabled(SharedPreferences p) {
+        return OperatingMode.get(p) == mode;
+    }
+
+    String folder(SharedPreferences p) {
+        String f = p.getString(prefFolder, "").trim();
         return f.isEmpty() ? defaultFolder() : f;
     }
 
@@ -86,18 +135,18 @@ class GwmSync {
     }
 
     /**
-     * When the last mirror pass started. The mirror is now kicked from every "the app is in
-     * front of the user" moment — process start, the clock view attaching, and every resume —
-     * on top of the 5-minute timer, so a newly published image lands without waiting. Those
-     * triggers can fire two or three times within a second of each other (launch = attach +
-     * resume), and running the whole pass that often is pure waste: nothing can have changed
-     * server-side in that window. A pass inside the window is therefore skipped.
+     * When this mirror's last pass started. The mirror is kicked from every "the app is in front
+     * of the user" moment — process start, the clock view attaching, and every resume — on top of
+     * the 5-minute timer, so a newly published image lands without waiting. Those triggers can
+     * fire two or three times within a second of each other (launch = attach + resume), and
+     * running the whole pass that often is pure waste: nothing can have changed server-side in
+     * that window. A pass inside the window is therefore skipped.
      */
-    private static volatile long sLastRunMs = 0L;
+    private volatile long lastRunMs = 0L;
     private static final long MIN_INTERVAL_MS = 30_000;
 
     /** Run one mirror pass on a background thread. Safe to call whenever; it no-ops when disabled. */
-    static void syncAsync(final Context appCtx, final WallpaperRepo repo, final Callback cb) {
+    void syncAsync(final Context appCtx, final WallpaperRepo repo, final Callback cb) {
         syncAsync(appCtx, repo, cb, false);
     }
 
@@ -105,14 +154,14 @@ class GwmSync {
      * @param force run even if a pass just ran. The settings "sync now" button passes true: a
      *              technician who taps it is owed a real attempt, not a silent skip.
      */
-    static void syncAsync(final Context appCtx, final WallpaperRepo repo, final Callback cb,
-                          boolean force) {
+    void syncAsync(final Context appCtx, final WallpaperRepo repo, final Callback cb,
+                   boolean force) {
         long now = android.os.SystemClock.elapsedRealtime();
-        if (!force && sLastRunMs != 0L && now - sLastRunMs < MIN_INTERVAL_MS) {
+        if (!force && lastRunMs != 0L && now - lastRunMs < MIN_INTERVAL_MS) {
             if (cb != null) cb.done(0, null);
             return;
         }
-        sLastRunMs = now;
+        lastRunMs = now;
         new Thread(new Runnable() {
             @Override public void run() {
                 int r;
@@ -120,7 +169,7 @@ class GwmSync {
                 try {
                     r = syncBlocking(appCtx, repo);
                 } catch (Throwable t) {
-                    Log.e(TAG, "gwm sync failed", t);
+                    Log.e(TAG, "sync failed (" + rpc + ")", t);
                     r = -1;
                     err = t.getMessage();
                 }
@@ -130,7 +179,7 @@ class GwmSync {
     }
 
     /** @return number of files in the folder after the mirror, or throws on a hard failure. */
-    static int syncBlocking(Context appCtx, WallpaperRepo repo) throws Exception {
+    int syncBlocking(Context appCtx, WallpaperRepo repo) throws Exception {
         SharedPreferences p = appCtx.getSharedPreferences(
                 SettingsActivity.SHARED_PREF_DOMAIN, Context.MODE_PRIVATE);
         if (!isEnabled(p)) return 0;
@@ -143,7 +192,7 @@ class GwmSync {
             throw new Exception("cannot create " + dir.getAbsolutePath());
         }
 
-        List<WallpaperItem> items = repo.fetchGwmItems();
+        List<WallpaperItem> items = repo.fetchChannelItems(rpc);
 
         // Desired file names, derived from the (UUID) URLs so they are stable and collision-free.
         Set<String> desired = new HashSet<>();
@@ -214,14 +263,14 @@ class GwmSync {
     }
 
     /** Stable on-disk name for a wallpaper URL: keep the (already unique) last path segment. */
-    private static String fileNameFor(String url) {
+    private String fileNameFor(String url) {
         String u = url;
         int q = u.indexOf('?');
         if (q >= 0) u = u.substring(0, q);
         int slash = u.lastIndexOf('/');
         String name = slash >= 0 ? u.substring(slash + 1) : u;
         name = name.replaceAll("[\\\\/:*?\"<>|]", "_");
-        if (name.isEmpty()) name = "gwm_" + Integer.toHexString(url.hashCode());
+        if (name.isEmpty()) name = fallbackPrefix + Integer.toHexString(url.hashCode());
         return name;
     }
 
@@ -260,34 +309,34 @@ class GwmSync {
         }
     }
 
-    private static Set<String> loadManaged(SharedPreferences p) {
+    private Set<String> loadManaged(SharedPreferences p) {
         Set<String> s = new HashSet<>();
         try {
-            JSONArray a = new JSONArray(p.getString(PREF_MANAGED, "[]"));
+            JSONArray a = new JSONArray(p.getString(prefManaged, "[]"));
             for (int i = 0; i < a.length(); i++) s.add(a.getString(i));
         } catch (Exception ignored) {}
         return s;
     }
 
-    private static void saveManaged(SharedPreferences p, Set<String> s) {
+    private void saveManaged(SharedPreferences p, Set<String> s) {
         JSONArray a = new JSONArray();
         for (String n : s) a.put(n);
-        p.edit().putString(PREF_MANAGED, a.toString()).apply();
+        p.edit().putString(prefManaged, a.toString()).apply();
     }
 
     /**
-     * Save a locally-provided file (e.g. a QR upload) straight into the GWM folder, and track it
-     * so a later mirror does not treat it as a stranger's file and keep it forever. Returns the
+     * Save a locally-provided file (e.g. a QR upload) straight into the mirrored folder, and track
+     * it so a later mirror does not treat it as a stranger's file and keep it forever. Returns the
      * saved path or null.
      */
-    static String saveLocalCopy(Context appCtx, InputStream in, String displayName) {
+    String saveLocalCopy(Context appCtx, InputStream in, String displayName) {
         try {
             SharedPreferences p = appCtx.getSharedPreferences(
                     SettingsActivity.SHARED_PREF_DOMAIN, Context.MODE_PRIVATE);
             File dir = new File(folder(p));
             if (!dir.exists() && !dir.mkdirs()) return null;
             String name = (displayName == null || displayName.trim().isEmpty())
-                    ? ("gwm_" + System.currentTimeMillis() + ".jpg")
+                    ? (fallbackPrefix + System.currentTimeMillis() + ".jpg")
                     : displayName.replaceAll("[\\\\/:*?\"<>|]", "_");
             File dest = new File(dir, name);
             // Avoid clobbering an existing name from a different image.

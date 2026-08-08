@@ -70,17 +70,18 @@ public class UploadServer extends NanoHTTPD {
     private final Context mContext;
     private final WallpaperRepo mRepo;
     private final UploadListener mListener;
-    /** When true, uploads land in the external GWM Split folder, not our wallpaper folder, and are
-     *  NOT made the current wallpaper — they belong to a different app entirely. */
-    private final boolean mGwmFolder;
+    /** Non-null when uploads land in an external mirrored folder (GWM Split / Jetour G700) rather
+     *  than our wallpaper folder. Those files are NOT made the current wallpaper — they belong to
+     *  a different app entirely. */
+    private final FolderMirror mMirror;
     private final Handler mMain = new Handler(Looper.getMainLooper());
 
-    private UploadServer(Context c, int port, WallpaperRepo repo, UploadListener listener, boolean gwmFolder) {
+    private UploadServer(Context c, int port, WallpaperRepo repo, UploadListener listener, FolderMirror mirror) {
         super(port);
         mContext = c.getApplicationContext();
         mRepo = repo;
         mListener = listener;
-        mGwmFolder = gwmFolder;
+        mMirror = mirror;
         // Do NOT use NanoHTTPD's default temp file manager: it writes to
         // System.getProperty("java.io.tmpdir"), which on Android points into the app
         // cache — a directory Android may wipe at any time. When it is gone, every
@@ -97,18 +98,19 @@ public class UploadServer extends NanoHTTPD {
 
     /** Bind and start the server, falling back to the next port if one is taken. */
     public static UploadServer startNew(Context c, WallpaperRepo repo, UploadListener listener) throws IOException {
-        return startNew(c, repo, listener, false);
+        return startNew(c, repo, listener, null);
     }
 
-    /** Variant whose uploads go straight into the external GWM Split folder. */
-    public static UploadServer startNewGwm(Context c, WallpaperRepo repo, UploadListener listener) throws IOException {
-        return startNew(c, repo, listener, true);
+    /** Variant whose uploads go straight into an external mirrored folder (GWM Split / Jetour). */
+    public static UploadServer startNewMirror(Context c, WallpaperRepo repo, UploadListener listener,
+                                              FolderMirror mirror) throws IOException {
+        return startNew(c, repo, listener, mirror);
     }
 
-    private static UploadServer startNew(Context c, WallpaperRepo repo, UploadListener listener, boolean gwmFolder) throws IOException {
+    private static UploadServer startNew(Context c, WallpaperRepo repo, UploadListener listener, FolderMirror mirror) throws IOException {
         IOException last = null;
         for(int i = 0; i < PORT_TRIES; i++) {
-            UploadServer server = new UploadServer(c, PORT + i, repo, listener, gwmFolder);
+            UploadServer server = new UploadServer(c, PORT + i, repo, listener, mirror);
             try {
                 server.start(READ_TIMEOUT_MS, true);
                 return server;
@@ -147,14 +149,14 @@ public class UploadServer extends NanoHTTPD {
                     // have the old multi-select page open from before an update. Keep the first
                     // and stop: writing the other eleven to disk when nothing downstream will ever
                     // show them is how the wallpaper folder filled up with pictures nobody chose.
-                    if(!mGwmFolder && !saved.isEmpty()) break;
+                    if(mMirror == null && !saved.isEmpty()) break;
                 }
                 if(!saved.isEmpty()) {
-                    // GWM uploads belong to a different app's folder — they are not our wallpaper,
-                    // so none of the slideshow prefs apply. For our own uploads, make the last one
-                    // the default wallpaper + enable the slideshow (picking one of a batch is
-                    // arbitrary, but leaving PREF_DEFAULT on whatever came before is worse).
-                    if(!mGwmFolder) {
+                    // Mirror uploads belong to a different app's folder — they are not our
+                    // wallpaper, so none of the slideshow prefs apply. For our own uploads, make
+                    // the last one the default wallpaper + enable the slideshow (picking one of a
+                    // batch is arbitrary, but leaving PREF_DEFAULT on whatever came before is worse).
+                    if(mMirror == null) {
                         SharedPreferences sp = mContext.getSharedPreferences(SettingsActivity.SHARED_PREF_DOMAIN, Context.MODE_PRIVATE);
                         sp.edit()
                                 .putString(WallpaperRepo.PREF_DEFAULT, saved.get(saved.size() - 1))
@@ -230,18 +232,18 @@ public class UploadServer extends NanoHTTPD {
     }
 
     private String saveUpload(String tmpPath, String originalName) {
-        // GWM mode: hand the file to the GWM folder writer, which also tracks it so a later cloud
+        // Mirror mode: hand the file to the folder writer, which also tracks it so a later cloud
         // mirror does not treat it as a stranger's file. All the wallpaper-folder logic below is
         // skipped — this file is not one of our wallpapers.
-        if(mGwmFolder) {
+        if(mMirror != null) {
             try {
                 FileInputStream in = new FileInputStream(tmpPath);
-                String path = GwmSync.saveLocalCopy(mContext, in,
+                String path = mMirror.saveLocalCopy(mContext, in,
                         "upload_" + originalName.replaceAll("[\\\\/:*?\"<>|]", "_"));
                 in.close();
                 return path;
             } catch(Exception e) {
-                Log.e(TAG, "saving the GWM upload failed", e);
+                Log.e(TAG, "saving the mirrored-folder upload failed", e);
                 return null;
             }
         }
@@ -336,15 +338,15 @@ public class UploadServer extends NanoHTTPD {
      * phone, and getString() would answer in the head unit's locale, not theirs.
      */
     private String uploadPage() {
-        // One picture at a time, everywhere except the GWM folder.
+        // One picture at a time, everywhere except the mirrored folders.
         //
         // A wallpaper is one picture: the car shows one, the screen after this one frames one, and
         // the person holding the phone is standing at a car choosing THE picture. Letting them send
         // twelve only moved the choosing onto the head unit — a tick-list on a dashboard, in front
-        // of a customer, that ended with eleven pictures nobody framed. GWM is the exception and
-        // keeps the batch: there the files go into another app's slideshow folder, never through
-        // our editor, so "several" is the whole point of it.
-        final boolean many = mGwmFolder;
+        // of a customer, that ended with eleven pictures nobody framed. The mirrors (GWM Split,
+        // Jetour G700) are the exception and keep the batch: there the files go into another app's
+        // slideshow folder, never through our editor, so "several" is the whole point of it.
+        final boolean many = mMirror != null;
         final String btn = many ? "رفع الصور" : "رفع الصورة";
         return "<!doctype html><html dir='rtl' lang='ar'><head>"
                 + "<meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'>"

@@ -105,6 +105,7 @@ public class ModeConfirmActivity extends AppCompatActivity {
         int id = mode == OperatingMode.FSE ? R.id.radioConfirmFse
                 : mode == OperatingMode.LEOPARD ? R.id.radioConfirmLeopard
                 : mode == OperatingMode.GWM ? R.id.radioConfirmGwm
+                : mode == OperatingMode.JETOUR ? R.id.radioConfirmJetour
                 : mode == OperatingMode.LYNKCO ? R.id.radioConfirmLynkco
                 : R.id.radioConfirmNormal;
         RadioButton b = findViewById(id);
@@ -119,6 +120,7 @@ public class ModeConfirmActivity extends AppCompatActivity {
         if(id == R.id.radioConfirmFse) return OperatingMode.FSE;
         if(id == R.id.radioConfirmLeopard) return OperatingMode.LEOPARD;
         if(id == R.id.radioConfirmGwm) return OperatingMode.GWM;
+        if(id == R.id.radioConfirmJetour) return OperatingMode.JETOUR;
         if(id == R.id.radioConfirmLynkco) return OperatingMode.LYNKCO;
         return OperatingMode.NORMAL;
     }
@@ -128,6 +130,7 @@ public class ModeConfirmActivity extends AppCompatActivity {
         int res = mode == OperatingMode.LEOPARD ? R.string.mode_leopard_desc
                 : mode == OperatingMode.FSE ? R.string.mode_fse_desc
                 : mode == OperatingMode.GWM ? R.string.mode_gwm_desc
+                : mode == OperatingMode.JETOUR ? R.string.mode_jetour_desc
                 : mode == OperatingMode.LYNKCO ? R.string.mode_lynkco_desc
                 : R.string.mode_normal_desc;
         mDesc.setText(getString(res));
@@ -168,7 +171,8 @@ public class ModeConfirmActivity extends AppCompatActivity {
             next = new Intent(this, LeopardPickerActivity.class);
         } else {
             int mode = OperatingMode.get(mPrefs);
-            boolean gated = mode == OperatingMode.NORMAL || mode == OperatingMode.FSE;
+            boolean gated = mode == OperatingMode.NORMAL || mode == OperatingMode.FSE
+                    || mode == OperatingMode.JETOUR;
             next = new Intent(this, gated ? WallpaperDownloadActivity.class : FullscreenActivity.class);
         }
         next.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP);

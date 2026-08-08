@@ -354,6 +354,12 @@
     <string name="gwm_permission_title">إذن مطلوب</string>
     <string name="gwm_permission_message">لوضع الصور في مجلد يستطيع تطبيق آخر قراءته، فعّل \"السماح بإدارة كل الملفات\" في الشاشة التالية.</string>
 
+    <!-- Jetour G700: نفس فكرة GWM Split بمجلد مختلف. رسائل الإذن والحالة مشتركة مع gwm_*. -->
+    <string name="jetour_section">صور Jetour</string>
+    <string name="jetour_subtitle">ينزّل الصور المعلَّمة \"Jetour\" من السحابة إلى مجلد ‎/sdcard/Pictures/G700‎ على السيارة ليستخدمها تطبيق الشاشة. لا علاقة له بخلفيات تطبيقنا.</string>
+    <string name="jetour_folder">المجلد: %1$s</string>
+    <string name="jetour_pair_phone">رفع من الهاتف (QR)</string>
+
     <!-- Leopard: the app hands the wallpaper to Android and steps out of the way. -->
     <string name="leopard_wallpaper_description">ذبذبة خلفيات — الصورة أو الفيديو الذي اخترته</string>
     <string name="leopard_title">اختر خلفية الجهاز</string>
@@ -400,6 +406,8 @@
     <string name="mode_leopard_desc">يسلّم التطبيق الخلفية إلى نظام أندرويد ثم يختفي — بلا ساعة ولا تبديل.</string>
     <string name="mode_gwm">GWM</string>
     <string name="mode_gwm_desc">مطابق لوضع Others تماماً، مع إضافة قسم «إدارة صور GWM» الذي يزامن قناة GWM إلى المجلد المشترك الذي يقرأه تطبيق لوحة GWM.</string>
+    <string name="mode_jetour">Jetour</string>
+    <string name="mode_jetour_desc">مطابق لوضع Others تماماً، مع إضافة قسم «إدارة صور Jetour» الذي ينزّل صور قناة Jetour إلى مجلد ‎/sdcard/Pictures/G700‎ ليستخدمها تطبيق الشاشة نفسه.</string>
     <string name="mode_lynkco">Lynk and Co</string>
     <string name="mode_lynkco_desc">لشاشات Lynk &amp; Co / Flyme. التطبيق أداة اختيار فقط — تُسلَّم الخلفية المختارة إلى تطبيق الثيم الخاص بالسيارة، فيفتح معاينة فيها زر «تطبيق».</string>
     <string name="lynkco_unsupported">ليست شاشة Lynk &amp; Co / Flyme</string>
@@ -431,6 +439,7 @@
     <string name="chip_mode_leopard">الوضع: Leopard \\ Denza</string>
     <string name="chip_mode_gwm">الوضع: GWM</string>
     <string name="chip_mode_lynkco">الوضع: Lynk and Co</string>
+    <string name="chip_mode_jetour">الوضع: Jetour</string>
 
     <!-- سجل الأعطال (الإعدادات ← التحديثات). لا يظهر إلا في سيارة حصل فيها عطل فعلاً. -->
     <string name="crash_log_open">سجل الأعطال</string>
