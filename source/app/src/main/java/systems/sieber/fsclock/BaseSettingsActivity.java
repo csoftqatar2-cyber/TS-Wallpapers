@@ -1375,6 +1375,20 @@ public class BaseSettingsActivity extends AppCompatActivity {
      * @param statusView optional live status line ("waiting for a phone…"), or null.
      */
     private View qrPanel(String data, CharSequence hintText, TextView codeView, TextView statusView) {
+        return qrPanel(data, hintText, codeView, statusView, null);
+    }
+
+    /** Recomputes the value the code encodes; null when it is momentarily unavailable (no Wi-Fi). */
+    interface QrDataSource { String get(); }
+
+    /**
+     * @param refresher when non-null, a "refresh" button is drawn under the code and re-encodes
+     *                  whatever this returns. The upload server binds every interface, so a
+     *                  Wi-Fi change only invalidates the address printed in the code — the server
+     *                  itself keeps serving and must NOT be restarted under a phone mid-upload.
+     */
+    private View qrPanel(String data, CharSequence hintText, TextView codeView, TextView statusView,
+                         final QrDataSource refresher) {
         float d = getResources().getDisplayMetrics().density;
         int pad = (int) (20 * d);
 
@@ -1418,6 +1432,38 @@ public class BaseSettingsActivity extends AppCompatActivity {
         if(statusView != null) {
             statusView.setGravity(sideBySide ? android.view.Gravity.START : android.view.Gravity.CENTER);
             text.addView(statusView);
+        }
+        if(refresher != null) {
+            // Changing the Wi-Fi hands the head unit a different IP, and the code on screen keeps
+            // pointing at the old one — which used to mean closing the whole app and coming back.
+            // The address is read again here, live, so the code catches up in place.
+            final String[] shown = { data };
+            Button refresh = new Button(this);
+            refresh.setText(R.string.qr_refresh);
+            refresh.setAllCaps(false);
+            refresh.setOnClickListener(v -> {
+                String fresh = refresher.get();
+                if(fresh == null) {
+                    Toast.makeText(BaseSettingsActivity.this, R.string.pair_no_wifi, Toast.LENGTH_LONG).show();
+                    return;
+                }
+                if(fresh.equals(shown[0])) {
+                    // Say so rather than flashing an identical code — otherwise a tap that changed
+                    // nothing looks exactly like a tap that fixed everything.
+                    Toast.makeText(BaseSettingsActivity.this,
+                            getString(R.string.qr_refresh_same, fresh), Toast.LENGTH_LONG).show();
+                    return;
+                }
+                shown[0] = fresh;
+                qr.setImageBitmap(QrCode.generate(fresh, 600));
+                if(codeView != null) codeView.setText(fresh);
+                Toast.makeText(BaseSettingsActivity.this,
+                        getString(R.string.qr_refresh_done, fresh), Toast.LENGTH_LONG).show();
+            });
+            LinearLayout.LayoutParams rlp = new LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+            rlp.topMargin = (int) (6 * d);
+            text.addView(refresh, rlp);
         }
 
         LinearLayout row = new LinearLayout(this);
@@ -2355,7 +2401,15 @@ public class BaseSettingsActivity extends AppCompatActivity {
             }
             if(url == null) {
                 stopUploadServer();
-                infoDialog(getString(strPairTitle), getString(R.string.pair_no_wifi));
+                // Retryable: the Wi-Fi may simply not have finished associating yet, and making
+                // them leave and re-enter the screen for that is the same wasted trip the refresh
+                // button exists to remove.
+                new AlertDialog.Builder(BaseSettingsActivity.this)
+                        .setTitle(strPairTitle)
+                        .setMessage(R.string.pair_no_wifi)
+                        .setPositiveButton(R.string.qr_refresh_retry, (d2, w2) -> pairPhone())
+                        .setNegativeButton(R.string.ok, null)
+                        .show();
                 return;
             }
 
@@ -2364,7 +2418,8 @@ public class BaseSettingsActivity extends AppCompatActivity {
             urlText.setTextIsSelectable(true);
             new AlertDialog.Builder(BaseSettingsActivity.this)
                     .setTitle(strPairTitle)
-                    .setView(qrPanel(url, getString(R.string.pair_scan_hint), urlText, null))
+                    .setView(qrPanel(url, getString(R.string.pair_scan_hint), urlText, null,
+                            () -> mUploadServer == null ? null : mUploadServer.getUrl()))
                     .setPositiveButton(R.string.ok, null)
                     .setOnDismissListener(dialog -> stopUploadServer())
                     .show();
@@ -2723,7 +2778,12 @@ public class BaseSettingsActivity extends AppCompatActivity {
         }
         if(url == null) {
             stopUploadServer();
-            infoDialog(getString(R.string.wallpaper_pair_phone), getString(R.string.pair_no_wifi));
+            new AlertDialog.Builder(this)
+                    .setTitle(R.string.wallpaper_pair_phone)
+                    .setMessage(R.string.pair_no_wifi)
+                    .setPositiveButton(R.string.qr_refresh_retry, (d2, w2) -> onClickPairPhone(v))
+                    .setNegativeButton(R.string.ok, null)
+                    .show();
             return;
         }
 
@@ -2741,7 +2801,8 @@ public class BaseSettingsActivity extends AppCompatActivity {
 
         AlertDialog dlg = new AlertDialog.Builder(this)
                 .setTitle(R.string.wallpaper_pair_phone)
-                .setView(qrPanel(url, getString(R.string.pair_scan_hint), urlText, mPairStatus))
+                .setView(qrPanel(url, getString(R.string.pair_scan_hint), urlText, mPairStatus,
+                        () -> mUploadServer == null ? null : mUploadServer.getUrl()))
                 .setPositiveButton(R.string.ok, null)
                 .setOnDismissListener(new DialogInterface.OnDismissListener() {
                     @Override

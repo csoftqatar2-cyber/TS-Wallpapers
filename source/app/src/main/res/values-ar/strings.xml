@@ -82,6 +82,10 @@
     <string name="batch_review_discard">إلغاء الصور</string>
     <string name="batch_review_discard_confirm">ستُحذف جميع الصور التي وصلت من الهاتف ولن تُضاف إلى الخلفيات. هل أنت متأكّد؟</string>
     <string name="pair_no_wifi">تأكد من اتصال الجهاز بشبكة واي‑فاي</string>
+    <string name="qr_refresh">🔄 تحديث الرمز (بعد تغيير الواي‑فاي)</string>
+    <string name="qr_refresh_done">تم تحديث الرمز — العنوان الجديد: %1$s</string>
+    <string name="qr_refresh_same">العنوان لم يتغيّر: %1$s</string>
+    <string name="qr_refresh_retry">🔄 إعادة المحاولة</string>
     <string name="wallpaper_local_folder">مجلد الخلفيات على الجهاز:\n%s</string>
     <string name="wallpaper_added">تمت إضافة %d ملف ✓</string>
     <string name="clock_layout_section">شكل الساعة (Clock layout)</string>

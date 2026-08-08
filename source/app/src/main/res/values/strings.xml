@@ -68,6 +68,10 @@
     <string name="batch_review_discard">Discard</string>
     <string name="batch_review_discard_confirm">Every image that arrived from the phone will be deleted and none will be added. Are you sure?</string>
     <string name="pair_no_wifi">Make sure the device is connected to a Wi-Fi network</string>
+    <string name="qr_refresh">🔄 Refresh code (after changing Wi-Fi)</string>
+    <string name="qr_refresh_done">Code refreshed — new address: %1$s</string>
+    <string name="qr_refresh_same">Address unchanged: %1$s</string>
+    <string name="qr_refresh_retry">🔄 Try again</string>
     <string name="wallpaper_local_folder">Wallpaper folder on this device:\n%s</string>
     <string name="wallpaper_added">%d files added ✓</string>
     <string name="clock_layout_section">Clock layout</string>

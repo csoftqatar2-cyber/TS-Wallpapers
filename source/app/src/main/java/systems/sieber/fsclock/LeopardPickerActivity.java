@@ -21,6 +21,7 @@ import android.view.TextureView;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.ViewOutlineProvider;
+import android.widget.Button;
 import android.widget.FrameLayout;
 import android.widget.GridLayout;
 import android.widget.ImageView;
@@ -432,6 +433,34 @@ public class LeopardPickerActivity extends AppCompatActivity {
         wlp.topMargin = Math.round(9 * d);
         warn.setLayoutParams(wlp);
         mPhoneQrBox.addView(warn);
+
+        // Switching Wi-Fi networks gives the car a different IP while this pane stays on screen,
+        // and the code keeps encoding the old one. The server binds every interface, so nothing
+        // needs restarting — only the address in the code has to be read again.
+        Button refresh = new Button(this);
+        refresh.setText(R.string.qr_refresh);
+        refresh.setAllCaps(false);
+        refresh.setTextSize(11);
+        refresh.setOnClickListener(v -> {
+            String fresh = mUploadServer == null ? null : mUploadServer.getUrl();
+            if(fresh == null) {
+                Toast.makeText(this, R.string.pair_no_wifi, Toast.LENGTH_LONG).show();
+                return;
+            }
+            if(fresh.equals(url)) {
+                Toast.makeText(this, getString(R.string.qr_refresh_same, fresh), Toast.LENGTH_LONG).show();
+                return;
+            }
+            // Redraw the whole column rather than swapping the bitmap: `url` is what the pane was
+            // built from, so a rebuild is what keeps a second tap comparing against the right one.
+            buildPhoneQr(fresh);
+            Toast.makeText(this, getString(R.string.qr_refresh_done, fresh), Toast.LENGTH_LONG).show();
+        });
+        LinearLayout.LayoutParams rlp = new LinearLayout.LayoutParams(
+                colW, LinearLayout.LayoutParams.WRAP_CONTENT);
+        rlp.topMargin = Math.round(9 * d);
+        refresh.setLayoutParams(rlp);
+        mPhoneQrBox.addView(refresh);
     }
 
     /**
