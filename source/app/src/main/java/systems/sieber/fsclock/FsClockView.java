@@ -1241,25 +1241,19 @@ public class FsClockView extends FrameLayout {
             return;
         }
 
-        final int chosen = mode;
         postDelayed(new Runnable() {
             @Override
             public void run() {
                 loadSettings();
-                // Others, FSE and Jetour hand over to the download gate, which holds the car until
-                // the whole library is local — the same screen ModeConfirmActivity routes into, so
-                // a car activated here and one confirmed there start identically. GWM keeps its
-                // original behaviour and just downloads in the background.
-                if(chosen == OperatingMode.NORMAL || chosen == OperatingMode.FSE
-                        || chosen == OperatingMode.JETOUR) {
-                    getContext().startActivity(new android.content.Intent(
-                            getContext(), WallpaperDownloadActivity.class));
-                    if(mActivity != null) mActivity.finish();
-                    return;
-                }
-                // Automatically download the public wallpapers right after activation, retrying a
-                // few times so a brief network hiccup doesn't leave the screen empty.
-                autoDownloadWallpapers(3);
+                // Every mode still standing here draws the library itself — Others, FSE, GWM and
+                // Jetour; the two hand-off modes returned above — so all of them hand over to the
+                // download gate, which holds the car until the whole library is local. It is the
+                // same screen ModeConfirmActivity routes into, so a car activated here and one
+                // confirmed there start identically. GWM used to skip it and download underneath a
+                // running slideshow, which is the freeze the workshop reported.
+                getContext().startActivity(new android.content.Intent(
+                        getContext(), WallpaperDownloadActivity.class));
+                if(mActivity != null) mActivity.finish();
             }
         }, 1500);
     }

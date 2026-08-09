@@ -170,10 +170,13 @@ public class ModeConfirmActivity extends AppCompatActivity {
         if(OperatingMode.isHandoff(mPrefs)) {
             next = new Intent(this, LeopardPickerActivity.class);
         } else {
-            int mode = OperatingMode.get(mPrefs);
-            boolean gated = mode == OperatingMode.NORMAL || mode == OperatingMode.FSE
-                    || mode == OperatingMode.JETOUR;
-            next = new Intent(this, gated ? WallpaperDownloadActivity.class : FullscreenActivity.class);
+            // Every mode that draws our own screen goes through the download gate — Others, FSE,
+            // GWM and Jetour alike. GWM used to be waved past it, on the reasoning that its folder
+            // mirror is the point of the mode; but a GWM car runs the same slideshow as Others, and
+            // starting that on a library which is not there yet is the same failure there as
+            // anywhere else. See WallpaperDownloadActivity.isPending, which enforces this even for
+            // a car that never comes through here.
+            next = new Intent(this, WallpaperDownloadActivity.class);
         }
         next.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP);
         startActivity(next);

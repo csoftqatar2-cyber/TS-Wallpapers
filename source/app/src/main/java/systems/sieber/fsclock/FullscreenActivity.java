@@ -200,6 +200,19 @@ public class FullscreenActivity extends AppCompatActivity {
             return;
         }
 
+        // Others, FSE, GWM and Jetour all draw the library themselves, so none of them may reach
+        // the slideshow before it is on the car. Activation and the mode gate each route into the
+        // download screen already; this is what makes it mandatory rather than merely usual — a
+        // car that arrives by any other route (a plain launch, a restart in the middle of the
+        // first download, an update landing on a car that never finished one) is held the same
+        // way. Without it the slideshow starts on an empty library and downloads underneath
+        // itself, which is what the workshop saw as the screen freezing.
+        if(WallpaperDownloadActivity.isPending(this, mSharedPref)) {
+            startActivity(new Intent(this, WallpaperDownloadActivity.class));
+            finish();
+            return;
+        }
+
         setContentView(R.layout.activity_fullscreen);
         uiModeManager = (UiModeManager) getSystemService(UI_MODE_SERVICE);
 

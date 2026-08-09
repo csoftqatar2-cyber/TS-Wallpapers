@@ -87,9 +87,9 @@
             android:configChanges="orientation|screenSize|keyboardHidden"
             android:theme="@style/AppTheme" />
 
-        <!-- Others/FSE only: blocks on WallpaperRepo.sync() before FullscreenActivity ever
-             opens. Not exported and not launchable on its own — only ModeConfirmActivity routes
-             into it. -->
+        <!-- Others, FSE, GWM and Jetour: blocks on WallpaperRepo.sync() before FullscreenActivity
+             ever opens. Not exported and not launchable on its own — activation, ModeConfirm and
+             FullscreenActivity's own isPending() check are what route into it. -->
         <activity
             android:name=".WallpaperDownloadActivity"
             android:exported="false"
