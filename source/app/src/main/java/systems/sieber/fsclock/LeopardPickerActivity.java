@@ -63,6 +63,11 @@ public class LeopardPickerActivity extends AppCompatActivity {
     private static final int PICK_LOCAL_REQUEST = 41;
     private static final int FIT_EDITOR_REQUEST = 42;
     private static final String PREF_DEFAULT_SOURCE = "leopard-default-source";
+    /**
+     * Set when the owner ticks "do not show this again" in the hand-off dialog and then confirms.
+     * Per car, not per picture — see {@link #showHandoffDialog}.
+     */
+    private static final String PREF_HANDOFF_EXPLAINED = "leopard-handoff-explained";
     private static final String SOURCE_CLOUD = "cloud";
     private static final String SOURCE_LOCAL = "local";
     private static final String SOURCE_PHONE = "phone";
@@ -1757,23 +1762,73 @@ public class LeopardPickerActivity extends AppCompatActivity {
             return;
         }
 
-        // The one-time live-wallpaper hand-off, for the first wallpaper of any kind on this car:
-        // pictures ride our own MediaWallpaperService now, exactly as videos always have, because
-        // that is the only wallpaper these head units bring back after a restart. Lynkco images
-        // are the exception — they go to the head unit's theme app and never touch this.
-        if(LeopardApplier.needsSystemScreen(this, mSelected.type)) {
-            // The worst moment in the feature: we are about to throw the user into an unstyled
-            // system screen with an English button. Warn first, and say it is one-time — an
-            // unexplained hand-off reads as the app breaking.
-            new AlertDialog.Builder(this)
-                    .setTitle(R.string.leopard_video_first_title)
-                    .setMessage(R.string.leopard_video_first_message)
-                    .setPositiveButton(R.string.leopard_video_first_ok, (d, w) -> doApply())
-                    .setNegativeButton(R.string.update_cancel, null)
-                    .show();
+        // The live-wallpaper hand-off, for every wallpaper of any kind on this car: pictures ride
+        // our own MediaWallpaperService now, exactly as videos always have, because that is the
+        // only wallpaper these head units bring back after a restart. Lynkco images are the
+        // exception — they go to the head unit's theme app and never touch this.
+        //
+        // The system screen opens on every apply (see LeopardApplier.needsSystemScreen); the
+        // dialog in front of it keeps appearing until the owner says they no longer need it.
+        if(LeopardApplier.needsSystemScreen(this, mSelected.type)
+                && !mPrefs.getBoolean(PREF_HANDOFF_EXPLAINED, false)) {
+            showHandoffDialog();
             return;
         }
         doApply();
+    }
+
+    /**
+     * Explain the system screen before throwing the user into it.
+     *
+     * It is the worst moment in the feature — an unstyled Android screen with an English button,
+     * on a car whose owner did not ask to leave the app — so this says what is about to appear
+     * and exactly which button ends it. An unexplained hand-off reads as the app breaking.
+     *
+     * The tick box is what stops it becoming a tax. Someone setting their tenth wallpaper knows
+     * the steps; they say so once and from then on "Set as wallpaper" goes straight through to
+     * the system screen. It is deliberately only honoured on the positive button — ticking the
+     * box and then cancelling is not agreement to anything.
+     */
+    private void showHandoffDialog() {
+        final float d = getResources().getDisplayMetrics().density;
+
+        TextView msg = new TextView(this);
+        msg.setText(R.string.leopard_video_first_message);
+        msg.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 16);
+        msg.setLineSpacing(0, 1.2f);   // three numbered steps read badly when they are packed
+
+        final android.widget.CheckBox dontAsk = new android.widget.CheckBox(this);
+        dontAsk.setText(R.string.leopard_handoff_dont_show);
+        dontAsk.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 16);
+        // A finger-sized target: this is a touchscreen an arm's length away in a car, not a phone.
+        dontAsk.setMinHeight(Math.round(48 * d));
+        dontAsk.setPadding(Math.round(10 * d), 0, 0, 0);
+
+        LinearLayout body = new LinearLayout(this);
+        body.setOrientation(LinearLayout.VERTICAL);
+        body.setPadding(Math.round(24 * d), Math.round(10 * d), Math.round(24 * d), 0);
+        body.addView(msg);
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        lp.topMargin = Math.round(18 * d);
+        body.addView(dontAsk, lp);
+
+        // The Lynkco density override makes this dialog tall on a short passenger panel, and the
+        // steps are the part that must not be cut off.
+        android.widget.ScrollView scroll = new android.widget.ScrollView(this);
+        scroll.addView(body);
+
+        new AlertDialog.Builder(this)
+                .setTitle(R.string.leopard_video_first_title)
+                .setView(scroll)
+                .setPositiveButton(R.string.leopard_video_first_ok, (dlg, w) -> {
+                    if(dontAsk.isChecked()) {
+                        mPrefs.edit().putBoolean(PREF_HANDOFF_EXPLAINED, true).apply();
+                    }
+                    doApply();
+                })
+                .setNegativeButton(R.string.update_cancel, null)
+                .show();
     }
 
     private void doApply() {

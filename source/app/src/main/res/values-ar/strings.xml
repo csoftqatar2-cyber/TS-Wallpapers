@@ -395,9 +395,10 @@
     <string name="leopard_local_none">لم يُختَر أي ملف</string>
     <string name="leopard_local_empty">لا توجد صور مخزّنة على الشاشة بعد</string>
     <string name="leopard_local_browse">تصفّح ملفات الجهاز</string>
-    <string name="leopard_video_first_title">إعداد لمرة واحدة</string>
-    <string name="leopard_video_first_message">ستُفتح شاشة أندرويد لتأكيد الخلفية الحيّة — اضغط زر «Set wallpaper» فيها.\n\nيحدث هذا مرة واحدة فقط، وهو ما يجعل الخلفية تبقى بعد إعادة تشغيل السيارة. وكل ما تختاره بعد ذلك يُطبَّق مباشرة.</string>
+    <string name="leopard_video_first_title">خطوة أخيرة في شاشة أندرويد</string>
+    <string name="leopard_video_first_message">ستُفتح الآن شاشة الخلفيات الخاصة بنظام أندرويد، وستظهر فيها معاينة لما اخترته.\n\n١ — اضغط زر «Set wallpaper» في تلك الشاشة.\n٢ — إن سألتك عن مكان التطبيق فاختر «Home screen».\n٣ — ستُغلق وحدها وتظهر الخلفية الجديدة على السيارة.\n\nهذه الشاشة من نظام أندرويد نفسه وليست جزءًا من التطبيق، ولهذا تظهر بالإنجليزية. وهي أيضًا ما يجعل الخلفية تبقى بعد إطفاء السيارة وتشغيلها — لذلك تُفتح في كل مرة، للصور وللخلفيات الحيّة على السواء.</string>
     <string name="leopard_video_first_ok">فهمت، متابعة</string>
+    <string name="leopard_handoff_dont_show">أعرف هذه الخطوات — لا تعرض هذه الرسالة مرة أخرى</string>
     <string name="leopard_unsupported">هذه الشاشة لا تدعم وضع Leopard \\ Denza.</string>
     <string name="leopard_gif_static_note">يعرض هذا الجهاز الصور المتحركة كصورة ثابتة.</string>
     <string name="mode_title">وضع التشغيل</string>

@@ -36,9 +36,10 @@ import java.io.InputStream;
  *
  * So a still is not set as a bitmap any more; it becomes the picture our live wallpaper draws.
  * The one cost is Android's rule that an app may not install itself as the live wallpaper
- * silently — it must go through ACTION_CHANGE_LIVE_WALLPAPER once, where the user presses the
- * system's own button. That happens once per car, for the first wallpaper of any kind; after our
- * service is the active one every later picture and video is applied instantly and silently.
+ * silently — it must go through ACTION_CHANGE_LIVE_WALLPAPER, where the user presses the system's
+ * own button. Android only insists on that for the first wallpaper of any kind; we send every
+ * apply through it by choice, so setting a wallpaper looks the same on the tenth picture as on
+ * the first. See {@link #needsSystemScreen}.
  *
  * A live wallpaper generally cannot cover the lock screen, so what is set is the home screen.
  * The copy must not promise otherwise.
@@ -61,8 +62,16 @@ class LeopardApplier {
     static final int RESULT_FAILED = 3;
 
     /**
-     * True when applying this item would throw the user into the system's own screen: the
-     * one-time live-wallpaper hand-off, for a still exactly as for a video.
+     * True when applying this item throws the user into the system's own screen: the
+     * live-wallpaper hand-off, for a still exactly as for a video.
+     *
+     * This is EVERY apply, not only the first one on a car. Android only requires the hand-off
+     * once — after our service is the active wallpaper the engine picks up each new picture on
+     * its own — but the owner asked for the system screen to appear every time, so that it is
+     * always the same act with the same visible confirmation rather than something that changes
+     * shape after the first use. The picture itself is already stored and the engine has already
+     * reloaded by the time the screen comes up; what the screen adds from the second time on is
+     * the confirmation, not the apply.
      *
      * Lynkco is the exception and always was — its stills go to the Flyme theme app, which is not
      * Android's wallpaper system at all, so nothing here applies to them. Only a Lynkco VIDEO
@@ -70,7 +79,7 @@ class LeopardApplier {
      */
     static boolean needsSystemScreen(Context ctx, String type) {
         if(OperatingMode.isLynkco(prefs(ctx)) && !WallpaperItem.TYPE_VIDEO.equals(type)) return false;
-        return !isOurServiceActive(ctx);
+        return true;
     }
 
     private static SharedPreferences prefs(Context ctx) {
@@ -106,11 +115,12 @@ class LeopardApplier {
      * Store the selection, then apply it.
      *
      * "Apply" is now the same act for every kind of file: point our live wallpaper at it. The
-     * engine reloads the moment the stored URI changes, so when our service is already the
-     * active wallpaper there is nothing else to do and nothing for the user to confirm.
+     * engine reloads the moment the stored URI changes, so the picture is already on the screen
+     * behind whatever the caller does next.
      *
      * @return one of the RESULT_* constants. RESULT_NEEDS_SYSTEM_SCREEN means the caller must
-     *         launch {@link #systemPickerIntent} after warning the user.
+     *         launch {@link #systemPickerIntent} — which, per {@link #needsSystemScreen}, is now
+     *         every apply outside Lynkco stills.
      */
     static int apply(Context ctx, String uriStr, String type) {
         String stored = uriStr;
@@ -137,7 +147,9 @@ class LeopardApplier {
                 .putLong(MediaWallpaperService.PREF_REV, p.getLong(MediaWallpaperService.PREF_REV, 0) + 1)
                 .apply();
         CrashReporter.breadcrumb("leopard: apply " + type + " " + stored);
-        return isOurServiceActive(ctx) ? RESULT_APPLIED_LIVE : RESULT_NEEDS_SYSTEM_SCREEN;
+        // One decision, asked in one place — the picker asks needsSystemScreen() before it starts,
+        // and this must not be able to disagree with the answer the user was already given.
+        return needsSystemScreen(ctx, type) ? RESULT_NEEDS_SYSTEM_SCREEN : RESULT_APPLIED_LIVE;
     }
 
     /*
