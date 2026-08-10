@@ -26,6 +26,10 @@ import androidx.appcompat.app.AppCompatActivity;
  * skippable gate would leave exactly the unanswered cars it exists to remove. The choice is
  * written down, reported to the backend right away, and the app opens straight into that mode
  * from then on.
+ *
+ * The one thing besides choosing that can be done here is updating the app — see
+ * {@link #checkForUpdate}. That is not a way past the gate; it is what makes the gate answerable
+ * on a car whose mode was added to a later version than the one installed.
  */
 public class ModeConfirmActivity extends AppCompatActivity {
 
@@ -86,6 +90,73 @@ public class ModeConfirmActivity extends AppCompatActivity {
 
         Button confirm = findViewById(R.id.buttonModeConfirm);
         confirm.setOnClickListener(v -> apply(selectedMode()));
+
+        TextView version = findViewById(R.id.textViewModeConfirmVersion);
+        if(version != null) {
+            version.setText(getString(R.string.update_current_version) + ": "
+                    + BuildConfig.VERSION_NAME + " (" + BuildConfig.VERSION_CODE + ")");
+        }
+        Button update = findViewById(R.id.buttonModeConfirmUpdate);
+        if(update != null) update.setOnClickListener(v -> checkForUpdate(update));
+    }
+
+    /**
+     * Update the app without leaving the gate.
+     *
+     * The reason this button exists is a car that is newer than the app on it: a mode added after
+     * the installed version simply is not in the list, and the only updater used to be in
+     * Settings — which this screen will not let anyone reach until they have answered, with an
+     * answer that cannot be right. So the technician updates here first, and picks the car
+     * afterwards on a screen that finally lists it.
+     *
+     * Deliberately the same {@link UpdateManager} the rest of the app uses: same source of truth,
+     * same installer, same failure messages. The button is disabled while the check is in flight
+     * because a head unit is slow enough that a second tap is a certainty otherwise.
+     */
+    private void checkForUpdate(final Button button) {
+        button.setEnabled(false);
+        button.setText(R.string.update_downloading);
+        new UpdateManager(this).checkForUpdate(new UpdateManager.UpdateCheckListener() {
+            @Override
+            public void onUpdateAvailable(int versionCode, String versionName,
+                                          final String apkUrl, String changelog) {
+                restore(button);
+                String message = getString(R.string.update_message,
+                        versionName + " (" + versionCode + ")");
+                if(changelog != null && !changelog.trim().isEmpty()) {
+                    message += "\n\n" + changelog.trim();
+                }
+                new android.app.AlertDialog.Builder(ModeConfirmActivity.this)
+                        .setTitle(R.string.update_title)
+                        .setMessage(message)
+                        .setPositiveButton(R.string.update_now,
+                                (d, w) -> new UpdateManager(ModeConfirmActivity.this)
+                                        .downloadAndInstall(apkUrl))
+                        .setNegativeButton(R.string.update_later, null)
+                        .show();
+            }
+
+            @Override
+            public void onNoUpdate() {
+                restore(button);
+                toast(R.string.update_up_to_date);
+            }
+
+            @Override
+            public void onError(String message) {
+                restore(button);
+                toast(R.string.update_check_failed);
+            }
+        });
+    }
+
+    private void restore(Button button) {
+        button.setEnabled(true);
+        button.setText(R.string.update_check);
+    }
+
+    private void toast(int res) {
+        android.widget.Toast.makeText(this, res, android.widget.Toast.LENGTH_LONG).show();
     }
 
     private void disableUnsupported(int radioId, int noteId, int reasonRes, boolean supported) {
