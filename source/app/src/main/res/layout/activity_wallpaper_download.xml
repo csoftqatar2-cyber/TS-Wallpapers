@@ -1,9 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Others/FSE only: a dedicated, opaque gate between the mode-confirm screen and the wallpaper
-     screen. Nothing else is on this screen, so unlike an overlay drawn on top of FsClockView
-     there is no stale cached wallpaper it could ever let show through underneath. It holds the
-     car here until WallpaperRepo.sync() reports every file local (mediaReady) — see
-     WallpaperDownloadActivity for the exact completion contract. -->
+<!-- Every wallpaper-drawing mode passes through here: a dedicated, opaque gate between the
+     mode-confirm screen and the wallpaper screen. Nothing else is on this screen, so unlike an
+     overlay drawn on top of FsClockView there is no stale cached wallpaper it could ever let show
+     through underneath. It holds the car here until WallpaperRepo.sync() reports every file local
+     (mediaReady) — see WallpaperDownloadActivity for the exact completion contract.
+
+     The bar runs on 0..1000, not 0..100: it is driven from a byte count and animated between
+     ticks, and at 100 steps that motion quantises back into the jumps this screen exists to
+     stop looking like. -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
@@ -17,7 +21,7 @@
         android:layout_height="wrap_content"
         android:text="@string/download_progress_title"
         android:textColor="@color/aurora_text"
-        android:textSize="20sp"
+        android:textSize="22sp"
         android:textStyle="bold" />
 
     <TextView
@@ -27,33 +31,50 @@
         android:layout_marginTop="10dp"
         android:text="0%"
         android:textColor="@color/colorAccent"
-        android:textSize="42sp"
+        android:textSize="46sp"
         android:textStyle="bold" />
 
     <ProgressBar
         android:id="@+id/progressBarWpDownload"
         style="?android:attr/progressBarStyleHorizontal"
-        android:layout_width="240dp"
-        android:layout_height="10dp"
+        android:layout_width="420dp"
+        android:layout_height="12dp"
         android:layout_marginTop="12dp"
-        android:max="100"
+        android:max="1000"
         android:progress="0" />
 
+    <!-- The two lines the workshop actually reads while it waits: how many wallpapers have
+         landed, and whether the car's connection is moving at all. Big and gold on purpose —
+         these are read from the driver's seat, at a distance, on a screen that is often
+         washed out by daylight. -->
     <TextView
         android:id="@+id/textViewWpDownloadCount"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginTop="10dp"
-        android:textColor="@color/aurora_muted"
-        android:textSize="14sp" />
+        android:layout_marginTop="16dp"
+        android:gravity="center"
+        android:textColor="@color/gold"
+        android:textSize="26sp"
+        android:textStyle="bold" />
+
+    <TextView
+        android:id="@+id/textViewWpDownloadSpeed"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:gravity="center"
+        android:text="@string/download_progress_speed_waiting"
+        android:textColor="@color/gold"
+        android:textSize="20sp"
+        android:textStyle="bold" />
 
     <TextView
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginTop="6dp"
+        android:layout_marginTop="14dp"
         android:gravity="center"
         android:text="@string/download_progress_hint"
         android:textColor="@color/aurora_muted"
-        android:textSize="12sp" />
+        android:textSize="13sp" />
 
 </LinearLayout>

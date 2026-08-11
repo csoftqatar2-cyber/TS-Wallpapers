@@ -497,7 +497,14 @@ public class FsClockView extends FrameLayout {
             public void mediaProgress(final int done, final int total) {
                 post(new Runnable() {
                     @Override
-                    public void run() { showDownloadProgress(done, total); }
+                    public void run() { showDownloadProgress(done, total, 0f); }
+                });
+            }
+            @Override
+            public void mediaTick(final int done, final int total, final float fraction, long bps) {
+                post(new Runnable() {
+                    @Override
+                    public void run() { showDownloadProgress(done, total, fraction); }
                 });
             }
             @Override
@@ -547,7 +554,7 @@ public class FsClockView extends FrameLayout {
      * Never shown for a car that is already up to date: nothing is counted as pending unless it
      * genuinely is, so an unchanged library reports 0 of 0 and this stays hidden.
      */
-    private void showDownloadProgress(int done, int total) {
+    private void showDownloadProgress(int done, int total, float fraction) {
         if(mLayoutDownloadProgress == null) return;
         if(mDownloadProgressDismissed) return;
         if(mSharedPref == null || !OperatingMode.isOthersLike(mSharedPref)) return;
@@ -556,7 +563,9 @@ public class FsClockView extends FrameLayout {
         if(mLayoutActivation != null && mLayoutActivation.getVisibility() == View.VISIBLE) return;
         if(total <= 0 || done >= total) { hideDownloadProgress(); return; }
 
-        int percent = Math.max(0, Math.min(100, Math.round(done * 100f / total)));
+        // The file in flight counts for the part of it that has already arrived — see
+        // WallpaperRepo.SyncCallback.mediaTick.
+        int percent = Math.max(0, Math.min(100, (int) ((done + fraction) * 100f / total)));
         mLayoutDownloadProgress.setVisibility(View.VISIBLE);
         if(mTextViewDownloadPercent != null) mTextViewDownloadPercent.setText(percent + "%");
         if(mProgressBarDownload != null) mProgressBarDownload.setProgress(percent);

@@ -487,7 +487,9 @@ Roboto Font Copyright (c) Christian Robertson. Licensed under the Apache License
 
     <!-- Others-mode first-run download screen. -->
     <string name="download_progress_title">Downloading the wallpapers</string>
-    <string name="download_progress_count">%1$d of %2$d</string>
+    <string name="download_progress_count">%1$d of %2$d wallpapers downloaded</string>
+    <string name="download_progress_speed">Internet speed: %1$s</string>
+    <string name="download_progress_speed_waiting">Internet speed: measuring…</string>
     <string name="download_progress_hint">Please wait until the download finishes so the wallpapers run smoothly.</string>
     <string name="download_progress_skip">Skip and use the app now</string>
 </resources>

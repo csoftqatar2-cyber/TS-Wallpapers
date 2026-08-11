@@ -1073,6 +1073,212 @@ public class WallpaperRepo {
          * thread after each file, so a listener has to hop to the UI thread itself.
          */
         default void mediaProgress(int done, int total) { }
+
+        /**
+         * The same progress, four times a second and measured in bytes rather than in whole
+         * files — plus the speed those bytes are arriving at.
+         *
+         * {@link #mediaProgress} can only move when a file FINISHES, so on a car with twenty
+         * wallpapers the gate screen sat still at 19% for as long as one download took and then
+         * jumped to 23%. Nothing was wrong, but a number that stands still is exactly what a
+         * frozen app looks like from the driver's seat. This one advances while the bytes are
+         * still coming in.
+         *
+         * @param done            files fully downloaded
+         * @param total           files this pass has to fetch
+         * @param fraction        0..1 through the file currently in flight (never reaches 1 —
+         *                        that is what {@code done} going up means)
+         * @param bytesPerSecond  measured link speed, 0 until there is enough to measure
+         */
+        default void mediaTick(int done, int total, float fraction, long bytesPerSecond) { }
+    }
+
+    /**
+     * Byte-level progress for one media pass, and the link speed that falls out of measuring it.
+     *
+     * Videos report themselves exactly: the bytes go through our own stream, so the count is the
+     * count. Images go through Glide, which hands back the cached file and nothing while it is
+     * working, so their progress is read off the growth of Glide's cache directory and their size
+     * is learned from the file it returns — after a couple of wallpapers this car knows what its
+     * own library weighs and the estimate stops being one. A file in flight is capped below 100%
+     * either way: only {@link #fileDone} is allowed to say a file has landed.
+     */
+    private static final class DownloadProgress {
+
+        /** What to assume one image weighs until this car has actually downloaded one. */
+        private static final long DEFAULT_IMAGE_BYTES = 900_000L;
+        /** A file that is still arriving is never drawn as arrived. */
+        private static final float MAX_FILE_FRACTION = 0.97f;
+
+        private final Context mCtx;
+        private final SyncCallback mCb;
+        private final int mTotal;
+
+        private volatile int mDone;
+        private volatile long mCurBytes;      // bytes of the file in flight
+        private volatile long mCurExpected;   // its size: exact for video, learned for images
+        private volatile long mTotalBytes;    // everything this pass pulled down (speed meter)
+
+        private volatile boolean mImageInFlight;
+        private volatile long mImageBaseline = -1;
+        private long mAvgImageBytes;
+        private int mAvgImageCount;
+
+        private long mSampleAt, mSampleBytes;
+        private volatile long mSpeed;
+
+        private Thread mTicker;
+        private volatile boolean mRunning;
+
+        DownloadProgress(Context ctx, SyncCallback cb, int total) {
+            mCtx = ctx;
+            mCb = cb;
+            mTotal = total;
+        }
+
+        /** Begin emitting ticks. No-op when nobody is listening or there is nothing to fetch. */
+        void start() {
+            if(mCb == null || mTotal <= 0) return;
+            mRunning = true;
+            mTicker = new Thread(new Runnable() {
+                @Override
+                public void run() {
+                    int tick = 0;
+                    while(mRunning) {
+                        try { Thread.sleep(250); } catch(InterruptedException e) { return; }
+                        // Measuring an image means stat()ing every file in Glide's cache, which
+                        // on a full one is a few hundred of them: worth doing twice a second,
+                        // not four times, on the kind of storage a head unit ships with.
+                        if((++tick % 2) == 0) pollImageBytes();
+                        sampleSpeed();
+                        emit();
+                    }
+                }
+            });
+            mTicker.setDaemon(true);
+            mTicker.start();
+        }
+
+        void stop() {
+            mRunning = false;
+            if(mTicker != null) mTicker.interrupt();
+        }
+
+        long speed() { return mSpeed; }
+
+        /** A video is starting; {@code contentLength} is what the server says it weighs. */
+        void fileStart(long contentLength) {
+            mCurBytes = 0;
+            mCurExpected = contentLength > 0 ? contentLength : 0;
+        }
+
+        /** Bytes just read off the wire (video path — the only one we stream ourselves). */
+        void addBytes(long n) {
+            mCurBytes += n;
+            mTotalBytes += n;
+        }
+
+        void imageStart() {
+            mCurBytes = 0;
+            mCurExpected = mAvgImageBytes > 0 ? mAvgImageBytes : DEFAULT_IMAGE_BYTES;
+            mImageBaseline = cacheDirSize();
+            mImageInFlight = true;
+        }
+
+        /** @param cached what Glide handed back, so this car learns what its images weigh. */
+        void imageDone(File cached) {
+            long len = (cached == null) ? 0 : cached.length();
+            if(len > 0) {
+                if(len > mCurBytes) mTotalBytes += len - mCurBytes;
+                mCurBytes = len;
+                mAvgImageBytes = (mAvgImageBytes * mAvgImageCount + len) / (mAvgImageCount + 1);
+                mAvgImageCount++;
+            }
+            fileDone();
+        }
+
+        void fileDone() {
+            mDone++;
+            reset();
+            if(mCb != null) mCb.mediaProgress(mDone, mTotal);
+            emit();
+        }
+
+        /** The file did not arrive. It does not count as done, and its bytes stop counting. */
+        void fileFailed() {
+            reset();
+            emit();
+        }
+
+        private void reset() {
+            mImageInFlight = false;
+            mImageBaseline = -1;
+            mCurBytes = 0;
+            mCurExpected = 0;
+        }
+
+        private void emit() {
+            if(mCb == null) return;
+            mCb.mediaTick(mDone, mTotal, fraction(), mSpeed);
+        }
+
+        private float fraction() {
+            long expected = mCurExpected;
+            if(expected <= 0) return 0f;
+            float f = mCurBytes / (float) expected;
+            if(f < 0f) return 0f;
+            return f > MAX_FILE_FRACTION ? MAX_FILE_FRACTION : f;
+        }
+
+        /**
+         * How far the image in flight has got, read off Glide's cache directory growing.
+         *
+         * Only ever allowed to move forward: the same cache evicts old entries while it writes,
+         * so a shrinking directory means somebody else's file went away, not that ours un-downloaded.
+         */
+        private void pollImageBytes() {
+            if(!mImageInFlight) return;
+            long baseline = mImageBaseline;
+            if(baseline < 0) return;
+            long now = cacheDirSize();
+            if(now < 0) return;
+            long grown = now - baseline;
+            if(grown > mCurBytes) {
+                mTotalBytes += grown - mCurBytes;
+                mCurBytes = grown;
+            }
+        }
+
+        private long cacheDirSize() {
+            try {
+                File dir = com.bumptech.glide.Glide.getPhotoCacheDir(mCtx);
+                if(dir == null) return -1;
+                File[] files = dir.listFiles();
+                if(files == null) return -1;
+                long sum = 0;
+                for(File f : files) if(f.isFile()) sum += f.length();
+                return sum;
+            } catch(Throwable t) {
+                // No cache dir, no permission, a Glide that moved it: the bar falls back to
+                // whole-file steps, which is what it did before this existed.
+                return -1;
+            }
+        }
+
+        /** Smoothed bytes/second, so the readout is a speed and not a stopwatch reading. */
+        private void sampleSpeed() {
+            long now = android.os.SystemClock.elapsedRealtime();
+            long bytes = mTotalBytes;
+            if(mSampleAt == 0) { mSampleAt = now; mSampleBytes = bytes; return; }
+            long dt = now - mSampleAt;
+            if(dt < 700) return;
+            long db = bytes - mSampleBytes;
+            mSampleAt = now;
+            mSampleBytes = bytes;
+            if(db < 0) db = 0;
+            long instant = db * 1000L / dt;
+            mSpeed = (mSpeed == 0) ? instant : (mSpeed * 2 + instant * 3) / 5;
+        }
     }
 
     /** Download the manifest in a background thread and refresh the cached playlist. */
@@ -1148,45 +1354,55 @@ public class WallpaperRepo {
                     // is alive, so this can take as long as the link makes it take.
                     int total = 0;
                     for(WallpaperItem it : parsed) if(needsDownload(it)) total++;
-                    int done = 0;
-                    if(cb != null) cb.mediaProgress(done, total);
+                    if(cb != null) cb.mediaProgress(0, total);
 
                     // A file that did not arrive must not be counted as arrived: progress is only
                     // advanced by a download that actually succeeded, so the bar cannot reach the
                     // total while something is still missing.
                     int failed = 0;
 
-                    // Videos first: they are the big files and the ones that cannot be shown at
-                    // all until they are local, while an image at least loads on demand.
-                    for(WallpaperItem it : parsed) {
-                        if(!it.isVideo()) continue;
-                        boolean counted = needsDownload(it);
-                        boolean ok = true;
-                        try { ensureVideoCached(it); } catch(Exception e) {
-                            Log.w(TAG, "video download failed: " + it.url, e);
-                            ok = false;
+                    // Reports the bytes underneath those files while they are still arriving —
+                    // see DownloadProgress for why whole-file steps were not enough.
+                    final DownloadProgress progress = new DownloadProgress(mContext, cb, total);
+                    progress.start();
+                    try {
+                        // Videos first: they are the big files and the ones that cannot be shown
+                        // at all until they are local, while an image at least loads on demand.
+                        for(WallpaperItem it : parsed) {
+                            if(!it.isVideo()) continue;
+                            boolean counted = needsDownload(it);
+                            boolean ok = true;
+                            try { ensureVideoCached(it, counted ? progress : null); } catch(Exception e) {
+                                Log.w(TAG, "video download failed: " + it.url, e);
+                                ok = false;
+                            }
+                            if(!counted) continue;
+                            if(ok) progress.fileDone();
+                            else { progress.fileFailed(); failed++; }
                         }
-                        if(!counted) continue;
-                        if(ok) { if(cb != null) cb.mediaProgress(++done, total); }
-                        else failed++;
-                    }
 
-                    // Pull every image/GIF into Glide's disk cache right away. Without this
-                    // each wallpaper is only fetched the first time it is actually shown, so
-                    // a freshly activated car had to be swiped through picture by picture
-                    // before they were all available offline.
-                    for(WallpaperItem it : parsed) {
-                        if(it == null || it.isVideo()) continue;
-                        boolean counted = needsDownload(it);
-                        boolean ok = prefetchImage(it);
-                        if(!counted) continue;
-                        if(ok) { if(cb != null) cb.mediaProgress(++done, total); }
-                        else failed++;
+                        // Pull every image/GIF into Glide's disk cache right away. Without this
+                        // each wallpaper is only fetched the first time it is actually shown, so
+                        // a freshly activated car had to be swiped through picture by picture
+                        // before they were all available offline.
+                        for(WallpaperItem it : parsed) {
+                            if(it == null || it.isVideo()) continue;
+                            // Not counted means a local file — there is nothing to fetch and
+                            // nothing to report, so it never enters the progress at all.
+                            if(!needsDownload(it)) continue;
+                            progress.imageStart();
+                            File cached = prefetchImage(it);
+                            if(cached != null) progress.imageDone(cached);
+                            else { progress.fileFailed(); failed++; }
+                        }
+                    } finally {
+                        progress.stop();
                     }
                     if(cb != null) {
                         if(failed > 0) cb.mediaIncomplete(failed, total);
                         else {
                             cb.mediaProgress(total, total);
+                            cb.mediaTick(total, total, 0f, progress.speed());
                             cb.mediaReady();
                         }
                     }
@@ -1205,20 +1421,24 @@ public class WallpaperRepo {
      * WallpaperView loads from, so a prefetched wallpaper appears instantly and keeps
      * working with no network). Runs on the sync thread, one file after the other, and
      * simply skips whatever fails — the wallpaper still loads on demand in that case.
+     *
+     * @return the cache file Glide wrote, or null if the download failed. The file is worth
+     *         handing back rather than a bare boolean: its length is the only place this app can
+     *         learn what one of its own wallpapers actually weighs, which is what lets the
+     *         progress bar advance inside a file instead of only between files.
      */
-    private boolean prefetchImage(WallpaperItem it) {
-        if(it == null || it.isVideo() || it.url == null) return true;
+    private File prefetchImage(WallpaperItem it) {
+        if(it == null || it.isVideo() || it.url == null) return null;
         String url = it.url.trim();
-        if(!url.startsWith("http://") && !url.startsWith("https://")) return true; // local file
+        if(!url.startsWith("http://") && !url.startsWith("https://")) return null; // local file
         try {
-            com.bumptech.glide.Glide.with(mContext)
+            return com.bumptech.glide.Glide.with(mContext)
                     .download(url)
                     .submit()
                     .get();
-            return true;
         } catch(Exception e) {
             Log.w(TAG, "prefetch failed: " + url, e);
-            return false;
+            return null;
         }
     }
 
@@ -1258,7 +1478,7 @@ public class WallpaperRepo {
      * mid-download leaves a truncated file that every later pass then skips as already cached —
      * a wallpaper permanently broken by one bad moment on the car's connection.
      */
-    private void ensureVideoCached(WallpaperItem item) throws Exception {
+    private void ensureVideoCached(WallpaperItem item, DownloadProgress progress) throws Exception {
         File f = videoCacheFile(item);
         if(f.exists() && f.length() > 0) return;
         File part = new File(f.getAbsolutePath() + ".part");
@@ -1268,11 +1488,16 @@ public class WallpaperRepo {
         conn.setInstanceFollowRedirects(true);
         try {
             InputStream in = conn.getInputStream();
+            // The one file whose size we are told before we start: the bar can be exact here.
+            if(progress != null) progress.fileStart(conn.getContentLength());
             FileOutputStream out = new FileOutputStream(part);
             try {
                 byte[] buf = new byte[8192];
                 int n;
-                while((n = in.read(buf)) != -1) out.write(buf, 0, n);
+                while((n = in.read(buf)) != -1) {
+                    out.write(buf, 0, n);
+                    if(progress != null) progress.addBytes(n);
+                }
                 out.flush();
             } finally {
                 try { out.close(); } catch(Exception ignored) {}

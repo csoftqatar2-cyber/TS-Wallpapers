@@ -79,6 +79,11 @@ public class MediaWallpaperService extends WallpaperService {
         private Mode mode = Mode.NONE;
         private boolean visible = false;
 
+        /** How many times the current still has asked for a surface that was not ready yet. */
+        private int drawRetries;
+        /** How many times the current still has failed to load at all. */
+        private int loadRetries;
+
         // image / gif
         private Bitmap bitmap;
         private AnimatedImageDrawable gifDrawable;
@@ -105,7 +110,54 @@ public class MediaWallpaperService extends WallpaperService {
 
         @Override
         public void onSurfaceChanged(SurfaceHolder holder, int format, int width, int height) {
+            // A brand new surface is a fresh chance for a still that failed on the last one.
+            loadRetries = 0;
             loadMedia(width, height);
+        }
+
+        /**
+         * The system asking for the picture back — and the reason a car used to come out of a
+         * restart with the video intact and the photo black.
+         *
+         * A video never needs this hook: MediaPlayer keeps pushing frames at the Surface, so
+         * whatever the window manager does to the buffers is repaired a few milliseconds later by
+         * the next frame. A still is posted exactly once, and a wallpaper surface does not keep
+         * what was posted to it — when its window is re-created (which is what happens while a
+         * head unit boots and the launcher and the second display settle) the buffer comes back
+         * blank, and blank on a wallpaper is a black screen with nothing left to redraw it.
+         */
+        @Override
+        public void onSurfaceRedrawNeeded(SurfaceHolder holder) {
+            ensureDrawn();
+        }
+
+        @Override
+        public void onSurfaceCreated(SurfaceHolder holder) {
+            super.onSurfaceCreated(holder);
+            ensureDrawn();
+        }
+
+        @Override
+        public void onOffsetsChanged(float xOffset, float yOffset, float xStep, float yStep,
+                                     int xPixels, int yPixels) {
+            // Some launchers re-lay-out the wallpaper window as they scroll their pages, which
+            // costs a still its buffer exactly like a boot does.
+            ensureDrawn();
+        }
+
+        /**
+         * Put the picture back on the surface, loading it again first if it is no longer in
+         * memory. Called from every hook that can mean "the buffer you drew into is gone".
+         *
+         * Deliberately a no-op for video: the player owns that surface and repairs it itself.
+         */
+        private void ensureDrawn() {
+            if(mode == Mode.VIDEO) return;
+            if((mode == Mode.IMAGE && bitmap != null) || (mode == Mode.GIF && gifDrawable != null)) {
+                drawImageOrGif();
+                return;
+            }
+            scheduleReload();
         }
 
         @Override
@@ -152,6 +204,40 @@ public class MediaWallpaperService extends WallpaperService {
             }
         };
 
+        /** One more go at putting the still on the surface. See {@link #repaintLater}. */
+        private final Runnable repaint = new Runnable() {
+            @Override public void run() { drawImageOrGif(); }
+        };
+
+        /**
+         * Try the whole load again shortly, a few times, then stop.
+         *
+         * The failures this exists for are all temporary — a surface with no size yet, a file the
+         * car is a moment away from being able to read, memory that is about to free up as the
+         * boot finishes. Giving up on the first one is what leaves a black screen behind.
+         */
+        private void scheduleReload() {
+            if(loadRetries >= 3) return;
+            loadRetries++;
+            handler.removeCallbacks(reload);
+            handler.postDelayed(reload, 1500L * loadRetries);
+        }
+
+        /**
+         * Draw the still again a few times over the next few seconds.
+         *
+         * At boot the wallpaper window is created, measured and re-created while the launcher and
+         * the second display settle, and each of those throws away the single buffer a still ever
+         * posts. These are three blits of a bitmap that is already decoded and already in memory —
+         * next to nothing — bought against the one failure that actually reached owners: a car
+         * that comes back from a restart with a black home screen.
+         */
+        private void repaintLater() {
+            handler.postDelayed(repaint, 500);
+            handler.postDelayed(repaint, 2000);
+            handler.postDelayed(repaint, 6000);
+        }
+
         @Override
         public void onSharedPreferenceChanged(SharedPreferences sp, String key) {
             if(PREF_URI.equals(key) || PREF_REV.equals(key)) {
@@ -162,9 +248,31 @@ public class MediaWallpaperService extends WallpaperService {
 
         // --- loading -------------------------------------------------------
 
+        /**
+         * Nothing thrown in here may reach the system callback that called us.
+         *
+         * The catch is on Throwable and not on Exception on purpose: the one failure a cheap head
+         * unit actually produces while it is booting is OutOfMemoryError, which is an Error, and
+         * it was therefore sailing straight past every catch(Exception) below and out of
+         * onSurfaceChanged — killing the engine on a surface that had never been drawn on.
+         */
         private void loadMedia(int targetW, int targetH) {
+            try {
+                loadMediaLocked(targetW, targetH);
+            } catch(Throwable t) {
+                CrashReporter.breadcrumb("wallpaper engine: load failed — " + t);
+                mode = Mode.NONE;
+                scheduleReload();
+            }
+        }
+
+        private void loadMediaLocked(int targetW, int targetH) {
             release();
-            if(targetW <= 0 || targetH <= 0) return;
+            if(targetW <= 0 || targetH <= 0) {
+                // No surface to measure against yet; there will be one in a moment.
+                scheduleReload();
+                return;
+            }
             String uriStr = prefs.getString(PREF_URI, null);
             if(uriStr == null) return;
             Uri uri = normalise(uriStr);
@@ -213,34 +321,79 @@ public class MediaWallpaperService extends WallpaperService {
         }
 
         private void loadImage(Uri uri, int targetW, int targetH) {
+            mode = Mode.IMAGE;
+            bitmap = decodeScaled(uri, targetW, targetH);
+            if(bitmap == null) {
+                // The one failure that looks like nothing: no exception, no picture, and a
+                // wallpaper surface that was never drawn on is black. Say so, so the next
+                // crash report from this car carries the reason rather than the symptom.
+                CrashReporter.breadcrumb("wallpaper engine: could not decode " + uri);
+                scheduleReload();
+                return;
+            }
+            loadRetries = 0;
+            drawImageOrGif();
+            repaintLater();
+        }
+
+        /**
+         * Decode small enough to survive a head unit, and keep trying smaller if it does not.
+         *
+         * The old two-pass decode only halved while BOTH sides still covered the screen, which on
+         * the 5120x1600 driver display means a portrait photo is never sampled down at all: a 12MP
+         * picture arrives as a 48MB ARGB_8888 bitmap. That is affordable when the owner is standing
+         * in the app and nothing else is starting. At boot, with the whole car coming up at once,
+         * it is the difference between a wallpaper and an OutOfMemoryError.
+         *
+         * Two things follow from that. A pixel budget, because everything past roughly one and a
+         * half screens of them is thrown away by the center-crop anyway and is memory spent on
+         * nothing. And RGB_565, which halves what is left and costs nothing visible: an opaque
+         * photo drawn onto an opaque surface has no alpha worth keeping.
+         *
+         * @return the decoded bitmap, or null when even the smallest attempt failed.
+         */
+        private Bitmap decodeScaled(Uri uri, int targetW, int targetH) {
+            BitmapFactory.Options bounds = new BitmapFactory.Options();
+            bounds.inJustDecodeBounds = true;
+            InputStream in = null;
             try {
-                // Pass 1: bounds only, so we can downsample big photos.
-                BitmapFactory.Options bounds = new BitmapFactory.Options();
-                bounds.inJustDecodeBounds = true;
-                InputStream in = getContentResolver().openInputStream(uri);
-                if(in != null) { BitmapFactory.decodeStream(in, null, bounds); in.close(); }
+                in = getContentResolver().openInputStream(uri);
+                if(in != null) BitmapFactory.decodeStream(in, null, bounds);
+            } catch(Throwable t) {
+                CrashReporter.breadcrumb("wallpaper engine: cannot read " + uri + " — " + t);
+                return null;
+            } finally {
+                if(in != null) try { in.close(); } catch(Exception ignored) {}
+                in = null;
+            }
+            if(bounds.outWidth <= 0 || bounds.outHeight <= 0) return null;
 
-                int sample = 1;
-                while(bounds.outWidth / (sample * 2) >= targetW
-                        && bounds.outHeight / (sample * 2) >= targetH) sample *= 2;
+            int sample = 1;
+            while(bounds.outWidth / (sample * 2) >= targetW
+                    && bounds.outHeight / (sample * 2) >= targetH) sample *= 2;
+            long budget = (long) targetW * targetH * 3L / 2L;
+            while((long) (bounds.outWidth / sample) * (bounds.outHeight / sample) > budget) sample *= 2;
 
+            for(int attempt = 0; attempt < 4; attempt++, sample *= 2) {
                 BitmapFactory.Options opts = new BitmapFactory.Options();
                 opts.inSampleSize = sample;
-                in = getContentResolver().openInputStream(uri);
-                if(in != null) { bitmap = BitmapFactory.decodeStream(in, null, opts); in.close(); }
-
-                mode = Mode.IMAGE;
-                if(bitmap == null) {
-                    // The one failure that looks like nothing: no exception, no picture, and a
-                    // wallpaper surface that was never drawn on is black. Say so, so the next
-                    // crash report from this car carries the reason rather than the symptom.
-                    CrashReporter.breadcrumb("wallpaper engine: could not decode " + uri);
+                opts.inPreferredConfig = Bitmap.Config.RGB_565;
+                try {
+                    in = getContentResolver().openInputStream(uri);
+                    if(in == null) return null;
+                    Bitmap bmp = BitmapFactory.decodeStream(in, null, opts);
+                    if(bmp != null) return bmp;
+                } catch(Throwable t) {
+                    // Out of memory at this size. Half it and try again rather than hand the car
+                    // a black screen — a slightly softer wallpaper is not a failure.
+                    CrashReporter.breadcrumb(
+                            "wallpaper engine: decode at 1/" + sample + " failed — " + t);
+                } finally {
+                    if(in != null) try { in.close(); } catch(Exception ignored) {}
+                    in = null;
                 }
-                drawImageOrGif();
-            } catch(Exception e) {
-                CrashReporter.breadcrumb("wallpaper engine: cannot read " + uri + " — " + e);
-                mode = Mode.NONE;
             }
+            return null;
         }
 
         private void loadGif(Uri uri) {
@@ -253,6 +406,7 @@ public class MediaWallpaperService extends WallpaperService {
                     d.setCallback(gifCallback);
                     gifDrawable = d;
                     mode = Mode.GIF;
+                    loadRetries = 0;
                     if(visible) d.start();
                     drawImageOrGif();
                 } else {
@@ -265,10 +419,15 @@ public class MediaWallpaperService extends WallpaperService {
                     drawable.draw(new Canvas(bmp));
                     bitmap = bmp;
                     mode = Mode.IMAGE;
+                    loadRetries = 0;
                     drawImageOrGif();
+                    // A still, whatever container it arrived in, needs the same insurance.
+                    repaintLater();
                 }
-            } catch(Exception e) {
+            } catch(Throwable t) {
+                CrashReporter.breadcrumb("wallpaper engine: gif failed " + uri + " — " + t);
                 mode = Mode.NONE;
+                scheduleReload();
             }
         }
 
@@ -290,8 +449,11 @@ public class MediaWallpaperService extends WallpaperService {
                 mp.prepareAsync();
                 player = mp;
                 mode = Mode.VIDEO;
-            } catch(Exception e) {
+                loadRetries = 0;
+            } catch(Throwable t) {
+                CrashReporter.breadcrumb("wallpaper engine: video failed " + uri + " — " + t);
                 mode = Mode.NONE;
+                scheduleReload();
             }
         }
 
@@ -303,7 +465,8 @@ public class MediaWallpaperService extends WallpaperService {
             Canvas canvas = null;
             try {
                 canvas = holder.lockCanvas();
-                if(canvas == null) return;
+                if(canvas == null) { retryDraw(); return; }
+                drawRetries = 0;
                 canvas.drawColor(Color.BLACK);
                 float vw = canvas.getWidth();
                 float vh = canvas.getHeight();
@@ -327,12 +490,27 @@ public class MediaWallpaperService extends WallpaperService {
                     gifDrawable.setBounds(left, top, left + w, top + h);
                     gifDrawable.draw(canvas);
                 }
-            } catch(Exception ignored) {
+            } catch(Throwable t) {
+                retryDraw();
             } finally {
                 if(canvas != null) {
                     try { holder.unlockCanvasAndPost(canvas); } catch(Exception ignored) {}
                 }
             }
+        }
+
+        /**
+         * The surface was not ready to be drawn on. It usually is a frame or two later.
+         *
+         * A video would not need this — the player simply pushes its next frame — but a still that
+         * loses its one draw has nothing else coming, so the retries are the difference between a
+         * wallpaper and a black screen. Bounded: if the surface is still refusing after five
+         * goes it is gone for good, and the next real lifecycle callback will load again anyway.
+         */
+        private void retryDraw() {
+            if(drawRetries >= 5) return;
+            drawRetries++;
+            handler.postDelayed(repaint, 150L * drawRetries);
         }
 
         // --- teardown ------------------------------------------------------
@@ -354,6 +532,7 @@ public class MediaWallpaperService extends WallpaperService {
                 player = null;
             }
             videoPrepared = false;
+            drawRetries = 0;
             mode = Mode.NONE;
         }
     }

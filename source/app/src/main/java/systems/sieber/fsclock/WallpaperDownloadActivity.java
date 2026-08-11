@@ -56,9 +56,39 @@ public class WallpaperDownloadActivity extends AppCompatActivity {
 
     private TextView mPercent;
     private TextView mCount;
+    private TextView mSpeed;
     private ProgressBar mBar;
     private WallpaperRepo mRepo;
     private boolean mProceeded = false;
+
+    /**
+     * Where the download really is, and where the screen has caught up to.
+     *
+     * They are two numbers because the truth arrives four times a second and the eye wants
+     * motion in between: {@link #mAnimate} walks the shown value towards the real one every
+     * frame. It only ever walks FORWARD — a retry starts its file count again from zero, and a
+     * bar that fell back to 0% would read as "it lost everything I just waited for".
+     */
+    private float mTargetPercent = 0f;
+    private float mShownPercent = 0f;
+    private int mDoneFiles = 0;
+    private int mTotalFiles = 0;
+
+    private final Runnable mAnimate = new Runnable() {
+        @Override
+        public void run() {
+            if(mProceeded) return;
+            float gap = mTargetPercent - mShownPercent;
+            if(gap > 0.01f) {
+                // Proportional, with a floor: close the big gaps fast, and still creep visibly
+                // while a single large video is coming down.
+                mShownPercent += Math.max(0.08f, gap * 0.2f);
+                if(mShownPercent > mTargetPercent) mShownPercent = mTargetPercent;
+            }
+            render();
+            mBar.postDelayed(this, 50);
+        }
+    };
 
     @Override
     protected void attachBaseContext(Context newBase) {
@@ -72,10 +102,18 @@ public class WallpaperDownloadActivity extends AppCompatActivity {
 
         mPercent = findViewById(R.id.textViewWpDownloadPercent);
         mCount = findViewById(R.id.textViewWpDownloadCount);
+        mSpeed = findViewById(R.id.textViewWpDownloadSpeed);
         mBar = findViewById(R.id.progressBarWpDownload);
         mRepo = new WallpaperRepo(this);
 
+        mBar.post(mAnimate);
         download(3);
+    }
+
+    @Override
+    protected void onDestroy() {
+        mBar.removeCallbacks(mAnimate);
+        super.onDestroy();
     }
 
     private void download(final int attemptsLeft) {
@@ -93,7 +131,16 @@ public class WallpaperDownloadActivity extends AppCompatActivity {
             public void mediaProgress(final int done, final int total) {
                 runOnUiThread(new Runnable() {
                     @Override
-                    public void run() { updateProgress(done, total); }
+                    public void run() { updateProgress(done, total, 0f, -1); }
+                });
+            }
+
+            @Override
+            public void mediaTick(final int done, final int total,
+                                  final float fraction, final long bytesPerSecond) {
+                runOnUiThread(new Runnable() {
+                    @Override
+                    public void run() { updateProgress(done, total, fraction, bytesPerSecond); }
                 });
             }
 
@@ -130,11 +177,45 @@ public class WallpaperDownloadActivity extends AppCompatActivity {
         }
     }
 
-    private void updateProgress(int done, int total) {
-        int percent = total > 0 ? Math.max(0, Math.min(100, Math.round(done * 100f / total))) : 100;
-        mPercent.setText(percent + "%");
-        mBar.setProgress(percent);
-        mCount.setText(getString(R.string.download_progress_count, done, total));
+    /**
+     * @param fraction        how far into the file currently downloading, 0..1
+     * @param bytesPerSecond  measured speed, or -1 to leave the readout as it is (a whole-file
+     *                        callback carries no measurement of its own)
+     */
+    private void updateProgress(int done, int total, float fraction, long bytesPerSecond) {
+        mDoneFiles = done;
+        mTotalFiles = total;
+        // done + fraction, not done alone: the file being downloaded counts for what has already
+        // arrived of it, which is the whole difference between a bar that creeps and one that
+        // stands still for a minute and then jumps four points.
+        float exact = total > 0 ? (done + fraction) * 100f / total : 100f;
+        if(exact < 0f) exact = 0f;
+        if(exact > 100f) exact = 100f;
+        if(exact > mTargetPercent) mTargetPercent = exact;
+
+        if(bytesPerSecond > 0) {
+            mSpeed.setText(getString(R.string.download_progress_speed, formatSpeed(bytesPerSecond)));
+        } else if(bytesPerSecond == 0) {
+            mSpeed.setText(R.string.download_progress_speed_waiting);
+        }
+        render();
+    }
+
+    /** Draw whatever the animator has caught up to. */
+    private void render() {
+        mPercent.setText((int) mShownPercent + "%");
+        mBar.setProgress(Math.round(mShownPercent * 10f));   // the bar runs 0..1000
+        if(mTotalFiles > 0) {
+            mCount.setText(getString(R.string.download_progress_count, mDoneFiles, mTotalFiles));
+        }
+    }
+
+    /** Bytes/second as a workshop reads it. */
+    private String formatSpeed(long bytesPerSecond) {
+        if(bytesPerSecond >= 1024 * 1024) {
+            return String.format(java.util.Locale.US, "%.1f MB/s", bytesPerSecond / (1024f * 1024f));
+        }
+        return String.format(java.util.Locale.US, "%.0f KB/s", bytesPerSecond / 1024f);
     }
 
     /** Enter the wallpaper screen. Idempotent: mediaReady() and an error path can both call it. */
