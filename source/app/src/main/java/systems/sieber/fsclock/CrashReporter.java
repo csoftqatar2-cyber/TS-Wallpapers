@@ -77,6 +77,10 @@ class CrashReporter {
     /** Note something worth seeing in the next crash report. Safe from any thread. */
     static void breadcrumb(String what) {
         if(what == null) return;
+        // Also to logcat, at a level ProGuard keeps, so that a car on the bench can be read live
+        // over adb instead of only through a crash report that a working app never files. This is
+        // how the wallpaper engine's own account of a fault becomes visible next to the platform's.
+        android.util.Log.e("fsclock", what);
         synchronized(TRAIL) {
             TRAIL.add(stamp(System.currentTimeMillis()) + "  " + what);
             while(TRAIL.size() > BREADCRUMBS) TRAIL.remove(0);

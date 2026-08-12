@@ -84,6 +84,13 @@ public class MediaWallpaperService extends WallpaperService {
         /** How many times the current still has failed to load at all. */
         private int loadRetries;
 
+        /**
+         * Whether a still has been posted to the CURRENT surface with lockCanvas — and therefore
+         * whether this surface is still fit to hand to a MediaPlayer. See {@link #loadMediaLocked}.
+         */
+        private boolean canvasUsed;
+
+
         // image / gif
         private Bitmap bitmap;
         private AnimatedImageDrawable gifDrawable;
@@ -106,12 +113,27 @@ public class MediaWallpaperService extends WallpaperService {
         public void onCreate(SurfaceHolder surfaceHolder) {
             super.onCreate(surfaceHolder);
             prefs.registerOnSharedPreferenceChangeListener(this);
+            trace("engine created" + (isPreview() ? " (preview)" : ""));
+        }
+
+        /**
+         * One engine's account of itself, tagged so two of them cannot be confused.
+         *
+         * There are two engines whenever the hand-off screen is up — the wallpaper and its preview
+         * — and telling them apart is the whole reason this fault took as long as it did to read:
+         * the preview played the video perfectly while the real one showed nothing, and the log
+         * looked self-contradictory until each line said which engine it came from.
+         */
+        private void trace(String what) {
+            CrashReporter.breadcrumb("wp[" + Integer.toHexString(hashCode()) + "] " + what);
         }
 
         @Override
         public void onSurfaceChanged(SurfaceHolder holder, int format, int width, int height) {
             // A brand new surface is a fresh chance for a still that failed on the last one.
             loadRetries = 0;
+            trace("surfaceChanged " + width + "x" + height + " fmt=" + format
+                    + " canvasUsed=" + canvasUsed);
             loadMedia(width, height);
         }
 
@@ -134,7 +156,14 @@ public class MediaWallpaperService extends WallpaperService {
         @Override
         public void onSurfaceCreated(SurfaceHolder holder) {
             super.onSurfaceCreated(holder);
-            ensureDrawn();
+            trace("surfaceCreated");
+            // Nothing has been posted to this one yet, so it is still clean enough for a video.
+            canvasUsed = false;
+            // Deliberately no ensureDrawn() here. A create is always followed by onSurfaceChanged,
+            // which loads the CURRENT selection properly; drawing here could only paint the still
+            // we happen to be holding — and painting a still is what makes a surface unusable for
+            // the video that onSurfaceChanged is about to start on it. That is the whole of the
+            // "set a picture, then set a video, and the picture stays" fault.
         }
 
         @Override
@@ -153,11 +182,20 @@ public class MediaWallpaperService extends WallpaperService {
          */
         private void ensureDrawn() {
             if(mode == Mode.VIDEO) return;
+            // The still we are holding is only worth putting back if it is still the wallpaper.
+            // Trusting the in-memory mode instead of what is stored is how an already-replaced
+            // picture used to be painted over the video that had replaced it.
+            if(!storedIsStill()) { scheduleReload(); return; }
             if((mode == Mode.IMAGE && bitmap != null) || (mode == Mode.GIF && gifDrawable != null)) {
                 drawImageOrGif();
                 return;
             }
             scheduleReload();
+        }
+
+        /** What the owner picked last, as the applier recorded it. Cheap: no file is touched. */
+        private boolean storedIsStill() {
+            return !WallpaperItem.TYPE_VIDEO.equals(prefs.getString(LeopardApplier.PREF_TYPE, null));
         }
 
         @Override
@@ -184,6 +222,7 @@ public class MediaWallpaperService extends WallpaperService {
 
         @Override
         public void onSurfaceDestroyed(SurfaceHolder holder) {
+            trace("surfaceDestroyed mode=" + mode);
             visible = false;
             release();
         }
@@ -293,7 +332,31 @@ public class MediaWallpaperService extends WallpaperService {
                 gif = type.equals("image/gif");
             }
 
+            trace("load type=" + (video ? "video" : gif ? "gif" : "image")
+                    + " canvasUsed=" + canvasUsed + " uri=" + uri);
             if(video) {
+                // One wallpaper surface cannot be used for a Canvas picture and then for a video.
+                // Whichever kind of producer connects first keeps the connection, and there is no
+                // way to hand it back: measured on a TI7 (Leopard/Denza family) head unit, the
+                // second one is simply refused —
+                //
+                //   BufferQueueProducer: [Wallpaper#0] connect: already connected (cur=2 req=3)
+                //                                                         cur=2 Canvas, req=3 media
+                //
+                // and nothing about that is loud. The player is built, the file opens, and not one
+                // frame is ever posted, so the last thing that WAS posted stays on the screen — the
+                // picture the owner is trying to replace. It reads as "the video does not apply",
+                // and it does not heal by itself, because only a surface that is destroyed and
+                // built again drops the connection.
+                //
+                // Asking for a new surface from in here does not work: changing the requested
+                // format brings onSurfaceChanged but no new surface (verified on the car — no
+                // onSurfaceCreated, and canvasUsed still true), so the engine cannot repair this
+                // for itself. What does work is never being in this position: LeopardApplier drops
+                // the live wallpaper when the KIND of the picked file changes, so the hand-off
+                // screen re-binds the service and this engine is born with a surface nobody has
+                // claimed. See LeopardApplier.apply.
+                if(canvasUsed) trace("video on a surface the Canvas already owns — expect no frames");
                 loadVideo(uri);
             } else if(gif && Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
                 loadGif(uri);
@@ -438,8 +501,14 @@ public class MediaWallpaperService extends WallpaperService {
                 mp.setDataSource(getApplicationContext(), uri);
                 mp.setLooping(true);
                 mp.setVolume(0f, 0f);   // wallpapers are silent
+                trace("video: handing the surface to MediaPlayer");
                 mp.setSurface(getSurfaceHolder().getSurface());
+                mp.setOnErrorListener((p, w1, w2) -> {
+                    trace("video: error " + w1 + "/" + w2);
+                    return false;
+                });
                 mp.setOnPreparedListener(p -> {
+                    trace("video: prepared, visible=" + visible);
                     videoPrepared = true;
                     try {
                         p.setVideoScalingMode(MediaPlayer.VIDEO_SCALING_MODE_SCALE_TO_FIT_WITH_CROPPING);
@@ -465,8 +534,11 @@ public class MediaWallpaperService extends WallpaperService {
             Canvas canvas = null;
             try {
                 canvas = holder.lockCanvas();
-                if(canvas == null) { retryDraw(); return; }
+                if(canvas == null) { trace("lockCanvas null"); retryDraw(); return; }
+                if(!canvasUsed) trace("lockCanvas took the surface (mode=" + mode + ")");
                 drawRetries = 0;
+                // From here on this surface belongs to the Canvas, and a video may not have it.
+                canvasUsed = true;
                 canvas.drawColor(Color.BLACK);
                 float vw = canvas.getWidth();
                 float vh = canvas.getHeight();

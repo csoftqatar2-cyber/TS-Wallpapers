@@ -101,6 +101,38 @@ class LeopardApplier {
         }
     }
 
+    /**
+     * Whether our engine puts this kind of file on the screen with a Canvas — a picture and a GIF —
+     * as opposed to handing the surface to a MediaPlayer, which is a video and only a video.
+     */
+    private static boolean drawnOnCanvas(String type) {
+        return !WallpaperItem.TYPE_VIDEO.equals(type);
+    }
+
+    /**
+     * Make Android build our wallpaper a new surface, by dropping the live wallpaper so that the
+     * hand-off screen the caller is about to show binds the service again from scratch.
+     *
+     * A wallpaper surface can be a Canvas surface or a video surface and never both. Whichever
+     * connects first owns it for as long as it exists, and the loser is refused — on a TI7 head
+     * unit, with our engine holding the surface for a picture and the player asking for it next:
+     *
+     *     BufferQueueProducer: [Wallpaper#0] connect: already connected (cur=2 req=3)
+     *
+     * Nothing throws. The video opens and decodes and posts no frames at all, so the screen keeps
+     * showing the last thing that was posted — the picture being replaced — and every video applied
+     * afterwards fails the same way, because the surface lives as long as the binding does. The
+     * engine cannot fix this from inside itself: asking for a different pixel format brings a
+     * surfaceChanged and no new surface. Only a new binding gives a new surface.
+     *
+     * The cost is a moment of the car's own wallpaper between here and the owner pressing the
+     * system's button, which is a screen they are on their way to anyway.
+     */
+    private static void freshSurfaceNeeded(Context ctx) {
+        CrashReporter.breadcrumb("leopard: kind changed — releasing the wallpaper for a new surface");
+        clearOurLiveWallpaper(ctx);
+    }
+
     static boolean isOurServiceActive(Context ctx) {
         try {
             WallpaperManager wm = WallpaperManager.getInstance(ctx);
@@ -141,12 +173,16 @@ class LeopardApplier {
         // stored — and SharedPreferences does not call a listener for an unchanged value, so the
         // engine slept through every apply after the first one. See MediaWallpaperService.PREF_REV.
         SharedPreferences p = prefs(ctx);
+        boolean kindChanged = drawnOnCanvas(p.getString(PREF_TYPE, null)) != drawnOnCanvas(type);
         p.edit()
                 .putString(MediaWallpaperService.PREF_URI, stored)
                 .putString(LeopardApplier.PREF_TYPE, type)
                 .putLong(MediaWallpaperService.PREF_REV, p.getLong(MediaWallpaperService.PREF_REV, 0) + 1)
                 .apply();
         CrashReporter.breadcrumb("leopard: apply " + type + " " + stored);
+        // Going from a picture to a video, or back, needs a wallpaper surface that has never been
+        // used for the other kind. See freshSurfaceNeeded.
+        if(kindChanged && isOurServiceActive(ctx)) freshSurfaceNeeded(ctx);
         // One decision, asked in one place — the picker asks needsSystemScreen() before it starts,
         // and this must not be able to disagree with the answer the user was already given.
         return needsSystemScreen(ctx, type) ? RESULT_NEEDS_SYSTEM_SCREEN : RESULT_APPLIED_LIVE;
