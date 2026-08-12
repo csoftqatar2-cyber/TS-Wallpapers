@@ -168,6 +168,15 @@ public class WallpaperRepo {
             String v = getSystemProperty(k);
             if (isPlausibleVin(v)) return v.trim();
         }
+        // Desay SV head units (Jetour T1J/T2 and the rest of the DesaySV IVI line). Their
+        // SVVDSCarInfo app publishes the VIN twice: here from the TBOX, and under
+        // sys.vehicle.hardware.vin.code above once the diagnosis CAN frame carrying it arrives.
+        //
+        // Strict, unlike the list above: the property scan and the two sibling apps (Back Button,
+        // THABTHABA STORE) only ever accept a 17-character VIN from a key nobody told us to
+        // trust, and a car those three read differently is a car with two rows in devices.
+        String tbox = getSystemProperty("persist.sys.tbox.vin");
+        if (isStrictVin(tbox)) return tbox.trim();
         return "";
     }
 
@@ -253,6 +262,9 @@ public class WallpaperRepo {
                 if (isPlausibleVin(v)) return v.trim();
             } catch (Throwable ignored) { }
         }
+        // Desay SV (Jetour) files its copy in Settings.System, not Global — but the table scan
+        // below already reads System and accepts exactly what the sibling apps accept, so there
+        // is deliberately no named shortcut for it here.
         return scanSettingsForVin(context);
     }
 
