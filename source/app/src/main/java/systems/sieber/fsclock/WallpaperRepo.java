@@ -610,6 +610,18 @@ public class WallpaperRepo {
         return new ArrayList<>(mAllItems);
     }
 
+    /**
+     * The wallpapers this car actually offers — the same list the slideshow plays, with everything
+     * the owner unticked in Settings ▸ إدارة الصور removed.
+     *
+     * The hand-off pickers (Leopard, Lynk &amp; Co) want this rather than {@link #allItems()}:
+     * editing a cloud image there copies it onto the car and hides the original, so a picker built
+     * from the unfiltered list offers the untouched original and the edit looks lost.
+     */
+    public List<WallpaperItem> visibleItems() {
+        return new ArrayList<>(mItems);
+    }
+
     /** Urls the owner hid on this device. */
     public java.util.Set<String> getHiddenUrls() {
         java.util.Set<String> set = new java.util.HashSet<>();
@@ -1421,6 +1433,61 @@ public class WallpaperRepo {
                 } catch(Exception e) {
                     Log.w(TAG, "sync failed", e);
                     if(cb != null) cb.done(false, 0, e.getMessage());
+                }
+            }
+        }).start();
+    }
+
+    // ---- pre-activation prefetch --------------------------------------------
+
+    /** One prefetch at a time, and never a second one in the same process. */
+    private volatile boolean mPrefetching;
+    private volatile boolean mPrefetched;
+
+    /**
+     * Start pulling the shared wallpapers down while the activation card is still on screen.
+     *
+     * The car cannot be told what IT will show until it is registered — {@link #getSyncUrl} is
+     * answered with the "inactive" sentinel and nothing else — so the download used to begin only
+     * after the serial was accepted and the car type chosen, with a technician and a customer both
+     * watching a progress bar start from zero. Most of what any car ends up showing is the shared
+     * library, and that part does not depend on which car this is: it can be on the disk before
+     * anybody has finished typing. Whatever is already cached is skipped by the real sync when it
+     * runs, so the gate after activation has only the car's own pictures left to fetch.
+     *
+     * Deliberately quiet: no progress, no callback, no retry. It is a head start, and a head start
+     * that fails costs nothing — the normal sync fetches the same files afterwards.
+     */
+    public void prefetchSharedAsync() {
+        if(mPrefetching || mPrefetched || isActive()) return;
+        String sbUrl = getSupabaseUrl();
+        if(sbUrl.contains("YOUR_SUPABASE_PROJECT")) return;
+        final String url = sbUrl + "/rest/v1/rpc/get_prefetch_wallpapers";
+        mPrefetching = true;
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    String json = httpGet(url);
+                    if(json == null || json.trim().isEmpty()) return;
+                    for(WallpaperItem it : parse(json)) {
+                        if(it == null || it.url == null || "inactive".equals(it.url)) continue;
+                        // An activation that lands mid-prefetch makes this pass redundant: the
+                        // real sync is already fetching the same files with a bar in front of it.
+                        if(isActive()) break;
+                        if(it.isVideo()) {
+                            try { ensureVideoCached(it, null); } catch(Exception e) {
+                                Log.w(TAG, "prefetch video failed: " + it.url, e);
+                            }
+                        } else {
+                            prefetchImage(it);
+                        }
+                    }
+                    mPrefetched = true;
+                } catch(Exception e) {
+                    Log.w(TAG, "prefetch failed", e);
+                } finally {
+                    mPrefetching = false;
                 }
             }
         }).start();

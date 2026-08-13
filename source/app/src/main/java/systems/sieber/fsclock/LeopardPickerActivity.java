@@ -477,21 +477,17 @@ public class LeopardPickerActivity extends AppCompatActivity {
      * back the raw photo instead.
      */
     private void buildPhoneGrid() {
-        // Anything edited elsewhere since it was last baked is redrawn first; the pass below then
-        // lists the picture the technician actually chose rather than the one they replaced.
-        rebakeStaleUploads();
-
         mPhoneGrid.removeAllViews();
         mShown.clear();
         mStripOffset = 0;
 
         for(File f : phoneUploads()) {
             String url = f.getAbsolutePath();
-            File edited = bakedFileFor(url);
-            mShown.add(edited != null
-                    ? new WallpaperItem(WallpaperItem.TYPE_IMAGE, edited.getAbsolutePath())
-                    : new WallpaperItem(WallpaperItem.guessType(url), url));
+            mShown.add(new WallpaperItem(WallpaperItem.guessType(url), url));
         }
+        // Anything edited anywhere is listed as the picture that edit produced, not as the raw
+        // photo it replaced — and anything whose edit has not been burnt in yet is burnt in now.
+        applyEdits();
 
         if(mShown.isEmpty()) {
             TextView empty = new TextView(this);
@@ -513,7 +509,7 @@ public class LeopardPickerActivity extends AppCompatActivity {
 
         String currentUri = samePath(mPrefs.getString(MediaWallpaperService.PREF_URI, ""));
         for(final WallpaperItem item : mShown) {
-            mPhoneGrid.addView(thumbCell(item, cellW, cellH, gap, d, currentUri, false));
+            mPhoneGrid.addView(thumbCell(item, cellW, cellH, gap, d, currentUri, false, true));
         }
         refreshSelection();
     }
@@ -622,6 +618,8 @@ public class LeopardPickerActivity extends AppCompatActivity {
      * nothing. The result is written screen-sized, which is also all the wallpaper will ever use.
      */
     private void bakeEdit(final WallpaperItem item) {
+        final boolean mEditingFromGrid = mFromGridPencil;
+        mFromGridPencil = false;
         setBusy(true, R.string.leopard_preparing);
         final int outW = mEditingW, outH = mEditingH;
         final String url = item.url;
@@ -639,6 +637,12 @@ public class LeopardPickerActivity extends AppCompatActivity {
                 // which is what the person standing at the head unit is waiting for.
                 if(SOURCE_PHONE.equals(mSource)) {
                     buildPhoneGrid();   // rebuilt, so it now holds this one too
+                    mSelected = pickFromGrid(shown);
+                } else if(mEditingFromGrid) {
+                    // A pencil pressed on a picture that is already in the list: the list is what
+                    // the technician was working through, so it comes back whole rather than
+                    // collapsing to the one picture they touched.
+                    showLocal();
                     mSelected = pickFromGrid(shown);
                 } else {
                     mShown.clear();
@@ -663,7 +667,9 @@ public class LeopardPickerActivity extends AppCompatActivity {
      */
     private String bakeToFile(String url, int outW, int outH) {
         try {
-            Bitmap src = decodeForBake(url, outW, outH);
+            String path = localSourceFor(url);
+            if(path == null) return null;
+            Bitmap src = decodeForBake(path, outW, outH);
             if(src == null) return null;
             Bitmap out = FitRenderer.bake(src, mRepo.getFit(url), mRepo.getFocal(url)[0],
                     mRepo.getFocal(url)[1], outW, outH, false);
@@ -690,33 +696,47 @@ public class LeopardPickerActivity extends AppCompatActivity {
     private boolean mRebaking;
 
     /**
-     * Re-burn every phone upload whose framing has changed since it was last baked.
+     * Show every edited picture as the picture that edit produced, and burn in the ones that have
+     * not been burnt in yet.
      *
-     * This is what makes an edit made in Settings ▸ إدارة الصور reach a Leopard car at all. That
-     * screen writes the fit and stops — it has no idea Leopard needs a file — so the picture the
-     * picker lists and applies stayed the one baked the first time. The technician edited, pressed
-     * تم, set it again, and the car showed the old crop: an edit that saved everywhere except
-     * where it counted. Redoing it here keeps the fix in one place, whatever screen did the edit.
+     * This is what makes an edit made anywhere but here reach the car at all. Leopard and Lynk &amp;
+     * Co do not read the fit at draw time — they hand a FILE to the head unit — so Settings ▸
+     * إدارة الصور writes the framing and stops: the picker went on listing and applying the raw
+     * photo, and the technician who edited, pressed تم and set it again watched the car show the
+     * old crop. From the seat that is indistinguishable from an edit that refuses to save.
      *
-     * Only pictures that HAVE a bake are redone: one that was never framed has nothing to redo,
-     * and baking it now would invent a decision nobody made.
+     * It used to cover phone uploads only, and only ones that already had a bake. Both limits were
+     * the bug: a cloud or device picture had no bake to be stale, so editing one changed nothing at
+     * all, for ever. Now anything with a framing of its own ({@link WallpaperRepo#fitChangedAt} is
+     * the record that it was edited) is burnt in, whichever source it came from — a cloud image is
+     * downloaded once to do it. A picture nobody has edited is left alone: baking it would invent a
+     * decision nobody made.
      */
-    private void rebakeStaleUploads() {
-        if(mRebaking) return;
+    private void applyEdits() {
+        mBakedSource.clear();
         final List<String> stale = new ArrayList<>();
-        File dir = new File(getCacheDir(), "leopard");
-        for(File f : phoneUploads()) {
-            String url = f.getAbsolutePath();
-            File baked = new File(dir, bakedName(url));
-            if(!baked.exists() || baked.length() == 0) continue;
-            long changed = mRepo.fitChangedAt(url);
-            if(baked.lastModified() >= changed) continue;
-            // Keyed by the edit, not by the image: a later edit of the same picture must be
-            // allowed its own attempt.
-            if(!mRebakeTried.add(url + "@" + changed)) continue;
-            stale.add(url);
+        for(int i = 0; i < mShown.size(); i++) {
+            final WallpaperItem item = mShown.get(i);
+            if(item.isVideo() || isBaked(item.url)) continue;
+            final long changed = mRepo.fitChangedAt(item.url);
+            if(changed == 0) continue;                     // never edited: nothing to burn in
+            File baked = bakedFileFor(item.url);
+            if(baked != null) {
+                WallpaperItem shown = new WallpaperItem(
+                        WallpaperItem.TYPE_IMAGE, baked.getAbsolutePath());
+                // The cell still has to know which picture it stands for: the pencil edits the
+                // ORIGINAL (the bake is an output, and editing it would stack crop upon crop) and
+                // the bin deletes the original with it.
+                mBakedSource.put(samePath(shown.url), item.url);
+                if(mSelected == item) mSelected = shown;
+                mShown.set(i, shown);
+            } else if(mRebakeTried.add(item.url + "@" + changed)) {
+                // Keyed by the edit, not by the image: a later edit of the same picture must be
+                // allowed its own attempt.
+                stale.add(item.url);
+            }
         }
-        if(stale.isEmpty()) return;
+        if(stale.isEmpty() || mRebaking) return;
 
         android.util.DisplayMetrics dm = new android.util.DisplayMetrics();
         getWindowManager().getDefaultDisplay().getRealMetrics(dm);
@@ -729,13 +749,40 @@ public class LeopardPickerActivity extends AppCompatActivity {
                 if(gone()) return;
                 // Nothing is stale now, so this pass cannot start another one.
                 if(SOURCE_PHONE.equals(mSource)) buildPhoneGrid();
+                else if(mFilmstripScroll.getVisibility() == View.VISIBLE) buildFilmstrip();
             });
         }).start();
     }
 
+    /** Baked file path → the picture it was made from. Rebuilt on every {@link #applyEdits}. */
+    private final java.util.Map<String, String> mBakedSource = new java.util.HashMap<>();
+
+    /** The original behind a listed picture: the raw photo when this one is a burnt-in edit. */
+    private String sourceOf(WallpaperItem item) {
+        if(item == null) return null;
+        String src = mBakedSource.get(samePath(item.url));
+        return src != null ? src : item.url;
+    }
+
+    /**
+     * A real file this url's pixels can be decoded from, fetching a cloud image if that is what it
+     * takes. Blocking — call from a background thread.
+     */
+    private String localSourceFor(String url) {
+        if(url == null || url.isEmpty()) return null;
+        if(LeopardCache.isRemote(url)) {
+            if(LeopardCache.materialise(this, url) == null) return null;
+            File f = LeopardCache.cachedFile(this, url);
+            return f == null ? null : f.getAbsolutePath();
+        }
+        // A document uri has no path to decode from. Everything that reaches the editor has been
+        // staged to a file first (see stageThenEdit), so this only skips one that never was.
+        if(url.startsWith("content://")) return null;
+        return samePath(url);
+    }
+
     /** Decode no larger than the screen needs — a 12MP phone photo would blow the heap here. */
-    private Bitmap decodeForBake(String url, int outW, int outH) throws Exception {
-        String path = samePath(url);
+    private Bitmap decodeForBake(String path, int outW, int outH) throws Exception {
         BitmapFactory.Options bounds = new BitmapFactory.Options();
         bounds.inJustDecodeBounds = true;
         BitmapFactory.decodeFile(path, bounds);
@@ -772,10 +819,13 @@ public class LeopardPickerActivity extends AppCompatActivity {
         // merged together, which is what the slideshow wants but not what this says on the tin:
         // the circle next to it is literally called "from the device".
         //
-        // The per-car hide list is ignored on purpose. It means "skip in the slideshow", and
-        // Leopard has no slideshow — the owner is picking one image by hand, so hiding it from
-        // a rotation that no longer exists would just make images vanish for no visible reason.
-        for(WallpaperItem it : mRepo.allItems()) {
+        // The per-car hide list IS honoured, and that is a correction rather than a preference.
+        // Editing a cloud image in Settings ▸ إدارة الصور cannot edit the cloud: it copies the
+        // picture onto the car, moves the framing onto the copy and hides the original. Ignoring
+        // the hide list therefore left this list offering the untouched original — while the
+        // edited copy sat on the device source — so the edit read as lost. What the owner
+        // unticked, this car does not offer.
+        for(WallpaperItem it : mRepo.visibleItems()) {
             if(LeopardCache.isRemote(it.url)) mShown.add(it);
         }
 
@@ -868,7 +918,7 @@ public class LeopardPickerActivity extends AppCompatActivity {
 
     /** Cached cloud wallpapers only — local files are not this circle's business. */
     private boolean hasCloudItems() {
-        for(WallpaperItem it : mRepo.allItems()) if(LeopardCache.isRemote(it.url)) return true;
+        for(WallpaperItem it : mRepo.visibleItems()) if(LeopardCache.isRemote(it.url)) return true;
         return false;
     }
 
@@ -888,7 +938,9 @@ public class LeopardPickerActivity extends AppCompatActivity {
         // show it.
         mRepo.load();
         mShown.clear();
-        for(WallpaperItem it : mRepo.allItems()) {
+        // The visible list, for the same reason the cloud circle uses it: what the owner unticked
+        // in Settings ▸ إدارة الصور, this car does not offer.
+        for(WallpaperItem it : mRepo.visibleItems()) {
             if(LeopardCache.isRemote(it.url)) continue;
             // Phone uploads live on this same disk but belong to the phone source, where they
             // are shown next to the code that produced them. Listing them twice would make the
@@ -1066,6 +1118,9 @@ public class LeopardPickerActivity extends AppCompatActivity {
 
     private void buildFilmstrip() {
         if(gone()) return;
+        // Same as the phone pane: what is listed is the picture the last edit produced, and an
+        // edit that has not been burnt into a file yet is burnt in now.
+        applyEdits();
         // The cells about to be discarded own the grid's video players; drop them first or each
         // rebuild strands another set of decoders.
         releaseTilePlayers();
@@ -1111,7 +1166,12 @@ public class LeopardPickerActivity extends AppCompatActivity {
         if(mStripOffset == 1) mFilmstrip.addView(browseCell(cellW, cellH, gap, d, radius));
 
         for(final WallpaperItem item : mShown) {
-            mFilmstrip.addView(thumbCell(item, cellW, cellH, gap, d, currentUri, true));
+            // The device source is this car's own storage too, so a file browsed onto the head
+            // unit gets the same pencil and bin as a photo that came off a phone. Cloud pictures
+            // do not: they belong to the fleet, and neither editing in place nor deleting them
+            // here would mean anything.
+            mFilmstrip.addView(thumbCell(item, cellW, cellH, gap, d, currentUri, true,
+                    SOURCE_LOCAL.equals(mSource)));
         }
         refreshSelection();
         // Nothing has a size yet — the tiles can only be matched to the viewport once the grid
@@ -1127,7 +1187,8 @@ public class LeopardPickerActivity extends AppCompatActivity {
      * selection ring quietly stops matching.
      */
     private View thumbCell(final WallpaperItem item, final int cellW, final int cellH,
-                           final int gap, float d, String currentUri, final boolean shapeToImage) {
+                           final int gap, float d, String currentUri, final boolean shapeToImage,
+                           final boolean actions) {
         final int radius = Math.round(16 * d);
         final FrameLayout cell = new FrameLayout(this);
         cell.setFocusable(true);
@@ -1238,10 +1299,96 @@ public class LeopardPickerActivity extends AppCompatActivity {
         ring.setDuplicateParentStateEnabled(true);
         cell.addView(ring);
 
+        // The pencil and the bin, over the ring so they stay reachable on a selected cell.
+        // Only a picture that is really a file on this car: a document uri picked a second ago is
+        // neither editable (the editor decodes files) nor ours to delete.
+        if(actions && !item.isVideo() && isLocalFile(item.url)) cell.addView(actionBar(item, d));
+
         // Tap opens the full-screen preview rather than just ticking the cell: a 326x122
         // thumbnail is too small to commit a whole dashboard to.
         cell.setOnClickListener(v -> { mSelected = item; refreshSelection(); showPreview(item); });
         return cell;
+    }
+
+    /**
+     * Edit and delete, on the picture itself.
+     *
+     * A photo that came off a customer's phone is the one picture on this screen that is genuinely
+     * this car's own: it is usually crooked or portrait, it is often wrong, and the two things
+     * anybody wants to do with it — re-frame it, or get rid of it — used to live in Settings ▸
+     * إدارة الصور, four taps away behind a screen that is not even about this picture. Here they
+     * are where the picture is.
+     *
+     * Both act at once. The bin does not ask: this is a photo that arrived a minute ago on a car
+     * with a customer standing at it, the file is gone from the grid before the finger is off the
+     * glass, and a confirmation dialog for something that trivial is the tax the old route already
+     * charged. The pencil opens the fit editor on the ORIGINAL photo — never on the burnt-in copy,
+     * or every edit would crop the crop — and the way back re-burns it, so the framing is on the
+     * picture in the grid before the editor has finished closing.
+     */
+    private View actionBar(final WallpaperItem item, float d) {
+        LinearLayout bar = new LinearLayout(this);
+        bar.setOrientation(LinearLayout.HORIZONTAL);
+        FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT);
+        lp.gravity = Gravity.TOP | Gravity.START;
+        lp.setMargins(Math.round(8 * d), Math.round(8 * d), 0, 0);
+        bar.setLayoutParams(lp);
+        bar.addView(actionButton(R.drawable.ic_edit_20dp, R.string.wallpaper_edit, d,
+                v -> editListed(item)));
+        bar.addView(actionButton(R.drawable.ic_delete_24dp, R.string.wallpaper_delete, d,
+                v -> deleteListed(item)));
+        return bar;
+    }
+
+    /** One round icon button, sized for a finger in a car rather than for a mouse. */
+    private View actionButton(int icon, int label, float d, View.OnClickListener click) {
+        ImageView v = new ImageView(this);
+        int size = Math.round(40 * d);
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(size, size);
+        lp.setMarginEnd(Math.round(8 * d));
+        v.setLayoutParams(lp);
+        v.setBackgroundResource(R.drawable.leopard_badge_circle);
+        int pad = Math.round(9 * d);
+        v.setPadding(pad, pad, pad, pad);
+        v.setImageResource(icon);
+        v.setContentDescription(getString(label));
+        v.setFocusable(true);
+        v.setClickable(true);
+        v.setOnClickListener(click);
+        return v;
+    }
+
+    /** Set while the editor was opened by a cell's pencil rather than by an import. */
+    private boolean mFromGridPencil;
+
+    /** Re-frame this picture — the photo it was made from, when it is already a burnt-in edit. */
+    private void editListed(WallpaperItem item) {
+        String src = sourceOf(item);
+        if(src == null || src.isEmpty()) return;
+        mFromGridPencil = true;
+        mSelected = item;
+        refreshSelection();
+        openFitEditor(new WallpaperItem(WallpaperItem.TYPE_IMAGE, src));
+    }
+
+    /** Delete it now, picture and burnt-in copy alike, and redraw the pane it was in. */
+    private void deleteListed(WallpaperItem item) {
+        final String src = sourceOf(item);
+        if(src == null || src.isEmpty()) return;
+        // The bake is an output of this photo and must not outlive it — left behind it would be a
+        // finished-looking picture in the cache with nothing on the car it belongs to.
+        File baked = new File(new File(getCacheDir(), "leopard"), bakedName(src));
+        if(baked.exists()) //noinspection ResultOfMethodCallIgnored
+            baked.delete();
+        if(!mRepo.deleteLocal(src)) { toast(R.string.wallpaper_delete_failed); return; }
+        if(mSelected == item) {
+            mSelected = null;
+            hidePreview();
+        }
+        if(SOURCE_PHONE.equals(mSource)) buildPhoneGrid();
+        else showLocal();
+        toast(R.string.wallpaper_delete_done);
     }
 
     /**
@@ -1563,6 +1710,12 @@ public class LeopardPickerActivity extends AppCompatActivity {
         t.setTextColor(ContextCompat.getColor(this, R.color.gold));
         t.setText(text);
         return t;
+    }
+
+    /** True for a url that names a file on this car, whichever way it is spelled. */
+    private static boolean isLocalFile(String url) {
+        return url != null && !url.isEmpty()
+                && !url.startsWith("content://") && !url.startsWith("http");
     }
 
     /** One spelling for a local file, so "file:///storage/x" and "/storage/x" compare equal. */

@@ -982,6 +982,11 @@ public class FsClockView extends FrameLayout {
             if(!mWallpaperRepo.isActive()) {
                 mLayoutActivation.setVisibility(View.VISIBLE);
                 mTextViewActivationDeviceId.setText(mWallpaperRepo.getDeviceId());
+                // The card is up, the technician is reading a serial off a card, and the car has
+                // a working connection and nothing to do with it. Start pulling the shared
+                // library now so the download screen that follows activation has most of its work
+                // already done. See WallpaperRepo.prefetchSharedAsync.
+                mWallpaperRepo.prefetchSharedAsync();
             } else {
                 mLayoutActivation.setVisibility(View.GONE);
                 // A car the Store activated arrives here having never been asked what it is: the
