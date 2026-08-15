@@ -118,6 +118,29 @@ public class LeopardPickerActivity extends AppCompatActivity {
     private boolean mAwaitingGridWidth = false;
 
     /**
+     * Clips this screen is fetching for itself, in the order they were asked for.
+     *
+     * A video cell can only draw once the file is on the car, and until then it is a flat brown
+     * rectangle with a play badge — indistinguishable from a broken wallpaper. That state used to
+     * be permanent in practice: the only thing that ever downloaded a clip was the playlist sync,
+     * so a video the sync had missed (a dropped link, the skip button on the download screen, a
+     * wallpaper added to the fleet after this car last synced) stayed blank for as long as the
+     * owner cared to look at it. Opening the cell downloaded the file — into the OTHER cache, the
+     * one the apply reads — and coming back showed the same blank cell, which is what made it
+     * read as stuck rather than as slow.
+     *
+     * So the grid fetches its own missing clips, one at a time: one car link, one download, and
+     * every other cell keeps whatever it already had.
+     */
+    private final java.util.LinkedHashSet<String> mVideoQueue = new java.util.LinkedHashSet<>();
+    /** One download in flight — a head unit's link does not get faster by being asked twice. */
+    private boolean mFetchingVideo;
+    /** Urls that came back empty. Re-queueing them on every rebuild would never stop. */
+    private final java.util.Set<String> mVideoFetchFailed = new java.util.HashSet<>();
+    /** A preview downloaded a clip the grid behind it was drawing blank; rebuild on the way out. */
+    private boolean mPreviewFetched;
+
+    /**
      * Videos playing inside the library grid, so a clip can be judged before it is opened.
      *
      * Capped, and that cap is not a nicety. A head unit has a handful of hardware video decoders
@@ -1234,7 +1257,14 @@ public class LeopardPickerActivity extends AppCompatActivity {
             // The playlist pre-downloads videos for smooth looping, so when the file is
             // already cached we can pull frame 0 out of it locally. Only a video that has
             // not been fetched yet falls back to the flat placeholder.
-            String local = mRepo.localVideoPath(item);
+            String local = videoFile(item);
+            if(local == null) {
+                // Nothing to draw yet. Say so — a spinner is "coming", a bare brown box is
+                // "broken" — and put the clip on this screen's own download queue so the cell
+                // fills itself in instead of waiting for a sync that may never come.
+                cell.addView(cellSpinner(d));
+                queueVideoFetch(item);
+            }
             if(local != null) {
                 Glide.with(this)
                         .asBitmap()
@@ -1606,6 +1636,76 @@ public class LeopardPickerActivity extends AppCompatActivity {
         return v;
     }
 
+    /** A quiet "this is on its way", centred in a cell that has no frame to show yet. */
+    private View cellSpinner(float d) {
+        ProgressBar p = new ProgressBar(this);
+        int size = Math.round(32 * d);
+        FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(size, size);
+        lp.gravity = Gravity.CENTER;
+        p.setLayoutParams(lp);
+        p.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
+        return p;
+    }
+
+    /**
+     * The file this clip can be drawn from, under either of the two names it may be cached as.
+     *
+     * There are two video caches and they are not interchangeable. The playlist keeps its own
+     * ({@code cache/wallpapers/vid_*.bin}, keyed by wallpaper identity so a host move does not
+     * cost every car 50 MB a clip) and the apply path keeps another ({@code cache/leopard/wp_*.mp4},
+     * which must carry a real extension or the wallpaper engine reads no MIME and draws black).
+     * The grid only ever asked the first one — so previewing a video, which fills the second,
+     * left the cell behind it exactly as blank as before. Either copy is a perfectly good source
+     * for a thumbnail and for a tile, so ask both.
+     */
+    private String videoFile(WallpaperItem item) {
+        if(item == null || !item.isVideo()) return null;
+        String local = mRepo.localVideoPath(item);
+        if(local != null) return local;
+        File f = LeopardCache.cachedFile(this, item.url);
+        return f == null ? null : f.getAbsolutePath();
+    }
+
+    /** Put a missing clip on the queue and make sure something is working through it. */
+    private void queueVideoFetch(WallpaperItem item) {
+        if(item == null || !LeopardCache.isRemote(item.url)) return;
+        if(mVideoFetchFailed.contains(item.url)) return;
+        mVideoQueue.add(item.url);
+        pumpVideoFetch();
+    }
+
+    /**
+     * Fetch the next queued clip, then repaint the grid so its cell stops being a placeholder.
+     *
+     * Strictly one at a time. These are the biggest files the app moves and the link they move
+     * over is a car's — three at once would make all three slow and starve the preview the owner
+     * is probably waiting on.
+     */
+    private void pumpVideoFetch() {
+        if(mFetchingVideo || gone() || mVideoQueue.isEmpty()) return;
+        final String url = mVideoQueue.iterator().next();
+        mVideoQueue.remove(url);
+        mFetchingVideo = true;
+        new Thread(() -> {
+            final boolean ok = LeopardCache.materialise(LeopardPickerActivity.this, url) != null;
+            runOnUiThread(() -> {
+                mFetchingVideo = false;
+                if(gone()) return;
+                if(!ok) {
+                    // One failure per screen: the owner reopening the picker is the retry.
+                    mVideoFetchFailed.add(url);
+                } else if(mFilmstripScroll != null
+                        && mFilmstripScroll.getVisibility() == View.VISIBLE
+                        && (mPreview == null || mPreview.getVisibility() != View.VISIBLE)) {
+                    // Rebuilding re-queues whatever is still missing, so this is also what keeps
+                    // the queue moving through the rest of them.
+                    buildFilmstrip();
+                }
+                pumpVideoFetch();
+            });
+        }).start();
+    }
+
     /**
      * Narrow (or widen) a cell so its frame ends exactly where the picture does.
      *
@@ -1812,6 +1912,9 @@ public class LeopardPickerActivity extends AppCompatActivity {
                             say(R.string.leopard_download_failed);
                             return;
                         }
+                        // The cell behind this preview was drawing a placeholder for want of this
+                        // very file. It is here now; the grid gets to know on the way out.
+                        mPreviewFetched = true;
                         playPreviewVideo(local);
                     }
                 });
@@ -1862,6 +1965,13 @@ public class LeopardPickerActivity extends AppCompatActivity {
         mPreview.setVisibility(View.GONE);
         mPreviewProgress.setVisibility(View.GONE);
         mPreviewLoading.setVisibility(View.GONE);
+        // A clip that arrived while the preview was open is a cell that can finally draw itself.
+        if(mPreviewFetched) {
+            mPreviewFetched = false;
+            if(mFilmstripScroll != null && mFilmstripScroll.getVisibility() == View.VISIBLE) {
+                buildFilmstrip();
+            }
+        }
     }
 
     @Override
