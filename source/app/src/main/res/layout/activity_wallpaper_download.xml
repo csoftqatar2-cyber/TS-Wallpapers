@@ -68,6 +68,21 @@
         android:textSize="20sp"
         android:textStyle="bold" />
 
+    <!-- How much longer. The count and the speed answer "is it moving"; neither answers the
+         question actually being asked in the workshop, which is whether to stand and wait or go
+         and do something else. Derived from elapsed time against progress rather than from byte
+         sizes — see WallpaperDownloadActivity.etaText. -->
+    <TextView
+        android:id="@+id/textViewWpDownloadEta"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:gravity="center"
+        android:text="@string/download_progress_eta_unknown"
+        android:textColor="@color/gold"
+        android:textSize="20sp"
+        android:textStyle="bold" />
+
     <TextView
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
@@ -76,5 +91,22 @@
         android:text="@string/download_progress_hint"
         android:textColor="@color/aurora_muted"
         android:textSize="13sp" />
+
+    <!-- The way out. The gate exists so a car does not swipe through a library it has not got,
+         which is a real defect and worth waiting for — but on a slow workshop link the wait can
+         run to many minutes, and holding a technician with a customer in the car has a cost of
+         its own. This hands the choice over: the app opens on whatever has already landed and
+         the same download carries on behind it. -->
+    <Button
+        android:id="@+id/buttonWpDownloadSkip"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="14dp"
+        android:minHeight="48dp"
+        android:paddingStart="24dp"
+        android:paddingEnd="24dp"
+        android:text="@string/download_progress_skip"
+        android:textAllCaps="false"
+        android:textSize="16sp" />
 
 </LinearLayout>

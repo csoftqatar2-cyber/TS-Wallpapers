@@ -461,5 +461,9 @@
     <string name="download_progress_speed">سرعة الإنترنت: %1$s</string>
     <string name="download_progress_speed_waiting">سرعة الإنترنت: جارٍ القياس…</string>
     <string name="download_progress_hint">يُرجى الانتظار حتى اكتمال التنزيل لتعمل الخلفيات بسلاسة.</string>
-    <string name="download_progress_skip">تخطٍّ واستخدام التطبيق الآن</string>
+    <string name="download_progress_skip">تخطٍّ — التنزيل يكمل في الخلفية</string>
+    <string name="download_progress_eta">يتبقى حوالي %1$d دقيقة</string>
+    <string name="download_progress_eta_soon">يتبقى أقل من دقيقة</string>
+    <string name="download_progress_eta_unknown">جارٍ حساب الوقت المتبقي…</string>
+    <string name="download_progress_skipped">التنزيل مستمر في الخلفية — ستظهر الخلفيات أولاً بأول</string>
 </resources>

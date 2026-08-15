@@ -491,5 +491,9 @@ Roboto Font Copyright (c) Christian Robertson. Licensed under the Apache License
     <string name="download_progress_speed">Internet speed: %1$s</string>
     <string name="download_progress_speed_waiting">Internet speed: measuring…</string>
     <string name="download_progress_hint">Please wait until the download finishes so the wallpapers run smoothly.</string>
-    <string name="download_progress_skip">Skip and use the app now</string>
+    <string name="download_progress_skip">Skip — the download continues in the background</string>
+    <string name="download_progress_eta">About %1$d min left</string>
+    <string name="download_progress_eta_soon">Less than a minute left</string>
+    <string name="download_progress_eta_unknown">Estimating the time left…</string>
+    <string name="download_progress_skipped">Downloading in the background — the wallpapers appear as they arrive</string>
 </resources>

@@ -57,9 +57,26 @@ public class WallpaperDownloadActivity extends AppCompatActivity {
     private TextView mPercent;
     private TextView mCount;
     private TextView mSpeed;
+    private TextView mEta;
     private ProgressBar mBar;
     private WallpaperRepo mRepo;
     private boolean mProceeded = false;
+
+    /**
+     * When the first byte of this session actually moved, and how far along it was then.
+     *
+     * The clock does not start in onCreate: the manifest fetch, the DNS and a car's wifi
+     * negotiating itself come first, and counting that dead time into the rate would put the very
+     * first estimate minutes too high — the one estimate somebody is definitely reading. It starts
+     * at the first progress report and measures from there.
+     *
+     * The baseline percentage matters just as much. A car that has already been through part of a
+     * download (a retry, or the pre-activation prefetch putting most of the library on disk) opens
+     * this screen at 60% in the first second, and dividing 60% by that second says the rest will
+     * take no time at all. Only progress made SINCE the clock started is used to set the rate.
+     */
+    private long mRateStartedAt = 0L;
+    private float mRateStartPercent = 0f;
 
     /**
      * Where the download really is, and where the screen has caught up to.
@@ -103,11 +120,32 @@ public class WallpaperDownloadActivity extends AppCompatActivity {
         mPercent = findViewById(R.id.textViewWpDownloadPercent);
         mCount = findViewById(R.id.textViewWpDownloadCount);
         mSpeed = findViewById(R.id.textViewWpDownloadSpeed);
+        mEta = findViewById(R.id.textViewWpDownloadEta);
         mBar = findViewById(R.id.progressBarWpDownload);
         mRepo = new WallpaperRepo(this);
 
+        findViewById(R.id.buttonWpDownloadSkip).setOnClickListener(v -> skip());
+
         mBar.post(mAnimate);
         download(3);
+    }
+
+    /**
+     * Leave now and let the library finish arriving behind the app.
+     *
+     * Nothing is cancelled. {@link WallpaperRepo#sync} runs on a thread of its own that outlives
+     * this activity, so the files carry on landing exactly as they were — what changes is only
+     * that nobody is being made to watch. The screen behind picks each wallpaper up as it appears,
+     * because the slideshow reads the cache on every draw.
+     *
+     * The gate is marked done, deliberately. Being sent back here on the next launch to wait for a
+     * download somebody has already chosen to skip would make the button a lie; the periodic sync
+     * and the sync on resume keep fetching whatever is still missing.
+     */
+    private void skip() {
+        android.widget.Toast.makeText(this, R.string.download_progress_skipped,
+                android.widget.Toast.LENGTH_LONG).show();
+        proceed();
     }
 
     @Override
@@ -168,6 +206,9 @@ public class WallpaperDownloadActivity extends AppCompatActivity {
      * workshop with a genuinely dead link still has to be able to reach the app.
      */
     private void retryOrProceed(int attemptsLeft) {
+        // The car has already been let through — by the skip button, or by an earlier path. A
+        // retry now would start a second download thread behind the app for no one's benefit.
+        if(mProceeded) return;
         if(attemptsLeft > 1) {
             mBar.postDelayed(new Runnable() {
                 @Override public void run() { download(attemptsLeft - 1); }
@@ -183,6 +224,9 @@ public class WallpaperDownloadActivity extends AppCompatActivity {
      *                        callback carries no measurement of its own)
      */
     private void updateProgress(int done, int total, float fraction, long bytesPerSecond) {
+        // Skipped, or already through: the thread that reports this is deliberately allowed to
+        // outlive the screen (see skip()), so its reports have to land on nothing.
+        if(mProceeded || isFinishing()) return;
         mDoneFiles = done;
         mTotalFiles = total;
         // done + fraction, not done alone: the file being downloaded counts for what has already
@@ -208,6 +252,47 @@ public class WallpaperDownloadActivity extends AppCompatActivity {
         if(mTotalFiles > 0) {
             mCount.setText(getString(R.string.download_progress_count, mDoneFiles, mTotalFiles));
         }
+        mEta.setText(etaText());
+    }
+
+    /**
+     * How much longer, in the only unit anybody asks it in.
+     *
+     * Measured from the rate this download has actually achieved — percent gained over seconds
+     * elapsed — rather than from bytes remaining. The bytes are not knowable here: an image's size
+     * is learnt only once Glide has finished writing it, so a byte-based estimate would be
+     * confidently wrong for the whole first half of a library and would then swing every time a
+     * 50 MB video started.
+     *
+     * Nothing is claimed before there is something to claim it from: under six seconds, or under
+     * three points of progress since the clock started, it says it is still working it out. That
+     * is not a stall — an estimate that opens at "42 minutes" and settles at two is worse than no
+     * estimate at all, because it is the first one that gets believed.
+     *
+     * Rounded UP to the minute, and never down to zero while files are still coming: a car that
+     * says "less than a minute" for four minutes has told one small lie, while one that says
+     * "0 minutes" and keeps going has told a plain untruth.
+     */
+    private String etaText() {
+        if(mTotalFiles <= 0 || mTargetPercent <= 0f) {
+            return getString(R.string.download_progress_eta_unknown);
+        }
+        if(mRateStartedAt == 0L) {
+            mRateStartedAt = android.os.SystemClock.elapsedRealtime();
+            mRateStartPercent = mTargetPercent;
+            return getString(R.string.download_progress_eta_unknown);
+        }
+        long elapsedMs = android.os.SystemClock.elapsedRealtime() - mRateStartedAt;
+        float gained = mTargetPercent - mRateStartPercent;
+        if(elapsedMs < 6000L || gained < 3f) {
+            return getString(R.string.download_progress_eta_unknown);
+        }
+        float remaining = 100f - mTargetPercent;
+        if(remaining <= 0f) return getString(R.string.download_progress_eta_soon);
+        long remainingMs = (long) (elapsedMs / gained * remaining);
+        if(remainingMs < 60_000L) return getString(R.string.download_progress_eta_soon);
+        int minutes = (int) Math.ceil(remainingMs / 60_000d);
+        return getString(R.string.download_progress_eta, minutes);
     }
 
     /** Bytes/second as a workshop reads it. */

@@ -1349,8 +1349,18 @@ public class WallpaperRepo {
                                     if(!f.isFile() || !f.getName().startsWith("vid_")) continue;
                                     // A .part left behind by a process killed mid-download: it is
                                     // never resumed, so it is pure dead weight in the cache.
-                                    if (f.getName().endsWith(".bin.part")) {
-                                        f.delete();
+                                    //
+                                    // Only once it has gone cold. Downloads now overlap by design
+                                    // — the pre-activation prefetch, the gate, and the sync behind
+                                    // a skipped gate can all be running — and this sweep runs at
+                                    // the start of every one of them, so deleting the newest .part
+                                    // would be this pass throwing away another pass's live work.
+                                    // Ten minutes is far longer than any single clip takes and far
+                                    // shorter than "for ever".
+                                    if (f.getName().endsWith(".part")) {
+                                        if(System.currentTimeMillis() - f.lastModified() > 10 * 60_000L) {
+                                            f.delete();
+                                        }
                                     } else if (f.getName().endsWith(".bin")
                                             && !activeCacheFiles.contains(f.getName())) {
                                         f.delete();
@@ -1556,11 +1566,19 @@ public class WallpaperRepo {
      * local", so writing the final name while the bytes are still arriving means a link dropped
      * mid-download leaves a truncated file that every later pass then skips as already cached —
      * a wallpaper permanently broken by one bad moment on the car's connection.
+     *
+     * The scratch name carries the thread's id, because two passes over the same clip at once is
+     * no longer a hypothetical: the pre-activation prefetch can still be running when the gate
+     * starts its own sync, and skipping the gate leaves its download running while the wallpaper
+     * screen starts another. Sharing one ".part" between two writers interleaves the two streams
+     * into a file that is the right length, passes every check here, and is not a video. Separate
+     * scratch files make the loser of the race harmless: both write their own, both rename onto
+     * the same finished name, and a rename is atomic.
      */
     private void ensureVideoCached(WallpaperItem item, DownloadProgress progress) throws Exception {
         File f = videoCacheFile(item);
         if(f.exists() && f.length() > 0) return;
-        File part = new File(f.getAbsolutePath() + ".part");
+        File part = new File(f.getAbsolutePath() + "." + Thread.currentThread().getId() + ".part");
         HttpURLConnection conn = (HttpURLConnection) new URL(item.url).openConnection();
         conn.setConnectTimeout(15000);
         conn.setReadTimeout(30000);
