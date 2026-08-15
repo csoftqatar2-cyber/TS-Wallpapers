@@ -51,6 +51,26 @@
 const NEW_SERIAL_PREFIX = '578';
 const LEGACY_SERIAL_PREFIX = '7078';
 
+/**
+ * Brute-force lock. After this many CONSECUTIVE rejected codes, the hardware id
+ * blocks itself and no code works on it again until an operator lifts the block
+ * from the dashboard.
+ *
+ * Counted here rather than in the app because the app is the thing being
+ * attacked: a counter in an APK is reset by clearing app data, and two of the
+ * three programs sharing this system cannot be updated in the field at all.
+ *
+ * "Consecutive" is the whole rule — a successful activation zeroes it. So a
+ * technician who mistypes a code twice on every install never drifts toward the
+ * limit, while someone trying codes one after another reaches it in one sitting.
+ * There is deliberately no time decay: a lock that quietly expires overnight is
+ * one the operator never finds out about, and finding out is half the point.
+ */
+const FAILED_ATTEMPT_LIMIT = 10;
+
+/** devices.block_reason — 'attempts' is the automatic lock, 'admin' the manual one. */
+const BLOCK_REASON_ATTEMPTS = 'failed_attempts';
+
 /** Response values, byte-identical to what activate_device has always returned. */
 const RESULT = {
   SUCCESS: 'success',
@@ -98,6 +118,11 @@ function shape(row) {
     activated_at: row.activated_at,
     updated_at: row.updated_at,
     source: row.source,
+    failed_attempts: row.failed_attempts || 0,
+    last_failed_at: row.last_failed_at || null,
+    last_failed_serial: row.last_failed_serial || null,
+    blocked_at: row.blocked_at || null,
+    block_reason: row.block_reason || null,
   };
 }
 
@@ -144,6 +169,82 @@ async function migrateIdentity(db, oldId, newId) {
 }
 
 /**
+ * One rejected code. Increments the consecutive-failure counter for this
+ * hardware id and, on the FAILED_ATTEMPT_LIMIT-th one, blocks it.
+ *
+ * The row is created if the id has never been seen: whoever is typing codes into
+ * a head unit that owns no licence is exactly who this is for, and an attempt
+ * that leaves no trace is one the operator can never be told about. serial_number
+ * is never written here — a rejected code does not belong to this car, and
+ * writing it would burn the UNIQUE index that IS the licensing rule.
+ *
+ * is_active is deliberately left alone. Blocking already stops the car; also
+ * clearing the activation would mean an operator lifting a block by mistake has
+ * a second, silent thing to put back.
+ */
+async function recordFailure(db, hardwareId, serial, before, status) {
+  const attempts = ((before && before.failed_attempts) || 0) + 1;
+  const blockNow = attempts >= FAILED_ATTEMPT_LIMIT;
+  const stamp = nowIso();
+
+  const after = {
+    ...(shape(before) || { hardware_id: hardwareId, serial_number: null, is_active: false }),
+    is_blocked: blockNow,
+    failed_attempts: attempts,
+    last_failed_at: stamp,
+    last_failed_serial: serial,
+    blocked_at: blockNow ? stamp : null,
+    block_reason: blockNow ? BLOCK_REASON_ATTEMPTS : null,
+  };
+
+  await db.batch([
+    db.prepare(
+      `INSERT INTO devices (hardware_id, serial_number, is_active, is_blocked, failed_attempts,
+                            first_failed_at, last_failed_at, last_failed_serial, blocked_at,
+                            block_reason, updated_at, source)
+       VALUES (?, NULL, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT(hardware_id) DO UPDATE SET
+         is_blocked         = excluded.is_blocked,
+         failed_attempts    = excluded.failed_attempts,
+         first_failed_at    = COALESCE(devices.first_failed_at, excluded.first_failed_at),
+         last_failed_at     = excluded.last_failed_at,
+         last_failed_serial = excluded.last_failed_serial,
+         blocked_at         = COALESCE(devices.blocked_at, excluded.blocked_at),
+         block_reason       = COALESCE(devices.block_reason, excluded.block_reason),
+         updated_at         = excluded.updated_at,
+         source             = excluded.source`,
+    ).bind(
+      hardwareId,
+      blockNow ? 1 : 0,
+      attempts,
+      stamp,
+      stamp,
+      serial,
+      blockNow ? stamp : null,
+      blockNow ? BLOCK_REASON_ATTEMPTS : null,
+      stamp,
+      blockNow ? 'auto_block' : 'failed_attempt',
+    ),
+    auditStmt(db, hardwareId, blockNow ? 'auto_block' : 'failed_attempt', before, after),
+  ]);
+
+  // The 10th rejection answers 'blocked', not 'invalid_format': from this moment
+  // that is the true state of the car, and all three programs already have a
+  // translated message for it. The meta fields below are for Postgres, which
+  // mirrors them into the dashboard; no car reads them.
+  return json({
+    status: blockNow ? RESULT.BLOCKED : status,
+    row: shape(await getDevice(db, hardwareId)),
+    attempts,
+    attempts_limit: FAILED_ATTEMPT_LIMIT,
+    attempts_left: Math.max(0, FAILED_ATTEMPT_LIMIT - attempts),
+    blocked_now: blockNow,
+    block_reason: blockNow ? BLOCK_REASON_ATTEMPTS : null,
+    last_failed_serial: serial,
+  });
+}
+
+/**
  * The activation decision. Mirrors activate_device's logic and its four return
  * values in the same order of checks, because the order is observable: a blocked
  * car with a malformed serial has always answered 'blocked', not 'invalid_format'.
@@ -166,8 +267,18 @@ async function handleActivate(db, body) {
 
   const before = await getDevice(db, hardwareId);
 
+  // An already-blocked car answers 'blocked' and its counter is left where it
+  // was: there is nothing left to count toward, and a number that keeps climbing
+  // after the lock only makes the dashboard harder to read.
   if (before && before.is_blocked) {
-    return json({ status: RESULT.BLOCKED, row: shape(before) });
+    return json({
+      status: RESULT.BLOCKED,
+      row: shape(before),
+      attempts: before.failed_attempts || 0,
+      attempts_limit: FAILED_ATTEMPT_LIMIT,
+      blocked_now: false,
+      block_reason: before.block_reason || null,
+    });
   }
 
   const serialOwner = await db
@@ -181,12 +292,14 @@ async function handleActivate(db, body) {
     serial.startsWith(NEW_SERIAL_PREFIX) ||
     (serial.startsWith(LEGACY_SERIAL_PREFIX) && !!serialOwner);
 
+  // Both rejections count the same. A code belonging to someone else's car is
+  // not a typo — if anything it is the more deliberate of the two.
   if (!validFormat) {
-    return json({ status: RESULT.INVALID_FORMAT, row: shape(before) });
+    return await recordFailure(db, hardwareId, serial, before, RESULT.INVALID_FORMAT);
   }
 
   if (serialOwner && serialOwner.hardware_id !== hardwareId) {
-    return json({ status: RESULT.SERIAL_ALREADY_USED, row: shape(before) });
+    return await recordFailure(db, hardwareId, serial, before, RESULT.SERIAL_ALREADY_USED);
   }
 
   // Idempotent by construction: re-activating the same car with the same serial
@@ -198,40 +311,103 @@ async function handleActivate(db, body) {
     is_active: true,
     is_blocked: false,
     activated_at: activatedAt,
+    failed_attempts: 0,
   };
 
+  // The right code clears the run of wrong ones. Without this, a car whose
+  // installer fumbled the code a few times on each of several visits would creep
+  // toward the limit over its lifetime and lock out a paying customer.
   await db.batch([
     db.prepare(
       `INSERT INTO devices (hardware_id, serial_number, is_active, is_blocked, activated_at, updated_at, source)
        VALUES (?, ?, 1, 0, ?, ?, 'activate')
        ON CONFLICT(hardware_id) DO UPDATE SET
-         serial_number = excluded.serial_number,
-         is_active     = 1,
-         activated_at  = excluded.activated_at,
-         updated_at    = excluded.updated_at,
-         source        = 'activate'`,
+         serial_number      = excluded.serial_number,
+         is_active          = 1,
+         activated_at       = excluded.activated_at,
+         updated_at         = excluded.updated_at,
+         source             = 'activate',
+         failed_attempts    = 0,
+         first_failed_at    = NULL,
+         last_failed_at     = NULL,
+         last_failed_serial = NULL,
+         blocked_at         = NULL,
+         block_reason       = NULL`,
     ).bind(hardwareId, serial, activatedAt, nowIso()),
     auditStmt(db, hardwareId, 'activate', before, after),
   ]);
 
-  return json({ status: RESULT.SUCCESS, row: shape(await getDevice(db, hardwareId)) });
+  return json({
+    status: RESULT.SUCCESS,
+    row: shape(await getDevice(db, hardwareId)),
+    attempts: 0,
+    attempts_limit: FAILED_ATTEMPT_LIMIT,
+    blocked_now: false,
+  });
 }
 
-/** Admin block/unblock/activate toggle — the dashboard's write path. */
+/**
+ * Admin block/unblock/activate toggle — the dashboard's write path.
+ *
+ * `reset_attempts` is what makes lifting an automatic block actually stick: leave
+ * the counter at 10 and the very next wrong code re-locks the car instantly, so
+ * from the operator's side the unblock button would look broken.
+ *
+ * `create` exists because a car can be blocked from the dashboard before D1 has
+ * ever heard of it (Postgres has held the fleet far longer than D1 has). Without
+ * it, blocking such a car would 404 and the two sides would disagree about the
+ * one flag it is least acceptable to disagree about.
+ */
 async function handleSetState(db, body) {
   const hardwareId = (body.hardware_id || '').trim();
   if (!hardwareId) return json({ error: 'hardware_id required' }, 400);
 
   const before = await getDevice(db, hardwareId);
-  if (!before) return json({ error: 'unknown hardware_id' }, 404);
+  if (!before && !body.create) return json({ error: 'unknown hardware_id' }, 404);
 
-  const isActive = body.is_active === undefined ? !!before.is_active : !!body.is_active;
-  const isBlocked = body.is_blocked === undefined ? !!before.is_blocked : !!body.is_blocked;
-  const after = { ...shape(before), is_active: isActive, is_blocked: isBlocked };
+  const isActive = body.is_active === undefined ? !!(before && before.is_active) : !!body.is_active;
+  const isBlocked = body.is_blocked === undefined ? !!(before && before.is_blocked) : !!body.is_blocked;
+  const resetAttempts = !!body.reset_attempts;
+  const stamp = nowIso();
+  const attempts = resetAttempts ? 0 : (before && before.failed_attempts) || 0;
+  const reason = isBlocked
+    ? body.block_reason || (before && before.block_reason) || 'admin'
+    : null;
+
+  const after = {
+    ...(shape(before) || { hardware_id: hardwareId, serial_number: null }),
+    is_active: isActive,
+    is_blocked: isBlocked,
+    failed_attempts: attempts,
+    blocked_at: isBlocked ? (before && before.blocked_at) || stamp : null,
+    block_reason: reason,
+  };
 
   await db.batch([
-    db.prepare('UPDATE devices SET is_active = ?, is_blocked = ?, updated_at = ?, source = ? WHERE hardware_id = ?')
-      .bind(isActive ? 1 : 0, isBlocked ? 1 : 0, nowIso(), 'admin', hardwareId),
+    db.prepare(
+      `INSERT INTO devices (hardware_id, serial_number, is_active, is_blocked, failed_attempts,
+                            blocked_at, block_reason, updated_at, source)
+       VALUES (?, NULL, ?, ?, ?, ?, ?, ?, 'admin')
+       ON CONFLICT(hardware_id) DO UPDATE SET
+         is_active          = excluded.is_active,
+         is_blocked         = excluded.is_blocked,
+         failed_attempts    = excluded.failed_attempts,
+         first_failed_at    = CASE WHEN excluded.failed_attempts = 0 THEN NULL ELSE devices.first_failed_at END,
+         last_failed_at     = CASE WHEN excluded.failed_attempts = 0 THEN NULL ELSE devices.last_failed_at END,
+         last_failed_serial = CASE WHEN excluded.failed_attempts = 0 THEN NULL ELSE devices.last_failed_serial END,
+         blocked_at         = CASE WHEN excluded.is_blocked = 1 THEN COALESCE(devices.blocked_at, excluded.blocked_at) ELSE NULL END,
+         block_reason       = excluded.block_reason,
+         updated_at         = excluded.updated_at,
+         source             = 'admin'`,
+    ).bind(
+      hardwareId,
+      isActive ? 1 : 0,
+      isBlocked ? 1 : 0,
+      attempts,
+      isBlocked ? stamp : null,
+      reason,
+      stamp,
+    ),
     auditStmt(db, hardwareId, 'admin', before, after),
   ]);
 
@@ -263,7 +439,14 @@ async function handleBulkUpsert(db, body) {
            is_blocked    = excluded.is_blocked,
            activated_at  = excluded.activated_at,
            updated_at    = excluded.updated_at,
-           source        = excluded.source`,
+           source        = excluded.source,
+           -- A push that lifts a block also clears the counter behind it, for the
+           -- same reason the unblock endpoint does: otherwise the nightly sweep
+           -- would "unblock" a car that re-locks on its next wrong code. Cars
+           -- that stay blocked keep their counter and reason untouched.
+           failed_attempts = CASE WHEN excluded.is_blocked = 0 THEN 0 ELSE devices.failed_attempts END,
+           block_reason    = CASE WHEN excluded.is_blocked = 0 THEN NULL ELSE devices.block_reason END,
+           blocked_at      = CASE WHEN excluded.is_blocked = 0 THEN NULL ELSE devices.blocked_at END`,
       ).bind(
         r.hardware_id,
         r.serial_number ?? null,
@@ -288,7 +471,8 @@ async function handleExport(db, url) {
 
   const { results } = await db
     .prepare(
-      `SELECT hardware_id, serial_number, is_active, is_blocked, activated_at
+      `SELECT hardware_id, serial_number, is_active, is_blocked, activated_at,
+              failed_attempts, last_failed_at, last_failed_serial, blocked_at, block_reason
          FROM devices WHERE hardware_id > ?
         ORDER BY hardware_id LIMIT ?`,
     )

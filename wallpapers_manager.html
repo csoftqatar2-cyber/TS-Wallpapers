@@ -246,6 +246,12 @@
             border: 1px solid rgba(6, 182, 212, 0.2);
         }
 
+        .stat-icon.red {
+            background: rgba(239, 68, 68, 0.1);
+            color: var(--danger);
+            border: 1px solid rgba(239, 68, 68, 0.25);
+        }
+
         /* Grid Workspace Layout — stacked: the (option-heavy) upload panel is a
            wide full-width card on top, the active-wallpapers manager below it. */
         .workspace-grid {
@@ -1062,6 +1068,20 @@
             color: var(--success);
         }
 
+        .stat-card .stat-hint.red {
+            color: #f87171;
+        }
+
+        /* A card that is only ever loud when it has something to say. At zero it
+           looks like every other card; the moment a car locks itself out it is the
+           first thing on the screen — the same reasoning as the crashes card. */
+        .stat-card.alerting {
+            border-color: rgba(239, 68, 68, 0.55);
+            background: linear-gradient(180deg, rgba(239,68,68,0.10), rgba(239,68,68,0.02));
+            animation: pulse 2.4s infinite;
+        }
+        .stat-card.alerting p { color: #fca5a5; }
+
         /* ===== Private Wallpapers Modal ===== */
         .modal-overlay {
             position: fixed;
@@ -1357,6 +1377,9 @@
         .dev-badge.blk { background: rgba(239,68,68,0.12); color: var(--danger); border: 1px solid rgba(239,68,68,0.3); }
         .dev-badge.mode { background: rgba(245,158,11,0.12); color: #f59e0b; border: 1px solid rgba(245,158,11,0.3); }
         .dev-badge.ver    { background: rgba(56,189,248,0.12); color: #38bdf8; border: 1px solid rgba(56,189,248,0.3); }
+        /* A failure run that has not reached the limit yet — amber, not red: nothing
+           has happened to this car, it is only worth an eye. */
+        .dev-badge.att    { background: rgba(245,158,11,0.14); color: #fbbf24; border: 1px solid rgba(245,158,11,0.35); }
         .dev-badge.verold { background: rgba(239,68,68,0.10); color: #f87171; border: 1px solid rgba(239,68,68,0.28); }
         .dev-row-actions { display: flex; gap: 8px; flex-wrap: wrap; }
         .dev-act {
@@ -1454,6 +1477,22 @@
                 </div>
                 <div class="stat-icon green">
                     <i class="fa-solid fa-mobile-screen-button"></i>
+                </div>
+            </div>
+
+            <!-- Cars that locked themselves out after 10 wrong activation codes. Its own card,
+                 not a line inside the devices list: someone sitting there trying codes is an
+                 event that wants a decision today, and a number buried behind two clicks is a
+                 number nobody looks at. Silent at zero, red and pulsing the moment it is not. -->
+            <div class="stat-card clickable" id="stat-card-autoblock" onclick="openDevicesModal('autoblock')"
+                 title="أجهزة حظرت نفسها تلقائياً بعد ١٠ محاولات تفعيل خاطئة">
+                <div class="stat-info">
+                    <h3>حظر تلقائي (١٠ محاولات خاطئة)</h3>
+                    <p id="stat-autoblocked">-</p>
+                    <span class="stat-hint red" id="stat-autoblock-hint"><i class="fa-solid fa-arrow-pointer"></i> اضغط لمراجعة الأجهزة ورفع الحظر</span>
+                </div>
+                <div class="stat-icon red">
+                    <i class="fa-solid fa-shield-halved"></i>
                 </div>
             </div>
 
@@ -1756,6 +1795,8 @@
                         <button type="button" class="dev-filter-btn" data-filter="active" onclick="setDevicesFilter('active')">المفعّلة</button>
                         <button type="button" class="dev-filter-btn" data-filter="inactive" onclick="setDevicesFilter('inactive')">غير مفعّلة</button>
                         <button type="button" class="dev-filter-btn" data-filter="blocked" onclick="setDevicesFilter('blocked')">المحظورة</button>
+                        <button type="button" class="dev-filter-btn" data-filter="autoblock" onclick="setDevicesFilter('autoblock')">حظر تلقائي</button>
+                        <button type="button" class="dev-filter-btn" data-filter="attempts" onclick="setDevicesFilter('attempts')">محاولات خاطئة</button>
                     </div>
                 </div>
                 <!-- The fleet by build. This is the answer to "did the update actually land?" —
@@ -2116,10 +2157,37 @@
             });
             if (!response.ok) throw new Error("Failed to load devices");
             devicesList = await response.json();
-            
+
             // Render Stats & Dropdown
             document.getElementById("stat-total-devices").innerText = devicesList.length;
+            renderAutoBlockStat();
             renderDevicesDropdown();
+        }
+
+        /** A car is auto-blocked when the activation service locked it, not an operator. */
+        function isAutoBlocked(d) {
+            return !!d.is_blocked && d.block_reason === 'failed_attempts';
+        }
+
+        /**
+         * The auto-block headline. Counts cars, not attempts: one car tried ten times is one
+         * problem, and adding the attempts up would inflate a single stubborn installer into
+         * what looks like a fleet-wide event.
+         */
+        function renderAutoBlockStat() {
+            const locked = devicesList.filter(isAutoBlocked).length;
+            const knocking = devicesList.filter(d => !d.is_blocked && (d.failed_attempts || 0) > 0).length;
+            const card = document.getElementById("stat-card-autoblock");
+            const hint = document.getElementById("stat-autoblock-hint");
+            document.getElementById("stat-autoblocked").innerText = locked;
+            if (card) card.classList.toggle('alerting', locked > 0);
+            if (hint) {
+                hint.innerHTML = locked > 0
+                    ? `<i class="fa-solid fa-triangle-exclamation"></i> اضغط لمراجعة الأجهزة ورفع الحظر`
+                    : (knocking > 0
+                        ? `<i class="fa-solid fa-arrow-pointer"></i> ${knocking} جهاز عليه محاولات خاطئة`
+                        : `<i class="fa-solid fa-circle-check"></i> لا توجد محاولات مشبوهة`);
+            }
         }
 
         // Fetch wallpapers
@@ -3441,10 +3509,10 @@
         // ============ Devices / Users management ============
         let devicesModalFilter = 'all';
 
-        function openDevicesModal() {
+        function openDevicesModal(filter) {
             document.getElementById("devices-search").value = "";
             devicesVersionFilter = 'ALL';
-            setDevicesFilter('all');
+            setDevicesFilter(filter || 'all');
             document.getElementById("devices-modal").style.display = "flex";
             renderDevicesModal();
         }
@@ -3493,16 +3561,49 @@
             Swal.fire({ icon, title, timer: 1500, showConfirmButton: false, background: '#1c160e', color: '#fff' });
         }
 
+        /**
+         * Block / unblock, through the RPC rather than a PATCH on the table.
+         *
+         * The flag has to reach Cloudflare in the same call: the activation service on D1 is
+         * what decides whether a code is accepted, and a PATCH here only moved Postgres —
+         * leaving D1 to catch up on the 02:30 sweep, so an unblocked car could still be refused
+         * its code for most of a day. The RPC writes Cloudflare first and Postgres second, and
+         * fails loudly rather than half-way if Cloudflare cannot be reached.
+         */
+        async function setDeviceBlocked(hwId, blocked) {
+            const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/admin_set_device_block`, {
+                method: "POST",
+                headers: {
+                    "apikey": ANON_KEY,
+                    "Authorization": `Bearer ${SESSION_TOKEN}`,
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({ p_hardware_id: hwId, p_blocked: blocked })
+            });
+            if (!res.ok) {
+                let msg = ""; try { msg = (await res.json()).message || ""; } catch (e) {}
+                if (res.status === 401 || res.status === 403) throw new Error("انتهت صلاحية جلسة الدخول. سجّل الدخول من جديد.");
+                throw new Error(msg || `فشل الطلب (HTTP ${res.status})`);
+            }
+            return res.json();
+        }
+
         async function toggleDeviceBlock(hwId) {
             const dev = devicesList.find(d => d.hardware_id === hwId);
             if (!dev) return;
             const willBlock = !dev.is_blocked;
+            const auto = isAutoBlocked(dev);
             const c = await Swal.fire({
                 icon: willBlock ? 'warning' : 'question',
-                title: willBlock ? 'حظر هذا الجهاز؟' : 'رفع الحظر عن الجهاز؟',
+                title: willBlock ? 'حظر هذا الجهاز؟' : (auto ? 'رفع الحظر التلقائي؟' : 'رفع الحظر عن الجهاز؟'),
                 html: willBlock
                     ? `سيتوقف الجهاز فوراً عن عرض الخلفيات، ولن يستطيع إعادة التفعيل بأي كود.<br><br><b>${dev.serial_number || 'بدون كود'}</b><br><small style="opacity:.7;">${hwId}</small>`
-                    : `سيُسمح للجهاز بالعمل والتفعيل من جديد.<br><br><b>${dev.serial_number || 'بدون كود'}</b>`,
+                    : (auto
+                        ? `هذا الجهاز حظر نفسه بعد <b>${dev.failed_attempts || FAILED_ATTEMPT_LIMIT}</b> محاولة تفعيل خاطئة.<br>
+                           سيُسمح له بالتفعيل من جديد، وسيبدأ العدّاد من الصفر.<br><br>
+                           <small style="opacity:.7;">${hwId}</small>
+                           ${dev.last_failed_serial ? `<br><small style="opacity:.7;">آخر كود جُرِّب: ${escapeHtml(dev.last_failed_serial)}</small>` : ''}`
+                        : `سيُسمح للجهاز بالعمل والتفعيل من جديد.<br><br><b>${dev.serial_number || 'بدون كود'}</b>`),
                 showCancelButton: true,
                 confirmButtonText: willBlock ? 'نعم، احظره' : 'نعم، ارفع الحظر',
                 cancelButtonText: 'إلغاء',
@@ -3511,9 +3612,9 @@
             });
             if (!c.isConfirmed) return;
             try {
-                await patchDevice(hwId, { is_blocked: willBlock });
+                await setDeviceBlocked(hwId, willBlock);
                 await afterDeviceChange();
-                toast('success', willBlock ? 'تم حظر الجهاز' : 'تم رفع الحظر');
+                toast('success', willBlock ? 'تم حظر الجهاز' : 'تم رفع الحظر وتصفير العدّاد');
             } catch (e) {
                 Swal.fire({ icon: 'error', title: 'تعذّر تنفيذ العملية', text: e.message, background: '#1c160e', color: '#fff' });
             }
@@ -3566,7 +3667,13 @@
             const c = await Swal.fire({
                 icon: 'warning',
                 title: 'حذف الجهاز نهائياً؟',
-                html: `سيُحذف تسجيل الجهاز. وإذا شُغّل التطبيق عليه مرة أخرى فسيظهر كجهاز جديد يحتاج إلى تفعيل.<br><br><b>${dev.serial_number || 'بدون كود'}</b><br><small style="opacity:.7;">${hwId}</small><br><br><small>ملاحظة: الصور المخصصة لهذا الجهاز لا تُحذف تلقائياً.</small>`,
+                html: `سيُحذف تسجيل الجهاز. وإذا شُغّل التطبيق عليه مرة أخرى فسيظهر كجهاز جديد يحتاج إلى تفعيل.<br><br><b>${dev.serial_number || 'بدون كود'}</b><br><small style="opacity:.7;">${hwId}</small><br><br><small>ملاحظة: الصور المخصصة لهذا الجهاز لا تُحذف تلقائياً.</small>`
+                    // Deleting only removes the Postgres row; the block itself lives on Cloudflare
+                    // and survives. That is the safe direction — but an operator who deletes a
+                    // blocked row to "clean up" then has no row left to press unblock on.
+                    + (dev.is_blocked
+                        ? `<br><br><small style="color:#fca5a5;">تحذير: الحظر مسجّل أيضاً على Cloudflare وسيظل قائماً بعد الحذف — إذا كنت تريد إعادة تشغيل الجهاز، ارفع الحظر أولاً بدل حذفه.</small>`
+                        : ''),
                 showCancelButton: true,
                 confirmButtonText: 'نعم، احذفه',
                 cancelButtonText: 'إلغاء',
@@ -3642,6 +3749,41 @@
                 { year: 'numeric', month: 'short', day: 'numeric' });
         }
 
+        /** Short local date + time — for an attempt, the hour is the useful part. */
+        function shortDateTime(value) {
+            if (!value) return '—';
+            const t = new Date(value);
+            return isNaN(t) ? '—' : t.toLocaleString('ar-EG',
+                { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+        }
+
+        /** How many wrong codes it takes to lock a car. Mirrors FAILED_ATTEMPT_LIMIT in worker.js. */
+        const FAILED_ATTEMPT_LIMIT = 10;
+
+        /**
+         * The story behind a block, in one line: how many codes were tried, when the last one
+         * was, and which code it was. The last code is what tells the operator whether this is a
+         * customer fumbling their own serial or someone working through codes that aren't theirs
+         * — the two look identical from a counter alone.
+         */
+        function attemptsLine(d) {
+            const n = d.failed_attempts || 0;
+            if (!n && !d.is_blocked) return '';
+            const bits = [];
+            if (isAutoBlocked(d)) {
+                bits.push(`حظر تلقائي بعد ${n} محاولة خاطئة`);
+                if (d.blocked_at) bits.push(`وقت الحظر: ${shortDateTime(d.blocked_at)}`);
+            } else if (d.is_blocked) {
+                bits.push('حظر يدوي من لوحة التحكم');
+                if (d.blocked_at) bits.push(`وقت الحظر: ${shortDateTime(d.blocked_at)}`);
+            } else {
+                bits.push(`محاولات تفعيل خاطئة: ${n} من ${FAILED_ATTEMPT_LIMIT}`);
+                if (d.last_failed_at) bits.push(`آخر محاولة: ${shortDateTime(d.last_failed_at)}`);
+            }
+            if (d.last_failed_serial) bits.push(`آخر كود جُرِّب: ${d.last_failed_serial}`);
+            return `<div class="dev-row-mac" style="color:#fca5a5;">${escapeHtml(bits.join('  ·  '))}</div>`;
+        }
+
         function activationLine(d) {
             const bits = [`التفعيل: ${shortDate(d.activated_at)}`];
             // Only shown once it exists: an empty "last seen" on every row would be noise, and
@@ -3713,6 +3855,10 @@
                 if (devicesModalFilter === 'active') return d.is_active && !d.is_blocked;
                 if (devicesModalFilter === 'inactive') return !d.is_active && !d.is_blocked;
                 if (devicesModalFilter === 'blocked') return d.is_blocked;
+                if (devicesModalFilter === 'autoblock') return isAutoBlocked(d);
+                // Cars still short of the limit. The list an operator watches when a code
+                // has leaked and people are trying it on cars that never bought it.
+                if (devicesModalFilter === 'attempts') return !d.is_blocked && (d.failed_attempts || 0) > 0;
                 return true;
             });
             if (devicesVersionFilter !== 'ALL') {
@@ -3737,6 +3883,11 @@
                 return;
             }
 
+            // Cars that locked themselves out float to the top of whichever view is open: they
+            // are the only rows here waiting on a decision. sort() is stable, so everything
+            // else keeps its newest-first order.
+            list = list.slice().sort((a, b) => (isAutoBlocked(b) ? 1 : 0) - (isAutoBlocked(a) ? 1 : 0));
+
             body.innerHTML = "";
             list.forEach(d => {
                 const hwId = d.hardware_id;
@@ -3745,29 +3896,40 @@
 
                 const avatar = document.createElement("div");
                 avatar.className = "dev-row-avatar";
-                avatar.innerHTML = d.is_blocked
-                    ? '<i class="fa-solid fa-ban"></i>'
-                    : '<i class="fa-solid fa-mobile-screen-button"></i>';
+                avatar.innerHTML = isAutoBlocked(d)
+                    ? '<i class="fa-solid fa-shield-halved"></i>'
+                    : (d.is_blocked
+                        ? '<i class="fa-solid fa-ban"></i>'
+                        : '<i class="fa-solid fa-mobile-screen-button"></i>');
 
                 const info = document.createElement("div");
                 info.className = "dev-row-info";
                 const count = wpCount[hwId] || 0;
-                const statusBadge = d.is_blocked
-                    ? '<span class="dev-badge blk"><i class="fa-solid fa-ban"></i> محظور</span>'
-                    : (d.is_active
-                        ? '<span class="dev-badge on"><i class="fa-solid fa-circle-check"></i> مفعّل</span>'
-                        : '<span class="dev-badge off"><i class="fa-solid fa-circle-pause"></i> غير مفعّل</span>');
+                // An automatic lock says so on the badge. "محظور" alone would leave the operator
+                // guessing whether they blocked this car themselves last month.
+                const statusBadge = isAutoBlocked(d)
+                    ? `<span class="dev-badge blk"><i class="fa-solid fa-shield-halved"></i> حظر تلقائي · ${d.failed_attempts || FAILED_ATTEMPT_LIMIT} محاولة</span>`
+                    : (d.is_blocked
+                        ? '<span class="dev-badge blk"><i class="fa-solid fa-ban"></i> محظور</span>'
+                        : (d.is_active
+                            ? '<span class="dev-badge on"><i class="fa-solid fa-circle-check"></i> مفعّل</span>'
+                            : '<span class="dev-badge off"><i class="fa-solid fa-circle-pause"></i> غير مفعّل</span>'));
+                const attemptsBadge = (!d.is_blocked && (d.failed_attempts || 0) > 0)
+                    ? `<span class="dev-badge att" title="محاولات تفعيل خاطئة متتالية — يُحظر الجهاز عند ${FAILED_ATTEMPT_LIMIT}"><i class="fa-solid fa-triangle-exclamation"></i> ${d.failed_attempts}/${FAILED_ATTEMPT_LIMIT} محاولة خاطئة</span>`
+                    : '';
                 const nameBit = d.client_name ? ` · ${escapeHtml(d.client_name)}` : '';
                 info.innerHTML = `
                     <div class="dev-row-title">
                         <span class="dev-row-serial">${escapeHtml(d.serial_number || 'بدون كود')}${nameBit}</span>
                         ${statusBadge}
+                        ${attemptsBadge}
                         ${modeBadge(d.mode)}
                         ${versionBadge(d)}
                         <span class="dev-badge off">${count} صورة</span>
                     </div>
                     <div class="dev-row-mac">${escapeHtml(hwId)}</div>
-                    <div class="dev-row-mac">${activationLine(d)}</div>`;
+                    <div class="dev-row-mac">${activationLine(d)}</div>
+                    ${attemptsLine(d)}`;
 
                 const actions = document.createElement("div");
                 actions.className = "dev-row-actions";

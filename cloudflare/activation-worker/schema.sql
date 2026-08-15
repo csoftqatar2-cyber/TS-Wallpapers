@@ -29,7 +29,21 @@ CREATE TABLE IF NOT EXISTS devices (
   activated_at  TEXT,
   updated_at    TEXT NOT NULL DEFAULT (STRFTIME('%Y-%m-%dT%H:%M:%fZ','now')),
   -- 'activate' | 'migrate' | 'admin' | 'bulk_import' | 'reconcile'
-  source        TEXT NOT NULL DEFAULT 'activate'
+  --           | 'failed_attempt' | 'auto_block'
+  source        TEXT NOT NULL DEFAULT 'activate',
+
+  -- Brute-force lock (see FAILED_ATTEMPT_LIMIT in worker.js). Consecutive
+  -- rejected codes; a successful activation sets it back to 0. A row can exist
+  -- with nothing but these columns filled in: that is a hardware id which has
+  -- only ever been typed codes at, never licensed, and it is exactly the row the
+  -- operator needs to see.
+  failed_attempts    INTEGER NOT NULL DEFAULT 0,
+  first_failed_at    TEXT,
+  last_failed_at     TEXT,
+  last_failed_serial TEXT,
+  blocked_at         TEXT,
+  -- 'failed_attempts' (automatic) | 'admin' (blocked by hand) | NULL
+  block_reason       TEXT
 );
 
 -- Mirrors the UNIQUE constraint on Postgres devices.serial_number. This is the
