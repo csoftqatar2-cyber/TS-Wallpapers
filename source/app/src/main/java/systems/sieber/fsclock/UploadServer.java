@@ -34,7 +34,12 @@ public class UploadServer extends NanoHTTPD {
 
     private static final String TAG = "UploadServer";
 
-    /** Every file received from a phone is named with this, and nothing else is. */
+    /**
+     * Every file received from a phone is named with this, and nothing else is — in the wallpaper
+     * folder AND in the mirrored folders. Load-bearing twice: the Leopard picker lists phone
+     * uploads by it, and {@code FolderMirror.loadLocal} reads it as the provenance record for the
+     * files that were tracked before provenance was recorded. Never change it.
+     */
     public static final String RECEIVED_PREFIX = "upload_";
 
     public static final int PORT = 8089;
@@ -232,14 +237,16 @@ public class UploadServer extends NanoHTTPD {
     }
 
     private String saveUpload(String tmpPath, String originalName) {
-        // Mirror mode: hand the file to the folder writer, which also tracks it so a later cloud
-        // mirror does not treat it as a stranger's file. All the wallpaper-folder logic below is
-        // skipped — this file is not one of our wallpapers.
+        // Mirror mode: hand the file to the folder writer, which records it as the customer's own
+        // so a later cloud pass never deletes it. All the wallpaper-folder logic below is skipped
+        // — this file is not one of our wallpapers.
         if(mMirror != null) {
             try {
                 FileInputStream in = new FileInputStream(tmpPath);
+                // RECEIVED_PREFIX, not a literal: FolderMirror reads exactly this prefix to
+                // recognise the phone uploads that older builds recorded as cloud files.
                 String path = mMirror.saveLocalCopy(mContext, in,
-                        "upload_" + originalName.replaceAll("[\\\\/:*?\"<>|]", "_"));
+                        RECEIVED_PREFIX + originalName.replaceAll("[\\\\/:*?\"<>|]", "_"));
                 in.close();
                 return path;
             } catch(Exception e) {

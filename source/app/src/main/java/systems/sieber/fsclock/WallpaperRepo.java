@@ -515,18 +515,21 @@ public class WallpaperRepo {
      * external folder, global-to-all-cars-of-that-make plus this car's own. Blocking — call from
      * a background thread.
      *
-     * Returns an empty list for an unactivated device (the RPC answers with a single "inactive"
-     * sentinel, exactly like the normal channel), so a car that is not activated never writes
-     * anything into the shared folder.
+     * An EMPTY list means "the operator published nothing" — an authoritative answer the caller
+     * may mirror, deletions included. NULL means "no manifest": not activated (the RPC answers
+     * with a single "inactive" sentinel, exactly like the normal channel), blocked, hardware id
+     * not recognised, or no backend configured. The two must stay apart, because the mirror
+     * deletes whatever an authoritative manifest omits — answering null-as-empty made a car that
+     * merely lost its identity for one call wipe its whole folder.
      */
     public List<WallpaperItem> fetchChannelItems(String rpcName) throws Exception {
         String url = getMirrorSyncUrl(rpcName);
-        if (url.isEmpty()) return new ArrayList<>();
+        if (url.isEmpty()) return null;                          // no backend configured
         String json = httpGet(url);
-        if (json == null || json.trim().isEmpty()) return new ArrayList<>();
+        if (json == null || json.trim().isEmpty()) return null;   // no answer, not an empty answer
         List<WallpaperItem> parsed = parse(json);
         if (parsed.size() == 1 && "inactive".equals(parsed.get(0).url)) {
-            return new ArrayList<>();
+            return null;
         }
         return parsed;
     }

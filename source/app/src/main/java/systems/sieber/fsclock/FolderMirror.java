@@ -29,8 +29,11 @@ import java.util.Set;
  * this while it is in the matching mode.
  *
  * "Mirror" means the folder ends up holding exactly the current manifest: new images are
- * downloaded, images dropped from the cloud are deleted. To avoid ever deleting a file some other
- * app placed there, only files THIS class wrote (tracked in prefs) are eligible for deletion.
+ * downloaded, images dropped from the cloud are deleted. Deleting is the dangerous half, so a file
+ * is only ever eligible when THIS class downloaded it from the channel. Two other kinds of file
+ * live in the same folder and neither is ours to delete: the ones a human sent from a phone
+ * through the QR upload (tracked separately, see prefLocal), and the ones some other app or the
+ * Cars-installer cable push left there (tracked nowhere at all).
  *
  * Two mirrors exist, and they are the same mechanism twice over with different addresses:
  *   {@link #GWM}    — 'gwm_split' -> /sdcard/Pictures/GWMSplit_Styles, for GWM head units.
@@ -47,13 +50,13 @@ class FolderMirror {
     /** The GWM Split channel. Pref keys are the originals, so cars in the field carry on unchanged. */
     static final FolderMirror GWM = new FolderMirror(
             OperatingMode.GWM,
-            "gwm-split-folder", "gwm-split-managed-files",
+            "gwm-split-folder", "gwm-split-managed-files", "gwm-split-local-files",
             "GWMSplit_Styles", "get_gwm_wallpapers", "gwm_");
 
     /** Jetour G700: same idea, its own folder and its own channel. */
     static final FolderMirror JETOUR = new FolderMirror(
             OperatingMode.JETOUR,
-            "jetour-g700-folder", "jetour-g700-managed-files",
+            "jetour-g700-folder", "jetour-g700-managed-files", "jetour-g700-local-files",
             "G700", "get_jetour_wallpapers", "jetour_");
 
     /** Every mirror there is, for the callers that just want to kick "whatever applies". */
@@ -62,17 +65,37 @@ class FolderMirror {
     /** The operating mode that switches this mirror on — the mode IS the enable flag. */
     final int mode;
     private final String prefFolder;
-    /** JSON array of the file names we created in the folder, so we never delete a stranger's file. */
+    /** JSON array of the file names we DOWNLOADED. The only names this class may ever delete. */
     private final String prefManaged;
+    /**
+     * JSON array of the names a human sent here through the app (today: the QR upload).
+     *
+     * We wrote these files, but they are never ours to delete: this car is the only place they
+     * exist and no cloud manifest will ever list them, so "absent from the manifest" cannot mean
+     * "dropped by the operator" for one of them. Up to and including build 162 they were recorded
+     * in prefManaged instead, which made the very next pass delete every photo a customer had just
+     * uploaded — the reason this second key exists.
+     */
+    private final String prefLocal;
     private final String folderName;
     private final String rpc;
     private final String fallbackPrefix;
 
-    private FolderMirror(int mode, String prefFolder, String prefManaged,
+    /**
+     * One pass at a time. Process start, view attach, every resume, the 5-minute timer and the
+     * forced "sync now" can all fire at once; they share the folder, the ".part" temp names and
+     * the managed pref, and a read-modify-write of that pref does not survive two threads.
+     */
+    private final Object passLock = new Object();
+    /** Guards the local-file list alone, so an upload never has to wait for a whole download pass. */
+    private final Object localLock = new Object();
+
+    private FolderMirror(int mode, String prefFolder, String prefManaged, String prefLocal,
                          String folderName, String rpc, String fallbackPrefix) {
         this.mode = mode;
         this.prefFolder = prefFolder;
         this.prefManaged = prefManaged;
+        this.prefLocal = prefLocal;
         this.folderName = folderName;
         this.rpc = rpc;
         this.fallbackPrefix = fallbackPrefix;
@@ -170,6 +193,9 @@ class FolderMirror {
                     r = syncBlocking(appCtx, repo);
                 } catch (Throwable t) {
                     Log.e(TAG, "sync failed (" + rpc + ")", t);
+                    // A pass that failed never saw the server, so it must not hold the debounce
+                    // closed for the next 30 seconds: the following trigger IS the retry.
+                    lastRunMs = 0L;
                     r = -1;
                     err = t.getMessage();
                 }
@@ -193,6 +219,15 @@ class FolderMirror {
         }
 
         List<WallpaperItem> items = repo.fetchChannelItems(rpc);
+        if (items == null) {
+            // No manifest at all — this car is not activated, is blocked, or its hardware id just
+            // changed under it. That is NOT the operator publishing an empty channel, and treating
+            // the two alike used to empty a whole car's folder over one unrecognised call. Touch
+            // nothing and let the next pass ask again.
+            CrashReporter.breadcrumb("FolderMirror " + rpc + ": no manifest, folder untouched");
+            File[] cur = dir.listFiles();
+            return cur == null ? 0 : cur.length;
+        }
 
         // Desired file names, derived from the (UUID) URLs so they are stable and collision-free.
         Set<String> desired = new HashSet<>();
@@ -201,39 +236,55 @@ class FolderMirror {
             desired.add(fileNameFor(it.url));
         }
 
-        Set<String> managed = loadManaged(p);
         List<String> touched = new ArrayList<>();   // paths to hand to the media scanner
 
-        // 1) delete files we previously wrote that are no longer wanted
-        for (String name : new HashSet<>(managed)) {
-            if (!desired.contains(name)) {
-                File f = new File(dir, name);
-                //noinspection ResultOfMethodCallIgnored
-                f.delete();
-                managed.remove(name);
-                touched.add(f.getAbsolutePath());
+        synchronized (passLock) {
+            Set<String> managed = loadManaged(p);
+            Set<String> local = loadLocal(p);
+
+            // 1) delete the files we DOWNLOADED that the cloud no longer lists. A photo the
+            //    customer uploaded from a phone is skipped here whatever the manifest says — it
+            //    is removed only by the person who put it there.
+            for (String name : new HashSet<>(managed)) {
+                if (local.contains(name)) {
+                    managed.remove(name);   // keep the two lists disjoint from here on
+                    continue;
+                }
+                if (!desired.contains(name)) {
+                    File f = new File(dir, name);
+                    //noinspection ResultOfMethodCallIgnored
+                    f.delete();
+                    managed.remove(name);
+                    touched.add(f.getAbsolutePath());
+                }
             }
+
+            // 2) download anything missing
+            for (WallpaperItem it : items) {
+                if (it == null || it.url == null) continue;
+                String name = fileNameFor(it.url);
+                if (local.contains(name)) {
+                    // A human's file already answers to this name. Never overwrite it, and never
+                    // adopt it into the managed list, or step 1 would reach it on a later pass.
+                    continue;
+                }
+                File dest = new File(dir, name);
+                // Already on disk => never fetched again. The name comes from the image's UUID, so
+                // "same name" really does mean "same image": a car that has been mirroring for
+                // months re-downloads nothing on each pass, only what the operator just added.
+                if (dest.exists() && dest.length() > 0) {
+                    managed.add(name);
+                    continue;
+                }
+                if (download(it.url, dest)) {
+                    managed.add(name);
+                    touched.add(dest.getAbsolutePath());
+                }
+            }
+
+            saveManaged(p, managed);
         }
 
-        // 2) download anything missing
-        for (WallpaperItem it : items) {
-            if (it == null || it.url == null) continue;
-            String name = fileNameFor(it.url);
-            File dest = new File(dir, name);
-            // Already on disk => never fetched again. The name comes from the image's UUID, so
-            // "same name" really does mean "same image": a car that has been mirroring for
-            // months re-downloads nothing on each pass, only what the operator just added.
-            if (dest.exists() && dest.length() > 0) {
-                managed.add(name);
-                continue;
-            }
-            if (download(it.url, dest)) {
-                managed.add(name);
-                touched.add(dest.getAbsolutePath());
-            }
-        }
-
-        saveManaged(p, managed);
         mediaScan(appCtx, touched);
 
         File[] now = dir.listFiles();
@@ -293,9 +344,12 @@ class FolderMirror {
             out.flush();
             out.close();
             out = null;
-            // Publish atomically, so a dropped download never leaves a half file the other app reads.
-            if (dest.exists()) //noinspection ResultOfMethodCallIgnored
-                dest.delete();
+            // Publish atomically, so a dropped download never leaves a half file the other app
+            // reads. rename() overwrites, so try it FIRST: deleting dest up front threw away a
+            // perfectly good image every time the rename then failed.
+            if (tmp.renameTo(dest)) return true;
+            //noinspection ResultOfMethodCallIgnored
+            dest.delete();
             return tmp.renameTo(dest);
         } catch (Throwable t) {
             Log.w(TAG, "download failed: " + url, t);
@@ -309,25 +363,58 @@ class FolderMirror {
         }
     }
 
-    private Set<String> loadManaged(SharedPreferences p) {
+    private static Set<String> readNames(SharedPreferences p, String key) {
         Set<String> s = new HashSet<>();
         try {
-            JSONArray a = new JSONArray(p.getString(prefManaged, "[]"));
+            JSONArray a = new JSONArray(p.getString(key, "[]"));
             for (int i = 0; i < a.length(); i++) s.add(a.getString(i));
         } catch (Exception ignored) {}
         return s;
     }
 
-    private void saveManaged(SharedPreferences p, Set<String> s) {
+    private static void writeNames(SharedPreferences p, String key, Set<String> s) {
         JSONArray a = new JSONArray();
         for (String n : s) a.put(n);
-        p.edit().putString(prefManaged, a.toString()).apply();
+        p.edit().putString(key, a.toString()).apply();
+    }
+
+    private Set<String> loadManaged(SharedPreferences p) { return readNames(p, prefManaged); }
+
+    private void saveManaged(SharedPreferences p, Set<String> s) { writeNames(p, prefManaged, s); }
+
+    /**
+     * The customer's own files, seeded once from the managed list.
+     *
+     * Cars in the field carry a single mixed list and prefs never recorded where an entry came
+     * from — they never had to, because the two writers have always named their files differently:
+     * a download is named after the storage object's own UUID path segment, while every QR upload
+     * goes through {@link UploadServer#RECEIVED_PREFIX}. For the legacy entries that prefix IS the
+     * provenance record, so the split is exact rather than a guess. Seeding also matters for a
+     * re-upload: without it a photo sent again under a name build 162 had already recorded would
+     * inherit that entry and be deleted a second time. The key's presence is the migration flag.
+     */
+    private Set<String> loadLocal(SharedPreferences p) {
+        synchronized (localLock) {
+            if (!p.contains(prefLocal)) {
+                Set<String> seed = new HashSet<>();
+                for (String n : loadManaged(p)) {
+                    if (n != null && n.startsWith(UploadServer.RECEIVED_PREFIX)) seed.add(n);
+                }
+                writeNames(p, prefLocal, seed);
+                return seed;
+            }
+            return readNames(p, prefLocal);
+        }
     }
 
     /**
-     * Save a locally-provided file (e.g. a QR upload) straight into the mirrored folder, and track
-     * it so a later mirror does not treat it as a stranger's file and keep it forever. Returns the
-     * saved path or null.
+     * Save a locally-provided file (e.g. a QR upload) straight into the mirrored folder and record
+     * it as the customer's own, so no later pass can delete it. Returns the saved path or null.
+     *
+     * It used to be recorded as "managed" instead, on the reasoning that an untracked file would
+     * be kept forever. Kept forever is exactly right for a photo somebody chose: the manifest for
+     * this folder never lists it, so "managed" really meant "delete on the very next pass" — which
+     * is what happened to every GWM Split upload up to and including build 162.
      */
     String saveLocalCopy(Context appCtx, InputStream in, String displayName) {
         try {
@@ -352,9 +439,14 @@ class FolderMirror {
             while ((n = in.read(buf)) != -1) out.write(buf, 0, n);
             out.flush();
             out.close();
-            Set<String> managed = loadManaged(p);
-            managed.add(dest.getName());
-            saveManaged(p, managed);
+            // One critical section for the whole read-modify-write (the monitor is reentrant, so
+            // loadLocal taking it again is fine): two phones uploading at once must not each save
+            // a list that is missing the other's file.
+            synchronized (localLock) {
+                Set<String> local = loadLocal(p);
+                local.add(dest.getName());
+                writeNames(p, prefLocal, local);
+            }
             mediaScan(appCtx, java.util.Collections.singletonList(dest.getAbsolutePath()));
             return dest.getAbsolutePath();
         } catch (Throwable t) {
