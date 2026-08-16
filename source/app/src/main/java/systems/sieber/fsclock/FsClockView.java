@@ -537,6 +537,33 @@ public class FsClockView extends FrameLayout {
         mActivity.finish();
     }
 
+    /** One-shot: this screen is torn down by the hand-off, so it must never fire twice. */
+    private boolean mHandOffLaunched = false;
+
+    /**
+     * A hand-off car (Leopard \ Denza, Lynk & Co) that became active again while this screen was
+     * already up — after a block was lifted, or after the activation overlay was satisfied.
+     *
+     * FullscreenActivity chooses the picker over this view, but only in onCreate and only if the
+     * car was active at that instant. A car that launched blocked came up on the clock and stayed
+     * there once the block was lifted, because nothing asked the question a second time: the app
+     * looked like it had reverted to Others, while Settings still showed the real mode — and
+     * merely opening and closing Settings fixed it, because its result callback happens to re-run
+     * the same check. Asking here as well is what makes the recovery automatic.
+     */
+    private void maybeHandOff() {
+        if(mHandOffLaunched || mActivity == null || mSharedPref == null) return;
+        if(mWallpaperRepo == null || !mWallpaperRepo.isActive()) return;
+        if(!OperatingMode.isHandoff(mSharedPref)) return;
+        // The mode gate wins when both are pending: it decides WHICH mode this car is, and
+        // handing over to a picker before that is answered is how a car lands in the wrong one.
+        if(ModeConfirmActivity.isPending(getContext(), mSharedPref)) return;
+        mHandOffLaunched = true;
+        getContext().startActivity(
+                new android.content.Intent(getContext(), LeopardPickerActivity.class));
+        mActivity.finish();
+    }
+
     /**
      * One folder-mirror pass, if this car runs one (GWM / Jetour). Cheap to call from anywhere:
      * {@link FolderMirror} returns null for every other mode and debounces bursts, so the
@@ -1090,6 +1117,9 @@ public class FsClockView extends FrameLayout {
                 // activation is already done. Hand it to the gate as soon as we learn it is
                 // active, rather than leaving it a launch behind.
                 maybeOpenModeGate();
+                // And a hand-off car that has just come back (block lifted, or activated on this
+                // screen) belongs in its picker, not on this clock.
+                maybeHandOff();
             }
         }
 
