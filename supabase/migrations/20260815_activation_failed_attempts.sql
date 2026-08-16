@@ -178,11 +178,19 @@ begin
     elsif attempts > 0 then
         -- A wrong code on a car that is already registered. Only ever an UPDATE:
         -- a single typo must not conjure a row into the fleet list.
+        --
+        -- `not is_blocked` freezes the record at the moment the lock closed. An
+        -- already-blocked car is refused before its code is even read, so every
+        -- later knock comes back carrying the same count — without this guard it
+        -- would still rewrite last_failed_serial, and the dashboard would end up
+        -- showing a code that was tried AFTER the block as if it were one of the
+        -- ten that caused it.
         update public.devices
            set failed_attempts    = attempts,
                last_failed_at     = now(),
                last_failed_serial = activation_serial
-         where hardware_id = device_hw_id;
+         where hardware_id = device_hw_id
+           and not is_blocked;
     end if;
 
     return decision;
