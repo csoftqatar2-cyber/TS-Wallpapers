@@ -38,6 +38,7 @@ import android.util.DisplayMetrics;
 import android.util.Log;
 import android.view.Gravity;
 import android.view.View;
+import android.view.ViewGroup;
 import android.view.ViewTreeObserver;
 import android.view.WindowManager;
 import android.view.inputmethod.InputMethodManager;
@@ -160,6 +161,62 @@ public class FsClockView extends FrameLayout {
         }
     };
 
+    /**
+     * Switch the activation card between its two meanings.
+     *
+     * "Not activated yet" and "blocked" are opposite instructions wearing the same screen: one
+     * asks for a serial, the other has to say that no serial will work. Leaving the entry
+     * column up on a blocked car is what sends a technician to the customer for a code the
+     * backend has already decided to refuse — so the serial box, the Activate button and the
+     * mode picker all go, and the support column is what remains, since a phone call is the
+     * only thing that can still change the outcome.
+     */
+    private void applyBlockedState(boolean blocked) {
+        mDeviceBlocked = blocked;
+        int form = blocked ? View.GONE : View.VISIBLE;
+        if(mLayoutActivationEntry != null) mLayoutActivationEntry.setVisibility(form);
+        if(mLayoutActivationMode != null) mLayoutActivationMode.setVisibility(form);
+        if(mViewActivationDivider != null) mViewActivationDivider.setVisibility(form);
+        if(mViewSupportDivider != null) mViewSupportDivider.setVisibility(form);
+        if(mTextViewBlockedBanner != null) {
+            mTextViewBlockedBanner.setVisibility(blocked ? View.VISIBLE : View.GONE);
+        }
+        // Both containers are wrap_content so the normal three-column card sizes itself. With
+        // two columns gone that same rule shrinks the whole page down to the width of a QR code,
+        // which is what made the blocked screen look like a narrow strip. While blocked the card
+        // is stretched instead, and the surviving column centres inside it.
+        stretch(mLayoutActivationCard, blocked);
+        stretch(mLayoutActivationColumns, blocked);
+    }
+
+    /** Toggle a view between match_parent and wrap_content width. */
+    private void stretch(View v, boolean full) {
+        if(v == null) return;
+        ViewGroup.LayoutParams lp = v.getLayoutParams();
+        if(lp == null) return;
+        int want = full ? ViewGroup.LayoutParams.MATCH_PARENT : ViewGroup.LayoutParams.WRAP_CONTENT;
+        if(lp.width != want) {
+            lp.width = want;
+            v.setLayoutParams(lp);
+        }
+    }
+
+    /**
+     * Ask the server why this car is not showing wallpapers, and switch the card accordingly.
+     *
+     * A null answer — no connection, or a backend that predates the status RPC — changes
+     * nothing. A car that merely lost its link is not a blocked car, and turning a dropped
+     * connection into a "you are blocked" screen would be the one false positive nobody in the
+     * workshop could argue with.
+     */
+    private void refreshBlockedState() {
+        if(mWallpaperRepo == null) return;
+        mWallpaperRepo.fetchStatus(status -> post(() -> {
+            if(status == null) return;
+            applyBlockedState(WallpaperRepo.STATUS_BLOCKED.equals(status));
+        }));
+    }
+
     /** (Re)start the periodic server re-sync timer, cancelling any previous schedule. */
     private void startPeriodicSync() {
         removeCallbacks(mPeriodicSyncRunnable);
@@ -179,6 +236,14 @@ public class FsClockView extends FrameLayout {
     Button mButtonRecheck;
     CheckBox mCheckBoxFse;
     TextView mTextViewActivationStatus;
+    /** The three columns of the activation card. The first two are hidden while blocked. */
+    View mLayoutActivationEntry, mLayoutActivationMode, mViewActivationDivider, mViewSupportDivider;
+    /** The card itself and its column row — both stretched while blocked. */
+    View mLayoutActivationCard, mLayoutActivationColumns;
+    TextView mTextViewBlockedBanner;
+    ImageView mImageViewSupportQr;
+    /** Set once the server has said this car is blocked, so the state survives a re-layout. */
+    private boolean mDeviceBlocked;
     View mBatteryView;
     TextView mBatteryText;
     ImageView mBatteryImage;
@@ -267,6 +332,24 @@ public class FsClockView extends FrameLayout {
         mButtonRecheck = findViewById(R.id.buttonRecheck);
         mCheckBoxFse = findViewById(R.id.checkBoxFse);
         mTextViewActivationStatus = findViewById(R.id.textViewActivationStatus);
+        mLayoutActivationEntry = findViewById(R.id.layoutActivationEntry);
+        mLayoutActivationMode = findViewById(R.id.layoutActivationMode);
+        mViewActivationDivider = findViewById(R.id.viewActivationDivider);
+        mViewSupportDivider = findViewById(R.id.viewSupportDivider);
+        mLayoutActivationCard = findViewById(R.id.layoutActivationCard);
+        mLayoutActivationColumns = findViewById(R.id.layoutActivationColumns);
+        mTextViewBlockedBanner = findViewById(R.id.textViewBlockedBanner);
+        mImageViewSupportQr = findViewById(R.id.imageViewSupportQr);
+
+        // How to reach a human: the number, and a QR into the WhatsApp chat for the customer's
+        // own phone. There is no "open WhatsApp" button next to it on purpose — head units do
+        // not have WhatsApp installed, so a button here would fail on nearly every car it
+        // appeared on. The customer's own phone is the device that can act; this screen's job
+        // is only to hand it the link. Drawn once; the link never changes at runtime.
+        if(mImageViewSupportQr != null) {
+            Bitmap qr = QrCode.generate(Support.WHATSAPP_URL, 512);
+            if(qr != null) mImageViewSupportQr.setImageBitmap(qr);
+        }
 
         if (mButtonActivate != null && mEditTextActivationSerial != null && mTextViewActivationStatus != null) {
             mButtonActivate.setOnClickListener(new View.OnClickListener() {
@@ -306,7 +389,12 @@ public class FsClockView extends FrameLayout {
                                         } else if ("invalid_format".equals(result)) {
                                             mTextViewActivationStatus.setText(R.string.activation_error_invalid_serial);
                                         } else if ("blocked".equals(result)) {
+                                            // Either the shop blocked this car, or that was the
+                                            // tenth wrong code and the backend just blocked it.
+                                            // Both mean the same thing to whoever is standing at
+                                            // the car: stop typing codes, call the shop.
                                             mTextViewActivationStatus.setText(R.string.activation_error_blocked);
+                                            applyBlockedState(true);
                                         } else {
                                             mTextViewActivationStatus.setText(getContext().getString(R.string.activation_error_failed,
                                                     error != null ? error : getContext().getString(R.string.activation_error_unknown)));
@@ -982,11 +1070,19 @@ public class FsClockView extends FrameLayout {
             if(!mWallpaperRepo.isActive()) {
                 mLayoutActivation.setVisibility(View.VISIBLE);
                 mTextViewActivationDeviceId.setText(mWallpaperRepo.getDeviceId());
+                // Redraw in whichever state we already know about, then re-ask: a car blocked
+                // while the app was running gets here through the periodic sync, and must not
+                // flash a serial box it is never allowed to use.
+                applyBlockedState(mDeviceBlocked);
+                refreshBlockedState();
                 // The card is up, the technician is reading a serial off a card, and the car has
                 // a working connection and nothing to do with it. Start pulling the shared
                 // library now so the download screen that follows activation has most of its work
                 // already done. See WallpaperRepo.prefetchSharedAsync.
-                mWallpaperRepo.prefetchSharedAsync();
+                //
+                // Not for a blocked car: nothing it downloads can ever be shown, and it is the
+                // one car in the fleet whose owner has not paid for the bandwidth.
+                if(!mDeviceBlocked) mWallpaperRepo.prefetchSharedAsync();
             } else {
                 mLayoutActivation.setVisibility(View.GONE);
                 // A car the Store activated arrives here having never been asked what it is: the

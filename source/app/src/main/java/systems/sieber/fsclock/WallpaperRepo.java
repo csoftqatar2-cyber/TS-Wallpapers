@@ -1739,6 +1739,56 @@ public class WallpaperRepo {
         void done(boolean success, String result, String error);
     }
 
+    /** Answer of {@link #fetchStatus}: 'active' | 'inactive' | 'blocked' | 'unknown'. */
+    public interface StatusCallback {
+        void done(String status);
+    }
+
+    /** This car is on the block list — no serial will activate it until the shop lifts it. */
+    public static final String STATUS_BLOCKED = "blocked";
+
+    /**
+     * Ask the server WHY this car is not showing wallpapers.
+     *
+     * get_wallpapers answers "inactive" for a car that was never registered and for one that
+     * has just been blocked, which is fine for deciding what to draw but useless for deciding
+     * what to TELL somebody: one of them needs a serial typed in, the other needs a phone call
+     * to the shop, and offering a serial box to a blocked car sends the technician chasing a
+     * code the backend is guaranteed to refuse.
+     *
+     * Failures are answered with null, never with a guess. A car that cannot reach the server
+     * is not a blocked car, and showing it a blocked screen because the wifi dropped would be
+     * the worst possible false positive.
+     */
+    public void fetchStatus(final StatusCallback cb) {
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                String status = null;
+                try {
+                    String sbUrl = getSupabaseUrl();
+                    if(!sbUrl.contains("YOUR_SUPABASE_PROJECT")) {
+                        JSONObject body = new JSONObject();
+                        body.put("device_hw_id", getDeviceId());
+                        body.put("legacy_hw_id", getLegacyDeviceId());
+                        String response = httpPost(sbUrl + "/rest/v1/rpc/get_device_status",
+                                body.toString());
+                        status = response == null ? null : response.trim();
+                        if(status != null && status.startsWith("\"") && status.endsWith("\"")
+                                && status.length() >= 2) {
+                            status = status.substring(1, status.length() - 1);
+                        }
+                    }
+                } catch(Exception e) {
+                    // Older backend without the RPC included: nothing is broken, the app simply
+                    // does not learn the distinction and keeps its previous behaviour.
+                    Log.w(TAG, "status check failed", e);
+                }
+                if(cb != null) cb.done(status);
+            }
+        }).start();
+    }
+
     public void activate(final String serial, final ActivateCallback cb) {
         new Thread(new Runnable() {
             @Override

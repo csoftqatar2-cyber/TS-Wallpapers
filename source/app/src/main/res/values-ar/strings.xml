@@ -283,9 +283,14 @@
     <string name="activation_recheck_not_found">السيارة غير مسجّلة بعد — أدخل الرقم التسلسلي للتفعيل</string>
     <string name="activation_success">تم التفعيل بنجاح!</string>
     <string name="activation_error_already_used">هذا الرقم التسلسلي مستخدم بالفعل على جهاز آخر</string>
-    <string name="activation_error_blocked">تم حظر هذا الجهاز. يرجى التواصل مع الدعم.</string>
+    <string name="activation_error_blocked">تم حظر هذا الجهاز. يرجى التواصل مع إدارة المتجر.</string>
     <string name="activation_error_failed">فشل التفعيل: %1$s</string>
     <string name="activation_error_unknown">خطأ غير معروف</string>
+
+    <!-- بيانات التواصل — تظهر في شاشة التفعيل، وتبقى وحدها عند حظر الجهاز. نفس الرقم ونفس
+         رابط واتساب المستخدمين في شاشة تفعيل ذبذبة ستور. -->
+    <string name="support_header">للتفعيل تواصل على الرقم</string>
+    <string name="support_qr_hint">امسح رمز QR لفتح محادثة واتساب مباشرة.</string>
 
     <!-- شاشة تأكيد الوضع (ModeConfirmActivity.java) — سيارة مفعّلة لم يُختَر وضعها بعد. -->
     <string name="mode_confirm_activated">✓ هذه السيارة مفعّلة</string>

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The blocked banner. Deliberately the only red surface on the activation screen: the rest
+     of that screen is a form to fill in, and this is the one element saying that filling it in
+     is pointless until the shop lifts the block. Same corner radius as the card it sits inside
+     so it reads as part of it rather than a toast that will disappear. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+    <solid android:color="#26ff6b5b" />
+    <stroke android:width="1dp" android:color="#66ff6b5b" />
+    <corners android:radius="14dp" />
+</shape>

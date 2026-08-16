@@ -443,9 +443,16 @@ Roboto Font Copyright (c) Christian Robertson. Licensed under the Apache License
     <string name="activation_recheck_not_found">This car is not registered yet — enter the serial number to activate</string>
     <string name="activation_success">Activated successfully!</string>
     <string name="activation_error_already_used">This serial number is already used on another device</string>
-    <string name="activation_error_blocked">This device has been blocked. Please contact support.</string>
+    <string name="activation_error_blocked">This device has been blocked. Please contact the store administrator.</string>
     <string name="activation_error_failed">Activation failed: %1$s</string>
     <string name="activation_error_unknown">Unknown error</string>
+
+    <!-- Support contact, shown on the activation overlay and left standing alone when the car
+         is blocked. Same number and same WhatsApp link as the Store app's activation screen —
+         the customer of a blocked car will be looking at both. -->
+    <string name="support_header">To activate, contact us on</string>
+    <string name="support_number" translatable="false">+974 5515 8880</string>
+    <string name="support_qr_hint">Scan the QR code to open the WhatsApp chat directly.</string>
 
     <!-- Mode confirmation gate (ModeConfirmActivity.java) — an activated car that has never
          had its mode chosen on a build that knows all five. No serial field here: activation

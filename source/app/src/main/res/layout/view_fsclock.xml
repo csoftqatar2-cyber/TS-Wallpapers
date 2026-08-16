@@ -246,21 +246,49 @@
              types is on the left, everything they choose is on the right, and neither column
              has to be tall. -->
         <LinearLayout
+            android:id="@+id/layoutActivationCard"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:background="@drawable/activation_card_bg"
             android:orientation="vertical"
             android:padding="24dp">
 
+            <!-- Blocked. Its own banner above everything, because "blocked" and "not activated
+                 yet" are opposite instructions: one says type a serial, the other says no serial
+                 will ever work and only the shop can lift it. Showing the serial box to a blocked
+                 car sends a technician back to the customer for a code that is guaranteed to be
+                 refused. Hidden unless get_device_status says so.
+
+                 Full width: applyBlockedState stretches the card across the screen while blocked,
+                 so this reads as a bar over the whole page — the same shape the Store app uses
+                 for the same message. -->
+            <TextView
+                android:id="@+id/textViewBlockedBanner"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center"
+                android:layout_marginBottom="18dp"
+                android:background="@drawable/activation_blocked_bg"
+                android:padding="18dp"
+                android:text="@string/activation_error_blocked"
+                android:textColor="@color/aurora_danger"
+                android:textSize="20sp"
+                android:textStyle="bold"
+                android:visibility="gone"
+                tools:visibility="visible" />
+
             <LinearLayout
+                android:id="@+id/layoutActivationColumns"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:baselineAligned="false"
+                android:gravity="center"
                 android:orientation="horizontal">
 
                 <!-- Left: identify yourself and act. -->
                 <LinearLayout
-                    android:layout_width="300dp"
+                    android:id="@+id/layoutActivationEntry"
+                    android:layout_width="260dp"
                     android:layout_height="wrap_content"
                     android:orientation="vertical">
 
@@ -329,10 +357,11 @@
                 </LinearLayout>
 
                 <View
+                    android:id="@+id/viewActivationDivider"
                     android:layout_width="1dp"
                     android:layout_height="match_parent"
-                    android:layout_marginStart="24dp"
-                    android:layout_marginEnd="24dp"
+                    android:layout_marginStart="20dp"
+                    android:layout_marginEnd="20dp"
                     android:background="@color/aurora_border" />
 
                 <!-- Right: operating mode. Was a lone "FSE" checkbox with nothing explaining
@@ -340,7 +369,8 @@
                      are exclusive and a second checkbox would let both be ticked with no
                      answer for what that means. -->
                 <LinearLayout
-                    android:layout_width="280dp"
+                    android:id="@+id/layoutActivationMode"
+                    android:layout_width="240dp"
                     android:layout_height="wrap_content"
                     android:orientation="vertical">
 
@@ -422,6 +452,64 @@
                         android:checked="false"
                         android:visibility="gone"
                         android:text="FSE" />
+                </LinearLayout>
+
+                <View
+                    android:id="@+id/viewSupportDivider"
+                    android:layout_width="1dp"
+                    android:layout_height="match_parent"
+                    android:layout_marginStart="20dp"
+                    android:layout_marginEnd="20dp"
+                    android:background="@color/aurora_border" />
+
+                <!-- How to reach a human. The last column on BOTH screens, and the only one left
+                     standing when the car is blocked — at that point it is the only thing on the
+                     screen that can still change anything.
+                     The QR carries the WhatsApp link because head units rarely have WhatsApp
+                     installed (and often no browser at all): the customer scans it with their own
+                     phone. The button below is for the few units that do. -->
+                <LinearLayout
+                    android:layout_width="200dp"
+                    android:layout_height="wrap_content"
+                    android:gravity="center_horizontal"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:gravity="center"
+                        android:text="@string/support_header"
+                        android:textColor="@color/gold"
+                        android:textSize="13sp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="4dp"
+                        android:text="@string/support_number"
+                        android:textColor="@color/aurora_text"
+                        android:textDirection="ltr"
+                        android:textSize="17sp"
+                        android:textStyle="bold" />
+
+                    <ImageView
+                        android:id="@+id/imageViewSupportQr"
+                        android:layout_width="140dp"
+                        android:layout_height="140dp"
+                        android:layout_marginTop="10dp"
+                        android:background="@android:color/white"
+                        android:contentDescription="@string/support_qr_hint"
+                        android:padding="6dp" />
+
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="8dp"
+                        android:gravity="center"
+                        android:text="@string/support_qr_hint"
+                        android:textColor="@color/aurora_muted"
+                        android:textSize="11sp" />
                 </LinearLayout>
             </LinearLayout>
 
