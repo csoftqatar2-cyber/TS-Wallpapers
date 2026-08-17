@@ -160,7 +160,11 @@ class LynkcoApplier {
                     + "_" + (scaleMode == SCALE_FILL ? "fill" : "fit") + "_" + canvasW + "x" + canvasH + ".jpg");
             if(out.exists() && out.length() > 0) return out;
 
-            Bitmap srcBmp = BitmapFactory.decodeFile(src.getAbsolutePath());
+            // A phone photo carries its orientation in EXIF, which BitmapFactory ignores and
+            // every preview the customer saw (Glide, and the fit editor) applies. Re-baked
+            // files written by us carry no EXIF at all, so this is a no-op for them.
+            Bitmap srcBmp = ExifOrientation.apply(
+                    BitmapFactory.decodeFile(src.getAbsolutePath()), src.getAbsolutePath());
             if(srcBmp == null) return null;
             Bitmap canvasBmp = Bitmap.createBitmap(canvasW, canvasH, Bitmap.Config.ARGB_8888);
             Canvas c = new Canvas(canvasBmp);

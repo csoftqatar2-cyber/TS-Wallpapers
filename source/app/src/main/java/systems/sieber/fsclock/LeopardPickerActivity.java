@@ -817,7 +817,9 @@ public class LeopardPickerActivity extends AppCompatActivity {
         }
         BitmapFactory.Options opts = new BitmapFactory.Options();
         opts.inSampleSize = sample;
-        return BitmapFactory.decodeFile(path, opts);
+        // Same EXIF turn the fit editor applies to its preview, for the same reason: the bake
+        // has to start from the picture the technician framed, not from the untouched pixels.
+        return ExifOrientation.apply(BitmapFactory.decodeFile(path, opts), path);
     }
 
     private void stopUploadServer() {

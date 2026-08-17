@@ -271,7 +271,14 @@ public class FitEditorActivity extends AppCompatActivity {
         }).start();
     }
 
-    /** Decode downsampled — the editor never needs more than the screen can show. */
+    /**
+     * Decode downsampled — the editor never needs more than the screen can show.
+     *
+     * EXIF is applied on the way out, because the wallpaper screen and the thumbnails load the
+     * same file through Glide, which applies it. Without that the editor previews a phone photo
+     * turned differently from the way it is about to be shown, and every rotation the technician
+     * makes here is measured against the wrong picture — see {@link ExifOrientation}.
+     */
     private Bitmap decode(String url) {
         try {
             String path = url;
@@ -288,7 +295,8 @@ public class FitEditorActivity extends AppCompatActivity {
 
             BitmapFactory.Options o = new BitmapFactory.Options();
             o.inSampleSize = sample;
-            return BitmapFactory.decodeFile(f.getAbsolutePath(), o);
+            return ExifOrientation.apply(
+                    BitmapFactory.decodeFile(f.getAbsolutePath(), o), f.getAbsolutePath());
         } catch(Throwable t) {
             return null;
         }
