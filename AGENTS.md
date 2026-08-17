@@ -294,3 +294,14 @@ The Supabase MCP server is usually connected in this workspace — use it
 | Backend schema | Supabase MCP tools against live project; SQL file covers only app_versions/apk |
 | Release a new version | bump `source/app/build.gradle:19-20`, commit (subject = changelog), push main |
 | Store metadata | `source/fastlane/` (currently stale) |
+
+## 10. Repo skills (`.claude/skills/`)
+
+Three recurring, high-blast-radius procedures are written up as skills. Claude Code loads
+them by name; humans can read them as checklists.
+
+| Skill | Covers |
+|---|---|
+| `ts-wallpapers-release` | Version bump → Arabic changelog commit → push → CI gate → verify. Includes the "docs commit pushed after the bump steals the changelog" trap and when `republish` is safe. |
+| `ts-device-triage` | One car isn't working: hardware id → `devices` row → `get_device_status`/`get_wallpapers` → crashes → unblock. Includes why a direct `update devices set is_blocked` breaks the unblock button. |
+| `ts-backend-rpc-change` | RPC/schema/migration changes: the frozen client contract, the `function is not unique` overload trap, D1-first write order, PENDING migration convention, grants and advisors. |
