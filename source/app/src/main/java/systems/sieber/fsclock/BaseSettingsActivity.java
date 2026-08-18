@@ -1403,9 +1403,19 @@ public class BaseSettingsActivity extends AppCompatActivity {
         // layout, which reads better when there is height to use.
         final boolean sideBySide = winW > winH * 3 / 2 && winH < (int) (560 * d);
 
+        // Room the stacked layout has to keep clear below the square. The refresh button is a
+        // whole extra row, and the settings text scale makes every line here taller than the
+        // 120dp this used to assume — without counting it the button lands under the fold, and
+        // a button you have to go looking for on a head unit is one nobody finds.
+        final int stackedReserve = (int) ((refresher != null ? 186 : 120) * d);
+        // The 240dp cap is what actually binds on a tall panel, so the reserve alone never freed
+        // the row: the square has to give up the space itself. 185dp is still far above the
+        // ~110dp where a phone camera starts to struggle, and it is the difference between a
+        // refresh button on screen and one nobody scrolls down to find.
+        final int stackedCap = (int) ((refresher != null ? 185 : 240) * d);
         int qrPx = sideBySide
                 ? Math.min((int) (240 * d), avail - 2 * pad)
-                : Math.min((int) (240 * d), avail - (int) (120 * d));   // leave room for the text
+                : Math.min(stackedCap, avail - stackedReserve);
         // Below this a phone camera starts to struggle, so we would rather scroll than shrink on.
         qrPx = Math.max((int) (110 * d), qrPx);
 
@@ -1441,6 +1451,17 @@ public class BaseSettingsActivity extends AppCompatActivity {
             Button refresh = new Button(this);
             refresh.setText(R.string.qr_refresh);
             refresh.setAllCaps(false);
+            // Built in code, so it does not inherit anything from a layout: without this it
+            // renders in the platform's default grey, which on a head unit reads as a disabled
+            // label rather than the way out of a stale QR code. Same secondary style the rest
+            // of the app uses for "not the main action, but still a button".
+            refresh.setBackgroundResource(R.drawable.fit_secondary_btn);
+            refresh.setTextColor(ContextCompat.getColor(this, R.color.aurora_text));
+            refresh.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 17);
+            refresh.setTypeface(refresh.getTypeface(), android.graphics.Typeface.BOLD);
+            refresh.setMinHeight((int) (52 * d));
+            refresh.setMinimumHeight((int) (52 * d));
+            refresh.setPadding((int) (28 * d), (int) (10 * d), (int) (28 * d), (int) (10 * d));
             refresh.setOnClickListener(v -> {
                 String fresh = refresher.get();
                 if(fresh == null) {
@@ -2948,7 +2969,10 @@ public class BaseSettingsActivity extends AppCompatActivity {
             @Override
             public void onUpdateAvailable(int versionCode, final String versionName, final String apkUrl, String changelog) {
                 if(isFinishing() || isDestroyed()) return;
-                String message = getString(R.string.update_message, versionName);
+                // Same shape as the mode screen's prompt: the build number is what a technician
+                // reads back over the phone, so it belongs next to the name in both places.
+                String message = getString(R.string.update_message,
+                        versionName + " (" + versionCode + ")");
                 if(changelog != null && !changelog.trim().isEmpty()) {
                     message += "\n\n" + changelog.trim();
                 }

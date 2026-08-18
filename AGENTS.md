@@ -143,7 +143,8 @@ the single most important thing to know before touching backend behavior).
 - Published application id: **`store.thabthaba.clock`**. Java namespace/package:
   **`systems.sieber.fsclock`** (upstream's — intentionally kept; do not "fix" the mismatch).
 - App name: "TS Wallpapers" (`values/strings.xml`), Arabic "ذبذبة خلفيات" (`values-ar`).
-- Current version: `versionCode 118`, `versionName "1.4"` (`source/app/build.gradle:19-20`).
+- Current version: read it from `source/app/build.gradle:19-20` — it moves with every release,
+  so this file deliberately does not repeat the number.
 - **Versioning contract:** `versionCode` is globally monotonic and must stay above 113
   (the last upstream-lineage build "2.3-ts"). versionName was reset to 1.x for the fork.
   Every release = bump both, push to main; CI does the rest. Never reuse or lower a versionCode.
@@ -169,8 +170,9 @@ It contains no secrets itself but keep it untracked anyway.
 ## 6. Supabase backend
 
 The complete live backend (project `ihgmqwzdpugdzddobhbc`) is captured in
-[supabase/schema.sql](supabase/schema.sql) — 4 tables (`devices`, `wallpapers`,
-`app_versions`, `store_installs`), all RLS policies, both buckets, and 6 RPC
+[supabase/schema.sql](supabase/schema.sql) — 8 tables (`devices`, `wallpapers`,
+`wallpaper_hides`, `app_versions`, `device_crashes`, `store_installs`, `store_crashes`,
+`media_url_backup_r`), all RLS policies, both buckets, and 12 RPC
 functions — plus the `admin-upload` Edge Function source in
 [supabase/functions/admin-upload/](supabase/functions/admin-upload/). Read
 [supabase/README.md](supabase/README.md) before touching the backend.

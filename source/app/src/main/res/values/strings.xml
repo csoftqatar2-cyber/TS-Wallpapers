@@ -58,7 +58,9 @@
     <string name="wallpaper_local_enable">Also show images/video from the device folder</string>
     <string name="wallpaper_add_local">Add from this device</string>
     <string name="wallpaper_pair_phone">Upload from a phone via QR Code</string>
-    <string name="pair_scan_hint">The customer scans this code with their phone camera (both must be on the same Wi-Fi) and uploads the image.\nIf the page stays blank or does not open: turn mobile data off on the phone — this network is local with no internet, so the phone tries to open the link over mobile data and never reaches it.\nStill nothing: make sure AP isolation is turned off on the router.</string>
+    <string name="pair_scan_hint">Scan this code with your phone camera, then choose your picture.
+Your phone must be on the same Wi-Fi as this screen.
+Page not opening? Turn mobile data off and try again.</string>
     <string name="pair_waiting">Waiting for an image from the phone…</string>
     <string name="pair_uploaded">Image received ✓ and set as the default wallpaper</string>
     <string name="pair_uploaded_n">%1$d image(s) received ✓</string>
@@ -159,7 +161,7 @@ Roboto Font Copyright (c) Christian Robertson. Licensed under the Apache License
     <!-- in-app self update -->
     <string name="update_check">Check for updates</string>
     <string name="update_title">Update available</string>
-    <string name="update_message">A new version (%1$s) is available.\n\nWould you like to update now?</string>
+    <string name="update_message">A new version %1$s is available.\n\nWould you like to update now?</string>
     <string name="update_now">Update now</string>
     <string name="update_later">Later</string>
     <string name="update_downloading">Downloading update…</string>

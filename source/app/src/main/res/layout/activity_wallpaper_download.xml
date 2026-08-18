@@ -101,12 +101,16 @@
         android:id="@+id/buttonWpDownloadSkip"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginTop="14dp"
-        android:minHeight="48dp"
-        android:paddingStart="24dp"
-        android:paddingEnd="24dp"
+        android:layout_marginTop="18dp"
+        android:background="@drawable/fit_secondary_btn"
+        android:minHeight="56dp"
+        android:minWidth="220dp"
+        android:paddingStart="32dp"
+        android:paddingEnd="32dp"
         android:text="@string/download_progress_skip"
         android:textAllCaps="false"
-        android:textSize="16sp" />
+        android:textColor="@color/aurora_text"
+        android:textSize="18sp"
+        android:textStyle="bold" />
 
 </LinearLayout>

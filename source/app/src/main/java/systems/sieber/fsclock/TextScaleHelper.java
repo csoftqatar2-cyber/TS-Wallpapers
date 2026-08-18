@@ -26,7 +26,17 @@ public class TextScaleHelper {
     /** Percent, not a multiplier — it is what the slider and the label both speak. */
     public static final int SCALE_MIN = 100;
     public static final int SCALE_MAX = 200;
-    public static final int SCALE_DEFAULT = 100;
+
+    /** The one value that means "change nothing" — NOT the same thing as the default. */
+    private static final int SCALE_NONE = 100;
+
+    /**
+     * 130, not 100. These screens are read from the driver's seat, at arm's length, on a panel
+     * that daylight washes out; the platform default is sized for a phone held 30cm from your
+     * face. Cars that never touched the slider pick this up on update (it is the fallback of
+     * {@link #saved}); a car whose installer already chose a size keeps that choice.
+     */
+    public static final int SCALE_DEFAULT = 130;
 
     /** Slider granularity. 5% steps: fine enough to tune, coarse enough to hit with a finger. */
     public static final int SCALE_STEP = 5;
@@ -61,7 +71,9 @@ public class TextScaleHelper {
      */
     public static Context wrap(Context context) {
         int percent = saved(context);
-        if(percent == SCALE_DEFAULT) return context;
+        // Against SCALE_NONE, never against SCALE_DEFAULT: the default is now a real scale, and
+        // comparing to it here would skip the very enlargement it asks for.
+        if(percent == SCALE_NONE) return context;
 
         Configuration config = new Configuration(context.getResources().getConfiguration());
         // Multiply rather than assign: the head unit may already carry its own accessibility

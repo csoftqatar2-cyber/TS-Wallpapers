@@ -18,6 +18,7 @@ import java.util.Locale;
  */
 public class LocaleHelper {
 
+    /** Follow the head unit. Kept for values stored by builds that defaulted to it; never written. */
     public static final String LANG_SYSTEM = "";
     public static final String LANG_ARABIC = "ar";
     public static final String LANG_ENGLISH = "en";
@@ -31,9 +32,17 @@ public class LocaleHelper {
         return isSystemArabic(context) ? LANG_ARABIC : LANG_ENGLISH;
     }
 
+    /**
+     * Arabic unless the car says otherwise.
+     *
+     * The customers are Arabic-speaking; the head units are not. A ROM stuck on English used to
+     * decide the app's language for them, which meant the default a customer met was the wrong
+     * one on nearly every car. English stays one tap away in Settings, and a car that has already
+     * been switched keeps its choice — this is only the answer when nobody has chosen yet.
+     */
     public static String saved(Context context) {
         SharedPreferences prefs = context.getSharedPreferences(BaseSettingsActivity.SHARED_PREF_DOMAIN, Context.MODE_PRIVATE);
-        return prefs.getString(PREF_KEY, LANG_SYSTEM);
+        return prefs.getString(PREF_KEY, LANG_ARABIC);
     }
 
     public static void save(Context context, String language) {
@@ -53,8 +62,8 @@ public class LocaleHelper {
 
     /**
      * Wrap a base context so it resolves resources in the chosen language. Call from
-     * Activity.attachBaseContext(). Returns the context untouched when the user has not
-     * overridden the language, so the device locale keeps winning by default.
+     * Activity.attachBaseContext(). Only LANG_SYSTEM is passed through untouched, and nothing
+     * writes that any more — the default is Arabic, so this now wraps on virtually every car.
      */
     public static Context wrap(Context context) {
         String language = saved(context);

@@ -6,7 +6,7 @@
     <!-- in-app self update -->
     <string name="update_check">التحقق من التحديثات</string>
     <string name="update_title">يوجد تحديث جديد</string>
-    <string name="update_message">صدر إصدار جديد (%1$s).\n\nهل تريد التحديث الآن؟</string>
+    <string name="update_message">صدر إصدار جديد %1$s.\n\nهل تريد التحديث الآن؟</string>
     <string name="update_now">حدّث الآن</string>
     <string name="update_later">لاحقاً</string>
     <string name="update_downloading">جارٍ تنزيل التحديث…</string>
@@ -72,7 +72,9 @@
     <string name="wallpaper_local_enable">عرض الصور والفيديو من مجلد الجهاز أيضاً</string>
     <string name="wallpaper_add_local">إضافة من الجهاز</string>
     <string name="wallpaper_pair_phone">رفع صورة من الهاتف عن طريق QR Code</string>
-    <string name="pair_scan_hint">يصوّر العميل هذا الرمز بكاميرا هاتفه (يجب أن يكون على شبكة الواي‑فاي نفسها) ثم يرفع الصورة.\nإذا بقيت الصفحة بيضاء أو لم تُفتح: أوقف بيانات الهاتف الخلوية — هذه شبكة محلية بلا إنترنت، فيحاول الهاتف فتح الرابط عبر البيانات ولا يصل.\nوإن استمرّت المشكلة: تأكّد من أن عزل الأجهزة (AP isolation) غير مفعَّل في الراوتر.</string>
+    <string name="pair_scan_hint">صوّر هذا الرمز بكاميرا هاتفك، ثم اختر صورتك.
+يجب أن يكون هاتفك على شبكة الواي‑فاي نفسها.
+الصفحة لا تفتح؟ أوقف بيانات الهاتف وحاول مرة أخرى.</string>
     <string name="pair_waiting">في انتظار صورة من الهاتف…</string>
     <string name="pair_uploaded">تم استلام الصورة ✓ وأصبحت الخلفية الافتراضية</string>
     <string name="pair_uploaded_n">تم استلام %1$d صورة ✓</string>
