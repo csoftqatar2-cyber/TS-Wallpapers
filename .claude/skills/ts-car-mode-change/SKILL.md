@@ -87,7 +87,11 @@ Work top to bottom; the list is the checklist.
    constraint or an enum lists the allowed modes, the new value must be accepted **first**,
    or every car that updates reports a mode the server rejects. Follow `ts-backend-rpc-change`.
 10. **Targeting + channel.** `wallpapers.target_mode` is compared against `devices.mode` in
-    `get_wallpapers`. A folder-mirror mode also needs its own channel value and its own
+    `get_wallpapers`, and it carries a **CHECK constraint listing the six current modes** —
+    migrate that constraint or no wallpaper can ever be targeted at the new mode (the insert
+    fails in the dashboard with a constraint error). `wallpapers.channel` is deliberately
+    unconstrained text, so a new channel needs no constraint change — only an RPC.
+    A folder-mirror mode also needs its own channel value and its own
     `get_<name>_wallpapers` RPC with the same shape and the same activation gate as
     `get_gwm_wallpapers` / `get_jetour_wallpapers`. Model the migration on
     [`20260808_jetour_mode_and_channel.sql`](../../../supabase/migrations/20260808_jetour_mode_and_channel.sql).

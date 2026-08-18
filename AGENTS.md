@@ -39,7 +39,9 @@ the single most important thing to know before touching backend behavior).
    receives a device-specific playlist (global rows + rows matching its hardware_id).
    A single-item response `"inactive"` means "device not activated" and clears the playlist.
 3. Playlist is cached in SharedPreferences (`wallpaper-cache-json`); videos are
-   pre-downloaded to `cacheDir/wallpapers/vid_*.bin`. Re-sync every 5 minutes.
+   pre-downloaded to `cacheDir/wallpapers/vid_*.bin` and remote images/GIFs are warmed into
+   Glide's disk cache. The 5-minute re-sync belongs to the clock screen — the hand-off modes
+   (Leopard, Lynk & Co) have no slideshow and refresh once per picker open instead.
 4. Local files in `externalFilesDir/Wallpapers/` (file picker or LAN upload) are merged in.
 
 ### Activation (device → Supabase)
@@ -52,8 +54,12 @@ the single most important thing to know before touching backend behavior).
 ### Admin management (dashboard → Supabase)
 - `wallpapers_manager.html` (deployed at Vercel, `/` rewrites to it) logs in as the
   fixed Supabase Auth user `admin@tswallpapers.app` (password → JWT).
-- Wallpaper **file uploads go through Edge Function `admin-upload`** (service-role
-  write to the `wallpapers` storage bucket); metadata rows go to the `wallpapers` table.
+- Wallpaper **file uploads go to Cloudflare R2** through our own Worker
+  (`cloudflare/wallpaper-upload/worker.js`, which checks the caller's admin session); the
+  metadata row is then inserted straight into the `wallpapers` table under that same session.
+  The `admin-upload` Edge Function is **superseded** (kept only as a rollback path — it does
+  not even accept `target_mode`). The JS function is still called `uploadViaFunction()`; the
+  name and one comment above it are stale, the code is R2.
 - Device admin (block/rename/activate/delete) PATCHes the `devices` table.
 
 ### Fleet check-in: mode, build, dates (device → Supabase → dashboard)
@@ -79,7 +85,10 @@ the single most important thing to know before touching backend behavior).
 - The next launch POSTs each unsent file to RPC `report_crash`; a sent file is renamed
   `.sent` and kept on the car so a technician can still read it offline
   (Settings → Updates → "سجل الأعطال", shown only when count > 0).
-- The dashboard reads `device_crashes` (admin-only RLS) in the "أعطال آخر ٧ أيام" card.
+- The dashboard reads `device_crashes` in the "أعطال آخر ٧ أيام" card. Its SELECT policy is
+  `to authenticated using (true)` — any authenticated user, not the admin uid like every other
+  table here (documented deliberately in schema.sql). The card counts client-side over the
+  newest 300 rows, so a busy week undercounts.
 - **`-keepnames class systems.sieber.fsclock.**` in proguard-rules.pro is what makes the
   traces readable.** Removing it turns every fleet crash report back into `a.b.c(SourceFile:1)`.
 
@@ -292,18 +301,24 @@ The Supabase MCP server is usually connected in this workspace — use it
 | Wallpaper sources/sync/device-id | `WallpaperRepo.java` |
 | Settings screen | `BaseSettingsActivity.java` (+ flavor `SettingsActivity`) |
 | Self-update | `UpdateManager.java` + `release.yml` + `supabase_app_update_setup.sql` |
-| Admin dashboard | `wallpapers_manager.html` (single file; constants at ~line 1519) |
+| Admin dashboard | `wallpapers_manager.html` (single file; grep for `const SUPABASE_URL` — line numbers drift). See skill `ts-admin-dashboard-change` |
 | Backend schema | Supabase MCP tools against live project; SQL file covers only app_versions/apk |
 | Release a new version | bump `source/app/build.gradle:19-20`, commit (subject = changelog), push main |
 | Store metadata | `source/fastlane/` (currently stale) |
 
 ## 10. Repo skills (`.claude/skills/`)
 
-Three recurring, high-blast-radius procedures are written up as skills. Claude Code loads
-them by name; humans can read them as checklists.
+The recurring, high-blast-radius procedures are written up as skills. Claude Code loads them
+by name; humans can read them as checklists.
 
 | Skill | Covers |
 |---|---|
 | `ts-wallpapers-release` | Version bump → Arabic changelog commit → push → CI gate → verify. Includes the "docs commit pushed after the bump steals the changelog" trap and when `republish` is safe. |
 | `ts-device-triage` | One car isn't working: hardware id → `devices` row → `get_device_status`/`get_wallpapers` → crashes → unblock. Includes why a direct `update devices set is_blocked` breaks the unblock button. |
 | `ts-backend-rpc-change` | RPC/schema/migration changes: the frozen client contract, the `function is not unique` overload trap, D1-first write order, PENDING migration convention, grants and advisors. |
+| `ts-car-mode-change` | Adding/changing an operating mode (a new car): the 11 touchpoints, the frozen `wire()` values, the `target_mode` CHECK, backend→dashboard→app order. |
+| `ts-local-build-and-test-car` | Building locally and installing on a test head unit: gradle flavors, where the APK lands, ADB to the known cars, and the debug-build trap that wipes activation. |
+| `ts-android-ui-change` | Editing a screen: the paired portrait/landscape `view_fsclock.xml`, the `"CLOCK"` prefs contract, ProGuard keeps, where the Arabic text lives. |
+| `ts-crash-triage` | Reading fleet crashes: the on-car files, the forgiving `report_crash`, retention limits, and the ProGuard rules that keep traces readable. |
+| `ts-wallpaper-content-ops` | Adding/targeting/replacing/removing wallpapers: channels, `target_mode`, hides, the URL-keyed cache that makes overwrites invisible, baked hand-off files. |
+| `ts-admin-dashboard-change` | Editing `wallpapers_manager.html`: file map, session/RLS model, which writes need an RPC, the duplicated admin identity, Vercel deploy. |
