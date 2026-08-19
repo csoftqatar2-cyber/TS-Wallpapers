@@ -289,6 +289,7 @@ Roboto Font Copyright (c) Christian Robertson. Licensed under the Apache License
     <string name="mode_title">Operating mode</string>
     <string name="mode_exclusive_note">Leopard (FSE) and Leopard \\ Denza cannot be combined — pick one.</string>
     <string name="mode_normal">Others</string>
+    <string name="mode_confirm_pick_first">Choose the car type to continue.</string>
     <string name="mode_normal_desc">The app shows wallpapers and the clock on its own screen.</string>
     <string name="mode_fse">Leopard (FSE)</string>
     <string name="mode_fse_desc">Forces a fixed 1920×720 window for very wide screens.</string>

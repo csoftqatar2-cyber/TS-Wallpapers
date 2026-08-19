@@ -1102,6 +1102,19 @@ public class WallpaperRepo {
         default void mediaProgress(int done, int total) { }
 
         /**
+         * How much of the whole library has arrived, in bytes.
+         *
+         * The file counter cannot answer that. A library of fifteen wallpapers is five videos of
+         * 10-63 MB and ten images under a megabyte: the videos are ~98% of the download and 33%
+         * of the count, so a bar driven by files crawls to 5% over several minutes and then jumps
+         * to 100% as the images fly past. This is the honest measure; the counter stays for
+         * "3 of 15", which is the question it is actually good at.
+         *
+         * @param totalBytes 0 when nothing could be sized — treat the file counter as the truth.
+         */
+        default void mediaBytes(long doneBytes, long totalBytes) { }
+
+        /**
          * The same progress, four times a second and measured in bytes rather than in whole
          * files — plus the speed those bytes are arriving at.
          *
@@ -1133,7 +1146,7 @@ public class WallpaperRepo {
     private static final class DownloadProgress {
 
         /** What to assume one image weighs until this car has actually downloaded one. */
-        private static final long DEFAULT_IMAGE_BYTES = 900_000L;
+        static final long DEFAULT_IMAGE_BYTES = 900_000L;
         /** A file that is still arriving is never drawn as arrived. */
         private static final float MAX_FILE_FRACTION = 0.97f;
 
@@ -1145,6 +1158,8 @@ public class WallpaperRepo {
         private volatile long mCurBytes;      // bytes of the file in flight
         private volatile long mCurExpected;   // its size: exact for video, learned for images
         private volatile long mTotalBytes;    // everything this pass pulled down (speed meter)
+        private volatile long mPlannedBytes;  // what the whole pass is expected to weigh
+        private volatile long mCompletedBytes;// bytes of the files that have fully landed
 
         private volatile boolean mImageInFlight;
         private volatile long mImageBaseline = -1;
@@ -1193,6 +1208,15 @@ public class WallpaperRepo {
 
         long speed() { return mSpeed; }
 
+        /** Total bytes this pass expects to move. 0 leaves the bar on the file count. */
+        void plan(long bytes) { mPlannedBytes = bytes > 0 ? bytes : 0; }
+
+        /** Everything landed: the estimate for the images was never going to be exact. */
+        void allDone() {
+            mCompletedBytes = mPlannedBytes;
+            emit();
+        }
+
         /** A video is starting; {@code contentLength} is what the server says it weighs. */
         void fileStart(long contentLength) {
             mCurBytes = 0;
@@ -1226,6 +1250,9 @@ public class WallpaperRepo {
 
         void fileDone() {
             mDone++;
+            // Banked before reset() zeroes it — this is the only record that the file's bytes
+            // are in, and the in-flight counter is about to be handed to the next file.
+            mCompletedBytes += mCurBytes;
             reset();
             if(mCb != null) mCb.mediaProgress(mDone, mTotal);
             emit();
@@ -1246,6 +1273,9 @@ public class WallpaperRepo {
 
         private void emit() {
             if(mCb == null) return;
+            // Bytes first: the screen prefers them for the percentage, and a tick carrying the
+            // previous pass's byte figure would draw one frame of the old number.
+            mCb.mediaBytes(mCompletedBytes + mCurBytes, mPlannedBytes);
             mCb.mediaTick(mDone, mTotal, fraction(), mSpeed);
         }
 
@@ -1401,6 +1431,20 @@ public class WallpaperRepo {
                     // Reports the bytes underneath those files while they are still arriving —
                     // see DownloadProgress for why whole-file steps were not enough.
                     final DownloadProgress progress = new DownloadProgress(mContext, cb, total);
+                    // Weigh the pass before starting it. Only the videos are asked — they are
+                    // nearly all of the bytes, and it is five or six HEADs rather than fifteen —
+                    // while the images ride on the same estimate the in-flight meter already uses.
+                    // Any video that will not give a length falls back to that estimate too: a
+                    // slightly wrong plan still moves the bar honestly, and a missing one leaves
+                    // it exactly where it was before.
+                    long planned = 0;
+                    for(WallpaperItem it : parsed) {
+                        if(it == null || !needsDownload(it)) continue;
+                        if(!it.isVideo()) { planned += DownloadProgress.DEFAULT_IMAGE_BYTES; continue; }
+                        long len = remoteLength(it.url);
+                        planned += len > 0 ? len : ASSUMED_VIDEO_BYTES;
+                    }
+                    progress.plan(planned);
                     progress.start();
                     try {
                         // Videos first: they are the big files and the ones that cannot be shown
@@ -1439,6 +1483,7 @@ public class WallpaperRepo {
                         if(failed > 0) cb.mediaIncomplete(failed, total);
                         else {
                             cb.mediaProgress(total, total);
+                            progress.allDone();
                             cb.mediaTick(total, total, 0f, progress.speed());
                             cb.mediaReady();
                         }
@@ -1449,6 +1494,34 @@ public class WallpaperRepo {
                 }
             }
         }).start();
+    }
+
+    /** What an unsizeable video is assumed to weigh, so one silent server cannot flatten the bar. */
+    private static final long ASSUMED_VIDEO_BYTES = 25L * 1024 * 1024;
+
+    /**
+     * What the server says a file weighs, or -1.
+     *
+     * A HEAD, with a short timeout and every failure swallowed: this only makes the progress bar
+     * truthful, and no wallpaper should fail to download because a size could not be read first.
+     */
+    private static long remoteLength(String url) {
+        HttpURLConnection c = null;
+        try {
+            c = (HttpURLConnection) new URL(url).openConnection();
+            c.setRequestMethod("HEAD");
+            c.setConnectTimeout(5000);
+            c.setReadTimeout(5000);
+            c.setInstanceFollowRedirects(true);
+            if(c.getResponseCode() / 100 != 2) return -1;
+            // getContentLengthLong() is API 24; this app still runs on 21 head units.
+            String len = c.getHeaderField("Content-Length");
+            return len == null ? -1 : Long.parseLong(len.trim());
+        } catch(Exception e) {
+            return -1;
+        } finally {
+            if(c != null) c.disconnect();
+        }
     }
 
     // ---- pre-activation prefetch --------------------------------------------

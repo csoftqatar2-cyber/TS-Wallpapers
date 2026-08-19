@@ -62,6 +62,9 @@ public class WallpaperDownloadActivity extends AppCompatActivity {
     private WallpaperRepo mRepo;
     private boolean mProceeded = false;
 
+    /** The pass measured in bytes. 0 total = nothing could be sized; fall back to the file count. */
+    private long mDoneBytes, mPlannedBytes;
+
     /**
      * When the first byte of this session actually moved, and how far along it was then.
      *
@@ -166,6 +169,14 @@ public class WallpaperDownloadActivity extends AppCompatActivity {
             }
 
             @Override
+            public void mediaBytes(final long doneBytes, final long totalBytes) {
+                runOnUiThread(new Runnable() {
+                    @Override
+                    public void run() { mDoneBytes = doneBytes; mPlannedBytes = totalBytes; }
+                });
+            }
+
+            @Override
             public void mediaProgress(final int done, final int total) {
                 runOnUiThread(new Runnable() {
                     @Override
@@ -229,10 +240,20 @@ public class WallpaperDownloadActivity extends AppCompatActivity {
         if(mProceeded || isFinishing()) return;
         mDoneFiles = done;
         mTotalFiles = total;
-        // done + fraction, not done alone: the file being downloaded counts for what has already
-        // arrived of it, which is the whole difference between a bar that creeps and one that
-        // stands still for a minute and then jumps four points.
-        float exact = total > 0 ? (done + fraction) * 100f / total : 100f;
+        // Bytes when we have them, files only as a fallback.
+        //
+        // Counting files made this bar a liar: five videos are ~98% of a library's bytes and a
+        // third of its files, so it sat at 5% through the whole of a 63 MB download and then ran
+        // to 100% while the images landed. Bytes move it at the rate the link is actually
+        // working at, which is also what makes the estimate underneath it worth reading.
+        float exact;
+        if(mPlannedBytes > 0) {
+            exact = mDoneBytes * 100f / mPlannedBytes;
+        } else {
+            // done + fraction, not done alone: the file being downloaded counts for what has
+            // already arrived of it.
+            exact = total > 0 ? (done + fraction) * 100f / total : 100f;
+        }
         if(exact < 0f) exact = 0f;
         if(exact > 100f) exact = 100f;
         if(exact > mTargetPercent) mTargetPercent = exact;
@@ -309,9 +330,14 @@ public class WallpaperDownloadActivity extends AppCompatActivity {
         mProceeded = true;
         // Written BEFORE the hop, not after: FullscreenActivity asks isPending() on the way in,
         // and a flag set a moment too late would bounce the car straight back here forever.
-        getSharedPreferences(BaseSettingsActivity.SHARED_PREF_DOMAIN, Context.MODE_PRIVATE)
-                .edit().putBoolean(PREF_GATE_DONE, true).apply();
-        Intent next = new Intent(this, FullscreenActivity.class);
+        SharedPreferences prefs = getSharedPreferences(
+                BaseSettingsActivity.SHARED_PREF_DOMAIN, Context.MODE_PRIVATE);
+        prefs.edit().putBoolean(PREF_GATE_DONE, true).apply();
+        // Where the car belongs once its library is here. Hand-off modes never draw our screen —
+        // their home is the picker they choose a wallpaper from, and sending them to the clock
+        // instead would show a Leopard car a screen it is not supposed to have.
+        Intent next = new Intent(this, OperatingMode.isHandoff(prefs)
+                ? LeopardPickerActivity.class : FullscreenActivity.class);
         next.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP);
         startActivity(next);
         finish();

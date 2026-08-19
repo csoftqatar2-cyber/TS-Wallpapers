@@ -1373,10 +1373,13 @@ public class FsClockView extends FrameLayout {
             OverlayPermission.request(mActivity, null);
         }
         if(mode == OperatingMode.LEOPARD || mode == OperatingMode.LYNKCO) {
-            // Nothing left for this screen to draw — hand over to the picker rather than sit on a
-            // dead clock. Both hand-off modes share it.
-            getContext().startActivity(
-                    new android.content.Intent(getContext(), LeopardPickerActivity.class));
+            // Nothing left for this screen to draw, but the picker it hands over to IS the
+            // library — so it goes through the download gate first, exactly like every other
+            // mode. Sending it straight on is what left those cars staring at empty cells while
+            // the files were still arriving. WallpaperDownloadActivity opens the picker itself
+            // once the library is local.
+            getContext().startActivity(new android.content.Intent(
+                    getContext(), WallpaperDownloadActivity.class));
             if(mActivity != null) mActivity.finish();
             return;
         }

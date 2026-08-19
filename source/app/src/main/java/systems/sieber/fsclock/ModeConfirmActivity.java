@@ -82,14 +82,28 @@ public class ModeConfirmActivity extends AppCompatActivity {
                     + new WallpaperRepo(this).getDeviceId());
         }
 
-        // Start on whatever the car currently believes it is, so confirming an already-correct
-        // guess is one tap rather than a hunt.
-        check(OperatingMode.get(mPrefs));
-        updateDesc(selectedMode());
-        mGroup.setOnCheckedChangeListener((g, id) -> updateDesc(selectedMode()));
+        // Nothing is preselected, on purpose.
+        //
+        // This used to start on whatever the car already believed it was — which for a fresh car
+        // is Others — so "confirm" was answerable without reading the list, and a car nobody had
+        // actually looked at got recorded as Others. The mode decides whether the app draws the
+        // screen, hands the file to the head unit, or mirrors a folder; a wrong one is not a
+        // preference the customer can shrug off. So the choice has to be made, not accepted.
+        final Button confirm = findViewById(R.id.buttonModeConfirm);
+        mGroup.clearCheck();
+        setConfirmEnabled(confirm, false);
+        updateDesc(MODE_NONE);
+        mGroup.setOnCheckedChangeListener((g, id) -> {
+            int mode = selectedMode();
+            updateDesc(mode);
+            setConfirmEnabled(confirm, mode != MODE_NONE);
+        });
 
-        Button confirm = findViewById(R.id.buttonModeConfirm);
-        confirm.setOnClickListener(v -> apply(selectedMode()));
+        confirm.setOnClickListener(v -> {
+            int mode = selectedMode();
+            if(mode == MODE_NONE) return;   // belt and braces; the button is disabled anyway
+            apply(mode);
+        });
 
         TextView version = findViewById(R.id.textViewModeConfirmVersion);
         if(version != null) {
@@ -172,22 +186,22 @@ public class ModeConfirmActivity extends AppCompatActivity {
         note.setVisibility(TextView.VISIBLE);
     }
 
-    private void check(int mode) {
-        int id = mode == OperatingMode.FSE ? R.id.radioConfirmFse
-                : mode == OperatingMode.LEOPARD ? R.id.radioConfirmLeopard
-                : mode == OperatingMode.GWM ? R.id.radioConfirmGwm
-                : mode == OperatingMode.JETOUR ? R.id.radioConfirmJetour
-                : mode == OperatingMode.LYNKCO ? R.id.radioConfirmLynkco
-                : R.id.radioConfirmNormal;
-        RadioButton b = findViewById(id);
-        // A migrated Leopard car on a ROM that cannot do Leopard would otherwise preselect a
-        // disabled button and leave the group with nothing checked.
-        if(b == null || !b.isEnabled()) id = R.id.radioConfirmNormal;
-        mGroup.check(id);
+    /** No mode chosen yet. Distinct from every real OperatingMode value, which start at 0. */
+    private static final int MODE_NONE = -1;
+
+    /**
+     * A locked button still has to read as the way forward, not as decoration — dimming it says
+     * "not yet" where hiding it would say "not here".
+     */
+    private void setConfirmEnabled(Button confirm, boolean enabled) {
+        if(confirm == null) return;
+        confirm.setEnabled(enabled);
+        confirm.setAlpha(enabled ? 1f : 0.45f);
     }
 
     private int selectedMode() {
         int id = mGroup.getCheckedRadioButtonId();
+        if(id == -1) return MODE_NONE;      // nobody has chosen yet
         if(id == R.id.radioConfirmFse) return OperatingMode.FSE;
         if(id == R.id.radioConfirmLeopard) return OperatingMode.LEOPARD;
         if(id == R.id.radioConfirmGwm) return OperatingMode.GWM;
@@ -198,6 +212,7 @@ public class ModeConfirmActivity extends AppCompatActivity {
 
     private void updateDesc(int mode) {
         if(mDesc == null) return;
+        if(mode == MODE_NONE) { mDesc.setText(R.string.mode_confirm_pick_first); return; }
         int res = mode == OperatingMode.LEOPARD ? R.string.mode_leopard_desc
                 : mode == OperatingMode.FSE ? R.string.mode_fse_desc
                 : mode == OperatingMode.GWM ? R.string.mode_gwm_desc
@@ -231,24 +246,18 @@ public class ModeConfirmActivity extends AppCompatActivity {
     }
 
     /**
-     * Enter the confirmed mode: the hand-off products open their picker, GWM goes straight to
-     * the clock (nothing about it needs the wallpapers local before the screen shows), and
-     * Others/FSE stop first at {@link WallpaperDownloadActivity} so the slideshow never starts
-     * before its library is actually on the car.
+     * Enter the confirmed mode, by way of {@link WallpaperDownloadActivity} — always, whichever
+     * mode was chosen. That screen is what decides where the car lands afterwards.
      */
     private void openApp() {
-        Intent next;
-        if(OperatingMode.isHandoff(mPrefs)) {
-            next = new Intent(this, LeopardPickerActivity.class);
-        } else {
-            // Every mode that draws our own screen goes through the download gate — Others, FSE,
-            // GWM and Jetour alike. GWM used to be waved past it, on the reasoning that its folder
-            // mirror is the point of the mode; but a GWM car runs the same slideshow as Others, and
-            // starting that on a library which is not there yet is the same failure there as
-            // anywhere else. See WallpaperDownloadActivity.isPending, which enforces this even for
-            // a car that never comes through here.
-            next = new Intent(this, WallpaperDownloadActivity.class);
-        }
+        // EVERY mode goes through the download gate, hand-off included.
+        //
+        // Leopard and Lynk & Co used to jump straight to the picker, on the reasoning that they
+        // have no slideshow to protect. But the picker is a grid OF that library: arriving before
+        // the files do is what produced the empty and stuck cells those cars kept showing. The
+        // gate is the one place the technician is still standing at the car, so it is the right
+        // place to wait — and WallpaperDownloadActivity sends each mode on to its own screen.
+        Intent next = new Intent(this, WallpaperDownloadActivity.class);
         next.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP);
         startActivity(next);
         finish();
