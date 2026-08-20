@@ -61,8 +61,8 @@
     <style name="AppDialog.ButtonBar" parent="Widget.AppCompat.ButtonBar">
         <item name="android:paddingStart">20dp</item>
         <item name="android:paddingEnd">20dp</item>
-        <item name="android:paddingTop">10dp</item>
-        <item name="android:paddingBottom">14dp</item>
+        <item name="android:paddingTop">0dp</item>
+        <item name="android:paddingBottom">4dp</item>
         <item name="android:showDividers">none</item>
     </style>
 
@@ -76,32 +76,38 @@
          as two buttons — the customer sees a sentence and looks for something to press. These
          carry the same backgrounds the rest of the app uses, sized for a finger on a panel that
          is usually an arm's length away. -->
-    <style name="AppDialog.Button" parent="Widget.AppCompat.Button">
-        <item name="android:background">@drawable/fit_secondary_btn</item>
+    <!-- Borderless parent, then our own background on top.
+         Widget.AppCompat.Button carries an InsetDrawable background with vertical insets; with a
+         flat shape dropped on it the top of the rounded rect was rendered outside the drawable's
+         own bounds and came out square, so every dialog button looked shaved off along its top
+         edge. Borderless brings no background and no insets, which leaves ours drawn whole. -->
+    <style name="AppDialog.Button" parent="Widget.AppCompat.Button.Borderless">
+        <item name="android:background">@drawable/dialog_btn_secondary</item>
         <item name="android:textColor">@color/aurora_text</item>
         <item name="android:textAllCaps">false</item>
         <item name="android:textSize">17sp</item>
         <item name="android:textStyle">bold</item>
-        <item name="android:minHeight">54dp</item>
         <!-- 104, not 140: a three-button dialog (save / cancel / select-all) has to fit on one
              row. When it does not, the platform stacks the bar vertically, and a stacked bar is
              tall enough to run off the bottom of a head unit's dialog. -->
         <item name="android:minWidth">104dp</item>
         <item name="android:paddingStart">24dp</item>
         <item name="android:paddingEnd">24dp</item>
+        <item name="android:paddingTop">6dp</item>
+        <item name="android:paddingBottom">6dp</item>
         <!-- Margins, not the bar's padding: the platform button bar sets its own padding and
              ours never reached the bottom edge, so the buttons sat flush against the panel and
              their rounded backgrounds were shaved off by its rounded corner. A margin on the
              button itself is the one inset that survives. -->
         <item name="android:layout_marginStart">10dp</item>
         <item name="android:layout_marginEnd">10dp</item>
-        <item name="android:layout_marginTop">4dp</item>
-        <item name="android:layout_marginBottom">14dp</item>
+        <item name="android:layout_marginTop">2dp</item>
+        <item name="android:layout_marginBottom">8dp</item>
     </style>
 
     <!-- The confirming action reads as the action, not as one of two equal words. -->
     <style name="AppDialog.Button.Positive" parent="AppDialog.Button">
-        <item name="android:background">@drawable/activation_primary_btn</item>
+        <item name="android:background">@drawable/dialog_btn_primary</item>
         <item name="android:textColor">#1a1204</item>
     </style>
 

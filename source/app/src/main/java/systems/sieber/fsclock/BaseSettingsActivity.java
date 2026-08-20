@@ -1133,7 +1133,11 @@ public class BaseSettingsActivity extends AppCompatActivity {
         if(dialog.getWindow() != null) {
             android.util.DisplayMetrics dm = getResources().getDisplayMetrics();
             dialog.getWindow().setLayout(Math.round(dm.widthPixels * 0.92f),
-                    Math.round(dm.heightPixels * 0.9f));
+                    // 0.84, not 0.9: the grid will happily eat every pixel it is given, and what
+                    // it takes comes out of the button row underneath — which then compresses its
+                    // buttons until their rounded backgrounds are drawn taller than the space they
+                    // get and the corners come out shaved. This is the slack that row needs.
+                    Math.round(dm.heightPixels * 0.84f));
         }
 
         // Editing closes this dialog: the editor is a full screen, and leaving a dialog behind it
@@ -2685,7 +2689,11 @@ public class BaseSettingsActivity extends AppCompatActivity {
         if(dialog.getWindow() != null) {
             android.util.DisplayMetrics dm = getResources().getDisplayMetrics();
             dialog.getWindow().setLayout(Math.round(dm.widthPixels * 0.92f),
-                    Math.round(dm.heightPixels * 0.9f));
+                    // 0.84, not 0.9: the grid will happily eat every pixel it is given, and what
+                    // it takes comes out of the button row underneath — which then compresses its
+                    // buttons until their rounded backgrounds are drawn taller than the space they
+                    // get and the corners come out shaved. This is the slack that row needs.
+                    Math.round(dm.heightPixels * 0.84f));
         }
 
         adapter.setOnEditListener(item -> {
