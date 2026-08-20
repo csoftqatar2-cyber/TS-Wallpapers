@@ -62,7 +62,7 @@
         <item name="android:paddingStart">20dp</item>
         <item name="android:paddingEnd">20dp</item>
         <item name="android:paddingTop">10dp</item>
-        <item name="android:paddingBottom">18dp</item>
+        <item name="android:paddingBottom">14dp</item>
         <item name="android:showDividers">none</item>
     </style>
 
@@ -83,11 +83,20 @@
         <item name="android:textSize">17sp</item>
         <item name="android:textStyle">bold</item>
         <item name="android:minHeight">54dp</item>
-        <item name="android:minWidth">140dp</item>
+        <!-- 104, not 140: a three-button dialog (save / cancel / select-all) has to fit on one
+             row. When it does not, the platform stacks the bar vertically, and a stacked bar is
+             tall enough to run off the bottom of a head unit's dialog. -->
+        <item name="android:minWidth">104dp</item>
         <item name="android:paddingStart">24dp</item>
         <item name="android:paddingEnd">24dp</item>
+        <!-- Margins, not the bar's padding: the platform button bar sets its own padding and
+             ours never reached the bottom edge, so the buttons sat flush against the panel and
+             their rounded backgrounds were shaved off by its rounded corner. A margin on the
+             button itself is the one inset that survives. -->
         <item name="android:layout_marginStart">10dp</item>
         <item name="android:layout_marginEnd">10dp</item>
+        <item name="android:layout_marginTop">4dp</item>
+        <item name="android:layout_marginBottom">14dp</item>
     </style>
 
     <!-- The confirming action reads as the action, not as one of two equal words. -->

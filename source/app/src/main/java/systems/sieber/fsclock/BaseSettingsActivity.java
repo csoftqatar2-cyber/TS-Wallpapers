@@ -1087,6 +1087,15 @@ public class BaseSettingsActivity extends AppCompatActivity {
 
         LinearLayout ll = new LinearLayout(this);
         ll.setOrientation(LinearLayout.VERTICAL);
+        // MATCH_PARENT, not the default wrap.
+        //
+        // The grid below is a ScrollView with weight 1, and a weight only divides space a parent
+        // actually has: inside a wrapping column it measures at its full natural height instead,
+        // the custom panel grows past the window this dialog is pinned to, and the buttons at the
+        // bottom are pushed off the screen. That was always marginal here and became visible the
+        // moment the action buttons grew real backgrounds and the settings text went up 30%.
+        ll.setLayoutParams(new ViewGroup.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
 
         TextView hint = new TextView(this);
         hint.setText(getString(R.string.wallpaper_manage_hint));
@@ -2637,6 +2646,15 @@ public class BaseSettingsActivity extends AppCompatActivity {
 
         LinearLayout ll = new LinearLayout(this);
         ll.setOrientation(LinearLayout.VERTICAL);
+        // MATCH_PARENT, not the default wrap.
+        //
+        // The grid below is a ScrollView with weight 1, and a weight only divides space a parent
+        // actually has: inside a wrapping column it measures at its full natural height instead,
+        // the custom panel grows past the window this dialog is pinned to, and the buttons at the
+        // bottom are pushed off the screen. That was always marginal here and became visible the
+        // moment the action buttons grew real backgrounds and the settings text went up 30%.
+        ll.setLayoutParams(new ViewGroup.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
 
         TextView hint = new TextView(this);
         hint.setText(getString(R.string.batch_review_hint));
