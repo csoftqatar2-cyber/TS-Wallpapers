@@ -679,13 +679,15 @@ public class WallpaperRepo {
         return list;
     }
 
+    /**
+     * Delegated to {@link WallpaperItem}, which owns the one list.
+     *
+     * This used to carry its own copy, and the two fell out of step: a file could be typed as a
+     * video by guessType and then dropped by this scan, so a phone upload landed on disk and
+     * never appeared anywhere — no error, no entry, nothing to look at.
+     */
     private boolean isSupportedMedia(String name) {
-        String u = name.toLowerCase();
-        return u.endsWith(".jpg") || u.endsWith(".jpeg") || u.endsWith(".png")
-                || u.endsWith(".webp") || u.endsWith(".bmp")
-                || u.endsWith(".gif")
-                || u.endsWith(".mp4") || u.endsWith(".webm") || u.endsWith(".mkv")
-                || u.endsWith(".3gp") || u.endsWith(".m4v") || u.endsWith(".mov");
+        return WallpaperItem.isSupportedMedia(name);
     }
 
     public boolean isEnabled() {

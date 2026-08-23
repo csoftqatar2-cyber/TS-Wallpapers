@@ -286,6 +286,13 @@ public class FitEditorActivity extends AppCompatActivity {
             File f = new File(path);
             if(!f.exists()) return null;
 
+            // A clip has no bitmap to decode, and BitmapFactory answers null for one — which this
+            // screen read as "the file is broken", showed fit_load_failed and closed itself. So a
+            // video sent from a phone reached the car and then bounced off the framing screen,
+            // even though everything after it (the slideshow, the wallpaper engine, the Leopard
+            // hand-off) plays video perfectly well. Its first frame is the picture to frame.
+            if(mIsVideo) return videoFrame(f);
+
             BitmapFactory.Options probe = new BitmapFactory.Options();
             probe.inJustDecodeBounds = true;
             BitmapFactory.decodeFile(f.getAbsolutePath(), probe);
@@ -299,6 +306,30 @@ public class FitEditorActivity extends AppCompatActivity {
                     BitmapFactory.decodeFile(f.getAbsolutePath(), o), f.getAbsolutePath());
         } catch(Throwable t) {
             return null;
+        }
+    }
+
+    /**
+     * A representative frame of a clip, or null if nothing can be pulled out of it.
+     *
+     * One second in rather than zero: the first frame of a phone recording is very often black
+     * or a blur, and framing a wallpaper against black is framing it blind. OPTION_CLOSEST_SYNC
+     * keeps it cheap — the nearest keyframe is good enough to position a picture by, and asking
+     * for an exact frame makes a head unit chew through the file.
+     */
+    private Bitmap videoFrame(File f) {
+        android.media.MediaMetadataRetriever r = new android.media.MediaMetadataRetriever();
+        try {
+            r.setDataSource(f.getAbsolutePath());
+            Bitmap bmp = r.getFrameAtTime(1_000_000L,
+                    android.media.MediaMetadataRetriever.OPTION_CLOSEST_SYNC);
+            // A clip shorter than a second has no frame out there; fall back on whatever it has.
+            if(bmp == null) bmp = r.getFrameAtTime();
+            return bmp;
+        } catch(Throwable t) {
+            return null;
+        } finally {
+            try { r.release(); } catch(Throwable ignored) { }
         }
     }
 

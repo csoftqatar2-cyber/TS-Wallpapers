@@ -57,13 +57,13 @@
     <string name="auto_contrast">Clock colour auto-inverts against the background (for legibility)</string>
     <string name="wallpaper_local_enable">Also show images/video from the device folder</string>
     <string name="wallpaper_add_local">Add from this device</string>
-    <string name="wallpaper_pair_phone">Upload from a phone via QR Code</string>
-    <string name="pair_scan_hint">Scan this code with your phone camera, then choose your picture.
+    <string name="wallpaper_pair_phone">Send a picture, video or GIF from a phone (QR Code)</string>
+    <string name="pair_scan_hint">Scan this code with your phone camera, then choose a picture, a video or a GIF.
 Your phone must be on the same Wi-Fi as this screen.
 Page not opening? Turn mobile data off and try again.</string>
-    <string name="pair_waiting">Waiting for an image from the phone…</string>
-    <string name="pair_uploaded">Image received ✓ and set as the default wallpaper</string>
-    <string name="pair_uploaded_n">%1$d image(s) received ✓</string>
+    <string name="pair_waiting">Waiting for a file from the phone…</string>
+    <string name="pair_uploaded">File received ✓ and set as the default wallpaper</string>
+    <string name="pair_uploaded_n">%1$d file(s) received ✓</string>
     <string name="batch_review_title">Review %1$d image(s)</string>
     <string name="batch_review_hint">These just arrived from the phone. Untick any you do not want, tap the pencil to edit one, then press Done to add them to your wallpapers.</string>
     <string name="batch_review_added">%1$d image(s) added to your wallpapers</string>

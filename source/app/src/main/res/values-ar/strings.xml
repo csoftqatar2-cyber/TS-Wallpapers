@@ -71,13 +71,13 @@
     <string name="auto_contrast">لون الساعة تلقائي عكس الخلفية (للوضوح)</string>
     <string name="wallpaper_local_enable">عرض الصور والفيديو من مجلد الجهاز أيضاً</string>
     <string name="wallpaper_add_local">إضافة من الجهاز</string>
-    <string name="wallpaper_pair_phone">رفع صورة من الهاتف عن طريق QR Code</string>
-    <string name="pair_scan_hint">صوّر هذا الرمز بكاميرا هاتفك، ثم اختر صورتك.
+    <string name="wallpaper_pair_phone">إرسال صورة أو فيديو أو GIF من الهاتف (QR Code)</string>
+    <string name="pair_scan_hint">صوّر هذا الرمز بكاميرا هاتفك، ثم اختر صورة أو فيديو أو GIF.
 يجب أن يكون هاتفك على شبكة الواي‑فاي نفسها.
 الصفحة لا تفتح؟ أوقف بيانات الهاتف وحاول مرة أخرى.</string>
-    <string name="pair_waiting">في انتظار صورة من الهاتف…</string>
-    <string name="pair_uploaded">تم استلام الصورة ✓ وأصبحت الخلفية الافتراضية</string>
-    <string name="pair_uploaded_n">تم استلام %1$d صورة ✓</string>
+    <string name="pair_waiting">في انتظار ملف من الهاتف…</string>
+    <string name="pair_uploaded">تم استلام الملف ✓ وأصبح الخلفية الافتراضية</string>
+    <string name="pair_uploaded_n">تم استلام %1$d ملف ✓</string>
     <string name="batch_review_title">مراجعة %1$d صورة</string>
     <string name="batch_review_hint">هذه هي الصور التي وصلت من الهاتف. أزِل العلامة عن أي صورة لا تريدها، واضغط على القلم لتعديل صورة، ثم اضغط «تم» لإضافتها إلى الخلفيات.</string>
     <string name="batch_review_added">تمت إضافة %1$d صورة للخلفيات</string>

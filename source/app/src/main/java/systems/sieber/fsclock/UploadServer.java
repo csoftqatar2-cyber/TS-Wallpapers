@@ -51,7 +51,7 @@ public class UploadServer extends NanoHTTPD {
      * two chunks, which is why the upload used to fail "randomly" while small images
      * went through. Give the upload two minutes.
      */
-    private static final int READ_TIMEOUT_MS = 120_000;
+    private static final int READ_TIMEOUT_MS = 300_000;
 
     public interface UploadListener {
         /**
@@ -68,6 +68,19 @@ public class UploadServer extends NanoHTTPD {
      * survives. Numbering the fields is what makes N files actually reachable.
      */
     private static final String FIELD_PREFIX = "image";
+
+    /**
+     * What the phone's file picker is allowed to offer.
+     *
+     * "image/*,video/*" on its own is not enough on every phone: a few Android file pickers read
+     * it strictly and grey out HEIC (what an iPhone stores by default) and some clips, so the
+     * extensions are named as well. Both halves are needed — the MIME globs are what make the
+     * gallery, rather than a file browser, open on most phones.
+     */
+    private static final String ACCEPT =
+            "image/*,video/*,"
+            + ".jpg,.jpeg,.png,.webp,.bmp,.heic,.heif,.avif,.gif,"
+            + ".mp4,.m4v,.mov,.webm,.mkv,.3gp";
 
     /** A phone can select an entire album; cap the batch so one tap cannot fill the disk. */
     private static final int MAX_BATCH = 30;
@@ -233,7 +246,100 @@ public class UploadServer extends NanoHTTPD {
         if(names != null && !names.isEmpty() && names.get(0) != null && !names.get(0).trim().isEmpty()) {
             return names.get(0);
         }
-        return "upload.jpg";
+        // No name at all. Deliberately extension-less: saveUpload reads the bytes, and
+        // guessing ".jpg" here is how a clip used to become an unplayable "picture".
+        return "upload";
+    }
+
+    /**
+     * The extension of {@code name}, lower-cased and including the dot, or null when it has
+     * none we recognise.
+     *
+     * A name is only a hint. Phones send ".jpg" for HEIC files, share sheets send names with no
+     * extension at all, and a wrong one is not cosmetic here: the extension is what
+     * {@link WallpaperItem#guessType} branches on, so it decides whether the file is later
+     * handed to a decoder or to a MediaPlayer.
+     */
+    private static String knownExtension(String name) {
+        if(name == null) return null;
+        int dot = name.lastIndexOf('.');
+        if(dot < 0 || dot >= name.length() - 1) return null;
+        String ext = name.substring(dot).toLowerCase(Locale.US);
+        return WallpaperItem.isSupportedMedia("x" + ext) ? ext : null;
+    }
+
+    /**
+     * What the file actually is, read from its first bytes, or null when nothing is recognised.
+     *
+     * Every format here identifies itself in its own header, which is the only thing on this
+     * path that cannot lie. It is what lets an iPhone HEIC arrive named ".jpg" and still be
+     * stored — and shown — as what it is.
+     */
+    private static String sniffExtension(String path) {
+        byte[] h = new byte[32];
+        FileInputStream in = null;
+        try {
+            in = new FileInputStream(path);
+            int n = in.read(h);
+            if(n < 12) return null;
+        } catch(Exception e) {
+            return null;
+        } finally {
+            if(in != null) try { in.close(); } catch(Exception ignored) { }
+        }
+        if((h[0] & 0xFF) == 0xFF && (h[1] & 0xFF) == 0xD8) return ".jpg";
+        if((h[0] & 0xFF) == 0x89 && h[1] == 'P' && h[2] == 'N' && h[3] == 'G') return ".png";
+        if(h[0] == 'G' && h[1] == 'I' && h[2] == 'F') return ".gif";
+        if(h[0] == 'B' && h[1] == 'M') return ".bmp";
+        if(h[0] == 'R' && h[1] == 'I' && h[2] == 'F' && h[3] == 'F'
+                && h[8] == 'W' && h[9] == 'E' && h[10] == 'B' && h[11] == 'P') return ".webp";
+        // Matroska and WebM share a header and differ only in the DocType a little further in.
+        if((h[0] & 0xFF) == 0x1A && (h[1] & 0xFF) == 0x45
+                && (h[2] & 0xFF) == 0xDF && (h[3] & 0xFF) == 0xA3) {
+            return contains(h, "webm") ? ".webm" : ".mkv";
+        }
+        // ISO base media: HEIC, AVIF, MP4 and MOV are all this container, told apart by the
+        // brand that follows "ftyp". Getting this wrong is the expensive one — a HEIC read as
+        // MP4 would be handed to a MediaPlayer that can only fail.
+        if(h[4] == 'f' && h[5] == 't' && h[6] == 'y' && h[7] == 'p') {
+            String brand = new String(h, 8, 4).toLowerCase(Locale.US);
+            if(brand.startsWith("hei") || brand.startsWith("hev")
+                    || brand.startsWith("mif") || brand.startsWith("msf")) return ".heic";
+            if(brand.startsWith("avi") && !brand.equals("avi ")) return ".avif";
+            if(brand.startsWith("qt")) return ".mov";
+            return ".mp4";
+        }
+        return null;
+    }
+
+    private static boolean contains(byte[] haystack, String needle) {
+        String s = new String(haystack).toLowerCase(Locale.US);
+        return s.contains(needle);
+    }
+
+    /**
+     * The name this file is stored under: the phone's own name when it carries a usable
+     * extension, otherwise the same stem with the extension the bytes say it should have.
+     */
+    private static String storedName(String originalName, String tmpPath) {
+        String safe = originalName.replaceAll("[\\\\/:*?\"<>|]", "_").trim();
+        if(safe.isEmpty()) safe = "upload";
+        String ext = knownExtension(safe);
+        String sniffed = sniffExtension(tmpPath);
+        // The bytes win over a name that says nothing useful, and over a name whose extension
+        // disagrees about which KIND of media this is — a clip named .jpg is the case that made
+        // uploads silently unplayable. A disagreement inside one kind (a .jpeg that is really a
+        // .png) is harmless, so the customer's own name is left alone.
+        boolean replace = ext == null
+                || (sniffed != null && !WallpaperItem.guessType("x" + ext)
+                        .equals(WallpaperItem.guessType("x" + sniffed)));
+        if(replace && sniffed != null) {
+            int dot = safe.lastIndexOf('.');
+            String stem = dot > 0 ? safe.substring(0, dot) : safe;
+            return stem + sniffed;
+        }
+        if(ext == null) return safe + ".jpg";   // nothing readable either way; the old default
+        return safe;
     }
 
     private String saveUpload(String tmpPath, String originalName) {
@@ -246,7 +352,7 @@ public class UploadServer extends NanoHTTPD {
                 // RECEIVED_PREFIX, not a literal: FolderMirror reads exactly this prefix to
                 // recognise the phone uploads that older builds recorded as cloud files.
                 String path = mMirror.saveLocalCopy(mContext, in,
-                        RECEIVED_PREFIX + originalName.replaceAll("[\\\\/:*?\"<>|]", "_"));
+                        RECEIVED_PREFIX + storedName(originalName, tmpPath));
                 in.close();
                 return path;
             } catch(Exception e) {
@@ -255,18 +361,17 @@ public class UploadServer extends NanoHTTPD {
             }
         }
         try {
-            String ext = ".jpg";
-            int dot = originalName.lastIndexOf('.');
-            if(dot >= 0 && dot < originalName.length() - 1) ext = originalName.substring(dot);
+            // storedName settles what this file IS before it is written — from the bytes when
+            // the phone's name cannot be trusted. The extension is not decoration here: it is
+            // what decides, from now on, whether the car decodes this or plays it.
+            String name = storedName(originalName, tmpPath);
+            int dot = name.lastIndexOf('.');
+            String ext = dot > 0 ? name.substring(dot) : ".jpg";
             // name so it sorts predictably; the default is tracked by PREF_DEFAULT path.
             // The prefix is also load-bearing: it is the only durable record that a file came
             // from a phone, which is what lets the Leopard picker list these under the phone
             // source instead of mixing them into the head unit's own storage.
-            File dest = new File(mRepo.getLocalFolder(),
-                    RECEIVED_PREFIX + originalName.replaceAll("[\\\\/:*?\"<>|]", "_"));
-            if(!dest.getName().toLowerCase().endsWith(ext.toLowerCase())) {
-                dest = new File(mRepo.getLocalFolder(), "upload" + ext);
-            }
+            File dest = new File(mRepo.getLocalFolder(), RECEIVED_PREFIX + name);
             // Never overwrite. Phones hand out colliding names constantly (IMG_0001.jpg on every
             // device, or the "upload.jpg" fallback above for a whole batch), and silently
             // replacing an existing wallpaper with a new one is data loss the user never asked
@@ -354,7 +459,7 @@ public class UploadServer extends NanoHTTPD {
         // Jetour G700) are the exception and keep the batch: there the files go into another app's
         // slideshow folder, never through our editor, so "several" is the whole point of it.
         final boolean many = mMirror != null;
-        final String btn = many ? "رفع الصور" : "رفع الصورة";
+        final String btn = many ? "رفع الملفات" : "رفع الملف";
         return "<!doctype html><html dir='rtl' lang='ar'><head>"
                 + "<meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'>"
                 + "<meta name='theme-color' content='#14100b'>"
@@ -365,22 +470,24 @@ public class UploadServer extends NanoHTTPD {
                 + "<p class='sub'>THABTHABA STORE</p>"
 
                 + "<div class='privacy'>"
-                + "<b>صورك تبقى في سيارتك وحدها</b>"
-                + "<p>الصور التي ترفعها من هنا تُحفَظ داخل شاشة هذه السيارة فقط، ولا تُرسَل إلى"
-                + " منصتنا السحابية ولا إلى أي جهاز آخر، ولا يمكن لأحد غيرك الاطّلاع عليها.</p>"
+                + "<b>ملفاتك تبقى في سيارتك وحدها</b>"
+                + "<p>ما ترفعه من هنا — صوراً أو فيديو — يُحفَظ داخل شاشة هذه السيارة فقط، ولا يُرسَل"
+                + " إلى منصتنا السحابية ولا إلى أي جهاز آخر، ولا يمكن لأحد غيرك الاطّلاع عليه.</p>"
                 + "</div>"
 
                 + "<div class='card'>"
                 + (many
-                    ? "<p style='margin:0 0 14px'>اختر صورة أو أكثر من هاتفك لتظهر على الشاشة كخلفية"
-                      + " — يمكنك اختيار أكثر من صورة في المرة الواحدة</p>"
-                    : "<p style='margin:0 0 14px'>اختر صورة واحدة من هاتفك لتظهر على شاشة السيارة"
+                    ? "<p style='margin:0 0 14px'>اختر من هاتفك صوراً أو فيديوهات أو صور GIF"
+                      + " لتظهر على الشاشة — يمكنك اختيار أكثر من ملف في المرة الواحدة</p>"
+                    : "<p style='margin:0 0 14px'>اختر من هاتفك <b>صورة</b> أو <b>فيديو</b>"
+                      + " أو <b>صورة GIF متحركة</b> لتظهر على شاشة السيارة"
                       + " — وستفتح شاشة الضبط بعدها مباشرة</p>")
                 + "<form id='f' method='post' action='/' enctype='multipart/form-data'>"
-                + "<input id='file' type='file' name='image' accept='image/*,video/*'"
+                + "<input id='file' type='file' name='image' accept='" + ACCEPT + "'"
                 + (many ? " multiple" : "") + " required>"
                 + "<label id='pick' class='pick' for='file'>"
-                + (many ? "اضغط هنا لاختيار الصور أو الفيديو" : "اضغط هنا لاختيار صورة أو فيديو")
+                + (many ? "اضغط هنا لاختيار صور أو فيديو أو GIF"
+                        : "اضغط هنا لاختيار صورة أو فيديو أو GIF")
                 + "</label>"
                 + "<button id='btn' type='submit'>" + btn + "</button>"
                 + "</form>"
@@ -393,16 +500,18 @@ public class UploadServer extends NanoHTTPD {
                 // so it reads as a short process with an end, and it sits UNDER the button so it
                 // never pushes the thing they came to press below the fold.
                 + "<div class='steps'>"
-                + "<b>كيف تضع صورتك على الشاشة</b>"
+                + "<b>كيف تضع صورتك أو الفيديو على الشاشة</b>"
                 + "<ol>"
                 + (many
-                    ? "<li>اضغط <b>اختيار الصور</b> واختر من ألبوم هاتفك — ويمكنك اختيار أكثر من صورة.</li>"
-                    : "<li>اضغط <b>اختيار صورة</b> واختر صورة واحدة من ألبوم هاتفك.</li>")
+                    ? "<li>اضغط <b>اختيار</b> واختر من ألبوم هاتفك — صور أو فيديو أو GIF، وأكثر من ملف إن أردت.</li>"
+                    : "<li>اضغط <b>اختيار</b> واختر من ألبوم هاتفك ملفاً واحداً — صورة أو فيديو أو GIF.</li>")
                 + "<li>اضغط <b>" + btn + "</b> وانتظر حتى يكتمل شريط التقدّم.</li>"
-                + "<li>ستظهر الصورة على شاشة السيارة فوراً، ويمكنك ضبط موضعها وحجمها من الشاشة نفسها.</li>"
+                + "<li>سيظهر الملف على شاشة السيارة فوراً، ويمكنك ضبط موضعه وحجمه من الشاشة نفسها.</li>"
                 + "</ol>"
+                + "<p class='note'>الصيغ المقبولة: صور JPG وPNG وHEIC وWEBP، وصور GIF المتحركة،"
+                + " وفيديو MP4 وMOV وWEBM. الفيديو أكبر حجماً فقد يستغرق رفعه وقتاً أطول.</p>"
                 + "<p class='note'>أبقِ هاتفك على شبكة الواي‑فاي نفسها الخاصة بالسيارة، ولا تغلق هذه"
-                + " الصفحة أثناء الرفع. وتبقى الصور محفوظة على الشاشة حتى بعد إغلاق الصفحة.</p>"
+                + " الصفحة أثناء الرفع. ويبقى ما ترفعه محفوظاً على الشاشة حتى بعد إغلاق الصفحة.</p>"
                 + "</div>"
 
                 + "</div><script>"
@@ -423,7 +532,7 @@ public class UploadServer extends NanoHTTPD {
                 // Numbered field names: a repeated name would collapse to one file server-side.
                 + "var fd=new FormData();"
                 + "for(var i=0;i<fi.files.length;i++){fd.append('image'+i,fi.files[i]);}"
-                + "var x=new XMLHttpRequest();x.open('POST','/',true);x.timeout=180000;"
+                + "var x=new XMLHttpRequest();x.open('POST','/',true);x.timeout=900000;"
                 // in-progress state: button locks, bar appears, percentage counts up
                 + "b.disabled=true;b.textContent='جارٍ الرفع…';bar.style.display='block';"
                 + "m.className='';m.textContent='جارٍ تجهيز الملف…';"
@@ -436,16 +545,16 @@ public class UploadServer extends NanoHTTPD {
                 + "if(x.status===200){document.open();document.write(x.responseText);document.close();}"
                 + "else{reset(x.responseText||('خطأ '+x.status));}};"
                 + "x.onerror=function(){reset('انقطع الاتصال بالجهاز — تأكّد من أن الهاتف والشاشة على شبكة الواي‑فاي نفسها ثم أعد المحاولة');};"
-                + "x.ontimeout=function(){reset('استغرق الرفع وقتاً طويلاً — جرّب ملفاً أصغر أو اقترب من الراوتر');};"
+                + "x.ontimeout=function(){reset('استغرق الرفع وقتاً طويلاً — جرّب فيديو أقصر أو اقترب من الراوتر');};"
                 + "x.send(fd);};"
                 + "</" + "script></body></html>";
     }
 
     private String successPage(int count) {
-        String headline = count == 1 ? "تم الرفع بنجاح" : ("تم رفع " + count + " صور بنجاح");
+        String headline = count == 1 ? "تم الرفع بنجاح" : ("تم رفع " + count + " ملفات بنجاح");
         String detail = count == 1
-                ? "وصلت الصورة إلى الشاشة — أكمِل ضبطها من الشاشة نفسها."
-                : "وصلت الصور إلى الشاشة — أكمِل ضبطها من الشاشة نفسها.";
+                ? "وصل الملف إلى الشاشة — أكمِل ضبطه من الشاشة نفسها."
+                : "وصلت الملفات إلى الشاشة — أكمِل ضبطها من الشاشة نفسها.";
         return "<!doctype html><html dir='rtl' lang='ar'><head><meta charset='utf-8'>"
                 + "<meta name='viewport' content='width=device-width,initial-scale=1'>"
                 + "<meta name='theme-color' content='#14100b'>"
@@ -461,9 +570,9 @@ public class UploadServer extends NanoHTTPD {
                 + "</div>"
                 + "<div class='privacy'>"
                 + "<b>محفوظة في هذه السيارة فقط</b>"
-                + "<p>لم تُرسَل صورك إلى منصتنا السحابية — هي مخزّنة داخل شاشة هذه السيارة وحدها.</p>"
+                + "<p>لم يُرسَل ما رفعته إلى منصتنا السحابية — هو مخزّن داخل شاشة هذه السيارة وحدها.</p>"
                 + "</div>"
-                + "<p style='text-align:center'><a href='/'>رفع صور أخرى</a></p>"
+                + "<p style='text-align:center'><a href='/'>رفع ملفات أخرى</a></p>"
                 + "</div></body></html>";
     }
 
