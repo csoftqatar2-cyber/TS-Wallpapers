@@ -223,7 +223,7 @@ public class BaseSettingsActivity extends AppCompatActivity {
             setTitle(getTitle() + " " + pInfo.versionName);
             // Brand + version always reads left-to-right, even in Arabic — it is a product token.
             TextView subtitle = findViewById(R.id.textViewHeaderSubtitle);
-            subtitle.setText("THABTHABA STORE · v" + pInfo.versionName);
+            subtitle.setText("Tahbthaba Wallpaper · v" + pInfo.versionName);
             ViewCompat.setLayoutDirection(subtitle, ViewCompat.LAYOUT_DIRECTION_LTR);
             // The headline version on the Updates card: what you are running, said plainly,
             // before the button asks whether you want something else.
