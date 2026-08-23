@@ -2860,6 +2860,7 @@ public class BaseSettingsActivity extends AppCompatActivity {
                 .create();
         holder[0] = dlg;
         dlg.show();
+        DialogButtons.apply(dlg);
     }
 
     private void stopUploadServer() {
