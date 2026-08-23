@@ -2014,7 +2014,7 @@ public class LeopardPickerActivity extends AppCompatActivity {
         // exactly screen-shaped now, and asking "fill or fit?" about it would only offer to undo
         // the framing the user just chose.
         if(OperatingMode.isLynkco(mPrefs) && !mSelected.isVideo() && !isBaked(mSelected.url)) {
-            new AlertDialog.Builder(this)
+            DialogButtons.apply(new AlertDialog.Builder(this)
                     .setTitle(R.string.lynkco_frame_title)
                     .setItems(new CharSequence[]{
                             getString(R.string.lynkco_frame_fill),
@@ -2023,7 +2023,7 @@ public class LeopardPickerActivity extends AppCompatActivity {
                         doApply();
                     })
                     .setNegativeButton(R.string.update_cancel, null)
-                    .show();
+                    .show());
             return;
         }
 
@@ -2083,7 +2083,7 @@ public class LeopardPickerActivity extends AppCompatActivity {
         android.widget.ScrollView scroll = new android.widget.ScrollView(this);
         scroll.addView(body);
 
-        new AlertDialog.Builder(this)
+        DialogButtons.apply(new AlertDialog.Builder(this)
                 .setTitle(R.string.leopard_video_first_title)
                 .setView(scroll)
                 .setPositiveButton(R.string.leopard_video_first_ok, (dlg, w) -> {
@@ -2093,7 +2093,7 @@ public class LeopardPickerActivity extends AppCompatActivity {
                     doApply();
                 })
                 .setNegativeButton(R.string.update_cancel, null)
-                .show();
+                .show());
     }
 
     private void doApply() {

@@ -223,7 +223,7 @@ public class BaseSettingsActivity extends AppCompatActivity {
             setTitle(getTitle() + " " + pInfo.versionName);
             // Brand + version always reads left-to-right, even in Arabic — it is a product token.
             TextView subtitle = findViewById(R.id.textViewHeaderSubtitle);
-            subtitle.setText("Tahbthaba Wallpaper · v" + pInfo.versionName);
+            subtitle.setText("Thabthaba Wallpaper · v" + pInfo.versionName);
             ViewCompat.setLayoutDirection(subtitle, ViewCompat.LAYOUT_DIRECTION_LTR);
             // The headline version on the Updates card: what you are running, said plainly,
             // before the button asks whether you want something else.
@@ -1111,7 +1111,7 @@ public class BaseSettingsActivity extends AppCompatActivity {
         ll.addView(hint);
         ll.addView(buildWallpaperGrid(adapter));
 
-        final AlertDialog dialog = new AlertDialog.Builder(this)
+        final AlertDialog dialog = DialogButtons.apply(new AlertDialog.Builder(this)
                 .setTitle(R.string.wallpaper_manage_title)
                 .setView(ll)
                 .setPositiveButton(R.string.save, new DialogInterface.OnClickListener() {
@@ -1126,7 +1126,7 @@ public class BaseSettingsActivity extends AppCompatActivity {
                 })
                 .setNegativeButton(R.string.update_cancel, null)
                 .setNeutralButton(R.string.wallpaper_manage_select_all, null)
-                .show();
+                .show());
 
         // The grid is the content, so give it the glass. The default dialog width wraps its view
         // and left two columns of pictures squeezed into half the screen.
@@ -1308,7 +1308,7 @@ public class BaseSettingsActivity extends AppCompatActivity {
      */
     private void confirmDeleteLocalWallpaper(final WallpaperItem item, final Runnable onDeleted) {
         if(item == null || item.url == null) return;
-        new AlertDialog.Builder(this)
+        DialogButtons.apply(new AlertDialog.Builder(this)
                 .setTitle(R.string.wallpaper_delete)
                 .setMessage(getString(R.string.wallpaper_delete_confirm, fileNameOf(item.url)))
                 .setPositiveButton(R.string.wallpaper_delete, new DialogInterface.OnClickListener() {
@@ -1328,7 +1328,7 @@ public class BaseSettingsActivity extends AppCompatActivity {
                     }
                 })
                 .setNegativeButton(R.string.update_cancel, null)
-                .show();
+                .show());
     }
 
     /** Add one url to this device's hidden list, leaving every other car untouched. */
@@ -1542,11 +1542,11 @@ public class BaseSettingsActivity extends AppCompatActivity {
         macText.setTextIsSelectable(true);
         macText.setTextSize(18);
 
-        new AlertDialog.Builder(this)
+        DialogButtons.apply(new AlertDialog.Builder(this)
                 .setTitle(R.string.mac_qr_title)
                 .setView(qrPanel(mac, getString(R.string.mac_qr_hint), macText, null))
                 .setPositiveButton(R.string.ok, null)
-                .show();
+                .show());
     }
 
     private void initFontSpinner() {
@@ -2207,7 +2207,7 @@ public class BaseSettingsActivity extends AppCompatActivity {
                 : current == OperatingMode.LYNKCO ? 4
                 : current == OperatingMode.JETOUR ? 5 : 0;
 
-        new AlertDialog.Builder(this)
+        DialogButtons.apply(new AlertDialog.Builder(this)
                 .setTitle(R.string.mode_title)
                 .setSingleChoiceItems(labels, checked, (d, which) -> {
                     if(modes[which] == OperatingMode.LEOPARD && !supported) {
@@ -2230,7 +2230,7 @@ public class BaseSettingsActivity extends AppCompatActivity {
                     else applyMode(modes[which]);
                 })
                 .setNegativeButton(R.string.update_cancel, null)
-                .show();
+                .show());
     }
 
     private void updateModeDescription(int mode, boolean leopardSupported) {
@@ -2438,25 +2438,25 @@ public class BaseSettingsActivity extends AppCompatActivity {
                 // Retryable: the Wi-Fi may simply not have finished associating yet, and making
                 // them leave and re-enter the screen for that is the same wasted trip the refresh
                 // button exists to remove.
-                new AlertDialog.Builder(BaseSettingsActivity.this)
+                DialogButtons.apply(new AlertDialog.Builder(BaseSettingsActivity.this)
                         .setTitle(strPairTitle)
                         .setMessage(R.string.pair_no_wifi)
                         .setPositiveButton(R.string.qr_refresh_retry, (d2, w2) -> pairPhone())
                         .setNegativeButton(R.string.ok, null)
-                        .show();
+                        .show());
                 return;
             }
 
             TextView urlText = new TextView(BaseSettingsActivity.this);
             urlText.setText(url);
             urlText.setTextIsSelectable(true);
-            new AlertDialog.Builder(BaseSettingsActivity.this)
+            DialogButtons.apply(new AlertDialog.Builder(BaseSettingsActivity.this)
                     .setTitle(strPairTitle)
                     .setView(qrPanel(url, getString(R.string.pair_scan_hint), urlText, null,
                             () -> mUploadServer == null ? null : mUploadServer.getUrl()))
                     .setPositiveButton(R.string.ok, null)
                     .setOnDismissListener(dialog -> stopUploadServer())
-                    .show();
+                    .show());
         }
     }
 
@@ -2491,7 +2491,7 @@ public class BaseSettingsActivity extends AppCompatActivity {
     }
 
     private void requestMirrorStoragePermission() {
-        new AlertDialog.Builder(this)
+        DialogButtons.apply(new AlertDialog.Builder(this)
                 .setTitle(R.string.gwm_permission_title)
                 .setMessage(R.string.gwm_permission_message)
                 .setPositiveButton(R.string.ok, new DialogInterface.OnClickListener() {
@@ -2517,7 +2517,7 @@ public class BaseSettingsActivity extends AppCompatActivity {
                     }
                 })
                 .setNegativeButton(R.string.update_cancel, null)
-                .show();
+                .show());
     }
 
     /** Hide the defaults that the chosen mode cannot use. */
@@ -2668,7 +2668,7 @@ public class BaseSettingsActivity extends AppCompatActivity {
         ll.addView(hint);
         ll.addView(buildWallpaperGrid(adapter));
 
-        final AlertDialog dialog = new AlertDialog.Builder(this)
+        final AlertDialog dialog = DialogButtons.apply(new AlertDialog.Builder(this)
                 .setTitle(getString(R.string.batch_review_title, items.size()))
                 .setView(ll)
                 .setCancelable(false) // dismissing by accident would silently discard the batch
@@ -2684,7 +2684,7 @@ public class BaseSettingsActivity extends AppCompatActivity {
                         confirmDiscardBatch();
                     }
                 })
-                .show();
+                .show());
 
         if(dialog.getWindow() != null) {
             android.util.DisplayMetrics dm = getResources().getDisplayMetrics();
@@ -2746,7 +2746,7 @@ public class BaseSettingsActivity extends AppCompatActivity {
 
     /** Cancelling throws away files the customer already sent, so make them say it twice. */
     private void confirmDiscardBatch() {
-        new AlertDialog.Builder(this)
+        DialogButtons.apply(new AlertDialog.Builder(this)
                 .setTitle(R.string.batch_review_discard)
                 .setMessage(R.string.batch_review_discard_confirm)
                 .setPositiveButton(R.string.batch_review_discard, new DialogInterface.OnClickListener() {
@@ -2767,7 +2767,7 @@ public class BaseSettingsActivity extends AppCompatActivity {
                         reopenBatchReview(); // back to the review, nothing lost
                     }
                 })
-                .show();
+                .show());
     }
 
     /** Delete an imported file plus everything keyed to it (fit, focal, pointers). */
@@ -2825,12 +2825,12 @@ public class BaseSettingsActivity extends AppCompatActivity {
         }
         if(url == null) {
             stopUploadServer();
-            new AlertDialog.Builder(this)
+            DialogButtons.apply(new AlertDialog.Builder(this)
                     .setTitle(R.string.wallpaper_pair_phone)
                     .setMessage(R.string.pair_no_wifi)
                     .setPositiveButton(R.string.qr_refresh_retry, (d2, w2) -> onClickPairPhone(v))
                     .setNegativeButton(R.string.ok, null)
-                    .show();
+                    .show());
             return;
         }
 
@@ -2918,7 +2918,7 @@ public class BaseSettingsActivity extends AppCompatActivity {
                     }
                 });
         builder.setCancelable(true);
-        AlertDialog dialog = builder.create();
+        AlertDialog dialog = DialogButtons.apply(builder.create());
         dialog.show();
         TextView messageView = dialog.findViewById(android.R.id.message);
         messageView.setTypeface(Typeface.MONOSPACE);
@@ -2966,7 +2966,7 @@ public class BaseSettingsActivity extends AppCompatActivity {
         ScrollView scroll = new ScrollView(this);
         scroll.addView(body);
 
-        new AlertDialog.Builder(this)
+        DialogButtons.apply(new AlertDialog.Builder(this)
                 .setTitle(getString(R.string.crash_log_title, CrashReporter.count(this)))
                 .setView(scroll)
                 .setPositiveButton(R.string.ok, null)
@@ -2983,7 +2983,7 @@ public class BaseSettingsActivity extends AppCompatActivity {
                         findViewById(R.id.buttonCrashLog).setVisibility(View.GONE);
                     }
                 })
-                .show();
+                .show());
     }
 
     /**
@@ -3014,7 +3014,7 @@ public class BaseSettingsActivity extends AppCompatActivity {
                 });
                 dlg.setNegativeButton(R.string.update_later, null);
                 dlg.setCancelable(true);
-                dlg.create().show();
+                DialogButtons.apply(dlg.create()).show();
             }
 
             @Override
@@ -3084,7 +3084,7 @@ public class BaseSettingsActivity extends AppCompatActivity {
                     }
                 });
         dlg.setCancelable(true);
-        dlg.create().show();
+        DialogButtons.apply(dlg.create()).show();
     }
 
     @Override

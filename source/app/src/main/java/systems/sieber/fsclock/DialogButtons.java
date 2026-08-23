@@ -29,9 +29,25 @@ final class DialogButtons {
 
     private DialogButtons() {}
 
-    /** Dress every button this dialog actually has. Safe on a dialog with none. */
-    static void apply(AlertDialog dlg) {
-        if(dlg == null) return;
+    /**
+     * Dress every button this dialog actually has, and return it so this can wrap a builder.
+     *
+     * Works whether the dialog has been shown yet or not, because both spellings exist in this
+     * codebase: {@code apply(builder.show())} dresses immediately, and {@code apply(b.create())}
+     * waits for the show. The distinction is not cosmetic — the platform does not create the
+     * buttons at all until the dialog is shown, so dressing early would silently do nothing.
+     */
+    static AlertDialog apply(final AlertDialog dlg) {
+        if(dlg == null) return null;
+        if(dlg.isShowing()) { dress(dlg); return dlg; }
+        dlg.setOnShowListener(new android.content.DialogInterface.OnShowListener() {
+            @Override
+            public void onShow(android.content.DialogInterface d) { dress(dlg); }
+        });
+        return dlg;
+    }
+
+    private static void dress(AlertDialog dlg) {
         Context c = dlg.getContext();
         dress(dlg.getButton(AlertDialog.BUTTON_POSITIVE), c,
                 R.drawable.dialog_btn_primary, 0xFF1A1204);
@@ -44,7 +60,7 @@ final class DialogButtons {
     private static void dress(Button b, Context c, int bg, int textColor) {
         if(b == null) return;
         float d = c.getResources().getDisplayMetrics().density;
-        b.setBackgroundResource(bg);
+        b.setBackground(background(c, bg == R.drawable.dialog_btn_primary));
         b.setTextColor(textColor);
         b.setAllCaps(false);
         b.setTextSize(TypedValue.COMPLEX_UNIT_SP, 17f);
@@ -78,6 +94,44 @@ final class DialogButtons {
             }
             b.setLayoutParams(lp);
         }
+    }
+
+    /**
+     * The button's background, built here rather than inflated.
+     *
+     * The XML selector drew its left, right and bottom edges and never its top one — proven with
+     * a temporary stroke — so the rounded top corners never appeared no matter what the bar was
+     * told about clipping. A GradientDrawable made in code carries no inset and no wrapper, and
+     * takes its bounds from the view it is set on, so all four corners are drawn.
+     */
+    private static android.graphics.drawable.Drawable background(Context c, boolean primary) {
+        float d = c.getResources().getDisplayMetrics().density;
+        int fill = primary
+                ? ContextCompat.getColor(c, R.color.colorAccent)
+                : ContextCompat.getColor(c, R.color.aurora_card);
+        android.graphics.drawable.StateListDrawable sl =
+                new android.graphics.drawable.StateListDrawable();
+        sl.addState(new int[]{ android.R.attr.state_pressed },
+                shape(fill, d, true, primary, c));
+        sl.addState(new int[]{ android.R.attr.state_focused },
+                shape(fill, d, true, primary, c));
+        sl.addState(new int[0], shape(fill, d, false, primary, c));
+        return sl;
+    }
+
+    private static android.graphics.drawable.GradientDrawable shape(
+            int fill, float d, boolean highlight, boolean primary, Context c) {
+        android.graphics.drawable.GradientDrawable g =
+                new android.graphics.drawable.GradientDrawable();
+        g.setShape(android.graphics.drawable.GradientDrawable.RECTANGLE);
+        g.setColor(fill);
+        g.setCornerRadius(px(12, d));   // 12dp — a corner you can actually see on a head unit
+        if(highlight) {
+            g.setStroke(px(2, d), ContextCompat.getColor(c, R.color.aurora_text));
+        } else if(!primary) {
+            g.setStroke(px(1, d), ContextCompat.getColor(c, R.color.aurora_border));
+        }
+        return g;
     }
 
     private static int px(int dp, float density) {

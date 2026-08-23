@@ -140,7 +140,7 @@ public class UpdateManager {
         // On Android O+ the user must explicitly allow installing apps from this app.
         if(Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
                 && !mActivity.getPackageManager().canRequestPackageInstalls()) {
-            new AlertDialog.Builder(mActivity)
+            DialogButtons.apply(new AlertDialog.Builder(mActivity)
                     .setTitle(R.string.update_title)
                     .setMessage(R.string.update_allow_unknown_sources)
                     .setPositiveButton(R.string.update_now, new DialogInterface.OnClickListener() {
@@ -154,7 +154,7 @@ public class UpdateManager {
                         }
                     })
                     .setNegativeButton(R.string.update_cancel, null)
-                    .show();
+                    .show());
             return;
         }
 

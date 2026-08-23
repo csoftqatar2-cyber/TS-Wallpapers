@@ -467,7 +467,7 @@ public class UploadServer extends NanoHTTPD {
                 + "<style>" + PAGE_CSS + "</style></head>"
                 + "<body><div class='wrap'>"
                 + "<div class='brand'>ذبذبة خلفيات</div>"
-                + "<p class='sub'>Tahbthaba Wallpaper</p>"
+                + "<p class='sub'>Thabthaba Wallpaper</p>"
 
                 + "<div class='privacy'>"
                 + "<b>ملفاتك تبقى في سيارتك وحدها</b>"
@@ -562,7 +562,7 @@ public class UploadServer extends NanoHTTPD {
                 + "<style>" + PAGE_CSS + "</style></head>"
                 + "<body><div class='wrap'>"
                 + "<div class='brand'>ذبذبة خلفيات</div>"
-                + "<p class='sub'>Tahbthaba Wallpaper</p>"
+                + "<p class='sub'>Thabthaba Wallpaper</p>"
                 + "<div class='card' style='text-align:center'>"
                 + "<div style='font-size:44px;line-height:1;color:#ffd27a'>✓</div>"
                 + "<h2 style='color:#ffd27a;font-size:21px;margin:10px 0 6px'>" + headline + "</h2>"

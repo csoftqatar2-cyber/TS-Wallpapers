@@ -1822,7 +1822,7 @@ public class FsClockView extends FrameLayout {
                         }
                     });
             dlg.setCancelable(true);
-            mEventDialog = dlg.create();
+            mEventDialog = DialogButtons.apply(dlg.create());
             mEventDialog.show();
         }
         if(e.hideAfter > 0) {

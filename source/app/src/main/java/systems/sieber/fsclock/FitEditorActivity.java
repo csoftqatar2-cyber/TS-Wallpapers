@@ -212,11 +212,11 @@ public class FitEditorActivity extends AppCompatActivity {
      * only place the explanation can live without costing the preview its height.
      */
     private void showHelp() {
-        new AlertDialog.Builder(this)
+        DialogButtons.apply(new AlertDialog.Builder(this)
                 .setTitle(R.string.fit_help_title)
                 .setMessage(R.string.fit_help_body)
                 .setPositiveButton(R.string.ok, null)
-                .show();
+                .show());
     }
 
     // The slider is 0..450 and the zoom is 0.5..5.0 — one step is one percent either way.
@@ -532,7 +532,7 @@ public class FitEditorActivity extends AppCompatActivity {
     }
 
     private void confirmDelete() {
-        new AlertDialog.Builder(this)
+        DialogButtons.apply(new AlertDialog.Builder(this)
                 .setMessage(R.string.fit_delete_confirm)
                 .setPositiveButton(R.string.fit_delete, (d, w) -> {
                     String path = mUrl != null && mUrl.startsWith("file://")
@@ -547,11 +547,11 @@ public class FitEditorActivity extends AppCompatActivity {
                     finish();
                 })
                 .setNegativeButton(R.string.update_cancel, null)
-                .show();
+                .show());
     }
 
     private void confirmApplyAll() {
-        new AlertDialog.Builder(this)
+        DialogButtons.apply(new AlertDialog.Builder(this)
                 .setMessage(R.string.fit_apply_all_confirm)
                 .setPositiveButton(R.string.ok, (d, w) -> {
                     mRepo.applyFitToAll(mFit);
@@ -560,7 +560,7 @@ public class FitEditorActivity extends AppCompatActivity {
                     setResult(RESULT_OK);
                 })
                 .setNegativeButton(R.string.update_cancel, null)
-                .show();
+                .show());
     }
 
     @Override

@@ -140,14 +140,14 @@ public class ModeConfirmActivity extends AppCompatActivity {
                 if(changelog != null && !changelog.trim().isEmpty()) {
                     message += "\n\n" + changelog.trim();
                 }
-                new android.app.AlertDialog.Builder(ModeConfirmActivity.this)
+                DialogButtons.apply(new android.app.AlertDialog.Builder(ModeConfirmActivity.this)
                         .setTitle(R.string.update_title)
                         .setMessage(message)
                         .setPositiveButton(R.string.update_now,
                                 (d, w) -> new UpdateManager(ModeConfirmActivity.this)
                                         .downloadAndInstall(apkUrl))
                         .setNegativeButton(R.string.update_later, null)
-                        .show();
+                        .show());
             }
 
             @Override
