@@ -412,7 +412,6 @@
                         <RadioButton
                             android:id="@+id/radioActivationNormal"
                             style="@style/ActivationModeRadio"
-                            android:checked="true"
                             android:text="@string/mode_normal" />
 
                         <RadioButton

@@ -325,13 +325,14 @@ public class FsClockView extends FrameLayout {
             });
         }
         mRadioGroupActivationMode = findViewById(R.id.radioGroupActivationMode);
-        initActivationModePicker();
         mTextViewActivationDeviceId = findViewById(R.id.textViewActivationDeviceId);
         mEditTextActivationSerial = findViewById(R.id.editTextActivationSerial);
         mButtonActivate = findViewById(R.id.buttonActivate);
         mButtonRecheck = findViewById(R.id.buttonRecheck);
         mCheckBoxFse = findViewById(R.id.checkBoxFse);
         mTextViewActivationStatus = findViewById(R.id.textViewActivationStatus);
+        // After the buttons, not before: the picker starts with nothing chosen and dims them.
+        initActivationModePicker();
         mLayoutActivationEntry = findViewById(R.id.layoutActivationEntry);
         mLayoutActivationMode = findViewById(R.id.layoutActivationMode);
         mViewActivationDivider = findViewById(R.id.viewActivationDivider);
@@ -355,6 +356,7 @@ public class FsClockView extends FrameLayout {
             mButtonActivate.setOnClickListener(new View.OnClickListener() {
                 @Override
                 public void onClick(View v) {
+                    if(selectedActivationMode() == MODE_NONE) { demandModeChoice(); return; }
                     final String serial = mEditTextActivationSerial.getText().toString().trim();
                     if (serial.isEmpty()) {
                         mTextViewActivationStatus.setText(R.string.activation_error_empty_serial);
@@ -416,6 +418,9 @@ public class FsClockView extends FrameLayout {
             mButtonRecheck.setOnClickListener(new View.OnClickListener() {
                 @Override
                 public void onClick(View v) {
+                    // The case this whole button exists for — a car the server already knows —
+                    // is exactly the one that used to walk past the picker into Others.
+                    if(selectedActivationMode() == MODE_NONE) { demandModeChoice(); return; }
                     mTextViewActivationStatus.setText(R.string.activation_rechecking);
                     mTextViewActivationStatus.setTextColor(Color.YELLOW);
                     mTextViewActivationStatus.setVisibility(View.VISIBLE);
@@ -1293,13 +1298,55 @@ public class FsClockView extends FrameLayout {
             leopard.setAlpha(0.4f);
         }
 
-        updateActivationModeDesc(desc, OperatingMode.NORMAL, supported);
-        mRadioGroupActivationMode.setOnCheckedChangeListener((g, id) ->
-                updateActivationModeDesc(desc, selectedActivationMode(), supported));
+        // Nothing is preselected, on purpose — the same rule ModeConfirmActivity follows.
+        // The list used to open on Others, so "already registered? re-check" was answerable
+        // without reading it: a car that nobody had actually looked at went in as Others, and
+        // the mode is what decides whether this app draws the screen, hands the file to the
+        // head unit, or mirrors a folder. It has to be chosen, never accepted.
+        mRadioGroupActivationMode.clearCheck();
+        updateActivationModeDesc(desc, MODE_NONE, supported);
+        syncActivationButtons();
+        mRadioGroupActivationMode.setOnCheckedChangeListener((g, id) -> {
+            updateActivationModeDesc(desc, selectedActivationMode(), supported);
+            syncActivationButtons();
+        });
+    }
+
+    /** No mode picked yet. Not a mode — the absence of one. */
+    private static final int MODE_NONE = -1;
+
+    /**
+     * Both activation buttons stay dimmed until the car's mode is chosen.
+     *
+     * Dimmed rather than hidden: on a head unit a missing button reads as "not here", while a
+     * dim one reads as "not yet" and points at what is still owed.
+     */
+    private void syncActivationButtons() {
+        boolean ready = selectedActivationMode() != MODE_NONE;
+        if(mButtonActivate != null) {
+            mButtonActivate.setEnabled(ready);
+            mButtonActivate.setAlpha(ready ? 1f : 0.45f);
+        }
+        if(mButtonRecheck != null) {
+            mButtonRecheck.setEnabled(ready);
+            mButtonRecheck.setAlpha(ready ? 1f : 0.45f);
+        }
+    }
+
+    /** Say what is missing, in the one place on this card that already carries messages. */
+    private void demandModeChoice() {
+        if(mTextViewActivationStatus == null) return;
+        mTextViewActivationStatus.setText(R.string.mode_confirm_pick_first);
+        mTextViewActivationStatus.setTextColor(Color.YELLOW);
+        mTextViewActivationStatus.setVisibility(View.VISIBLE);
     }
 
     private void updateActivationModeDesc(android.widget.TextView desc, int mode, boolean supported) {
         if(desc == null) return;
+        if(mode == MODE_NONE) {
+            desc.setText(R.string.mode_confirm_pick_first);
+            return;
+        }
         int res = mode == OperatingMode.LEOPARD ? R.string.mode_leopard_desc
                 : mode == OperatingMode.LYNKCO ? R.string.mode_lynkco_desc
                 : mode == OperatingMode.GWM ? R.string.mode_gwm_desc
@@ -1320,6 +1367,7 @@ public class FsClockView extends FrameLayout {
             return mCheckBoxFse != null && mCheckBoxFse.isChecked() ? OperatingMode.FSE : OperatingMode.NORMAL;
         }
         int id = mRadioGroupActivationMode.getCheckedRadioButtonId();
+        if(id == -1) return MODE_NONE;      // nobody has chosen yet
         if(id == R.id.radioActivationLeopard) return OperatingMode.LEOPARD;
         if(id == R.id.radioActivationGwm) return OperatingMode.GWM;
         if(id == R.id.radioActivationJetour) return OperatingMode.JETOUR;
@@ -1335,6 +1383,8 @@ public class FsClockView extends FrameLayout {
      * car the server already had on record), so both leave the app in exactly the same state.
      */
     private void applyActivationSuccess(int mode) {
+        // Belt and braces; both callers are gated already.
+        if(mode == MODE_NONE) { demandModeChoice(); return; }
         mTextViewActivationStatus.setText(R.string.activation_success);
         mTextViewActivationStatus.setTextColor(Color.GREEN);
         mTextViewActivationStatus.setVisibility(View.VISIBLE);
