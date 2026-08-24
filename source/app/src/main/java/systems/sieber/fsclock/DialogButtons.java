@@ -70,20 +70,20 @@ final class DialogButtons {
         // An explicit height, not a minimum: the bar was sizing the view and the background
         // apart, and a fixed height is what makes them one number. 52dp is a finger target on a
         // head unit and still leaves the bar short enough not to run off a small dialog.
-        // The bar paints its children into a slot shorter than the button it laid out — the
-        // measurement that finally showed it: a 69px-tall button, 63px of it drawn, the missing
-        // 6px exactly the top. A 6dp corner is 9px on this screen, so two thirds of the arc fell
-        // in the clipped strip and the button read as square-topped. Letting the bar draw
-        // outside its own bounds is what puts the corner back.
+        // The button row, and ONLY the button row, is allowed to draw outside itself.
+        //
+        // It hands each button a slot ~6px shorter than the button it laid out, and the missing
+        // strip is the top one — exactly where a 12dp corner lives, so the button came out square
+        // along its top edge. Letting the row overflow puts the corner back.
+        //
+        // Its PARENT must keep clipping. Freeing that one too was a real regression: the dialog's
+        // scrolling content (the wallpaper grid, the QR panel) then drew outside its own box as
+        // well and ran underneath the buttons, which looked like the buttons were slicing the
+        // content in half.
         if(b.getParent() instanceof ViewGroup) {
             ViewGroup bar = (ViewGroup) b.getParent();
             bar.setClipChildren(false);
             bar.setClipToPadding(false);
-            if(bar.getParent() instanceof ViewGroup) {
-                ViewGroup outer = (ViewGroup) bar.getParent();
-                outer.setClipChildren(false);
-                outer.setClipToPadding(false);
-            }
         }
         ViewGroup.LayoutParams lp = b.getLayoutParams();
         if(lp != null) {

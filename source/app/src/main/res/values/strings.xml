@@ -57,7 +57,7 @@
     <string name="auto_contrast">Clock colour auto-inverts against the background (for legibility)</string>
     <string name="wallpaper_local_enable">Also show images/video from the device folder</string>
     <string name="wallpaper_add_local">Add from this device</string>
-    <string name="wallpaper_pair_phone">Send a picture, video or GIF from a phone (QR Code)</string>
+    <string name="wallpaper_pair_phone">Upload a picture or video from a phone (QR Code)</string>
     <string name="pair_scan_hint">Scan this code with your phone camera, then choose a picture, a video or a GIF.
 Your phone must be on the same Wi-Fi as this screen.
 Page not opening? Turn mobile data off and try again.</string>

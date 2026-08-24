@@ -71,7 +71,7 @@
     <string name="auto_contrast">لون الساعة تلقائي عكس الخلفية (للوضوح)</string>
     <string name="wallpaper_local_enable">عرض الصور والفيديو من مجلد الجهاز أيضاً</string>
     <string name="wallpaper_add_local">إضافة من الجهاز</string>
-    <string name="wallpaper_pair_phone">إرسال صورة أو فيديو أو GIF من الهاتف (QR Code)</string>
+    <string name="wallpaper_pair_phone">رفع صورة او فيديو من الهاتف (QR Code)</string>
     <string name="pair_scan_hint">صوّر هذا الرمز بكاميرا هاتفك، ثم اختر صورة أو فيديو أو GIF.
 يجب أن يكون هاتفك على شبكة الواي‑فاي نفسها.
 الصفحة لا تفتح؟ أوقف بيانات الهاتف وحاول مرة أخرى.</string>
