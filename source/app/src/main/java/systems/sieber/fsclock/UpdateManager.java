@@ -1,7 +1,6 @@
 package systems.sieber.fsclock;
 
 import android.app.Activity;
-import android.app.AlertDialog;
 import android.app.DownloadManager;
 import android.app.PendingIntent;
 import android.content.BroadcastReceiver;
@@ -140,7 +139,7 @@ public class UpdateManager {
         // On Android O+ the user must explicitly allow installing apps from this app.
         if(Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
                 && !mActivity.getPackageManager().canRequestPackageInstalls()) {
-            DialogButtons.apply(new AlertDialog.Builder(mActivity)
+            new AuroraDialog.Builder(mActivity)
                     .setTitle(R.string.update_title)
                     .setMessage(R.string.update_allow_unknown_sources)
                     .setPositiveButton(R.string.update_now, new DialogInterface.OnClickListener() {
@@ -154,7 +153,7 @@ public class UpdateManager {
                         }
                     })
                     .setNegativeButton(R.string.update_cancel, null)
-                    .show());
+                    .show();
             return;
         }
 

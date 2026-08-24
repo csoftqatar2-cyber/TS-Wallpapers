@@ -1,7 +1,6 @@
 package systems.sieber.fsclock;
 
 import android.app.Activity;
-import android.app.AlertDialog;
 import android.content.ActivityNotFoundException;
 import android.content.Context;
 import android.content.Intent;
@@ -60,13 +59,13 @@ final class OverlayPermission {
             if(after != null) after.run();
             return;
         }
-        AlertDialog dialog = DialogButtons.apply(new AlertDialog.Builder(activity)
+        AuroraDialog dialog = new AuroraDialog.Builder(activity)
                 .setTitle(R.string.auto_start_overlay_title)
                 .setMessage(R.string.auto_start_overlay_message)
                 .setPositiveButton(R.string.ok, (d, w) -> open(activity))
                 .setNegativeButton(R.string.update_cancel, null)
                 .setCancelable(true)
-                .create());
+                .create();
         // One listener for every way out — OK, Cancel, back, or a tap outside — so the caller's
         // continuation cannot be lost down whichever path the user happens to take.
         if(after != null) dialog.setOnDismissListener(d -> after.run());

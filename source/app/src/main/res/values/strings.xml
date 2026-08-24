@@ -17,6 +17,7 @@
     <string name="wallpaper_manage_empty">No images yet — tap “Check for new wallpapers” first.</string>
     <string name="wallpaper_manage_saved">Saved ✓ — %1$d shown, %2$d hidden</string>
     <string name="wallpaper_manage_select_all">Select all</string>
+    <string name="wallpaper_manage_deselect_all">Deselect all</string>
     <string name="wallpaper_type_image">Image</string>
     <string name="wallpaper_type_gif">Animated image</string>
     <string name="wallpaper_type_video">Video</string>
@@ -25,7 +26,7 @@
     <string name="wallpaper_delete_confirm">Delete “%1$s” from this device for good? Only images sent from a phone or added from the device can be deleted; this cannot be undone.</string>
     <string name="wallpaper_delete_done">Image deleted from the device ✓</string>
     <string name="wallpaper_delete_failed">Could not delete the image — it is still on the device</string>
-    <string name="wallpaper_source_remote">From the server</string>
+    <string name="wallpaper_source_remote">From the cloud</string>
 
     <string-array name="wallpaper_interval_labels">
         <item>30 seconds</item>
@@ -59,8 +60,7 @@
     <string name="wallpaper_add_local">Add from this device</string>
     <string name="wallpaper_pair_phone">Upload a picture or video from a phone (QR Code)</string>
     <string name="pair_scan_hint">Scan this code with your phone camera, then choose a picture, a video or a GIF.
-Your phone must be on the same Wi-Fi as this screen.
-Page not opening? Turn mobile data off and try again.</string>
+Your phone must be on the same Wi-Fi as this screen.</string>
     <string name="pair_waiting">Waiting for a file from the phone…</string>
     <string name="pair_uploaded">File received ✓ and set as the default wallpaper</string>
     <string name="pair_uploaded_n">%1$d file(s) received ✓</string>
@@ -301,7 +301,7 @@ Roboto Font Copyright (c) Christian Robertson. Licensed under the Apache License
     <string name="mode_jetour_desc">Same as Others, plus a \"Manage Jetour images\" section that downloads the Jetour channel into /sdcard/Pictures/G700 for the head unit\'s own app to read.</string>
     <string name="mode_lynkco">Lynk and Co</string>
     <string name="mode_lynkco_desc">For Lynk &amp; Co / Flyme head units. The app is just a picker — the chosen wallpaper is handed to the car\'s own theme app, which opens a preview with an \"Apply\" button.</string>
-    <string name="lynkco_unsupported">Not a Lynk &amp; Co / Flyme head unit</string>
+    <string name="mode_unavailable_here">This mode is not available on this screen.</string>
     <string name="lynkco_applied">Opening the wallpaper preview — tap \"Apply\" on the car\'s screen to set it.</string>
     <string name="mode_leopard_unsupported_note">Some screens do not support Leopard \\ Denza — the option is disabled automatically on those.</string>
     <string name="mode_new_badge">New</string>

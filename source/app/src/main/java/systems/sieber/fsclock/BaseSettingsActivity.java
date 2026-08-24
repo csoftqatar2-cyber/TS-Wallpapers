@@ -2,7 +2,6 @@ package systems.sieber.fsclock;
 
 import android.Manifest;
 import android.annotation.SuppressLint;
-import android.app.AlertDialog;
 import android.app.Dialog;
 import android.app.TimePickerDialog;
 import android.app.UiModeManager;
@@ -1111,7 +1110,7 @@ public class BaseSettingsActivity extends AppCompatActivity {
         ll.addView(hint);
         ll.addView(buildWallpaperGrid(adapter));
 
-        final AlertDialog dialog = DialogButtons.apply(new AlertDialog.Builder(this)
+        final AuroraDialog dialog = new AuroraDialog.Builder(this)
                 .setTitle(R.string.wallpaper_manage_title)
                 .setView(ll)
                 .setPositiveButton(R.string.save, new DialogInterface.OnClickListener() {
@@ -1125,8 +1124,8 @@ public class BaseSettingsActivity extends AppCompatActivity {
                     }
                 })
                 .setNegativeButton(R.string.update_cancel, null)
-                .setNeutralButton(R.string.wallpaper_manage_select_all, null)
-                .show());
+                .setNeutralButton(R.string.wallpaper_manage_deselect_all, null)
+                .show();
 
         // The grid is the content, so give it the glass. The default dialog width wraps its view
         // and left two columns of pictures squeezed into half the screen.
@@ -1155,13 +1154,23 @@ public class BaseSettingsActivity extends AppCompatActivity {
             if(adapter.getCount() == 0) dialog.dismiss();
         }));
 
-        // keep the dialog open when "select all" is pressed (it toggles all rows instead)
-        Button selectAll = dialog.getButton(DialogInterface.BUTTON_NEUTRAL);
+        // keep the dialog open when the toggle is pressed (it toggles all rows instead)
+        //
+        // The label follows the state rather than standing still. Everything is ticked by
+        // default, so a button that always read "تحديد الكل" was offering to do what was already
+        // done — the one press it needed to offer was the opposite one.
+        final Button selectAll = dialog.getButton(DialogInterface.BUTTON_NEUTRAL);
         if(selectAll != null) {
+            selectAll.setText(adapter.areAllVisible()
+                    ? R.string.wallpaper_manage_deselect_all : R.string.wallpaper_manage_select_all);
             selectAll.setOnClickListener(new View.OnClickListener() {
                 @Override
                 public void onClick(View button) {
-                    adapter.setAllVisible(!adapter.areAllVisible());
+                    boolean turnOn = !adapter.areAllVisible();
+                    adapter.setAllVisible(turnOn);
+                    selectAll.setText(turnOn
+                            ? R.string.wallpaper_manage_deselect_all
+                            : R.string.wallpaper_manage_select_all);
                 }
             });
         }
@@ -1308,7 +1317,7 @@ public class BaseSettingsActivity extends AppCompatActivity {
      */
     private void confirmDeleteLocalWallpaper(final WallpaperItem item, final Runnable onDeleted) {
         if(item == null || item.url == null) return;
-        DialogButtons.apply(new AlertDialog.Builder(this)
+        new AuroraDialog.Builder(this)
                 .setTitle(R.string.wallpaper_delete)
                 .setMessage(getString(R.string.wallpaper_delete_confirm, fileNameOf(item.url)))
                 .setPositiveButton(R.string.wallpaper_delete, new DialogInterface.OnClickListener() {
@@ -1328,7 +1337,7 @@ public class BaseSettingsActivity extends AppCompatActivity {
                     }
                 })
                 .setNegativeButton(R.string.update_cancel, null)
-                .show());
+                .show();
     }
 
     /** Add one url to this device's hidden list, leaving every other car untouched. */
@@ -1416,16 +1425,16 @@ public class BaseSettingsActivity extends AppCompatActivity {
         // layout, which reads better when there is height to use.
         final boolean sideBySide = winW > winH * 3 / 2 && winH < (int) (560 * d);
 
-        // Room the stacked layout has to keep clear below the square. The refresh button is a
-        // whole extra row, and the settings text scale makes every line here taller than the
-        // 120dp this used to assume — without counting it the button lands under the fold, and
-        // a button you have to go looking for on a head unit is one nobody finds.
-        final int stackedReserve = (int) ((refresher != null ? 186 : 120) * d);
-        // The 240dp cap is what actually binds on a tall panel, so the reserve alone never freed
-        // the row: the square has to give up the space itself. 185dp is still far above the
-        // ~110dp where a phone camera starts to struggle, and it is the difference between a
-        // refresh button on screen and one nobody scrolls down to find.
-        final int stackedCap = (int) ((refresher != null ? 185 : 240) * d);
+        // Room the stacked layout keeps clear below the square, for the hint, the address and
+        // the status line. The refresh control used to be a whole extra row here and forced both
+        // of these numbers down; it is a glyph beside the square now, so it costs no height and
+        // the code is back to full size.
+        final int stackedReserve = (int) (150 * d);
+        // 200dp, not 240: the address and the status line sit under the square, and at 240 the
+        // last of them was clipped by the panel's own bottom edge — a half-drawn line reads as
+        // broken however scrollable it is. 200dp is still far above the ~110dp where a phone
+        // camera starts to struggle.
+        final int stackedCap = (int) (200 * d);
         int qrPx = sideBySide
                 ? Math.min((int) (240 * d), avail - 2 * pad)
                 : Math.min(stackedCap, avail - stackedReserve);
@@ -1456,25 +1465,26 @@ public class BaseSettingsActivity extends AppCompatActivity {
             statusView.setGravity(sideBySide ? android.view.Gravity.START : android.view.Gravity.CENTER);
             text.addView(statusView);
         }
+        android.widget.ImageButton refresh = null;
         if(refresher != null) {
             // Changing the Wi-Fi hands the head unit a different IP, and the code on screen keeps
             // pointing at the old one — which used to mean closing the whole app and coming back.
             // The address is read again here, live, so the code catches up in place.
+            //
+            // A glyph beside the square, not a labelled button under it. As a button it was the
+            // widest thing on the panel and pushed the code down until the panel had to be
+            // scrolled to reach it; the action belongs to the code, so it sits next to it.
             final String[] shown = { data };
-            Button refresh = new Button(this);
-            refresh.setText(R.string.qr_refresh);
-            refresh.setAllCaps(false);
-            // Built in code, so it does not inherit anything from a layout: without this it
-            // renders in the platform's default grey, which on a head unit reads as a disabled
-            // label rather than the way out of a stale QR code. Same secondary style the rest
-            // of the app uses for "not the main action, but still a button".
+            refresh = new android.widget.ImageButton(this);
+            refresh.setImageResource(R.drawable.ic_qr_refresh);
+            refresh.setScaleType(ImageView.ScaleType.FIT_CENTER);
             refresh.setBackgroundResource(R.drawable.fit_secondary_btn);
-            refresh.setTextColor(ContextCompat.getColor(this, R.color.aurora_text));
-            refresh.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 17);
-            refresh.setTypeface(refresh.getTypeface(), android.graphics.Typeface.BOLD);
-            refresh.setMinHeight((int) (52 * d));
-            refresh.setMinimumHeight((int) (52 * d));
-            refresh.setPadding((int) (28 * d), (int) (10 * d), (int) (28 * d), (int) (10 * d));
+            // The label is gone from the face, so it has to survive as the spoken/long-press name.
+            refresh.setContentDescription(getString(R.string.qr_refresh));
+            int rpad = (int) (12 * d);
+            refresh.setPadding(rpad, rpad, rpad, rpad);
+            final ImageView qrView = qr;
+            final TextView codeText = codeView;
             refresh.setOnClickListener(v -> {
                 String fresh = refresher.get();
                 if(fresh == null) {
@@ -1489,15 +1499,44 @@ public class BaseSettingsActivity extends AppCompatActivity {
                     return;
                 }
                 shown[0] = fresh;
-                qr.setImageBitmap(QrCode.generate(fresh, 600));
-                if(codeView != null) codeView.setText(fresh);
+                qrView.setImageBitmap(QrCode.generate(fresh, 600));
+                if(codeText != null) codeText.setText(fresh);
                 Toast.makeText(BaseSettingsActivity.this,
                         getString(R.string.qr_refresh_done, fresh), Toast.LENGTH_LONG).show();
             });
-            LinearLayout.LayoutParams rlp = new LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-            rlp.topMargin = (int) (6 * d);
-            text.addView(refresh, rlp);
+        }
+
+        // The square and its glyph travel together: whatever the outer layout does, the refresh
+        // control stays beside the code it refreshes.
+        //
+        // The code itself must stay dead centre. A button on one side alone would push it off by
+        // half the button's width, and a QR code that sits slightly to one side of the panel is
+        // the kind of wrongness people see without being able to name. So the other side gets an
+        // empty view of exactly the same width and the square is centred between them.
+        //
+        // Forced LTR: the button belongs on the LEFT of the code, and in a locale-following row
+        // "first child" would put it on the right in Arabic. Direction is a property of text,
+        // and this row has none.
+        LinearLayout qrBlock = new LinearLayout(this);
+        qrBlock.setOrientation(LinearLayout.HORIZONTAL);
+        qrBlock.setGravity(android.view.Gravity.CENTER_VERTICAL);
+        if(Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN_MR1) {
+            qrBlock.setLayoutDirection(View.LAYOUT_DIRECTION_LTR);
+        }
+        final int rsz = (int) (52 * d);
+        final int rgap = (int) (12 * d);
+        if(refresh != null) {
+            LinearLayout.LayoutParams rlp = new LinearLayout.LayoutParams(rsz, rsz);
+            rlp.rightMargin = rgap;
+            qrBlock.addView(refresh, rlp);
+        }
+        qrBlock.addView(qr, new LinearLayout.LayoutParams(qrPx, qrPx));
+        if(refresh != null) {
+            View balance = new View(this);
+            balance.setVisibility(View.INVISIBLE);
+            LinearLayout.LayoutParams blp2 = new LinearLayout.LayoutParams(rsz, rsz);
+            blp2.leftMargin = rgap;
+            qrBlock.addView(balance, blp2);
         }
 
         LinearLayout row = new LinearLayout(this);
@@ -1505,22 +1544,23 @@ public class BaseSettingsActivity extends AppCompatActivity {
         if(sideBySide) {
             row.setOrientation(LinearLayout.HORIZONTAL);
             row.setGravity(android.view.Gravity.CENTER_VERTICAL);
-            LinearLayout.LayoutParams qlp = new LinearLayout.LayoutParams(qrPx, qrPx);
-            qlp.setMarginEnd(pad);
-            qr.setLayoutParams(qlp);
-            row.addView(qr);
+            LinearLayout.LayoutParams blp = new LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+            blp.setMarginEnd(pad);
+            row.addView(qrBlock, blp);
             // Weighted, so a long URL wraps in the column instead of pushing the code off-screen.
             row.addView(text, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
         } else {
             row.setOrientation(LinearLayout.VERTICAL);
             row.setGravity(android.view.Gravity.CENTER_HORIZONTAL);
-            LinearLayout.LayoutParams qlp = new LinearLayout.LayoutParams(qrPx, qrPx);
-            qlp.topMargin = pad;
-            qlp.bottomMargin = pad;
-            qr.setLayoutParams(qlp);
+            LinearLayout.LayoutParams blp = new LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+            blp.topMargin = pad;
+            blp.bottomMargin = pad;
+            blp.gravity = android.view.Gravity.CENTER_HORIZONTAL;
             // Hint above the code, as before: text, square, rest.
             row.addView(hint);
-            row.addView(qr);
+            row.addView(qrBlock, blp);
             row.addView(text);
         }
 
@@ -1542,11 +1582,11 @@ public class BaseSettingsActivity extends AppCompatActivity {
         macText.setTextIsSelectable(true);
         macText.setTextSize(18);
 
-        DialogButtons.apply(new AlertDialog.Builder(this)
+        new AuroraDialog.Builder(this)
                 .setTitle(R.string.mac_qr_title)
                 .setView(qrPanel(mac, getString(R.string.mac_qr_hint), macText, null))
                 .setPositiveButton(R.string.ok, null)
-                .show());
+                .show();
     }
 
     private void initFontSpinner() {
@@ -2196,8 +2236,11 @@ public class BaseSettingsActivity extends AppCompatActivity {
                 supported ? getString(R.string.mode_leopard)
                         : getString(R.string.mode_leopard) + " — " + getString(R.string.leopard_unsupported),
                 getString(R.string.mode_gwm),
-                lynkcoSupported ? getString(R.string.mode_lynkco)
-                        : getString(R.string.mode_lynkco) + " — " + getString(R.string.lynkco_unsupported),
+                // The row is the mode name, nothing appended. The note that used to hang off it
+                // ("not a Lynk & Co / Flyme head unit") was shop-facing detail on a screen the
+                // customer reads; the mode still refuses to be picked here, which is the part
+                // that matters.
+                getString(R.string.mode_lynkco),
                 getString(R.string.mode_jetour)
         };
         int current = OperatingMode.get(mSharedPref);
@@ -2207,7 +2250,7 @@ public class BaseSettingsActivity extends AppCompatActivity {
                 : current == OperatingMode.LYNKCO ? 4
                 : current == OperatingMode.JETOUR ? 5 : 0;
 
-        DialogButtons.apply(new AlertDialog.Builder(this)
+        new AuroraDialog.Builder(this)
                 .setTitle(R.string.mode_title)
                 .setSingleChoiceItems(labels, checked, (d, which) -> {
                     if(modes[which] == OperatingMode.LEOPARD && !supported) {
@@ -2219,7 +2262,7 @@ public class BaseSettingsActivity extends AppCompatActivity {
                     if(modes[which] == OperatingMode.LYNKCO && !lynkcoSupported) {
                         // No Flyme theme app on this unit — Lynkco has nothing to hand the
                         // wallpaper to, so refuse it here rather than accept a dead mode.
-                        Toast.makeText(this, R.string.lynkco_unsupported, Toast.LENGTH_LONG).show();
+                        Toast.makeText(this, R.string.mode_unavailable_here, Toast.LENGTH_LONG).show();
                         return;
                     }
                     d.dismiss();
@@ -2230,7 +2273,7 @@ public class BaseSettingsActivity extends AppCompatActivity {
                     else applyMode(modes[which]);
                 })
                 .setNegativeButton(R.string.update_cancel, null)
-                .show());
+                .show();
     }
 
     private void updateModeDescription(int mode, boolean leopardSupported) {
@@ -2438,25 +2481,25 @@ public class BaseSettingsActivity extends AppCompatActivity {
                 // Retryable: the Wi-Fi may simply not have finished associating yet, and making
                 // them leave and re-enter the screen for that is the same wasted trip the refresh
                 // button exists to remove.
-                DialogButtons.apply(new AlertDialog.Builder(BaseSettingsActivity.this)
+                new AuroraDialog.Builder(BaseSettingsActivity.this)
                         .setTitle(strPairTitle)
                         .setMessage(R.string.pair_no_wifi)
                         .setPositiveButton(R.string.qr_refresh_retry, (d2, w2) -> pairPhone())
                         .setNegativeButton(R.string.ok, null)
-                        .show());
+                        .show();
                 return;
             }
 
             TextView urlText = new TextView(BaseSettingsActivity.this);
             urlText.setText(url);
             urlText.setTextIsSelectable(true);
-            DialogButtons.apply(new AlertDialog.Builder(BaseSettingsActivity.this)
+            new AuroraDialog.Builder(BaseSettingsActivity.this)
                     .setTitle(strPairTitle)
                     .setView(qrPanel(url, getString(R.string.pair_scan_hint), urlText, null,
                             () -> mUploadServer == null ? null : mUploadServer.getUrl()))
                     .setPositiveButton(R.string.ok, null)
                     .setOnDismissListener(dialog -> stopUploadServer())
-                    .show());
+                    .show();
         }
     }
 
@@ -2491,7 +2534,7 @@ public class BaseSettingsActivity extends AppCompatActivity {
     }
 
     private void requestMirrorStoragePermission() {
-        DialogButtons.apply(new AlertDialog.Builder(this)
+        new AuroraDialog.Builder(this)
                 .setTitle(R.string.gwm_permission_title)
                 .setMessage(R.string.gwm_permission_message)
                 .setPositiveButton(R.string.ok, new DialogInterface.OnClickListener() {
@@ -2517,7 +2560,7 @@ public class BaseSettingsActivity extends AppCompatActivity {
                     }
                 })
                 .setNegativeButton(R.string.update_cancel, null)
-                .show());
+                .show();
     }
 
     /** Hide the defaults that the chosen mode cannot use. */
@@ -2668,7 +2711,7 @@ public class BaseSettingsActivity extends AppCompatActivity {
         ll.addView(hint);
         ll.addView(buildWallpaperGrid(adapter));
 
-        final AlertDialog dialog = DialogButtons.apply(new AlertDialog.Builder(this)
+        final AuroraDialog dialog = new AuroraDialog.Builder(this)
                 .setTitle(getString(R.string.batch_review_title, items.size()))
                 .setView(ll)
                 .setCancelable(false) // dismissing by accident would silently discard the batch
@@ -2684,7 +2727,7 @@ public class BaseSettingsActivity extends AppCompatActivity {
                         confirmDiscardBatch();
                     }
                 })
-                .show());
+                .show();
 
         if(dialog.getWindow() != null) {
             android.util.DisplayMetrics dm = getResources().getDisplayMetrics();
@@ -2746,7 +2789,7 @@ public class BaseSettingsActivity extends AppCompatActivity {
 
     /** Cancelling throws away files the customer already sent, so make them say it twice. */
     private void confirmDiscardBatch() {
-        DialogButtons.apply(new AlertDialog.Builder(this)
+        new AuroraDialog.Builder(this)
                 .setTitle(R.string.batch_review_discard)
                 .setMessage(R.string.batch_review_discard_confirm)
                 .setPositiveButton(R.string.batch_review_discard, new DialogInterface.OnClickListener() {
@@ -2767,7 +2810,7 @@ public class BaseSettingsActivity extends AppCompatActivity {
                         reopenBatchReview(); // back to the review, nothing lost
                     }
                 })
-                .show());
+                .show();
     }
 
     /** Delete an imported file plus everything keyed to it (fit, focal, pointers). */
@@ -2782,7 +2825,7 @@ public class BaseSettingsActivity extends AppCompatActivity {
     public void onClickPairPhone(View v) {
         stopUploadServer();
         // Assigned below; the upload listener can fire before the local would be in scope.
-        final AlertDialog[] holder = new AlertDialog[1];
+        final AuroraDialog[] holder = new AuroraDialog[1];
         final String url;
         try {
             mUploadServer = UploadServer.startNew(this, mWallpaperRepo, new UploadServer.UploadListener() {
@@ -2825,12 +2868,12 @@ public class BaseSettingsActivity extends AppCompatActivity {
         }
         if(url == null) {
             stopUploadServer();
-            DialogButtons.apply(new AlertDialog.Builder(this)
+            new AuroraDialog.Builder(this)
                     .setTitle(R.string.wallpaper_pair_phone)
                     .setMessage(R.string.pair_no_wifi)
                     .setPositiveButton(R.string.qr_refresh_retry, (d2, w2) -> onClickPairPhone(v))
                     .setNegativeButton(R.string.ok, null)
-                    .show());
+                    .show();
             return;
         }
 
@@ -2846,7 +2889,7 @@ public class BaseSettingsActivity extends AppCompatActivity {
         mPairStatus.setTextColor(ContextCompat.getColor(this, R.color.aurora_muted));
         mPairStatus.setText(R.string.pair_waiting);
 
-        AlertDialog dlg = new AlertDialog.Builder(this)
+        AuroraDialog dlg = new AuroraDialog.Builder(this)
                 .setTitle(R.string.wallpaper_pair_phone)
                 .setView(qrPanel(url, getString(R.string.pair_scan_hint), urlText, mPairStatus,
                         () -> mUploadServer == null ? null : mUploadServer.getUrl()))
@@ -2860,7 +2903,6 @@ public class BaseSettingsActivity extends AppCompatActivity {
                 .create();
         holder[0] = dlg;
         dlg.show();
-        DialogButtons.apply(dlg);
     }
 
     private void stopUploadServer() {
@@ -2902,7 +2944,7 @@ public class BaseSettingsActivity extends AppCompatActivity {
         for(String s : getString(R.string.date_format_placeholders_help).split("\n")) {
             sb.append(s.trim()).append("\n");
         }
-        final AlertDialog.Builder builder = new AlertDialog.Builder(this);
+        final AuroraDialog.Builder builder = new AuroraDialog.Builder(this);
         builder.setTitle(getString(R.string.date_format_placeholders_help_title));
         builder.setMessage(sb.toString());
         builder.setPositiveButton(getString(R.string.ok),
@@ -2918,7 +2960,7 @@ public class BaseSettingsActivity extends AppCompatActivity {
                     }
                 });
         builder.setCancelable(true);
-        AlertDialog dialog = DialogButtons.apply(builder.create());
+        AuroraDialog dialog = builder.create();
         dialog.show();
         TextView messageView = dialog.findViewById(android.R.id.message);
         messageView.setTypeface(Typeface.MONOSPACE);
@@ -2966,7 +3008,7 @@ public class BaseSettingsActivity extends AppCompatActivity {
         ScrollView scroll = new ScrollView(this);
         scroll.addView(body);
 
-        DialogButtons.apply(new AlertDialog.Builder(this)
+        new AuroraDialog.Builder(this)
                 .setTitle(getString(R.string.crash_log_title, CrashReporter.count(this)))
                 .setView(scroll)
                 .setPositiveButton(R.string.ok, null)
@@ -2983,7 +3025,7 @@ public class BaseSettingsActivity extends AppCompatActivity {
                         findViewById(R.id.buttonCrashLog).setVisibility(View.GONE);
                     }
                 })
-                .show());
+                .show();
     }
 
     /**
@@ -3003,7 +3045,7 @@ public class BaseSettingsActivity extends AppCompatActivity {
                 if(changelog != null && !changelog.trim().isEmpty()) {
                     message += "\n\n" + changelog.trim();
                 }
-                AlertDialog.Builder dlg = new AlertDialog.Builder(BaseSettingsActivity.this);
+                AuroraDialog.Builder dlg = new AuroraDialog.Builder(BaseSettingsActivity.this);
                 dlg.setTitle(R.string.update_title);
                 dlg.setMessage(message);
                 dlg.setPositiveButton(R.string.update_now, new DialogInterface.OnClickListener() {
@@ -3014,7 +3056,7 @@ public class BaseSettingsActivity extends AppCompatActivity {
                 });
                 dlg.setNegativeButton(R.string.update_later, null);
                 dlg.setCancelable(true);
-                DialogButtons.apply(dlg.create()).show();
+                dlg.show();
             }
 
             @Override
@@ -3074,7 +3116,7 @@ public class BaseSettingsActivity extends AppCompatActivity {
     }
 
     void infoDialog(String title, String text) {
-        final AlertDialog.Builder dlg = new AlertDialog.Builder(this);
+        final AuroraDialog.Builder dlg = new AuroraDialog.Builder(this);
         if(title != null) dlg.setTitle(title);
         if(text != null) dlg.setMessage(text);
         dlg.setPositiveButton(getString(R.string.ok),
@@ -3084,7 +3126,7 @@ public class BaseSettingsActivity extends AppCompatActivity {
                     }
                 });
         dlg.setCancelable(true);
-        DialogButtons.apply(dlg.create()).show();
+        dlg.show();
     }
 
     @Override

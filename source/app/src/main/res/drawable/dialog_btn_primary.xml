@@ -1,25 +1,23 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- The dialog button bar hands every button a fixed height and draws its background taller than
-     that, so a large corner radius has its arc clipped away and the button comes out looking
-     shaved along the top. 6dp survives that intact — see AppDialog.Button. -->
+<!-- Primary action in AuroraDialog's app-owned button container. -->
 <selector xmlns:android="http://schemas.android.com/apk/res/android">
     <item android:state_focused="true">
         <shape android:shape="rectangle">
             <solid android:color="@color/gold" />
             <stroke android:width="2dp" android:color="@color/aurora_text" />
-            <corners android:radius="6dp" />
+            <corners android:radius="12dp" />
         </shape>
     </item>
     <item android:state_pressed="true">
         <shape android:shape="rectangle">
             <solid android:color="@color/gold" />
-            <corners android:radius="6dp" />
+            <corners android:radius="12dp" />
         </shape>
     </item>
     <item>
         <shape android:shape="rectangle">
             <solid android:color="@color/colorAccent" />
-            <corners android:radius="6dp" />
+            <corners android:radius="12dp" />
         </shape>
     </item>
 </selector>

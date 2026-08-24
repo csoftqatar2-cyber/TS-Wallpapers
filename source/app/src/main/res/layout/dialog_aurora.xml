@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Inflated into AuroraDialog's size-capped root. The framework AlertDialog button panel is
+     deliberately absent: aurora_dialog_buttons receives ordinary Button views owned by us. -->
+<merge xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <TextView
+        android:id="@+id/aurora_dialog_title"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="14dp"
+        android:gravity="start"
+        android:textColor="@color/gold"
+        android:textSize="19sp"
+        android:textStyle="bold"
+        android:visibility="gone" />
+
+    <LinearLayout
+        android:id="@+id/aurora_dialog_body"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical">
+
+        <ScrollView
+            android:id="@+id/aurora_dialog_message_scroll"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:fillViewport="false"
+            android:overScrollMode="ifContentScrolls"
+            android:visibility="gone">
+
+            <TextView
+                android:id="@android:id/message"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="start"
+                android:lineSpacingExtra="3dp"
+                android:textColor="@color/aurora_text"
+                android:textSize="16sp" />
+        </ScrollView>
+
+        <FrameLayout
+            android:id="@+id/aurora_dialog_content"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:visibility="gone" />
+    </LinearLayout>
+
+    <FrameLayout
+        android:id="@+id/aurora_dialog_buttons"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="18dp" />
+
+</merge>

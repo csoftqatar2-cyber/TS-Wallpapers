@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- The window background behind every AlertDialog in the app.
+<!-- Warm Aurora surface used by the app-owned dialog root.
      Named *_panel_bg because @color/dialog_bg already exists and is a different thing. -->
 <inset xmlns:android="http://schemas.android.com/apk/res/android"
     android:insetLeft="28dp"

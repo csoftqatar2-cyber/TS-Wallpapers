@@ -39,6 +39,7 @@
     <string name="wallpaper_manage_empty">لا توجد صور بعد — اضغط «التحقق من الخلفيات الجديدة» أولاً.</string>
     <string name="wallpaper_manage_saved">تم الحفظ ✓ — %1$d ظاهرة، %2$d مخفية</string>
     <string name="wallpaper_manage_select_all">تحديد الكل</string>
+    <string name="wallpaper_manage_deselect_all">إلغاء تحديد الكل</string>
     <string name="wallpaper_type_image">صورة</string>
     <string name="wallpaper_type_gif">صورة متحركة</string>
     <string name="wallpaper_type_video">فيديو</string>
@@ -47,7 +48,7 @@
     <string name="wallpaper_delete_confirm">هل تريد حذف «%1$s» من الجهاز نهائياً؟ الحذف متاح للصور المرفوعة من الهاتف أو المضافة من الجهاز فقط، ولا يمكن التراجع عنه.</string>
     <string name="wallpaper_delete_done">تم حذف الصورة من الجهاز ✓</string>
     <string name="wallpaper_delete_failed">تعذّر حذف الصورة — ما زالت موجودة على الجهاز</string>
-    <string name="wallpaper_source_remote">من الخادم</string>
+    <string name="wallpaper_source_remote">من السحابة</string>
     <string name="wallpaper_url_hint">رابط قائمة الخلفيات (JSON manifest URL)</string>
     <string name="wallpaper_sync">تحديث الخلفيات من الرابط الآن</string>
     <string name="wallpaper_help">اسحب يميناً أو يساراً على الشاشة للتبديل بين الخلفيات. الصيغ المدعومة: صور JPG/PNG، وصور GIF المتحركة، وفيديو MP4. يُعيد الرابط قائمة JSON بالشكل التالي: {\"wallpapers\":[{\"type\":\"image\",\"url\":\"...\"},{\"type\":\"video\",\"url\":\"...\"}]}</string>
@@ -73,8 +74,7 @@
     <string name="wallpaper_add_local">إضافة من الجهاز</string>
     <string name="wallpaper_pair_phone">رفع صورة او فيديو من الهاتف (QR Code)</string>
     <string name="pair_scan_hint">صوّر هذا الرمز بكاميرا هاتفك، ثم اختر صورة أو فيديو أو GIF.
-يجب أن يكون هاتفك على شبكة الواي‑فاي نفسها.
-الصفحة لا تفتح؟ أوقف بيانات الهاتف وحاول مرة أخرى.</string>
+يجب أن يكون هاتفك على شبكة الواي‑فاي نفسها.</string>
     <string name="pair_waiting">في انتظار ملف من الهاتف…</string>
     <string name="pair_uploaded">تم استلام الملف ✓ وأصبح الخلفية الافتراضية</string>
     <string name="pair_uploaded_n">تم استلام %1$d ملف ✓</string>
@@ -423,7 +423,7 @@
     <string name="mode_jetour_desc">مطابق لوضع Others تماماً، مع إضافة قسم «إدارة صور Jetour» الذي ينزّل صور قناة Jetour إلى مجلد ‎/sdcard/Pictures/G700‎ ليستخدمها تطبيق الشاشة نفسه.</string>
     <string name="mode_lynkco">Lynk and Co</string>
     <string name="mode_lynkco_desc">لشاشات Lynk &amp; Co / Flyme. التطبيق أداة اختيار فقط — تُسلَّم الخلفية المختارة إلى تطبيق الثيم الخاص بالسيارة، فيفتح معاينة فيها زر «تطبيق».</string>
-    <string name="lynkco_unsupported">ليست شاشة Lynk &amp; Co / Flyme</string>
+    <string name="mode_unavailable_here">هذا الوضع غير متاح على هذه الشاشة.</string>
     <string name="lynkco_applied">تُفتح الآن معاينة الخلفية — اضغط «تطبيق» على شاشة السيارة لتثبيتها.</string>
     <string name="mode_leopard_unsupported_note">بعض الشاشات لا تدعم وضع Leopard \\ Denza، ويظهر الخيار معطَّلاً عليها تلقائياً.</string>
     <string name="mode_new_badge">جديد</string>

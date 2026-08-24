@@ -73,8 +73,9 @@ public class ModeConfirmActivity extends AppCompatActivity {
         // the worst answer we could record for this car.
         disableUnsupported(R.id.radioConfirmLeopard, R.id.textViewConfirmLeopardNote,
                 R.string.leopard_unsupported, mLeopardSupported);
-        disableUnsupported(R.id.radioConfirmLynkco, R.id.textViewConfirmLynkcoNote,
-                R.string.lynkco_unsupported, mLynkcoSupported);
+        // Lynkco is dimmed when the unit cannot do it, with no explanatory line: the dimming is
+        // the whole message on a customer-facing screen.
+        disableUnsupported(R.id.radioConfirmLynkco, 0, 0, mLynkcoSupported);
 
         TextView deviceId = findViewById(R.id.textViewModeConfirmDeviceId);
         if(deviceId != null) {
@@ -140,14 +141,14 @@ public class ModeConfirmActivity extends AppCompatActivity {
                 if(changelog != null && !changelog.trim().isEmpty()) {
                     message += "\n\n" + changelog.trim();
                 }
-                DialogButtons.apply(new android.app.AlertDialog.Builder(ModeConfirmActivity.this)
+                new AuroraDialog.Builder(ModeConfirmActivity.this)
                         .setTitle(R.string.update_title)
                         .setMessage(message)
                         .setPositiveButton(R.string.update_now,
                                 (d, w) -> new UpdateManager(ModeConfirmActivity.this)
                                         .downloadAndInstall(apkUrl))
                         .setNegativeButton(R.string.update_later, null)
-                        .show());
+                        .show();
             }
 
             @Override
@@ -180,6 +181,7 @@ public class ModeConfirmActivity extends AppCompatActivity {
             b.setEnabled(false);
             b.setAlpha(0.4f);
         }
+        if(noteId == 0 || reasonRes == 0) return;   // dimmed, and that is all it says
         TextView note = findViewById(noteId);
         if(note == null) return;
         note.setText(getString(reasonRes));

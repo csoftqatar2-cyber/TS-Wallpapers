@@ -1,6 +1,5 @@
 package systems.sieber.fsclock;
 
-import android.app.AlertDialog;
 import android.content.ActivityNotFoundException;
 import android.content.Context;
 import android.content.Intent;
@@ -337,13 +336,42 @@ public class LeopardPickerActivity extends AppCompatActivity {
             preparePreviewVideo(mSelected);
             return;   // the grid is behind the preview; rebuilding it now would be for nobody
         }
+        // Settings is launched from here plainly, with no result to wait for, and it is where
+        // pictures get hidden (إدارة الصور). This screen holds its OWN WallpaperRepo, so the hide
+        // was written to prefs and this instance never heard about it: the picture the owner had
+        // just unticked was still sitting on the grid, and picking it still worked. Others-mode
+        // never showed this because FullscreenActivity reloads on the settings result.
+        if(!hiddenSignature().equals(mShownHiddenSig)) {
+            mRepo.load();
+            if(SOURCE_PHONE.equals(mSource)) { markHiddenShown(); buildPhoneGrid(); }
+            else selectSource(mSource);
+            return;
+        }
         restartTilePlayers();
+    }
+
+    /**
+     * The hide list as it stood when the pane on screen was built.
+     *
+     * Compared rather than watched: there is no callback when another screen edits the list, and
+     * a blanket reload on every resume would re-run the cloud pane's sync each time the user came
+     * back from the system's wallpaper screen.
+     */
+    private String mShownHiddenSig = "";
+
+    private String hiddenSignature() {
+        return mPrefs.getString(WallpaperRepo.PREF_HIDDEN, "");
+    }
+
+    private void markHiddenShown() {
+        mShownHiddenSig = hiddenSignature();
     }
 
     // ---------------------------------------------------------------- sources
 
     private void selectSource(String source) {
         mSource = source;
+        markHiddenShown();
         // Moving off the phone source ends that errand: what is set from the library afterwards
         // is browsing, and browsing must not throw anyone out to the launcher. (The upload
         // listener sets the flag before it switches back here, so this cannot undo its own case.)
@@ -2014,7 +2042,7 @@ public class LeopardPickerActivity extends AppCompatActivity {
         // exactly screen-shaped now, and asking "fill or fit?" about it would only offer to undo
         // the framing the user just chose.
         if(OperatingMode.isLynkco(mPrefs) && !mSelected.isVideo() && !isBaked(mSelected.url)) {
-            DialogButtons.apply(new AlertDialog.Builder(this)
+            new AuroraDialog.Builder(this)
                     .setTitle(R.string.lynkco_frame_title)
                     .setItems(new CharSequence[]{
                             getString(R.string.lynkco_frame_fill),
@@ -2023,7 +2051,7 @@ public class LeopardPickerActivity extends AppCompatActivity {
                         doApply();
                     })
                     .setNegativeButton(R.string.update_cancel, null)
-                    .show());
+                    .show();
             return;
         }
 
@@ -2083,7 +2111,7 @@ public class LeopardPickerActivity extends AppCompatActivity {
         android.widget.ScrollView scroll = new android.widget.ScrollView(this);
         scroll.addView(body);
 
-        DialogButtons.apply(new AlertDialog.Builder(this)
+        new AuroraDialog.Builder(this)
                 .setTitle(R.string.leopard_video_first_title)
                 .setView(scroll)
                 .setPositiveButton(R.string.leopard_video_first_ok, (dlg, w) -> {
@@ -2093,7 +2121,7 @@ public class LeopardPickerActivity extends AppCompatActivity {
                     doApply();
                 })
                 .setNegativeButton(R.string.update_cancel, null)
-                .show());
+                .show();
     }
 
     private void doApply() {

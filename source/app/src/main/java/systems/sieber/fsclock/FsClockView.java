@@ -3,7 +3,6 @@ package systems.sieber.fsclock;
 import android.Manifest;
 import android.annotation.SuppressLint;
 import android.app.AlarmManager;
-import android.app.AlertDialog;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.DialogInterface;
@@ -1794,7 +1793,7 @@ public class FsClockView extends FrameLayout {
         clockView.setLayerType(View.LAYER_TYPE_HARDWARE, paint);
     }
 
-    AlertDialog mEventDialog;
+    AuroraDialog mEventDialog;
     Ringtone mEventRingtone;
     void doEventStuff(Event e) {
         if(e.playAlarm) {
@@ -1806,7 +1805,7 @@ public class FsClockView extends FrameLayout {
             speak(e.speakText);
         }
         if(e.title != null && !e.title.trim().equals("")) {
-            final AlertDialog.Builder dlg = new AlertDialog.Builder(getContext());
+            final AuroraDialog.Builder dlg = new AuroraDialog.Builder(getContext());
             if(e.title != null) dlg.setTitle(e.title);
             if(e.speakText != null) dlg.setMessage(e.speakText);
             dlg.setOnDismissListener(new DialogInterface.OnDismissListener() {
@@ -1822,7 +1821,7 @@ public class FsClockView extends FrameLayout {
                         }
                     });
             dlg.setCancelable(true);
-            mEventDialog = DialogButtons.apply(dlg.create());
+            mEventDialog = dlg.create();
             mEventDialog.show();
         }
         if(e.hideAfter > 0) {
