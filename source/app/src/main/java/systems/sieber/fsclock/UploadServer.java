@@ -414,15 +414,13 @@ public class UploadServer extends NanoHTTPD {
             + "border-right:5px solid #ff9a3d;border-radius:14px;padding:16px 18px;margin-bottom:18px}"
             + ".privacy b{display:block;color:#ffd27a;font-size:18px;margin-bottom:6px}"
             + ".privacy p{margin:0;font-size:16px;color:#f5eee4}"
-            + ".pick{display:block;width:100%;min-height:60px;padding:18px;border-radius:14px;"
-            + "background:#14100b;border:1.5px dashed rgba(255,214,160,0.35);color:#b0a48f;"
-            + "font-size:17px;text-align:center;cursor:pointer}"
-            + ".pick.has{border-style:solid;border-color:#ff9a3d;color:#f5eee4}"
+            // The picker IS the button now: choosing a file sends it, so there is only ever one
+            // thing on this page to press and it must read as the primary action, not a dropzone.
+            + ".pick{display:block;width:100%;min-height:64px;padding:19px;border-radius:14px;"
+            + "background:#ff9a3d;border:0;color:#14100b;font-size:19px;font-weight:700;"
+            + "text-align:center;cursor:pointer;font-family:inherit}"
+            + ".pick.busy{background:#5a4a33;color:#b0a48f;cursor:default;pointer-events:none}"
             + "#file{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}"
-            + "#btn{display:block;width:100%;min-height:60px;margin-top:14px;border:0;border-radius:14px;"
-            + "background:#ff9a3d;color:#14100b;font-size:19px;font-weight:700;cursor:pointer;"
-            + "font-family:inherit}"
-            + "#btn:disabled{background:#5a4a33;color:#b0a48f;cursor:default}"
             + "#bar{display:none;height:10px;margin-top:16px;border-radius:99px;background:#14100b;"
             + "border:1px solid rgba(255,214,160,0.14);overflow:hidden}"
             + "#fill{height:100%;width:0;background:#ffd27a;transition:width .2s}"
@@ -459,7 +457,11 @@ public class UploadServer extends NanoHTTPD {
         // Jetour G700) are the exception and keep the batch: there the files go into another app's
         // slideshow folder, never through our editor, so "several" is the whole point of it.
         final boolean many = mMirror != null;
-        final String btn = many ? "رفع الملفات" : "رفع الملف";
+        // One control, one gesture: picking the file starts the upload. A second "send" button
+        // only ever asked the customer to confirm a choice they had already made, standing at a
+        // car — and every phone that returned to this page from its gallery showed an idle screen
+        // that looked like nothing had happened.
+        final String pickLabel = many ? "اختر صوراً أو فيديو" : "اختر صورة أو فيديو";
         return "<!doctype html><html dir='rtl' lang='ar'><head>"
                 + "<meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'>"
                 + "<meta name='theme-color' content='#14100b'>"
@@ -478,18 +480,15 @@ public class UploadServer extends NanoHTTPD {
                 + "<div class='card'>"
                 + (many
                     ? "<p style='margin:0 0 14px'>اختر من هاتفك صوراً أو فيديوهات أو صور GIF"
-                      + " لتظهر على الشاشة — يمكنك اختيار أكثر من ملف في المرة الواحدة</p>"
+                      + " لتظهر على الشاشة — يمكنك اختيار أكثر من ملف في المرة الواحدة،"
+                      + " والرفع يبدأ وحده فور الاختيار</p>"
                     : "<p style='margin:0 0 14px'>اختر من هاتفك <b>صورة</b> أو <b>فيديو</b>"
-                      + " أو <b>صورة GIF متحركة</b> لتظهر على شاشة السيارة"
-                      + " — وستفتح شاشة الضبط بعدها مباشرة</p>")
+                      + " أو <b>صورة GIF متحركة</b> لتظهر على شاشة السيارة — يبدأ الرفع وحده"
+                      + " فور اختيارك، وستفتح شاشة الضبط بعدها مباشرة</p>")
                 + "<form id='f' method='post' action='/' enctype='multipart/form-data'>"
                 + "<input id='file' type='file' name='image' accept='" + ACCEPT + "'"
                 + (many ? " multiple" : "") + " required>"
-                + "<label id='pick' class='pick' for='file'>"
-                + (many ? "اضغط هنا لاختيار صور أو فيديو أو GIF"
-                        : "اضغط هنا لاختيار صورة أو فيديو أو GIF")
-                + "</label>"
-                + "<button id='btn' type='submit'>" + btn + "</button>"
+                + "<label id='pick' class='pick' for='file'>" + pickLabel + "</label>"
                 + "</form>"
                 + "<div id='bar'><div id='fill'></div></div>"
                 + "<p id='msg'></p>"
@@ -503,9 +502,9 @@ public class UploadServer extends NanoHTTPD {
                 + "<b>كيف تضع صورتك أو الفيديو على الشاشة</b>"
                 + "<ol>"
                 + (many
-                    ? "<li>اضغط <b>اختيار</b> واختر من ألبوم هاتفك — صور أو فيديو أو GIF، وأكثر من ملف إن أردت.</li>"
-                    : "<li>اضغط <b>اختيار</b> واختر من ألبوم هاتفك ملفاً واحداً — صورة أو فيديو أو GIF.</li>")
-                + "<li>اضغط <b>" + btn + "</b> وانتظر حتى يكتمل شريط التقدّم.</li>"
+                    ? "<li>اضغط <b>" + pickLabel + "</b> واختر من ألبوم هاتفك — صور أو فيديو أو GIF، وأكثر من ملف إن أردت.</li>"
+                    : "<li>اضغط <b>" + pickLabel + "</b> واختر من ألبوم هاتفك ملفاً واحداً — صورة أو فيديو أو GIF.</li>")
+                + "<li>يبدأ الرفع وحده بمجرّد اختيارك — انتظر حتى يكتمل شريط التقدّم.</li>"
                 + "<li>سيظهر الملف على شاشة السيارة فوراً، ويمكنك ضبط موضعه وحجمه من الشاشة نفسها.</li>"
                 + "</ol>"
                 + "<p class='note'>الصيغ المقبولة: صور JPG وPNG وHEIC وWEBP، وصور GIF المتحركة،"
@@ -515,26 +514,29 @@ public class UploadServer extends NanoHTTPD {
                 + "</div>"
 
                 + "</div><script>"
-                + "var f=document.getElementById('f'),b=document.getElementById('btn'),"
+                + "var f=document.getElementById('f'),"
                 + "m=document.getElementById('msg'),fi=document.getElementById('file'),"
                 + "pick=document.getElementById('pick'),bar=document.getElementById('bar'),"
                 + "fill=document.getElementById('fill');"
-                // Immediate feedback on choosing a file, so the page never looks inert.
-                + "fi.onchange=function(){if(fi.files.length){pick.className='pick has';"
-                + "pick.textContent=fi.files.length===1?fi.files[0].name:('تم اختيار '+fi.files.length+' ملف');"
-                + "m.className='';m.textContent='';}};"
-                + "function reset(t){b.disabled=false;b.textContent='" + btn + "';bar.style.display='none';"
-                + "fill.style.width='0';m.className='err';m.textContent=t;}"
-                + "f.onsubmit=function(e){e.preventDefault();"
-                + "if(!fi.files.length){m.className='err';m.textContent='اختر ملفاً أولاً';return;}"
-                + "if(fi.files.length>" + MAX_BATCH + "){m.className='err';"
-                + "m.textContent='الحد الأقصى " + MAX_BATCH + " ملفات في المرة الواحدة';return;}"
+                // reset() puts the one control back so a failed try can be repeated by pressing
+                // the same thing again — the file input is cleared too, otherwise re-picking the
+                // same file fires no change event and the page would sit there doing nothing.
+                + "function reset(t){pick.className='pick';pick.textContent='" + pickLabel + "';"
+                + "bar.style.display='none';fill.style.width='0';fi.value='';"
+                + "m.className='err';m.textContent=t;}"
+                // Choosing IS sending: the change event goes straight into the upload.
+                + "fi.onchange=function(){if(!fi.files.length)return;send();};"
+                + "if(f)f.onsubmit=function(e){e.preventDefault();};"
+                + "function send(){"
+                + "if(fi.files.length>" + MAX_BATCH + "){reset('الحد الأقصى " + MAX_BATCH + " ملفات في المرة الواحدة');return;}"
                 // Numbered field names: a repeated name would collapse to one file server-side.
                 + "var fd=new FormData();"
                 + "for(var i=0;i<fi.files.length;i++){fd.append('image'+i,fi.files[i]);}"
                 + "var x=new XMLHttpRequest();x.open('POST','/',true);x.timeout=900000;"
                 // in-progress state: button locks, bar appears, percentage counts up
-                + "b.disabled=true;b.textContent='جارٍ الرفع…';bar.style.display='block';"
+                + "pick.className='pick busy';"
+                + "pick.textContent=fi.files.length===1?fi.files[0].name:('جارٍ رفع '+fi.files.length+' ملفات');"
+                + "bar.style.display='block';"
                 + "m.className='';m.textContent='جارٍ تجهيز الملف…';"
                 + "x.upload.onprogress=function(ev){if(ev.lengthComputable){"
                 + "var p=Math.round(ev.loaded*100/ev.total);fill.style.width=p+'%';"
@@ -546,7 +548,7 @@ public class UploadServer extends NanoHTTPD {
                 + "else{reset(x.responseText||('خطأ '+x.status));}};"
                 + "x.onerror=function(){reset('انقطع الاتصال بالجهاز — تأكّد من أن الهاتف والشاشة على شبكة الواي‑فاي نفسها ثم أعد المحاولة');};"
                 + "x.ontimeout=function(){reset('استغرق الرفع وقتاً طويلاً — جرّب فيديو أقصر أو اقترب من الراوتر');};"
-                + "x.send(fd);};"
+                + "x.send(fd);}"
                 + "</" + "script></body></html>";
     }
 

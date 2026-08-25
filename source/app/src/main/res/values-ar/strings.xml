@@ -442,10 +442,10 @@
     <string name="leopard_downloading">جارٍ تحميل الفيديو… %1$d%%</string>
     <string name="leopard_download_failed">تعذّر تنزيل هذه الخلفية</string>
     <string name="leopard_source_phone">من الهاتف</string>
-    <string name="leopard_phone_hint">امسح هذا الرمز بهاتف على شبكة الواي‑فاي نفسها، ثم ارفع الصورة.</string>
+    <string name="leopard_phone_hint">امسح هذا الرمز بهاتف على شبكة الواي‑فاي نفسها، ثم اختر الصورة.</string>
     <string name="leopard_phone_step1">١ — امسح الرمز بكاميرا الهاتف (على شبكة الواي‑فاي نفسها)</string>
-    <string name="leopard_phone_step2">٢ — ستُفتح صفحة على الهاتف: اختر الصورة</string>
-    <string name="leopard_phone_step3">٣ — اضغط «رفع الصورة» لتظهر هنا على الشاشة</string>
+    <string name="leopard_phone_step2">٢ — ستُفتح صفحة على الهاتف: اضغط زرّ الاختيار واختر الصورة</string>
+    <string name="leopard_phone_step3">٣ — يبدأ الرفع وحده، وتظهر الصورة هنا على الشاشة</string>
     <string name="leopard_phone_keep_open">⚠ اترك هذه الشاشة مفتوحة حتى ينتهي الرفع من الهاتف — إذا أغلقت التطبيق فلن تصل الصورة.</string>
     <string name="leopard_phone_received">تم استلام الصورة ✓ — اضبط الإطار ثم عيّنها خلفية</string>
     <string name="leopard_phone_empty">لم تُرسَل أي صورة من الهاتف بعد — امسح الرمز لإضافة صورة</string>
