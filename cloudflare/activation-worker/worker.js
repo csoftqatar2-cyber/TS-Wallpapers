@@ -52,6 +52,51 @@ const NEW_SERIAL_PREFIX = '578';
 const LEGACY_SERIAL_PREFIX = '7078';
 
 /**
+ * Closed blocks carved out of the open '578' space.
+ *
+ * The prefix rule alone means a customer who bought 578300001 can activate a
+ * second car by typing 578300002 — the code next to their own. That is the one
+ * guess anyone actually makes. A block listed here stops being open: inside it,
+ * ONLY the serials that were really issued are honored, and everything else that
+ * shares its prefix is rejected like any malformed code.
+ *
+ * The rest of the '578' space is deliberately left exactly as it was. This is a
+ * fence around the codes we hand out, not a change to the licensing rule: a
+ * serial outside every block listed here still activates on its prefix alone.
+ *
+ * `digits` is the exact width of the tail, and it is load-bearing. Without it
+ * '5783000010' — an issued code with a digit appended — would read as 001 and
+ * pass, which is the same guess in a different costume.
+ *
+ * To sell another batch: issue it inside a new block and add the block here
+ * BEFORE handing the codes out. A block added after the fact would reject codes
+ * a customer has already paid for.
+ */
+const CLOSED_BLOCKS = [
+  // Sold 2026-08-26: 578300001 … 578300100 (100 codes).
+  { prefix: '578300', digits: 3, firstIssued: 1, lastIssued: 100 },
+];
+
+/**
+ * True when `serial` falls inside a closed block but is not one of the serials
+ * that block actually issued. False for every serial outside every block, which
+ * is why the open space keeps behaving exactly as it did before.
+ */
+function isUnissuedInClosedBlock(serial) {
+  for (const block of CLOSED_BLOCKS) {
+    if (!serial.startsWith(block.prefix)) continue;
+
+    const tail = serial.slice(block.prefix.length);
+    if (tail.length !== block.digits) return true;   // wrong width, incl. appended digits
+    if (!/^[0-9]+$/.test(tail)) return true;
+
+    const n = Number(tail);
+    return n < block.firstIssued || n > block.lastIssued;
+  }
+  return false;
+}
+
+/**
  * Brute-force lock. After this many CONSECUTIVE rejected codes, the hardware id
  * blocks itself and no code works on it again until an operator lifts the block
  * from the dashboard.
@@ -286,10 +331,20 @@ async function handleActivate(db, body) {
     .bind(serial)
     .first();
 
-  // '578...' is always valid. '7078...' is valid only when it's already on
-  // file — a genuinely new (never-seen) 7078 code no longer activates anything.
+  // This car re-typing the code it already owns is always honored, ahead of
+  // every format rule. That is Rule 2 at the top of this file: /activate must
+  // stay idempotent so a retry after a failed Postgres commit self-heals. It
+  // also means no rule added below can ever lock out a car already in the
+  // field — the worst a bad rule can do is refuse a NEW activation.
+  const ownedByThisCar = !!serialOwner && serialOwner.hardware_id === hardwareId;
+
+  // '578...' is always valid, EXCEPT inside a closed block, where only the
+  // serials actually issued count (see CLOSED_BLOCKS). '7078...' is valid only
+  // when it's already on file — a genuinely new (never-seen) 7078 code no
+  // longer activates anything.
   const validFormat =
-    serial.startsWith(NEW_SERIAL_PREFIX) ||
+    ownedByThisCar ||
+    (serial.startsWith(NEW_SERIAL_PREFIX) && !isUnissuedInClosedBlock(serial)) ||
     (serial.startsWith(LEGACY_SERIAL_PREFIX) && !!serialOwner);
 
   // Both rejections count the same. A code belonging to someone else's car is
