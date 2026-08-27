@@ -299,7 +299,18 @@ class LeopardApplier {
                 }
             }
         }
-        ctx.startActivity(intent, opts);
+        try {
+            ctx.startActivity(intent, opts);
+        } catch(SecurityException e) {
+            // Naming a display is a privilege, not a right. SafeActivityOptions.checkPermissions
+            // rejects launchDisplayId for a display this app does not own — which happens when the
+            // picker is itself running inside another app's window (the THABTHABA dashboard hosts
+            // it on a virtual display, and pressing "set wallpaper" crashed here). Losing the
+            // display hint only risks the rotation this method exists to avoid; losing the app
+            // loses everything, so drop the hint and start it plainly.
+            Log.w(TAG, "display hint refused, starting without it", e);
+            ctx.startActivity(intent);
+        }
     }
 
     /** Which screen this context is on, or -1 when it cannot be told. */
