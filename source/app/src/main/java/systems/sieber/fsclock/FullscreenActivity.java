@@ -153,7 +153,7 @@ public class FullscreenActivity extends AppCompatActivity {
                         // the way back from Settings — so switching mode there used to write the
                         // pref and change nothing until the app was killed and reopened.
                         if(OperatingMode.isHandoff(mSharedPref) && new WallpaperRepo(FullscreenActivity.this).isActive()) {
-                            startActivity(new Intent(FullscreenActivity.this, LeopardPickerActivity.class));
+                            startHere(new Intent(FullscreenActivity.this, LeopardPickerActivity.class));
                             finish();
                             return;
                         }
@@ -188,14 +188,9 @@ public class FullscreenActivity extends AppCompatActivity {
         // chosen answers that question first. It has to come before the Leopard/Lynkco redirect
         // below, or a car migrated onto the wrong mode would sail past the gate into a picker
         // it should not be in. See ModeConfirmActivity for why the gate exists at all.
-        if(ModeConfirmActivity.isPending(this, mSharedPref)) {
-            startActivity(new Intent(this, ModeConfirmActivity.class));
-            finish();
-            return;
-        }
-
-        if(OperatingMode.isHandoff(mSharedPref) && new WallpaperRepo(this).isActive()) {
-            startActivity(new Intent(this, LeopardPickerActivity.class));
+        Intent gated = routeFor(this, mSharedPref);
+        if(gated != null) {
+            startHere(gated);
             finish();
             return;
         }
@@ -207,11 +202,7 @@ public class FullscreenActivity extends AppCompatActivity {
         // first download, an update landing on a car that never finished one) is held the same
         // way. Without it the slideshow starts on an empty library and downloads underneath
         // itself, which is what the workshop saw as the screen freezing.
-        if(WallpaperDownloadActivity.isPending(this, mSharedPref)) {
-            startActivity(new Intent(this, WallpaperDownloadActivity.class));
-            finish();
-            return;
-        }
+
 
         setContentView(R.layout.activity_fullscreen);
         uiModeManager = (UiModeManager) getSystemService(UI_MODE_SERVICE);
@@ -559,4 +550,63 @@ public class FullscreenActivity extends AppCompatActivity {
         }
     }
 
+    /**
+     * Start one of our own activities WITHOUT letting it jump to another screen.
+     *
+     * <p>This app hands off between activities and finishes the one behind. On a unit with more
+     * than one display that handover is where it moves: a task with no display named for it goes
+     * to the default one, so an app opened on a passenger panel - or inside the THABTHABA
+     * dashboard, which renders it on a virtual display of its own - visibly flashed onto the main
+     * screen for a moment before being carried back. Recorded off a real car: the picker filled
+     * the main panel for about a second on every launch.
+     *
+     * <p>Naming the display we are already on keeps the whole app where it was opened. Naming a
+     * display is a privilege the system can refuse, so the hint is dropped rather than taking the
+     * app down with it.
+     */
+    void startHere(Intent intent) {
+        android.os.Bundle opts = null;
+        try {
+            android.view.Display d = (android.os.Build.VERSION.SDK_INT >= 30)
+                    ? getDisplay() : getWindowManager().getDefaultDisplay();
+            if(d != null && d.getDisplayId() >= 0) {
+                opts = android.app.ActivityOptions.makeBasic()
+                        .setLaunchDisplayId(d.getDisplayId()).toBundle();
+            }
+        } catch(Throwable t) {
+            opts = null;
+        }
+        try {
+            startActivity(intent, opts);
+        } catch(SecurityException e) {
+            startActivity(intent);
+        }
+    }
+    /**
+     * The one place that decides which screen this app owes the customer.
+     *
+     * <p>Returns the screen to go to, or null to stay on this one - which is not "nothing to do":
+     * this activity carries the activation overlay, so null is what an unactivated car gets, and
+     * it is the gate.
+     *
+     * <p>Extracted because there are now two ways in. {@link LeopardEntryActivity} is the door the
+     * THABTHABA dashboard uses, and it asks THIS method rather than repeating the decision. A
+     * second copy of a licence check is a second place for it to be forgotten, and the whole point
+     * of the second door is that it changes where a window lands, never who is allowed through.
+     *
+     * <p>Order matters and is the original order: the mode question comes before the Leopard
+     * redirect, or a car migrated onto the wrong mode sails into a picker it should not be in.
+     */
+    static Intent routeFor(Activity a, SharedPreferences sp) {
+        if(ModeConfirmActivity.isPending(a, sp)) {
+            return new Intent(a, ModeConfirmActivity.class);
+        }
+        if(OperatingMode.isHandoff(sp) && new WallpaperRepo(a).isActive()) {
+            return new Intent(a, LeopardPickerActivity.class);
+        }
+        if(WallpaperDownloadActivity.isPending(a, sp)) {
+            return new Intent(a, WallpaperDownloadActivity.class);
+        }
+        return null;
+    }
 }

@@ -159,6 +159,22 @@
             </intent-filter>
         </activity>
 
+        <!-- The THABTHABA dashboard's way in. Its own taskAffinity is the whole point:
+             a NEW_TASK launch (which is what `am start` always is) would otherwise find
+             this app's display-0 task and drag it across the main screen on its way to
+             the dashboard's virtual display. No intent-filter, so it stays out of the
+             launcher. Exported because `am start` runs as shell; it reads no extras and
+             adds no behaviour - it IS FullscreenActivity, so both gates run unchanged.
+             configChanges must match FullscreenActivity: landing on another display is a
+             configuration change, and being recreated by it is its own visible flicker. -->
+        <activity
+            android:name=".LeopardEntryActivity"
+            android:configChanges="orientation|screenSize|keyboardHidden"
+            android:theme="@style/AppTheme"
+            android:exported="true"
+            android:taskAffinity=":entry"
+            android:excludeFromRecents="true" />
+
         <receiver android:name=".PowerReceiver"
             android:exported="true">
             <intent-filter>
