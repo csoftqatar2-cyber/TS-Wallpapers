@@ -1,10 +1,12 @@
 package systems.sieber.fsclock;
 
+import android.app.Activity;
 import android.app.Application;
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.content.res.Configuration;
 import android.graphics.Color;
+import android.os.Bundle;
 import android.util.Log;
 
 import androidx.appcompat.app.AppCompatDelegate;
@@ -27,6 +29,30 @@ public class FsClockApp extends Application {
         // was the opposite of harmless: this method runs in every process of the app, the wallpaper
         // service's included, so it fired the instant Android restored our live wallpaper at boot
         // and replaced it with a plain bitmap. See the note in LeopardApplier.
+        guardTheWallpaperCard();
+    }
+
+    /**
+     * Hide our recents card whenever a screen comes to the front and our live wallpaper is the
+     * active one — see {@link LeopardApplier#keepTaskOutOfRecents} for why the card is dangerous.
+     *
+     * Registered here rather than in each Activity's onResume because there are five screens that
+     * can be the front one on a hand-off car, and one of them forgotten is a car whose wallpaper
+     * still disappears. Unlike the reassert() above, this touches nothing until an Activity is
+     * actually resumed, so the wallpaper service's own process never runs a line of it.
+     */
+    private void guardTheWallpaperCard() {
+        registerActivityLifecycleCallbacks(new ActivityLifecycleCallbacks() {
+            @Override public void onActivityResumed(Activity a) {
+                LeopardApplier.keepTaskOutOfRecents(a);
+            }
+            @Override public void onActivityCreated(Activity a, Bundle b) { }
+            @Override public void onActivityStarted(Activity a) { }
+            @Override public void onActivityPaused(Activity a) { }
+            @Override public void onActivityStopped(Activity a) { }
+            @Override public void onActivitySaveInstanceState(Activity a, Bundle b) { }
+            @Override public void onActivityDestroyed(Activity a) { }
+        });
     }
 
     /**

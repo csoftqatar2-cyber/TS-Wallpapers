@@ -275,6 +275,11 @@ Roboto Font Copyright (c) Christian Robertson. Licensed under the Apache License
     <string name="leopard_applied_image">Set ✓ — home and lock screen</string>
     <string name="leopard_applied_video">Set ✓ — home screen</string>
     <string name="leopard_apply_failed">Could not set this wallpaper</string>
+    <!-- Shown when the head unit cleared our live wallpaper — a force-stop from the recents
+         list does exactly that. Offering the same picture back beats hunting for it again. -->
+    <string name="leopard_restore_title">The wallpaper was removed</string>
+    <string name="leopard_restore_message">The head unit removed the wallpaper you had set. Put the same one back?</string>
+    <string name="leopard_restore_ok">Put it back</string>
     <string name="leopard_local_none">No file chosen</string>
     <string name="leopard_local_empty">Nothing stored on this screen yet</string>
     <string name="leopard_local_browse">Browse device files</string>

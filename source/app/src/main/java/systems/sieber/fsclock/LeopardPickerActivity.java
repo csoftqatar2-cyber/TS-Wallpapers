@@ -328,6 +328,10 @@ public class LeopardPickerActivity extends AppCompatActivity {
         // moment ago by the configuration change the apply itself caused, and it exists only to
         // find this note and leave.
         if(resumeAfterApply()) return;
+        // A wallpaper this car had is gone (see offerWallpaperRestore). Asked here rather than
+        // fixed silently: putting a live wallpaper back is the system's screen and the owner's
+        // own button, so the least we can do is spare them finding the picture again.
+        offerWallpaperRestore();
         // onPause tore the player down. Coming back — most often from the system's live-wallpaper
         // screen, which every video apply passes through — the preview would otherwise be a black
         // rectangle where a playing clip was. The file is cached by now, so this is instant.
@@ -348,6 +352,41 @@ public class LeopardPickerActivity extends AppCompatActivity {
             return;
         }
         restartTilePlayers();
+    }
+
+    /** Asked at most once per visit, so a declined offer does not come back on every resume. */
+    private boolean mRestoreOffered;
+
+    /**
+     * Offer to put back a wallpaper the head unit took away.
+     *
+     * The car this exists for is a Denza, whose recents force-stops the package when its card is
+     * swiped — and a force-stop makes the system drop our live wallpaper for the vendor's own
+     * (the log is quoted in {@link LeopardApplier#keepTaskOutOfRecents}, which is what stops it
+     * happening again). This is the other half: the cars already in that state when the fix
+     * arrives, and the ways round it that remain — "close all", or a force-stop from Settings.
+     *
+     * Re-applying is deliberately the SAME call the Set button makes, so the restore cannot drift
+     * from the apply: the stored file is already durable ({@code leopard-current/current.jpg}),
+     * and the system's screen it hands to is the only way an ordinary app may install a live
+     * wallpaper. One button on our side, one on the system's, and the picture the owner chose is
+     * back — instead of finding it in the library again.
+     */
+    private void offerWallpaperRestore() {
+        if(mRestoreOffered || isFinishing()) return;
+        if(!LeopardApplier.wasTakenFromUs(this)) return;
+        final String uri = mPrefs.getString(MediaWallpaperService.PREF_URI, null);
+        final String type = mPrefs.getString(LeopardApplier.PREF_TYPE, null);
+        if(uri == null) return;
+        mRestoreOffered = true;
+        CrashReporter.breadcrumb("leopard: offering to restore a wallpaper that was cleared");
+        new AuroraDialog.Builder(this)
+                .setTitle(R.string.leopard_restore_title)
+                .setMessage(R.string.leopard_restore_message)
+                .setPositiveButton(R.string.leopard_restore_ok,
+                        (dlg, w) -> onApplied(LeopardApplier.apply(this, uri, type), type))
+                .setNegativeButton(R.string.update_cancel, null)
+                .show();
     }
 
     /**

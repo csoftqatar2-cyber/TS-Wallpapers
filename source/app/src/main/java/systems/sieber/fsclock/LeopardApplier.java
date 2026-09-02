@@ -144,6 +144,92 @@ class LeopardApplier {
     }
 
     /**
+     * Take this app's task out of the recents list for as long as our live wallpaper is the one
+     * on the screen — the single fix for "the wallpaper disappears when I close the app".
+     *
+     * Swiping a card away in the recents list is not the ordinary task removal it is on a phone.
+     * Measured on a Denza (DiLink 6.0) head unit, the vendor's recents FORCE-STOPS the package:
+     *
+     *     RecentsPresenter: onSwipeUpDelete task = TS Wallpapers
+     *     RecentsModel:     Recents forceStopPackage = store.thabthaba.clock
+     *     ActivityManager:  Force stopping store.thabthaba.clock ... from pid 2672
+     *     WallpaperManagerService: Wallpaper service gone: ...MediaWallpaperService
+     *     WallpaperManagerService: Wallpaper uninstalled, removing: ...MediaWallpaperService
+     *     WallpaperManagerService: bindWallpaperComponentLocked: componentName=null
+     *
+     * A force-stop reaches WallpaperManagerService as "this wallpaper's package is GONE", so it
+     * does not re-bind us the way it does after an ordinary process death (which is why a car
+     * comes back from a restart with the picture intact) — it clears the wallpaper and falls
+     * back to the vendor's own. Nothing on our side can undo that afterwards: re-binding a live
+     * wallpaper needs SET_WALLPAPER_COMPONENT, a signature permission, and the one entry point
+     * an ordinary app has is the system screen with the user's own button on it.
+     *
+     * Splitting the service into its own process does NOT help either — a force-stop kills every
+     * process of the package. The only thing that helps is not being swipeable, and the card is
+     * the only thing the owner can swipe. Verified on the car: started with
+     * FLAG_ACTIVITY_EXCLUDE_FROM_RECENTS, the vendor's recents reported {@code preloadTaskList
+     * size=1} and listed the sibling app only, with ours running the whole time.
+     *
+     * Scoped to "our wallpaper is live" rather than to the mode, so Others/GWM/Jetour — which
+     * draw their own screen and own no wallpaper component — keep an ordinary recents card, and
+     * a hand-off car gets one too until the moment it actually has a wallpaper to protect.
+     */
+    static void keepTaskOutOfRecents(android.app.Activity activity) {
+        try {
+            if(!isOurServiceActive(activity)) return;
+            android.app.ActivityManager am = (android.app.ActivityManager)
+                    activity.getSystemService(Context.ACTIVITY_SERVICE);
+            if(am == null) return;
+            final int myTaskId = activity.getTaskId();
+            for(android.app.ActivityManager.AppTask task : am.getAppTasks()) {
+                if(idOf(task.getTaskInfo()) != myTaskId) continue;
+                task.setExcludeFromRecents(true);
+                CrashReporter.breadcrumb("leopard: task " + myTaskId + " hidden from recents");
+                return;
+            }
+        } catch(Throwable t) {
+            // A ROM that refuses this leaves the card in place: the old behaviour, not a crash.
+            Log.w(TAG, "could not hide the task from recents", t);
+        }
+    }
+
+    /**
+     * Which task an AppTask describes, or -1.
+     *
+     * {@code RecentTaskInfo.id} is the only field that exists all the way back to our minSdk, and
+     * it is documented to read -1 for a task that is not running — never ours, which is the one we
+     * are standing in. {@code taskId} replaced it in Q and is the field to trust where it exists;
+     * it lives on TaskInfo, a class that does not exist below Q, so the version gate is what keeps
+     * an older ROM from resolving a field that is not there.
+     */
+    private static int idOf(android.app.ActivityManager.RecentTaskInfo info) {
+        if(info == null) return -1;
+        if(Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) return info.taskId;
+        //noinspection deprecation
+        return info.id;
+    }
+
+    /**
+     * True when a wallpaper this app applied is no longer the one on the screen — a card that was
+     * swiped away before {@link #keepTaskOutOfRecents} could hide it, "close all", or a force-stop
+     * from Settings.
+     *
+     * Only counts files that went to our own live wallpaper: a Lynkco still lives in the Flyme
+     * theme app, which no force-stop of ours can disturb, and claiming otherwise would offer to
+     * "restore" a wallpaper that was never lost.
+     */
+    static boolean wasTakenFromUs(Context ctx) {
+        try {
+            SharedPreferences p = prefs(ctx);
+            if(p.getString(MediaWallpaperService.PREF_URI, null) == null) return false;
+            if(!needsSystemScreen(ctx, p.getString(PREF_TYPE, null))) return false;
+            return !isOurServiceActive(ctx);
+        } catch(Throwable t) {
+            return false;
+        }
+    }
+
+    /**
      * Store the selection, then apply it.
      *
      * "Apply" is now the same act for every kind of file: point our live wallpaper at it. The
