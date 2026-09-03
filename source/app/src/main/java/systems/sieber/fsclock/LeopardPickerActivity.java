@@ -311,9 +311,42 @@ public class LeopardPickerActivity extends AppCompatActivity {
         selectSource(mSource);
     }
 
+    /** Fleet contract: re-check the licence every 10±2 min while this screen is up. */
+    private final android.os.Handler mRecheckHandler = new android.os.Handler(android.os.Looper.getMainLooper());
+    private final Runnable mPeriodicRecheck = new Runnable() {
+        @Override public void run() {
+            if(isFinishing() || isDestroyed()) return;
+            if(LicenceRecheck.claim(LeopardPickerActivity.this)) silentRefresh();
+            mRecheckHandler.postDelayed(this, LicenceRecheck.nextDelayMs());
+        }
+    };
+    /** A sibling program said "ask the server now" (no extras, rate-limited in claim()). */
+    private final android.content.BroadcastReceiver mRecheckReceiver = new android.content.BroadcastReceiver() {
+        @Override public void onReceive(android.content.Context c, Intent i) {
+            if(i == null || !LicenceRecheck.ACTION.equals(i.getAction())) return;
+            if(LicenceRecheck.claim(LeopardPickerActivity.this)) silentRefresh();
+        }
+    };
+    private boolean mRecheckRegistered;
+
     @Override
     protected void onResume() {
         super.onResume();
+        mRecheckHandler.removeCallbacks(mPeriodicRecheck);
+        mRecheckHandler.postDelayed(mPeriodicRecheck, LicenceRecheck.nextDelayMs());
+        if(!mRecheckRegistered) {
+            try {
+                android.content.IntentFilter f = new android.content.IntentFilter(LicenceRecheck.ACTION);
+                if(android.os.Build.VERSION.SDK_INT >= 33) {
+                    registerReceiver(mRecheckReceiver, f, android.content.Context.RECEIVER_EXPORTED);
+                } else {
+                    registerReceiver(mRecheckReceiver, f);
+                }
+                mRecheckRegistered = true;
+            } catch(Throwable ignored) {
+                // The manifest receiver still writes the flag; this screen learns at its next sync.
+            }
+        }
         // The mirror of the check in FullscreenActivity: this screen only exists because the
         // mode is a hand-off product (Leopard or Lynkco), so the moment that stops being true —
         // the user switched back in Settings, which we launch plainly and get no result from —
@@ -2069,6 +2102,11 @@ public class LeopardPickerActivity extends AppCompatActivity {
     @Override
     protected void onPause() {
         super.onPause();
+        mRecheckHandler.removeCallbacks(mPeriodicRecheck);
+        if(mRecheckRegistered) {
+            try { unregisterReceiver(mRecheckReceiver); } catch(Throwable ignored) { }
+            mRecheckRegistered = false;
+        }
         // Leaving a decoder running behind another app is not something a head unit forgives.
         stopPreviewVideo();
         // Same for the grid's tiles, and for the same reason — but they have to be put back on
