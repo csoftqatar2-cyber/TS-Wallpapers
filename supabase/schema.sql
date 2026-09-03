@@ -1008,12 +1008,14 @@ create or replace function public.is_device_activated_v2(device_hw_id text, devi
 returns boolean
 language plpgsql security definer set search_path to 'public'
 as $function$
+#variable_conflict use_column
 declare
     hw    text;
     v_app text := lower(coalesce(nullif(btrim(is_device_activated_v2.app_id), ''), 'wallpapers'));
+    v_tok text := is_device_activated_v2.device_token;
     ok    boolean;
 begin
-    if is_device_activated_v2.device_token is null or is_device_activated_v2.device_hw_id is null then return false; end if;
+    if v_tok is null or is_device_activated_v2.device_hw_id is null then return false; end if;
     hw := public.resolve_device_id(is_device_activated_v2.device_hw_id);
     select exists (
         select 1
@@ -1021,16 +1023,20 @@ begin
           join public.device_tokens t on t.hardware_id = d.hardware_id and t.app_id = v_app
          where d.hardware_id = hw
            and d.is_active = true and d.is_blocked = false
-           and t.token_hash = encode(extensions.digest(is_device_activated_v2.device_token, 'sha256'), 'hex')
+           and t.token_hash = encode(extensions.digest(v_tok, 'sha256'), 'hex')
     ) into ok;
     if ok then
+        -- Evidence stamp, at most once an hour. `#variable_conflict use_column` + the alias
+        -- matter: the first version wrote `app_id = v_app` unqualified, plpgsql saw the
+        -- parameter `app_id`, raised "ambiguous", the exception block swallowed it, and no
+        -- car was ever stamped (found on the bench 2026-09-04 01:5x).
         begin
-            update public.device_tokens
+            update public.device_tokens t
                set last_verified_at = now()
-             where hardware_id = hw and app_id = v_app
-               and (last_verified_at is null or last_verified_at < now() - interval '1 hour');
+             where t.hardware_id = hw and t.app_id = v_app
+               and (t.last_verified_at is null or t.last_verified_at < now() - interval '1 hour');
         exception when others then
-            null;  -- evidence only; never let it cost a car its answer
+            raise warning 'is_device_activated_v2: stamp failed for %/%: %', hw, v_app, SQLERRM;
         end;
     end if;
     return coalesce(ok, false);
