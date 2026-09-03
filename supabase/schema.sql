@@ -1055,3 +1055,8 @@ revoke all on function public.admin_set_device_block_all(text, boolean) from pub
 grant execute on function public.admin_set_device_block_all(text, boolean) to authenticated;
 -- Supabase default privileges hand EXECUTE to anon on new functions; take it back explicitly.
 revoke execute on function public.admin_set_device_block_all(text, boolean) from anon;
+
+-- 20260909_alias_admin_read.sql
+drop policy if exists "alias admin read" on public.device_id_aliases;
+create policy "alias admin read" on public.device_id_aliases for select to authenticated using (auth.uid() = '5b8e1336-ce54-4dd9-bd23-243158c178fe'::uuid);
+grant select on public.device_id_aliases to authenticated;
