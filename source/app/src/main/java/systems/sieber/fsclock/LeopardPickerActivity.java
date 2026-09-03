@@ -947,11 +947,33 @@ public class LeopardPickerActivity extends AppCompatActivity {
 
     /** Sync without disturbing the visible strip; on success re-read the list so anything deleted
      *  on the manager drops out and anything new appears. Failures are ignored — the cache stands. */
+    /**
+     * The server just answered, and the answer was "this car is not activated" (the
+     * {@code inactive} sentinel — the car was blocked from the dashboard, or its row was
+     * removed). sync() has already cleared the stored flag; what it cannot do is take this
+     * screen down. Without this a blocked Leopard car sat on an empty picker saying "no
+     * wallpapers yet" with nothing to tell the driver why — while every other program in the
+     * fleet was already showing the blocked screen. FullscreenActivity carries the activation
+     * overlay (blocked banner + support QR), exactly what a cold start would have shown.
+     *
+     * Only a SERVER answer gets here: sync() reports success=false on any network failure,
+     * and the flag is never written on failure, so an offline car keeps its picker.
+     */
+    private boolean standDownIfInactive(boolean success) {
+        if(!success || mRepo.isActive()) return false;
+        startActivity(new Intent(this, FullscreenActivity.class));
+        finish();
+        return true;
+    }
+
     private void silentRefresh() {
         mRepo.sync(new WallpaperRepo.SyncCallback() {
             @Override
             public void done(boolean success, int count, String error) {
-                runOnUiThread(() -> { if(success) showCloud(); });
+                runOnUiThread(() -> {
+                    if(standDownIfInactive(success)) return;
+                    if(success) showCloud();
+                });
             }
             @Override
             public void mediaReady() { runOnUiThread(LeopardPickerActivity.this::onMediaCached); }
@@ -971,6 +993,7 @@ public class LeopardPickerActivity extends AppCompatActivity {
             public void done(boolean success, int count, String error) {
                 runOnUiThread(() -> {
                     mProgress.setVisibility(View.GONE);
+                    if(standDownIfInactive(success)) return;
                     if(success) { showCloud(); return; }   // sync() reloads the list itself
                     // An offline car may still have a usable library: the last good response is
                     // cached and videos are pre-downloaded. "Offline, showing cached" and
