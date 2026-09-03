@@ -1103,3 +1103,56 @@ create policy "blockev admin read" on public.device_block_events for select to a
 grant select on public.device_block_events to authenticated;
 revoke all on public.device_block_events from anon;
 
+-- 20260913_admin_settings_voice_config.sql: owner-editable settings (admin only) + secret-gated S2S reader for the voice proxy.
+create table if not exists public.admin_settings (
+    key        text primary key,
+    value      text,
+    updated_at timestamptz not null default now(),
+    updated_by uuid
+);
+alter table public.admin_settings enable row level security;
+drop policy if exists "adm settings read"   on public.admin_settings;
+drop policy if exists "adm settings insert" on public.admin_settings;
+drop policy if exists "adm settings update" on public.admin_settings;
+create policy "adm settings read"   on public.admin_settings for select to authenticated using     (auth.uid() = '5b8e1336-ce54-4dd9-bd23-243158c178fe'::uuid);
+create policy "adm settings insert" on public.admin_settings for insert to authenticated with check (auth.uid() = '5b8e1336-ce54-4dd9-bd23-243158c178fe'::uuid);
+create policy "adm settings update" on public.admin_settings for update to authenticated using     (auth.uid() = '5b8e1336-ce54-4dd9-bd23-243158c178fe'::uuid) with check (auth.uid() = '5b8e1336-ce54-4dd9-bd23-243158c178fe'::uuid);
+grant select, insert, update on public.admin_settings to authenticated;
+revoke all on public.admin_settings from anon;
+
+-- Stamp who/when on every write, whatever the client sends.
+create or replace function public.admin_settings_touch()
+returns trigger language plpgsql as $function$
+begin
+    new.updated_at := now();
+    new.updated_by := auth.uid();
+    return new;
+end $function$;
+drop trigger if exists admin_settings_touch on public.admin_settings;
+create trigger admin_settings_touch before insert or update on public.admin_settings
+    for each row execute function public.admin_settings_touch();
+
+insert into public.admin_settings (key, value) values
+  ('voice.openrouter_key', null),
+  ('voice.model',          'openai/gpt-4o-mini'),
+  ('voice.daily_quota_per_car',  '60'),
+  ('voice.minute_quota_per_car', '6')
+on conflict (key) do nothing;
+
+create or replace function cf.voice_config(p_secret text)
+returns jsonb
+language plpgsql security definer set search_path to 'public'
+as $function$
+#variable_conflict use_column
+declare
+    expected text;
+begin
+    select ds.decrypted_secret into expected from vault.decrypted_secrets ds where ds.name = 'cf_activation_worker_secret';
+    if expected is null or p_secret is null
+       or encode(extensions.digest(p_secret, 'sha256'), 'hex') <> encode(extensions.digest(expected, 'sha256'), 'hex') then
+        raise exception 'unauthorized' using errcode = '28000';
+    end if;
+    return coalesce((select jsonb_object_agg(s.key, s.value) from public.admin_settings s where s.key like 'voice.%'), '{}'::jsonb);
+end $function$;
+revoke all on function cf.voice_config(text) from public;
+grant execute on function cf.voice_config(text) to anon, authenticated;
