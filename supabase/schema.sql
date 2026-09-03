@@ -581,18 +581,33 @@ CREATE OR REPLACE FUNCTION public.store_check_in(p_hw_id text, p_car text DEFAUL
  SECURITY DEFINER
  SET search_path TO 'public'
 AS $function$
-declare v_blocked boolean;
+declare
+    v_store_blocked  boolean;
+    v_device_blocked boolean;
 begin
-  if p_hw_id is null or length(p_hw_id) = 0 then return false; end if;
-  insert into public.store_installs (hw_id, car, version)
-       values (p_hw_id, nullif(p_car,''), nullif(p_version,''))
-  on conflict (hw_id) do update
-       set last_seen = now(),
-           car       = coalesce(nullif(excluded.car,''),     public.store_installs.car),
-           version   = coalesce(nullif(excluded.version,''), public.store_installs.version)
-  returning blocked into v_blocked;
-  return coalesce(v_blocked, false);
-end $function$;
+    if p_hw_id is null or length(p_hw_id) = 0 then return false; end if;
+
+    insert into public.store_installs (hw_id, car, version)
+         values (p_hw_id, nullif(p_car,''), nullif(p_version,''))
+    on conflict (hw_id) do update
+         set last_seen = now(),
+             car       = coalesce(nullif(excluded.car,''),     public.store_installs.car),
+             version   = coalesce(nullif(excluded.version,''), public.store_installs.version)
+    returning blocked into v_store_blocked;
+
+    -- One block list for the whole car (2026-09-03): the store also honours
+    -- devices.is_blocked, which the wallpapers dashboard and D1 write. Looked
+    -- up through resolve_device_id so a pre-VIN check-in id still matches.
+    select exists (
+        select 1
+          from public.devices d
+         where d.hardware_id = public.resolve_device_id(p_hw_id)
+           and d.is_blocked = true
+    ) into v_device_blocked;
+
+    return coalesce(v_store_blocked, false) or coalesce(v_device_blocked, false);
+end
+$function$;
 
 -- Crash upload from the store app (separate table from device_crashes).
 CREATE OR REPLACE FUNCTION public.store_report_crash(p_report text, p_car text DEFAULT NULL::text, p_version text DEFAULT NULL::text, p_device text DEFAULT NULL::text)
