@@ -1076,3 +1076,22 @@ revoke execute on function public.admin_set_device_block_all(text, boolean) from
 drop policy if exists "alias admin read" on public.device_id_aliases;
 create policy "alias admin read" on public.device_id_aliases for select to authenticated using (auth.uid() = '5b8e1336-ce54-4dd9-bd23-243158c178fe'::uuid);
 grant select on public.device_id_aliases to authenticated;
+
+-- 20260911_device_block_events.sql (admin_set_device_block itself is not captured in this file; its live body
+-- ends with an INSERT into this table after the Worker accepted the change).
+create table if not exists public.device_block_events (
+    id          bigserial primary key,
+    hardware_id text not null,
+    blocked     boolean not null,
+    reason      text,
+    by_uid      uuid,
+    via         text,
+    at          timestamptz not null default now()
+);
+create index if not exists device_block_events_hw_idx on public.device_block_events (hardware_id, at desc);
+alter table public.device_block_events enable row level security;
+drop policy if exists "blockev admin read" on public.device_block_events;
+create policy "blockev admin read" on public.device_block_events for select to authenticated using (auth.uid() = '5b8e1336-ce54-4dd9-bd23-243158c178fe'::uuid);
+grant select on public.device_block_events to authenticated;
+revoke all on public.device_block_events from anon;
+
