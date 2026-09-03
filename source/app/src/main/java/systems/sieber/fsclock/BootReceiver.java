@@ -46,8 +46,6 @@ public class BootReceiver extends BroadcastReceiver {
     static boolean isStartTrigger(String action) {
         if(action == null) return false;
         return action.equals(Intent.ACTION_BOOT_COMPLETED)
-                || action.equals("android.intent.action.QUICKBOOT_POWERON")
-                || action.equals("com.htc.intent.action.QUICKBOOT_POWERON")
                 || action.equals(Intent.ACTION_POWER_CONNECTED)
                 || action.equals(Intent.ACTION_MY_PACKAGE_REPLACED)
                 || action.equals(Intent.ACTION_USER_PRESENT);

@@ -31,6 +31,16 @@ import fi.iki.elonen.NanoHTTPD;
  * No internet or external hosting needed — everything stays on the local Wi-Fi.
  */
 public class UploadServer extends NanoHTTPD {
+    /**
+     * Per-session secret path segment (2026-09-03). The server listens on every
+     * interface while the QR is on screen, so before this anyone on the same Wi-Fi
+     * could push a picture onto the car. The QR now carries http://ip:port/<token>/
+     * and every other path — GET or POST — is a 404. New per instance, so a stale
+     * URL from a previous pairing is useless.
+     */
+    private final String mToken = Long.toHexString(new java.security.SecureRandom().nextLong())
+            + Long.toHexString(new java.security.SecureRandom().nextLong());
+    private String tokenPath() { return "/" + mToken + "/"; }
 
     private static final String TAG = "UploadServer";
 
@@ -145,6 +155,11 @@ public class UploadServer extends NanoHTTPD {
     public Response serve(IHTTPSession session) {
         try {
             if(Method.POST.equals(session.getMethod())) {
+                String postUri = session.getUri();
+                if(postUri == null || !tokenPath().equals(postUri.indexOf('?') >= 0 ? postUri.substring(0, postUri.indexOf('?')) : postUri)) {
+                    return newFixedLengthResponse(Response.Status.NOT_FOUND, "text/plain; charset=utf-8",
+                            "الصفحة غير موجودة");
+                }
                 Map<String, String> files = new HashMap<>();
                 session.parseBody(files);
                 // The page posts to "/" under image0, image1, ... — see FIELD_PREFIX. The old
@@ -207,7 +222,7 @@ public class UploadServer extends NanoHTTPD {
             int q = uri.indexOf('?');
             if(q >= 0) uri = uri.substring(0, q);
 
-            if("/".equals(uri) || uri.isEmpty()) {
+            if(tokenPath().equals(uri)) {
                 return newFixedLengthResponse(Response.Status.OK, "text/html; charset=utf-8", uploadPage());
             }
             if("/favicon.ico".equals(uri)) {
@@ -485,7 +500,7 @@ public class UploadServer extends NanoHTTPD {
                     : "<p style='margin:0 0 14px'>اختر من هاتفك <b>صورة</b> أو <b>فيديو</b>"
                       + " أو <b>صورة GIF متحركة</b> لتظهر على شاشة السيارة — يبدأ الرفع وحده"
                       + " فور اختيارك، وستفتح شاشة الضبط بعدها مباشرة</p>")
-                + "<form id='f' method='post' action='/' enctype='multipart/form-data'>"
+                + "<form id='f' method='post' action='" + tokenPath() + "' enctype='multipart/form-data'>"
                 + "<input id='file' type='file' name='image' accept='" + ACCEPT + "'"
                 + (many ? " multiple" : "") + " required>"
                 + "<label id='pick' class='pick' for='file'>" + pickLabel + "</label>"
@@ -532,7 +547,7 @@ public class UploadServer extends NanoHTTPD {
                 // Numbered field names: a repeated name would collapse to one file server-side.
                 + "var fd=new FormData();"
                 + "for(var i=0;i<fi.files.length;i++){fd.append('image'+i,fi.files[i]);}"
-                + "var x=new XMLHttpRequest();x.open('POST','/',true);x.timeout=900000;"
+                + "var x=new XMLHttpRequest();x.open('POST','" + tokenPath() + "',true);x.timeout=900000;"
                 // in-progress state: button locks, bar appears, percentage counts up
                 + "pick.className='pick busy';"
                 + "pick.textContent=fi.files.length===1?fi.files[0].name:('جارٍ رفع '+fi.files.length+' ملفات');"
@@ -647,7 +662,7 @@ public class UploadServer extends NanoHTTPD {
     public String getUrl() {
         String ip = getLocalIpAddress(mContext);
         // getListeningPort(), not PORT: startNew() may have fallen back to another port
-        return ip == null ? null : ("http://" + ip + ":" + getListeningPort() + "/");
+        return ip == null ? null : ("http://" + ip + ":" + getListeningPort() + tokenPath());
     }
 
     // ---- temp files (kept inside our own cache dir, created on demand) -------------

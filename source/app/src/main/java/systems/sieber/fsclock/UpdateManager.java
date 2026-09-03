@@ -171,7 +171,20 @@ public class UpdateManager {
             return;
         }
 
-        DownloadManager.Request req = new DownloadManager.Request(Uri.parse(apkUrl));
+        // 2026-09-03: only our own https hosts may hand this car an APK. CI and the
+        // dashboard publish to the R2 bucket; older app_versions rows may still point at
+        // Supabase storage, so both hosts stay allowed. A refusal here cannot false-positive.
+        Uri apkUri = Uri.parse(apkUrl);
+        String apkHost = apkUri.getHost() == null ? "" : apkUri.getHost().toLowerCase();
+        boolean hostOk = apkHost.equals("pub-3108628f0bc04bb4a97214eb7732e284.r2.dev")
+                || apkHost.equals("ihgmqwzdpugdzddobhbc.supabase.co");
+        if(!"https".equalsIgnoreCase(apkUri.getScheme()) || !hostOk
+                || apkUri.getUserInfo() != null || apkUri.getPort() != -1) {
+            CrashReporter.breadcrumb("update refused: bad apk_url host/scheme " + apkHost);
+            Toast.makeText(mActivity, R.string.update_failed, Toast.LENGTH_LONG).show();
+            return;
+        }
+        DownloadManager.Request req = new DownloadManager.Request(apkUri);
         req.setTitle(mActivity.getString(R.string.app_name));
         req.setDescription(mActivity.getString(R.string.update_downloading));
         req.setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED);
@@ -207,6 +220,31 @@ public class UpdateManager {
             Toast.makeText(mActivity, R.string.update_failed, Toast.LENGTH_LONG).show();
             return;
         }
+        // 2026-09-03: an APK is a zip and starts with "PK". A captive-portal page or an
+        // R2 error body saved as update.apk must never reach the installer. The sha256 is
+        // only recorded for now (app_versions has no digest column yet) — see FLEET-FIX-PLAN.
+        try(InputStream head = new FileInputStream(file)) {
+            byte[] magic = new byte[2];
+            int n = head.read(magic);
+            if(n < 2 || magic[0] != 'P' || magic[1] != 'K') {
+                CrashReporter.breadcrumb("update refused: not an APK (" + file.length() + " bytes)");
+                //noinspection ResultOfMethodCallIgnored
+                file.delete();
+                Toast.makeText(mActivity, R.string.update_failed, Toast.LENGTH_LONG).show();
+                return;
+            }
+        } catch(Exception e) {
+            Toast.makeText(mActivity, R.string.update_failed, Toast.LENGTH_LONG).show();
+            return;
+        }
+        try(InputStream in = new FileInputStream(file)) {
+            java.security.MessageDigest md = java.security.MessageDigest.getInstance("SHA-256");
+            byte[] buf = new byte[65536]; int r;
+            while((r = in.read(buf)) > 0) md.update(buf, 0, r);
+            StringBuilder hex = new StringBuilder();
+            for(byte x : md.digest()) hex.append(String.format("%02x", x));
+            CrashReporter.breadcrumb("update apk sha256=" + hex);
+        } catch(Exception ignored) { }
 
         // Preferred path: the modern PackageInstaller "session" API. It replaces
         // the app in place AND — unlike the old ACTION_VIEW intent — reports the
