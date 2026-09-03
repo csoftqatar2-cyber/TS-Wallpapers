@@ -343,7 +343,11 @@ AS $function$
 declare
     existing_hw_id text;
 begin
-    if legacy_hw_id is not null and legacy_hw_id <> '' and legacy_hw_id <> device_hw_id then
+    -- Direction guard (2026-09-03): same rule as migrate_device_hardware_id. The live
+    -- activate_device is the CF dispatcher (20260802_cf_activation_*.sql) and carries it too.
+    if legacy_hw_id is not null and legacy_hw_id <> '' and legacy_hw_id <> device_hw_id
+       and device_hw_id like 'VIN-%'
+       and (legacy_hw_id not like 'VIN-%' or upper(legacy_hw_id) = upper(device_hw_id)) then
         if not exists (select 1 from public.devices d where d.hardware_id = device_hw_id)
            and exists (select 1 from public.devices d where d.hardware_id = legacy_hw_id) then
             update public.devices set hardware_id = device_hw_id where hardware_id = legacy_hw_id;
@@ -395,6 +399,14 @@ CREATE OR REPLACE FUNCTION public.migrate_device_hardware_id(old_id text, new_id
 AS $function$
 begin
     if old_id is null or old_id = '' or new_id is null or new_id = '' or old_id = new_id then
+        return;
+    end if;
+    -- Direction guard (2026-09-03, migrations/20260903_migration_direction_guard.sql):
+    -- only legacy -> VIN, or a case-only VIN rename. A caller-named VIN- source is refused.
+    if new_id not like 'VIN-%' then
+        return;
+    end if;
+    if old_id like 'VIN-%' and upper(old_id) <> upper(new_id) then
         return;
     end if;
     -- Only ever migrate INTO an id that does not exist yet, so two devices can never be merged.

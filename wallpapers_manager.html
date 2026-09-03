@@ -3132,7 +3132,7 @@
                     } else {
                         const device = devicesList.find(d => d.hardware_id === wp.hardware_id);
                         const serial = device ? device.serial_number : 'غير معروف';
-                        target.innerHTML = `<i class="fa-solid fa-folder-tree"></i> ${folderChannel.label} · كود: ${serial}`;
+                        target.innerHTML = `<i class="fa-solid fa-folder-tree"></i> ${folderChannel.label} · كود: ${escapeHtml(serial)}`;
                         target.title = `معرف الجهاز: ${wp.hardware_id}`;
                     }
                 } else if (wp.is_global) {
@@ -3143,7 +3143,7 @@
                     // Try to find device serial
                     const device = devicesList.find(d => d.hardware_id === wp.hardware_id);
                     const serial = device ? device.serial_number : 'غير معروف';
-                    target.innerHTML = `<i class="fa-solid fa-key"></i> كود: ${serial} | الماك: ${wp.hardware_id}`;
+                    target.innerHTML = `<i class="fa-solid fa-key"></i> كود: ${escapeHtml(serial)} | الماك: ${escapeHtml(wp.hardware_id)}`;
                     target.title = `معرف الجهاز: ${wp.hardware_id}`;
                 }
 
@@ -3338,7 +3338,7 @@
 
                 const nameBit = d.client_name ? ` · ${escapeHtml(d.client_name)}` : '';
                 row.innerHTML = `
-                    <input type="checkbox" ${isHidden ? 'checked' : ''} onclick="event.stopPropagation(); toggleHideSelection('${hwId.replace(/'/g, "\\'")}')">
+                    <input type="checkbox" data-hw="${escapeHtml(hwId)}" ${isHidden ? 'checked' : ''} onclick="event.stopPropagation(); toggleHideSelection(this.dataset.hw)">
                     <div class="hide-row-info">
                         <div class="hide-row-serial">${escapeHtml(d.serial_number || 'بدون كود')}${nameBit}</div>
                         <div class="hide-row-mac">${escapeHtml(hwId)}</div>
@@ -3597,11 +3597,11 @@
                 icon: willBlock ? 'warning' : 'question',
                 title: willBlock ? 'حظر هذا الجهاز؟' : (auto ? 'رفع الحظر التلقائي؟' : 'رفع الحظر عن الجهاز؟'),
                 html: willBlock
-                    ? `سيتوقف الجهاز فوراً عن عرض الخلفيات، ولن يستطيع إعادة التفعيل بأي كود.<br><br><b>${dev.serial_number || 'بدون كود'}</b><br><small style="opacity:.7;">${hwId}</small>`
+                    ? `سيتوقف الجهاز فوراً عن عرض الخلفيات، ولن يستطيع إعادة التفعيل بأي كود.<br><br><b>${escapeHtml(dev.serial_number || 'بدون كود')}</b><br><small style="opacity:.7;">${escapeHtml(hwId)}</small>`
                     : (auto
                         ? `هذا الجهاز حظر نفسه بعد <b>${dev.failed_attempts || FAILED_ATTEMPT_LIMIT}</b> محاولة تفعيل خاطئة.<br>
                            سيُسمح له بالتفعيل من جديد، وسيبدأ العدّاد من الصفر.<br><br>
-                           <small style="opacity:.7;">${hwId}</small>
+                           <small style="opacity:.7;">${escapeHtml(hwId)}</small>
                            ${dev.last_failed_serial ? `<br><small style="opacity:.7;">آخر كود جُرِّب: ${escapeHtml(dev.last_failed_serial)}</small>` : ''}`
                         : `سيُسمح للجهاز بالعمل والتفعيل من جديد.<br><br><b>${dev.serial_number || 'بدون كود'}</b>`),
                 showCancelButton: true,
@@ -3667,7 +3667,7 @@
             const c = await Swal.fire({
                 icon: 'warning',
                 title: 'حذف الجهاز نهائياً؟',
-                html: `سيُحذف تسجيل الجهاز. وإذا شُغّل التطبيق عليه مرة أخرى فسيظهر كجهاز جديد يحتاج إلى تفعيل.<br><br><b>${dev.serial_number || 'بدون كود'}</b><br><small style="opacity:.7;">${hwId}</small><br><br><small>ملاحظة: الصور المخصصة لهذا الجهاز لا تُحذف تلقائياً.</small>`
+                html: `سيُحذف تسجيل الجهاز. وإذا شُغّل التطبيق عليه مرة أخرى فسيظهر كجهاز جديد يحتاج إلى تفعيل.<br><br><b>${escapeHtml(dev.serial_number || 'بدون كود')}</b><br><small style="opacity:.7;">${escapeHtml(hwId)}</small><br><br><small>ملاحظة: الصور المخصصة لهذا الجهاز لا تُحذف تلقائياً.</small>`
                     // Deleting only removes the Postgres row; the block itself lives on Cloudflare
                     // and survives. That is the safe direction — but an operator who deletes a
                     // blocked row to "clean up" then has no row left to press unblock on.
@@ -3817,7 +3817,7 @@
 
             const chip = (label, value, active, cls) =>
                 `<button type="button" class="dev-filter-btn ${active ? 'active' : ''} ${cls || ''}"
-                         onclick="setDevicesVersionFilter(${value === null ? 'null' : `'${value}'`})">${label}</button>`;
+                         data-ver="${value === null ? '' : escapeHtml(value)}" data-vernull="${value === null}">${label}</button>`;
 
             let html = chip(`كل النسخ (${devicesList.length})`, 'ALL', devicesVersionFilter === 'ALL');
             rows.forEach(b => {
@@ -3830,6 +3830,8 @@
                 }
             });
             box.innerHTML = html;
+            // 2026-09-03: app_version comes from the car; never build an onclick string from it.
+            box.querySelectorAll('[data-ver]').forEach(b => b.addEventListener('click', () => setDevicesVersionFilter(b.dataset.vernull === 'true' ? null : b.dataset.ver)));
         }
 
         /** null is a real value here ("never reported"), so 'ALL' is the no-filter sentinel. */
@@ -4061,10 +4063,10 @@
                         <div class="device-group-avatar"><i class="fa-solid fa-mobile-screen-button"></i></div>
                         <div class="device-group-meta">
                             <div class="device-group-serial">
-                                <span>${serial}</span>
+                                <span>${escapeHtml(serial)}</span>
                                 <span class="device-group-count">${items.length} صورة</span>
                             </div>
-                            <div class="device-group-mac">${hwId}</div>
+                            <div class="device-group-mac">${escapeHtml(hwId)}</div>
                         </div>
                     </div>
                 `;

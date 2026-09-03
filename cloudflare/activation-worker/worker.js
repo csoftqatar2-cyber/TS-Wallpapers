@@ -305,7 +305,15 @@ async function handleActivate(db, body) {
 
   // Same pre-step as the RPC: a car already registered under its legacy id that
   // now reports a VIN keeps its row, rather than registering itself as new.
-  if (legacyId && legacyId !== hardwareId) {
+  // Direction guard (2026-09-03): a fielded app only ever asks to move a
+  // MAC-/SYS-/BOOT-/SRL-/AID-/UNKNOWN row onto a VIN- id, or the same VIN spelled
+  // in another case. Any other shape is a stranger naming a VIN read off a
+  // windscreen, and must not move anyone's licence. Mirrors
+  // public.migrate_device_hardware_id in Postgres (20260903_migration_direction_guard.sql).
+  const legalMove =
+    hardwareId.startsWith('VIN-') &&
+    (!legacyId.startsWith('VIN-') || legacyId.toUpperCase() === hardwareId.toUpperCase());
+  if (legacyId && legacyId !== hardwareId && legalMove) {
     const existing = await getDevice(db, hardwareId);
     if (!existing) await migrateIdentity(db, legacyId, hardwareId);
   }
