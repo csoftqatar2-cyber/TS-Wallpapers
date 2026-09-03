@@ -766,6 +766,9 @@ alter table public.devices add column if not exists token_hash      text;
 alter table public.devices add column if not exists token_issued_at timestamptz;
 alter table public.devices add column if not exists token_version   int not null default 0;
 alter table public.devices add column if not exists token_app_id    text;
+-- 20260905_enroll_conflict_mirror.sql: dashboard mirror of D1's 'enroll_conflict' audit.
+alter table public.devices add column if not exists enroll_conflicts        int not null default 0;
+alter table public.devices add column if not exists last_enroll_conflict_at timestamptz;
 create unique index if not exists devices_token_hash_idx
     on public.devices (token_hash) where token_hash is not null;
 
@@ -849,6 +852,17 @@ begin
     if resp.status <> 200 then return null; end if;
     meta := resp.content::json;
     st   := meta ->> 'status';
+
+    -- Mirror of D1's 'enroll_conflict' audit: a second enrol (or a rotation attempt with a
+    -- wrong serial) on a car that already holds a token. Informational only.
+    if st = 'already_enrolled' then
+        update public.devices
+           set enroll_conflicts        = enroll_conflicts + 1,
+               last_enroll_conflict_at = now()
+         where hardware_id = hw;
+        return null;
+    end if;
+
     if st not in ('enrolled', 'rotated') or (meta ->> 'token') is null then return null; end if;
     tok := meta ->> 'token';
 
