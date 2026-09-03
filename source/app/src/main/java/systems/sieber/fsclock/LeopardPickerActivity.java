@@ -311,9 +311,22 @@ public class LeopardPickerActivity extends AppCompatActivity {
         selectSource(mSource);
     }
 
+    /** When this screen last asked the server (elapsed-realtime ms); 0 = never. */
+    private long mLastSyncAskedMs;
+    /** Fleet contract 2026-09-03: a real return to the foreground re-checks, at most once a minute. */
+    private static final long RESUME_RECHECK_MIN_MS = 60_000L;
+
     @Override
     protected void onResume() {
         super.onResume();
+        // Fleet contract 2026-09-03: coming back to the foreground asks the server again
+        // (the licence may have been blocked, or a block lifted, while we were away), at
+        // most once a minute. The first visit is covered by showCloud()'s own auto-sync;
+        // the answer is handled exactly as every other sync (standDownIfInactive).
+        if(mTriedAutoSync && mLastSyncAskedMs != 0
+                && android.os.SystemClock.elapsedRealtime() - mLastSyncAskedMs >= RESUME_RECHECK_MIN_MS) {
+            silentRefresh();
+        }
         // The mirror of the check in FullscreenActivity: this screen only exists because the
         // mode is a hand-off product (Leopard or Lynkco), so the moment that stops being true —
         // the user switched back in Settings, which we launch plainly and get no result from —
@@ -967,6 +980,7 @@ public class LeopardPickerActivity extends AppCompatActivity {
     }
 
     private void silentRefresh() {
+        mLastSyncAskedMs = android.os.SystemClock.elapsedRealtime();
         mRepo.sync(new WallpaperRepo.SyncCallback() {
             @Override
             public void done(boolean success, int count, String error) {
@@ -988,6 +1002,7 @@ public class LeopardPickerActivity extends AppCompatActivity {
     private void refreshCloud() {
         mProgress.setVisibility(View.VISIBLE);
         hideState();
+        mLastSyncAskedMs = android.os.SystemClock.elapsedRealtime();
         mRepo.sync(new WallpaperRepo.SyncCallback() {
             @Override
             public void done(boolean success, int count, String error) {
