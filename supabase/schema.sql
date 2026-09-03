@@ -868,10 +868,14 @@ create or replace function cf.enroll_device_impl(device_hw_id text, app_id text,
 returns text
 language plpgsql security definer set search_path to 'public'
 as $function$
+#variable_conflict use_column
 declare
     hw        text;
     d         public.devices;
-    v_app     text := lower(coalesce(nullif(btrim(app_id), ''), 'wallpapers'));
+    p_hw      text := enroll_device_impl.device_hw_id;
+    v_app     text := lower(coalesce(nullif(btrim(enroll_device_impl.app_id), ''), 'wallpapers'));
+    v_vc      int  := enroll_device_impl.app_version_code;
+    v_serial  text := enroll_device_impl.serial;
     min_vc    int;
     win_days  int;
     seen_ok   boolean := false;
@@ -884,18 +888,18 @@ declare
     have_row  boolean;
     tries     int := 0;
 begin
-    if device_hw_id is null or device_hw_id = '' then return null; end if;
-    hw := public.resolve_device_id(device_hw_id);
+    if p_hw is null or p_hw = '' then return null; end if;
+    hw := public.resolve_device_id(p_hw);
 
-    select * into d from public.devices where hardware_id = hw;
+    select * into d from public.devices dv where dv.hardware_id = hw;
     if not found or not d.is_active or d.is_blocked then return null; end if;
 
     -- Per-app window: unset or not reached -> nobody enrols.
-    select value::int into min_vc from cf.settings where key = 'token_min_version_code.' || v_app;
-    if min_vc is null or coalesce(app_version_code, 0) < min_vc then
+    select s.value::int into min_vc from cf.settings s where s.key = 'token_min_version_code.' || v_app;
+    if min_vc is null or coalesce(v_vc, 0) < min_vc then
         return null;
     end if;
-    select value::int into win_days from cf.settings where key = 'token_enroll_window_days';
+    select s.value::int into win_days from cf.settings s where s.key = 'token_enroll_window_days';
     win_days := coalesce(win_days, 14);
 
     -- Recency through THIS app: device_ping heartbeat, or the app's historical source.
@@ -903,20 +907,19 @@ begin
                         where a.hardware_id = hw and a.app_id = v_app
                           and a.last_seen >= now() - make_interval(days => win_days));
     if not seen_ok and v_app = 'store' then
-        select exists (select 1 from public.store_installs s
-                        where s.hw_id in (device_hw_id, hw)
-                          and s.last_seen >= now() - make_interval(days => win_days)) into seen_ok;
+        select exists (select 1 from public.store_installs si
+                        where si.hw_id in (p_hw, hw)
+                          and si.last_seen >= now() - make_interval(days => win_days)) into seen_ok;
     elsif not seen_ok and v_app = 'wallpapers' then
         seen_ok := d.last_seen_at is not null and d.last_seen_at >= now() - make_interval(days => win_days);
     end if;
     if not seen_ok then return null; end if;
 
-    select value into url from cf.settings where key = 'worker_enroll_url';
-    select decrypted_secret into secret from vault.decrypted_secrets where name = 'cf_activation_worker_secret';
+    select s.value into url from cf.settings s where s.key = 'worker_enroll_url';
+    select ds.decrypted_secret into secret from vault.decrypted_secrets ds where ds.name = 'cf_activation_worker_secret';
     if url is null or secret is null then return null; end if;
 
-    -- anon's statement_timeout is 3s: keep the Worker call well inside it so Postgres never
-    -- gives up AFTER D1 has already minted (the lost-mint case the reissue below repairs).
+    -- Keep the Worker round-trip inside anon's 3 s statement_timeout.
     perform extensions.http_set_curlopt('CURLOPT_TIMEOUT_MS', '2200');
     perform extensions.http_set_curlopt('CURLOPT_CONNECTTIMEOUT_MS', '1200');
     have_row := exists (select 1 from public.device_tokens t where t.hardware_id = hw and t.app_id = v_app);
@@ -928,8 +931,8 @@ begin
                 'POST', url,
                 array[extensions.http_header('Authorization', 'Bearer ' || secret)],
                 'application/json',
-                json_build_object('hardware_id', hw, 'app_id', v_app, 'app_version_code', app_version_code,
-                                  'activation_serial', serial,
+                json_build_object('hardware_id', hw, 'app_id', v_app, 'app_version_code', v_vc,
+                                  'activation_serial', v_serial,
                                   'reissue', (tries = 2))::text
             )::extensions.http_request);
         exception when others then
@@ -939,7 +942,6 @@ begin
         if resp.status <> 200 then return null; end if;
         meta := resp.content::json;
         st   := meta ->> 'status';
-
         -- D1 holds a token for this (car, app) but we have no mirror row: a mint whose answer
         -- never reached the car. Ask once for a reissue; the caller already passed every gate.
         if st = 'already_enrolled' and not have_row and tries = 1 then
@@ -950,12 +952,12 @@ begin
 
     -- Mirror of D1's 'enroll_conflict' audit (per app and per car).
     if st = 'already_enrolled' then
-        update public.device_tokens
-           set enroll_conflicts = enroll_conflicts + 1, last_enroll_conflict_at = now()
-         where hardware_id = hw and app_id = v_app;
-        update public.devices
-           set enroll_conflicts = enroll_conflicts + 1, last_enroll_conflict_at = now()
-         where hardware_id = hw;
+        update public.device_tokens t
+           set enroll_conflicts = t.enroll_conflicts + 1, last_enroll_conflict_at = now()
+         where t.hardware_id = hw and t.app_id = v_app;
+        update public.devices dv
+           set enroll_conflicts = dv.enroll_conflicts + 1, last_enroll_conflict_at = now()
+         where dv.hardware_id = hw;
         return null;
     end if;
 
@@ -963,13 +965,13 @@ begin
     tok := meta ->> 'token';
 
     -- Mirror the hash (never the token). D1 already decided; mirror unconditionally.
-    insert into public.device_tokens (hardware_id, app_id, token_hash, token_issued_at, token_version)
+    insert into public.device_tokens as t (hardware_id, app_id, token_hash, token_issued_at, token_version)
     values (hw, v_app, encode(extensions.digest(tok, 'sha256'), 'hex'), now(),
             coalesce((meta ->> 'token_version')::int, 1))
-    on conflict (hardware_id, app_id) do update
+    on conflict on constraint device_tokens_pkey do update
        set token_hash      = excluded.token_hash,
            token_issued_at = excluded.token_issued_at,
-           token_version   = greatest(public.device_tokens.token_version + 1, excluded.token_version);
+           token_version   = greatest(t.token_version + 1, excluded.token_version);
     return tok;
 end $function$;
 revoke all on function cf.enroll_device_impl(text, text, int, text) from public;
