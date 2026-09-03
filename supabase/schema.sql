@@ -769,6 +769,34 @@ alter table public.devices add column if not exists token_app_id    text;
 -- 20260905_enroll_conflict_mirror.sql: dashboard mirror of D1's 'enroll_conflict' audit.
 alter table public.devices add column if not exists enroll_conflicts        int not null default 0;
 alter table public.devices add column if not exists last_enroll_conflict_at timestamptz;
+
+-- 20260905_per_app_tokens.sql: one token per (car, app); devices.token_* are inert since then.
+create table if not exists public.device_tokens (
+    hardware_id             text        not null references public.devices(hardware_id) on update cascade on delete cascade,
+    app_id                  text        not null,
+    token_hash              text        not null,
+    token_issued_at         timestamptz not null default now(),
+    token_version           int         not null default 1,
+    enroll_conflicts        int         not null default 0,
+    last_enroll_conflict_at timestamptz,
+    primary key (hardware_id, app_id)
+);
+create unique index if not exists device_tokens_hash_idx on public.device_tokens (token_hash);
+
+alter table public.device_tokens enable row level security;
+drop policy if exists "tok admin read"   on public.device_tokens;
+drop policy if exists "tok admin delete" on public.device_tokens;
+create policy "tok admin read"   on public.device_tokens for select to authenticated using (auth.uid() = '5b8e1336-ce54-4dd9-bd23-243158c178fe'::uuid);
+create policy "tok admin delete" on public.device_tokens for delete to authenticated using (auth.uid() = '5b8e1336-ce54-4dd9-bd23-243158c178fe'::uuid);
+grant select, delete on public.device_tokens to authenticated;
+revoke all on public.device_tokens from anon;
+
+-- Carry over the per-car tokens issued under 20260904 into their app's row.
+insert into public.device_tokens (hardware_id, app_id, token_hash, token_issued_at, token_version)
+select hardware_id, coalesce(token_app_id, 'wallpapers'), token_hash, coalesce(token_issued_at, now()), greatest(token_version, 1)
+  from public.devices where token_hash is not null
+on conflict (hardware_id, app_id) do nothing;
+
 create unique index if not exists devices_token_hash_idx
     on public.devices (token_hash) where token_hash is not null;
 
@@ -806,10 +834,6 @@ begin
 
     select * into d from public.devices where hardware_id = hw;
     if not found or not d.is_active or d.is_blocked then return null; end if;
-    -- Already enrolled and no serial proof -> nothing to hand out (D1 audits the conflict).
-    if d.token_hash is not null and serial is null then
-        perform 1;  -- fall through to the Worker so the conflict is recorded there
-    end if;
 
     -- Per-app window: unset or not reached -> nobody enrols.
     select value::int into min_vc from cf.settings where key = 'token_min_version_code.' || v_app;
@@ -830,7 +854,7 @@ begin
     end if;
     if not seen_ok then return null; end if;
 
-    -- D1 mints (or rotates) the token.
+    -- D1 mints (or rotates) the token for (car, app).
     select value into url from cf.settings where key = 'worker_enroll_url';
     select decrypted_secret into secret from vault.decrypted_secrets where name = 'cf_activation_worker_secret';
     if url is null or secret is null then return null; end if;
@@ -853,12 +877,15 @@ begin
     meta := resp.content::json;
     st   := meta ->> 'status';
 
-    -- Mirror of D1's 'enroll_conflict' audit: a second enrol (or a rotation attempt with a
-    -- wrong serial) on a car that already holds a token. Informational only.
+    -- Mirror of D1's 'enroll_conflict' audit: a second enrol for THIS app on a car that
+    -- already holds this app's token (or a rotation attempt with a wrong serial).
+    -- Counted per app here and per car on devices for the dashboard headline.
     if st = 'already_enrolled' then
+        update public.device_tokens
+           set enroll_conflicts = enroll_conflicts + 1, last_enroll_conflict_at = now()
+         where hardware_id = hw and app_id = v_app;
         update public.devices
-           set enroll_conflicts        = enroll_conflicts + 1,
-               last_enroll_conflict_at = now()
+           set enroll_conflicts = enroll_conflicts + 1, last_enroll_conflict_at = now()
          where hardware_id = hw;
         return null;
     end if;
@@ -867,12 +894,13 @@ begin
     tok := meta ->> 'token';
 
     -- Mirror the hash (never the token). D1 already decided; mirror unconditionally.
-    update public.devices
-       set token_hash      = encode(extensions.digest(tok, 'sha256'), 'hex'),
-           token_issued_at = now(),
-           token_version   = token_version + 1,
-           token_app_id    = v_app
-     where hardware_id = hw;
+    insert into public.device_tokens (hardware_id, app_id, token_hash, token_issued_at, token_version)
+    values (hw, v_app, encode(extensions.digest(tok, 'sha256'), 'hex'), now(),
+            coalesce((meta ->> 'token_version')::int, 1))
+    on conflict (hardware_id, app_id) do update
+       set token_hash      = excluded.token_hash,
+           token_issued_at = excluded.token_issued_at,
+           token_version   = greatest(public.device_tokens.token_version + 1, excluded.token_version);
     return tok;
 end $function$;
 revoke all on function cf.enroll_device_impl(text, text, int, text) from public;
@@ -912,17 +940,17 @@ returns boolean
 language sql security definer set search_path to 'public'
 as $function$
   select exists (
-    select 1 from public.devices d
+    select 1
+      from public.devices d
+      join public.device_tokens t
+        on t.hardware_id = d.hardware_id
+       and t.app_id = lower(coalesce(nullif(btrim(is_device_activated_v2.app_id), ''), 'wallpapers'))
      where d.hardware_id = public.resolve_device_id(is_device_activated_v2.device_hw_id)
        and d.is_active = true and d.is_blocked = false
-       and d.token_hash is not null
        and is_device_activated_v2.device_token is not null
-       and d.token_hash = encode(extensions.digest(is_device_activated_v2.device_token, 'sha256'), 'hex')
+       and t.token_hash = encode(extensions.digest(is_device_activated_v2.device_token, 'sha256'), 'hex')
   );
 $function$;
-
-revoke all on function public.enroll_device(text, text, int) from public;
-revoke all on function public.activate_device_v2(text, text, text, text, int) from public;
 revoke all on function public.is_device_activated_v2(text, text, text, int) from public;
 grant execute on function public.enroll_device(text, text, int) to anon, authenticated;
 grant execute on function public.activate_device_v2(text, text, text, text, int) to anon, authenticated;
