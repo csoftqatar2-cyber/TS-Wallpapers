@@ -11,7 +11,9 @@
 --       edit rows like 'voice.openrouter_key' and 'voice.model' with the admin session.
 --   cf.voice_config(p_secret text) -> jsonb
 --       SECURITY DEFINER, callable by anon/authenticated BUT returns rows only when p_secret
---       equals the vault secret 'cf_activation_worker_secret' (compared as sha256 digests);
+--       hashes (sha256) to admin_settings 'voice.proxy_secret_sha256' - the voice Worker's OWN secret,
+--       never the activation Worker's (revised 2026-09-04 04:5x: reading the vault secret out was
+--       refused, and one secret per Worker is the better boundary anyway);
 --       anything else raises 'unauthorized'. The voice proxy Worker (server-to-server, secret
 --       in its own env) reads 'voice.*' through it and caches ~60 s. No device holds the secret.
 --
@@ -51,6 +53,7 @@ create trigger admin_settings_touch before insert or update on public.admin_sett
 
 insert into public.admin_settings (key, value) values
   ('voice.openrouter_key', null),
+  ('voice.proxy_secret_sha256', null),  -- sha256 of the voice Worker's own SHARED_SECRET; set out of band
   ('voice.model',          'openai/gpt-4o-mini'),
   ('voice.daily_quota_per_car',  '60'),
   ('voice.minute_quota_per_car', '6')
@@ -62,14 +65,17 @@ language plpgsql security definer set search_path to 'public'
 as $function$
 #variable_conflict use_column
 declare
-    expected text;
+    expected_hash text;
 begin
-    select ds.decrypted_secret into expected from vault.decrypted_secrets ds where ds.name = 'cf_activation_worker_secret';
-    if expected is null or p_secret is null
-       or encode(extensions.digest(p_secret, 'sha256'), 'hex') <> encode(extensions.digest(expected, 'sha256'), 'hex') then
+    -- The voice proxy Worker has its OWN secret (never the activation Worker's). Only its
+    -- sha256 lives here, so an admin can rotate it by editing the row after `wrangler secret put`.
+    select s.value into expected_hash from public.admin_settings s where s.key = 'voice.proxy_secret_sha256';
+    if expected_hash is null or p_secret is null
+       or encode(extensions.digest(p_secret, 'sha256'), 'hex') <> lower(expected_hash) then
         raise exception 'unauthorized' using errcode = '28000';
     end if;
-    return coalesce((select jsonb_object_agg(s.key, s.value) from public.admin_settings s where s.key like 'voice.%'), '{}'::jsonb);
+    return coalesce((select jsonb_object_agg(s.key, s.value) from public.admin_settings s
+                      where s.key like 'voice.%' and s.key <> 'voice.proxy_secret_sha256'), '{}'::jsonb);
 end $function$;
 revoke all on function cf.voice_config(text) from public;
 grant execute on function cf.voice_config(text) to anon, authenticated;
