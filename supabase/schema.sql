@@ -881,6 +881,8 @@ declare
     meta      json;
     tok       text;
     st        text;
+    have_row  boolean;
+    tries     int := 0;
 begin
     if device_hw_id is null or device_hw_id = '' then return null; end if;
     hw := public.resolve_device_id(device_hw_id);
@@ -896,9 +898,7 @@ begin
     select value::int into win_days from cf.settings where key = 'token_enroll_window_days';
     win_days := coalesce(win_days, 14);
 
-    -- The car must have been seen recently THROUGH this app: the app's historical source
-    -- (store_installs for the store, devices.last_seen_at for the wallpapers app) or the
-    -- per-app heartbeat device_ping writes for every app.
+    -- Recency through THIS app: device_ping heartbeat, or the app's historical source.
     seen_ok := exists (select 1 from public.device_app_seen a
                         where a.hardware_id = hw and a.app_id = v_app
                           and a.last_seen >= now() - make_interval(days => win_days));
@@ -911,29 +911,44 @@ begin
     end if;
     if not seen_ok then return null; end if;
 
-    -- D1 mints (or rotates) the token for (car, app).
     select value into url from cf.settings where key = 'worker_enroll_url';
     select decrypted_secret into secret from vault.decrypted_secrets where name = 'cf_activation_worker_secret';
     if url is null or secret is null then return null; end if;
 
-    perform extensions.http_set_curlopt('CURLOPT_TIMEOUT_MS', '4000');
-    perform extensions.http_set_curlopt('CURLOPT_CONNECTTIMEOUT_MS', '2000');
-    begin
-        select * into resp from extensions.http((
-            'POST', url,
-            array[extensions.http_header('Authorization', 'Bearer ' || secret)],
-            'application/json',
-            json_build_object('hardware_id', hw, 'app_id', v_app, 'app_version_code', app_version_code,
-                              'activation_serial', serial)::text
-        )::extensions.http_request);
-    exception when others then
-        raise warning 'enroll_device: % unreachable: %', hw, SQLERRM;
-        return null;
-    end;
-    if resp.status <> 200 then return null; end if;
-    meta := resp.content::json;
-    st   := meta ->> 'status';
+    -- anon's statement_timeout is 3s: keep the Worker call well inside it so Postgres never
+    -- gives up AFTER D1 has already minted (the lost-mint case the reissue below repairs).
+    perform extensions.http_set_curlopt('CURLOPT_TIMEOUT_MS', '2200');
+    perform extensions.http_set_curlopt('CURLOPT_CONNECTTIMEOUT_MS', '1200');
+    have_row := exists (select 1 from public.device_tokens t where t.hardware_id = hw and t.app_id = v_app);
 
+    loop
+        tries := tries + 1;
+        begin
+            select * into resp from extensions.http((
+                'POST', url,
+                array[extensions.http_header('Authorization', 'Bearer ' || secret)],
+                'application/json',
+                json_build_object('hardware_id', hw, 'app_id', v_app, 'app_version_code', app_version_code,
+                                  'activation_serial', serial,
+                                  'reissue', (tries = 2))::text
+            )::extensions.http_request);
+        exception when others then
+            raise warning 'enroll_device: % unreachable: %', hw, SQLERRM;
+            return null;
+        end;
+        if resp.status <> 200 then return null; end if;
+        meta := resp.content::json;
+        st   := meta ->> 'status';
+
+        -- D1 holds a token for this (car, app) but we have no mirror row: a mint whose answer
+        -- never reached the car. Ask once for a reissue; the caller already passed every gate.
+        if st = 'already_enrolled' and not have_row and tries = 1 then
+            continue;
+        end if;
+        exit;
+    end loop;
+
+    -- Mirror of D1's 'enroll_conflict' audit (per app and per car).
     if st = 'already_enrolled' then
         update public.device_tokens
            set enroll_conflicts = enroll_conflicts + 1, last_enroll_conflict_at = now()
@@ -947,6 +962,7 @@ begin
     if st not in ('enrolled', 'rotated') or (meta ->> 'token') is null then return null; end if;
     tok := meta ->> 'token';
 
+    -- Mirror the hash (never the token). D1 already decided; mirror unconditionally.
     insert into public.device_tokens (hardware_id, app_id, token_hash, token_issued_at, token_version)
     values (hw, v_app, encode(extensions.digest(tok, 'sha256'), 'hex'), now(),
             coalesce((meta ->> 'token_version')::int, 1))

@@ -160,12 +160,20 @@ const actions = (db) => db.__audit.map((a) => a.action);
   check('wrong serial cannot rotate', (await post(db, '/v1/devices/enroll', { hardware_id: 'VIN-ACTIVE', app_id: 'store', activation_serial: '578300099' })).status, 'already_enrolled');
   check('audit has rotate_token', actions(db).includes('rotate_token'), true);
 
+  // --- lost-mint recovery: Postgres asks for a reissue when it has no mirror row ---
+  const re = await post(db, '/v1/devices/enroll', { hardware_id: 'VIN-ACTIVE', app_id: 'store', reissue: true });
+  check('reissue rotates without a serial', re.status, 'rotated');
+  check('reissued token verifies', (await post(db, '/v1/devices/verify', { hardware_id: 'VIN-ACTIVE', app_id: 'store', token: re.token })).active, true);
+  check('token before reissue is dead', (await post(db, '/v1/devices/verify', { hardware_id: 'VIN-ACTIVE', app_id: 'store', token: rot.token })).active, false);
+  check('audit has reissue_token', actions(db).includes('reissue_token'), true);
+  check('reissue on a never-enrolled app just enrols', (await post(db, '/v1/devices/enroll', { hardware_id: 'VIN-ACTIVE', app_id: 'leo', reissue: true })).status, 'enrolled');
+
   // --- operator reset: one app only ---
   const r1 = await post(db, '/v1/devices/set-state', { hardware_id: 'VIN-ACTIVE', reset_token: true, reset_token_app_id: 'store' });
   check('reset_token for store accepted', r1.status, 'ok');
   check('store token gone', db.__tokens.has('VIN-ACTIVE|store'), false);
   check('wallpapers token kept', db.__tokens.has('VIN-ACTIVE|wallpapers'), true);
-  check('set-state reports remaining tokens', r1.tokens.map((t) => t.app_id).join(','), 'wallpapers');
+  check('set-state reports remaining tokens', r1.tokens.map((t) => t.app_id).join(','), 'leo,wallpapers');
   check('store can enrol again', (await post(db, '/v1/devices/enroll', { hardware_id: 'VIN-ACTIVE', app_id: 'store' })).status, 'enrolled');
 
   // --- operator reset: all apps ---

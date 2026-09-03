@@ -224,7 +224,7 @@ function randomTokenHex() {
 }
 
 /**
- * POST /v1/devices/enroll {hardware_id, app_id, app_version_code, activation_serial?}
+ * POST /v1/devices/enroll {hardware_id, app_id, app_version_code, activation_serial?, reissue?}
  *  -> {status:'enrolled', token}            first and only time the plaintext is seen
  *  -> {status:'already_enrolled', token:null}
  *  -> {status:'refused', token:null}        not active, blocked, or unknown
@@ -249,7 +249,14 @@ async function handleEnroll(db, body) {
   // serial along only after activate_device answered 'success'; D1 re-checks it
   // against the row, so a stranger with the VIN alone can never rotate.
   const serial = typeof body.activation_serial === 'string' ? body.activation_serial.trim() : '';
-  const rotate = !!serial && !!before.serial_number && secretMatches(serial, before.serial_number);
+  const bySerial = !!serial && !!before.serial_number && secretMatches(serial, before.serial_number);
+  // Lost-mint recovery: Postgres (the only caller, authenticated by the shared secret)
+  // sets reissue=true when D1 says "already enrolled" for a (car, app) it has NO mirror
+  // row for - the mint happened but its answer never reached the car (Postgres hit its
+  // statement timeout after our reply). The dead token is rotated away and the caller
+  // that passed every gate gets a live one. Audited separately so it stays countable.
+  const reissue = body.reissue === true;
+  const rotate = bySerial || reissue;
 
   if (existing && !rotate) {
     // A second enrol for this app on an enrolled car: either a reinstalled genuine
@@ -289,7 +296,7 @@ async function handleEnroll(db, body) {
   }
   const after = await getToken(db, hardwareId, appId);
   const rotated = rotate && !!existing;
-  await auditStmt(db, hardwareId, rotated ? 'rotate_token' : 'enroll', before,
+  await auditStmt(db, hardwareId, rotated ? (reissue && !bySerial ? 'reissue_token' : 'rotate_token') : 'enroll', before,
     { ...shape(before), app_id: appId, token_version: after ? after.token_version : 1 }).run();
   return json({ status: rotated ? 'rotated' : 'enrolled', token, app_id: appId,
     token_version: after ? after.token_version : 1, row: shape(before) });
