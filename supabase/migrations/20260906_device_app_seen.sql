@@ -1,4 +1,5 @@
--- Applied live as device_app_seen on 2026-09-03 (Supabase MCP execute_sql).
+-- Applied live as device_app_seen on 2026-09-03 (Supabase MCP execute_sql; device_ping re-created once with
+-- #variable_conflict use_column after the first version tripped on the app_id name clash).
 --
 -- WHY
 --   enroll_device only hands a token to a car that was seen RECENTLY through the asking
@@ -53,15 +54,18 @@ create or replace function public.device_ping(device_hw_id text, app_id text, ap
 returns void
 language plpgsql security definer set search_path to 'public'
 as $function$
+#variable_conflict use_column
 declare
     hw    text;
-    v_app text := lower(coalesce(nullif(btrim(app_id), ''), 'wallpapers'));
+    v_app text := lower(coalesce(nullif(btrim(device_ping.app_id), ''), 'wallpapers'));
+    v_vc  int  := device_ping.app_version_code;
+    v_ver text := device_ping.app_version;
 begin
-    if device_hw_id is null or btrim(device_hw_id) = '' then return; end if;
-    hw := public.resolve_device_id(device_hw_id);
+    if device_ping.device_hw_id is null or btrim(device_ping.device_hw_id) = '' then return; end if;
+    hw := public.resolve_device_id(device_ping.device_hw_id);
     if not exists (select 1 from public.devices where hardware_id = hw) then return; end if;
     insert into public.device_app_seen (hardware_id, app_id, app_version_code, app_version)
-    values (hw, left(v_app, 32), app_version_code, left(app_version, 40))
+    values (hw, left(v_app, 32), v_vc, left(v_ver, 40))
     on conflict (hardware_id, app_id) do update
        set last_seen        = now(),
            pings            = public.device_app_seen.pings + 1,

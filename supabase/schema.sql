@@ -811,6 +811,57 @@ on conflict (key) do nothing;
 
 -- Internal: the one place that talks to the Worker. `serial` is non-null only when the
 -- caller is activate_device_v2 right after a 'success' - it unlocks rotation.
+-- 20260906_device_app_seen.sql: per-app presence heartbeat (recency source for token enrolment).
+create table if not exists public.device_app_seen (
+    hardware_id      text        not null references public.devices(hardware_id) on update cascade on delete cascade,
+    app_id           text        not null,
+    app_version_code int,
+    app_version      text,
+    first_seen       timestamptz not null default now(),
+    last_seen        timestamptz not null default now(),
+    pings            bigint      not null default 1,
+    primary key (hardware_id, app_id)
+);
+create index if not exists device_app_seen_last_seen_idx on public.device_app_seen (app_id, last_seen desc);
+
+alter table public.device_app_seen enable row level security;
+drop policy if exists "seen admin read" on public.device_app_seen;
+create policy "seen admin read" on public.device_app_seen for select to authenticated using (auth.uid() = '5b8e1336-ce54-4dd9-bd23-243158c178fe'::uuid);
+grant select on public.device_app_seen to authenticated;
+revoke all on public.device_app_seen from anon;
+
+insert into cf.settings(key, value) values
+  ('token_min_version_code.controller', '999999'),
+  ('token_min_version_code.leo',        '999999')
+on conflict (key) do nothing;
+
+-- Presence heartbeat. Unknown car -> silently nothing (never creates a devices row).
+create or replace function public.device_ping(device_hw_id text, app_id text, app_version_code int default null, app_version text default null)
+returns void
+language plpgsql security definer set search_path to 'public'
+as $function$
+#variable_conflict use_column
+declare
+    hw    text;
+    v_app text := lower(coalesce(nullif(btrim(device_ping.app_id), ''), 'wallpapers'));
+    v_vc  int  := device_ping.app_version_code;
+    v_ver text := device_ping.app_version;
+begin
+    if device_ping.device_hw_id is null or btrim(device_ping.device_hw_id) = '' then return; end if;
+    hw := public.resolve_device_id(device_ping.device_hw_id);
+    if not exists (select 1 from public.devices where hardware_id = hw) then return; end if;
+    insert into public.device_app_seen (hardware_id, app_id, app_version_code, app_version)
+    values (hw, left(v_app, 32), v_vc, left(v_ver, 40))
+    on conflict (hardware_id, app_id) do update
+       set last_seen        = now(),
+           pings            = public.device_app_seen.pings + 1,
+           app_version_code = coalesce(excluded.app_version_code, public.device_app_seen.app_version_code),
+           app_version      = coalesce(excluded.app_version,      public.device_app_seen.app_version);
+end $function$;
+revoke all on function public.device_ping(text, text, int, text) from public;
+grant execute on function public.device_ping(text, text, int, text) to anon, authenticated;
+
+
 create or replace function cf.enroll_device_impl(device_hw_id text, app_id text, app_version_code int, serial text)
 returns text
 language plpgsql security definer set search_path to 'public'
@@ -843,13 +894,17 @@ begin
     select value::int into win_days from cf.settings where key = 'token_enroll_window_days';
     win_days := coalesce(win_days, 14);
 
-    -- The car must have been seen recently THROUGH this app (a fresh activation counts:
-    -- activate_device_v2 stamps the check-in before calling here).
-    if v_app = 'store' then
+    -- The car must have been seen recently THROUGH this app: the app's historical source
+    -- (store_installs for the store, devices.last_seen_at for the wallpapers app) or the
+    -- per-app heartbeat device_ping writes for every app.
+    seen_ok := exists (select 1 from public.device_app_seen a
+                        where a.hardware_id = hw and a.app_id = v_app
+                          and a.last_seen >= now() - make_interval(days => win_days));
+    if not seen_ok and v_app = 'store' then
         select exists (select 1 from public.store_installs s
                         where s.hw_id in (device_hw_id, hw)
                           and s.last_seen >= now() - make_interval(days => win_days)) into seen_ok;
-    else
+    elsif not seen_ok and v_app = 'wallpapers' then
         seen_ok := d.last_seen_at is not null and d.last_seen_at >= now() - make_interval(days => win_days);
     end if;
     if not seen_ok then return null; end if;
@@ -877,9 +932,6 @@ begin
     meta := resp.content::json;
     st   := meta ->> 'status';
 
-    -- Mirror of D1's 'enroll_conflict' audit: a second enrol for THIS app on a car that
-    -- already holds this app's token (or a rotation attempt with a wrong serial).
-    -- Counted per app here and per car on devices for the dashboard headline.
     if st = 'already_enrolled' then
         update public.device_tokens
            set enroll_conflicts = enroll_conflicts + 1, last_enroll_conflict_at = now()
@@ -893,7 +945,6 @@ begin
     if st not in ('enrolled', 'rotated') or (meta ->> 'token') is null then return null; end if;
     tok := meta ->> 'token';
 
-    -- Mirror the hash (never the token). D1 already decided; mirror unconditionally.
     insert into public.device_tokens (hardware_id, app_id, token_hash, token_issued_at, token_version)
     values (hw, v_app, encode(extensions.digest(tok, 'sha256'), 'hex'), now(),
             coalesce((meta ->> 'token_version')::int, 1))
@@ -930,11 +981,11 @@ begin
         else
             update public.devices set last_seen_at = now() where hardware_id = hw;
         end if;
+        perform public.device_ping(device_hw_id, app_id, app_version_code, null);
         tok := cf.enroll_device_impl(device_hw_id, app_id, app_version_code, activation_serial);
     end if;
     return jsonb_build_object('status', st, 'token', tok);
 end $function$;
-
 create or replace function public.is_device_activated_v2(device_hw_id text, device_token text, app_id text default 'wallpapers', app_version_code int default null)
 returns boolean
 language sql security definer set search_path to 'public'
