@@ -189,9 +189,8 @@
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
-                <!-- QUICKBOOT_POWERON (plain + HTC) removed 2026-09-03: no head unit we ship
-                     sends it, and unlike BOOT_COMPLETED it is not a protected broadcast, so
-                     any co-installed app could fire this receiver at will. -->
+                <action android:name="android.intent.action.QUICKBOOT_POWERON" />
+                <action android:name="com.htc.intent.action.QUICKBOOT_POWERON" />
                 <!-- the car woke rather than booted: no BOOT_COMPLETED is sent, and this is the
                      case that made auto-start work only after a long park -->
                 <action android:name="android.intent.action.USER_PRESENT" />
