@@ -73,3 +73,14 @@ begin
 end $function$;
 revoke all on function cf.voice_config(text) from public;
 grant execute on function cf.voice_config(text) to anon, authenticated;
+
+-- PostgREST exposes only the public schema: thin wrapper for the Worker's server-to-server call
+-- (POST /rest/v1/rpc/voice_config {"p_secret": ...}).
+create or replace function public.voice_config(p_secret text)
+returns jsonb
+language sql security definer set search_path to 'public'
+as $function$
+  select cf.voice_config(p_secret);
+$function$;
+revoke all on function public.voice_config(text) from public;
+grant execute on function public.voice_config(text) to anon, authenticated;
