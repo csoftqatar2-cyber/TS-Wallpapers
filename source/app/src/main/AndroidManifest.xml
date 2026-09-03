@@ -175,16 +175,6 @@
             android:taskAffinity=":entry"
             android:excludeFromRecents="true" />
 
-        <!-- Fleet-wide "re-check the licence" nudge (2026-09-03). Exported on purpose and
-             NOT a command channel: no extras are read, the only effect is one rate-limited
-             server check that the app already performs by itself. See LicenceRecheck. -->
-        <receiver android:name=".LicenceRecheck$Receiver"
-            android:exported="true">
-            <intent-filter>
-                <action android:name="com.thabthaba.action.RECHECK_LICENCE" />
-            </intent-filter>
-        </receiver>
-
         <receiver android:name=".PowerReceiver"
             android:exported="true">
             <intent-filter>

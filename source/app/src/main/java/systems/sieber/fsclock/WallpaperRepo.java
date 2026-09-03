@@ -1374,12 +1374,7 @@ public class WallpaperRepo {
                     mPref.edit()
                          .putString(PREF_CACHE, toJson(parsed))
                          .apply();
-                    // Fleet contract 2026-09-03: a licence that just changed state on this
-                    // car (blocked, or a block lifted) is news the other five programs want
-                    // within seconds, not at their next launch. Compare before writing.
-                    boolean wasActive = mSecurePref.getBoolean(PREF_ACTIVE, false);
                     mSecurePref.putBoolean(PREF_ACTIVE, active);
-                    if (wasActive != active) LicenceRecheck.notifySiblings(mContext);
 
                     load();
 
