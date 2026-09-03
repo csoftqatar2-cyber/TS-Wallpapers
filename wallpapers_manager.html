@@ -1881,6 +1881,8 @@
         const REST_WP_HIDES = `${SUPABASE_URL}/rest/v1/wallpaper_hides`;
         const REST_APP_VERSIONS = `${SUPABASE_URL}/rest/v1/app_versions`;
         const REST_CRASHES = `${SUPABASE_URL}/rest/v1/device_crashes`;
+        // Per-(car, app) tokens - one row per app that enrolled on that car (admin-only via RLS).
+        const REST_DEVICE_TOKENS = `${SUPABASE_URL}/rest/v1/device_tokens`;
         const AUTH_URL = `${SUPABASE_URL}/auth/v1`;
         // Wallpaper bytes live on Cloudflare R2 — Supabase Storage egress is what the fleet
         // exhausted. This Worker is the only thing allowed to write into that bucket, and it
@@ -2160,6 +2162,7 @@
             if (!response.ok) throw new Error("Failed to load devices");
             devicesList = await response.json();
 
+            await loadDeviceTokens();
             // Render Stats & Dropdown
             document.getElementById("stat-total-devices").innerText = devicesList.length;
             renderAutoBlockStat();
@@ -2176,7 +2179,22 @@
          * what the dashboard shows. token_version counts issues + resets + rotations, so a
          * value above 1 means the car re-typed its code (reinstall) or an operator reset it.
          */
-        function hasToken(d) { return !!d.token_hash; }
+        /** hardware_id -> [{app_id, token_version, token_issued_at, enroll_conflicts, last_enroll_conflict_at}] */
+        let deviceTokens = {};
+        async function loadDeviceTokens() {
+            deviceTokens = {};
+            try {
+                const r = await fetch(`${REST_DEVICE_TOKENS}?select=hardware_id,app_id,token_version,token_issued_at,enroll_conflicts,last_enroll_conflict_at`, {
+                    headers: { "apikey": ANON_KEY, "Authorization": `Bearer ${SESSION_TOKEN}` }
+                });
+                if (!r.ok) return;
+                (await r.json()).forEach(t => { (deviceTokens[t.hardware_id] ||= []).push(t); });
+            } catch (e) { /* table missing or offline: badges simply do not show */ }
+        }
+        function tokensOf(d) { return deviceTokens[d.hardware_id] || []; }
+        function hasToken(d) { return tokensOf(d).length > 0; }
+        const APP_LABEL = { wallpapers: 'الخلفيات', store: 'الستور', backbutton: 'Back Button', tslink: 'TS Link', controller: 'الكونترولر', leo: 'Leo' };
+        const appLabel = (a) => APP_LABEL[a] || a;
 
         /**
          * enroll_conflicts mirrors D1's 'enroll_conflict' audit: someone tried to enrol a car
@@ -2186,7 +2204,9 @@
         function tokenLine(d) {
             const n = d.enroll_conflicts || 0;
             if (!n) return '';
-            const bits = [`محاولات تسجيل توكن مرفوضة: ${n}`];
+            const perApp = tokensOf(d).filter(t => (t.enroll_conflicts || 0) > 0)
+                .map(t => `${appLabel(t.app_id)} ×${t.enroll_conflicts}`).join('، ');
+            const bits = [`محاولات تسجيل توكن مرفوضة: ${n}${perApp ? ` (${perApp})` : ''}`];
             if (d.last_enroll_conflict_at) bits.push(`آخر محاولة: ${shortDateTime(d.last_enroll_conflict_at)}`);
             if (!hasToken(d)) bits.push('الجهاز بلا توكن حاليًا');
             return `<div class="dev-row-mac" style="color:#fbbf24;">${escapeHtml(bits.join('  ·  '))}</div>`;
@@ -3950,9 +3970,9 @@
                 const attemptsBadge = (!d.is_blocked && (d.failed_attempts || 0) > 0)
                     ? `<span class="dev-badge att" title="محاولات تفعيل خاطئة متتالية — يُحظر الجهاز عند ${FAILED_ATTEMPT_LIMIT}"><i class="fa-solid fa-triangle-exclamation"></i> ${d.failed_attempts}/${FAILED_ATTEMPT_LIMIT} محاولة خاطئة</span>`
                     : '';
-                const tokenBadge = hasToken(d)
-                    ? `<span class="dev-badge on" title="هذه السيارة تحمل توكن خاص بها (تطبيق ${escapeHtml(d.token_app_id || '?')}) منذ ${escapeHtml(shortDate(d.token_issued_at))}"><i class="fa-solid fa-key"></i> توكن${(d.token_version || 0) > 1 ? ` · v${d.token_version}` : ''}</span>`
-                    : '';
+                const tokenBadge = tokensOf(d).map(t =>
+                    `<span class="dev-badge on" title="توكن ${escapeHtml(appLabel(t.app_id))} منذ ${escapeHtml(shortDate(t.token_issued_at))}${(t.token_version || 1) > 1 ? ` — أُعيد إصداره ${t.token_version - 1} مرة (إعادة تثبيت أو تصفير)` : ''}"><i class="fa-solid fa-key"></i> ${escapeHtml(appLabel(t.app_id))}${(t.token_version || 1) > 1 ? ` · v${t.token_version}` : ''}</span>`
+                ).join('');
                 const conflictBadge = (d.enroll_conflicts || 0) > 0
                     ? `<span class="dev-badge att" title="محاولات تسجيل توكن على سيارة تحمل توكن بالفعل — نسخة APK مستنسخة أو إعادة تثبيت"><i class="fa-solid fa-clone"></i> ${d.enroll_conflicts} محاولة استنساخ</span>`
                     : '';
