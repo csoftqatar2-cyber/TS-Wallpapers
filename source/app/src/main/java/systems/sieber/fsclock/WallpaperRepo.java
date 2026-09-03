@@ -75,6 +75,16 @@ public class WallpaperRepo {
     static final String PREF_LAST_URL = "wallpaper-last-url";
     static final String PREF_DEVICE_ID = "device-id";
     static final String PREF_ACTIVE = "device-active";
+    /** Epoch-ms of the last enroll_device attempt - at most one a day (see maybeEnrollOrVerifyToken). */
+    static final String PREF_TOKEN_ENROLL_AT = "device-token-enroll-at";
+    /**
+     * Phase 2-H transition switch. While true, a token that fails is_device_activated_v2 is only
+     * recorded (breadcrumb) and the car keeps the licence the v1 answers give it; nothing in the
+     * token path can deactivate a car. Flip to false ONLY in the build that implements Phase 3
+     * (backend token_enforce_min_version_code.wallpapers), and nowhere else - this is the one
+     * place the fallback is decided.
+     */
+    static final boolean TOKEN_FALLBACK_TO_V1 = true;
     /** The last VIN this car ever reported. A head unit that answers the VIN query today and
      *  comes up empty tomorrow (the settings row is written late in the boot, and on some Geely
      *  builds not at all until the car has been driven) would otherwise fall all the way back to
@@ -1368,6 +1378,10 @@ public class WallpaperRepo {
 
                     load();
 
+                    // Phase 2-H token: only after a server answer, only on an active car, and
+                    // it can only add a token - see the method's contract.
+                    if (active) maybeEnrollOrVerifyToken();
+
                     // Clean up video cache files that are no longer used
                     try {
                         java.util.HashSet<String> activeCacheFiles = new java.util.HashSet<>();
@@ -1869,21 +1883,36 @@ public class WallpaperRepo {
             @Override
             public void run() {
                 try {
-                    String url = getSupabaseUrl() + "/rest/v1/rpc/activate_device";
                     JSONObject body = new JSONObject();
                     body.put("device_hw_id", getDeviceId());
                     body.put("activation_serial", serial);
                     body.put("legacy_hw_id", getLegacyDeviceId());
-                    String response = httpPost(url, body.toString());
-                    
-                    String result = response.trim();
-                    if (result.startsWith("\"") && result.endsWith("\"") && result.length() >= 2) {
-                        result = result.substring(1, result.length() - 1);
+
+                    // Phase 2-H: activate_device_v2 wraps the very same activate_device on the
+                    // server (same D1 decision, same four answers) and adds the per-car token.
+                    // A backend without it (HTTP 404) gets the v1 call, byte for byte as before.
+                    String result;
+                    String token = null;
+                    JSONObject v2 = new JSONObject(body.toString());
+                    v2.put("app_id", DeviceToken.APP_ID);
+                    v2.put("app_version_code", BuildConfig.VERSION_CODE);
+                    String[] r = httpPostRaw(getSupabaseUrl() + "/rest/v1/rpc/activate_device_v2", v2.toString());
+                    int code = Integer.parseInt(r[0]);
+                    if (code == 404) {
+                        String response = httpPost(getSupabaseUrl() + "/rest/v1/rpc/activate_device", body.toString());
+                        result = unquote(response);
+                    } else if (code < 200 || code >= 300) {
+                        throw new Exception("HTTP " + code + " for activate_device_v2");
+                    } else {
+                        JSONObject answer = new JSONObject(r[1]);
+                        result = answer.optString("status", "");
+                        if (!answer.isNull("token")) token = answer.optString("token", null);
                     }
-                    
+
                     boolean success = "success".equals(result);
                     if (success) {
                         mSecurePref.putBoolean(PREF_ACTIVE, true);
+                        if (token != null) DeviceToken.set(mContext, token);
                     }
                     if (cb != null) cb.done(success, result, null);
                 } catch (Exception e) {
@@ -1892,6 +1921,110 @@ public class WallpaperRepo {
                 }
             }
         }).start();
+    }
+
+    /** PostgREST answers a scalar as a quoted JSON string; strip exactly that. */
+    private static String unquote(String response) {
+        String result = response == null ? "" : response.trim();
+        if (result.startsWith("\"") && result.endsWith("\"") && result.length() >= 2) {
+            result = result.substring(1, result.length() - 1);
+        }
+        return result;
+    }
+
+    /**
+     * POST like {@link #httpPost} but hand back {status, body} instead of throwing on a
+     * non-2xx, so a caller can tell "the RPC does not exist here" (404) from a failure.
+     */
+    private String[] httpPostRaw(String urlStr, String jsonBody) throws Exception {
+        URL url = new URL(urlStr);
+        HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+        conn.setConnectTimeout(15000);
+        conn.setReadTimeout(20000);
+        conn.setRequestMethod("POST");
+        conn.setRequestProperty("Accept", "application/json");
+        conn.setRequestProperty("Content-Type", "application/json");
+        String sbUrl = getSupabaseUrl();
+        String sbKey = getSupabaseKey();
+        if (!sbUrl.contains("YOUR_SUPABASE_PROJECT") && urlStr.startsWith(sbUrl)) {
+            conn.setRequestProperty("apikey", sbKey);
+            conn.setRequestProperty("Authorization", "Bearer " + sbKey);
+        }
+        conn.setDoOutput(true);
+        java.io.OutputStream os = conn.getOutputStream();
+        os.write(jsonBody.getBytes("UTF-8"));
+        os.close();
+        int code = conn.getResponseCode();
+        java.io.InputStream in = (code >= 200 && code < 300) ? conn.getInputStream() : conn.getErrorStream();
+        StringBuilder sb = new StringBuilder();
+        if (in != null) {
+            InputStreamReader reader = new InputStreamReader(in);
+            char[] buf = new char[4096];
+            int n;
+            while((n = reader.read(buf)) != -1) sb.append(buf, 0, n);
+            reader.close();
+        }
+        conn.disconnect();
+        return new String[]{ String.valueOf(code), sb.toString() };
+    }
+
+    /**
+     * Phase 2-H, the only place the token is asked about, and it can only ever ADD a token.
+     *
+     * Runs on the sync thread after a server answer that left the car active. With a token:
+     * is_device_activated_v2 is asked and a false is recorded as a breadcrumb - while
+     * {@link #TOKEN_FALLBACK_TO_V1} is true it changes nothing, the licence is whatever the v1
+     * answers said. Without a token: enroll_device is asked at most once a day; null means
+     * "gate closed or car not recent", not an error, and nothing is written except the
+     * attempt time. Every failure here is swallowed: a car that already showed its playlist
+     * must never be touched by a call that exists only to make it safer later.
+     */
+    private void maybeEnrollOrVerifyToken() {
+        try {
+            String sbUrl = getSupabaseUrl();
+            if (sbUrl.contains("YOUR_SUPABASE_PROJECT")) return;
+            String token = DeviceToken.get(mContext);
+            if (token != null) {
+                JSONObject body = new JSONObject();
+                body.put("device_hw_id", getDeviceId());
+                body.put("device_token", token);
+                body.put("app_id", DeviceToken.APP_ID);
+                body.put("app_version_code", BuildConfig.VERSION_CODE);
+                String[] r = httpPostRaw(sbUrl + "/rest/v1/rpc/is_device_activated_v2", body.toString());
+                int code = Integer.parseInt(r[0]);
+                if (code >= 200 && code < 300) {
+                    String a = unquote(r[1]);
+                    if ("false".equalsIgnoreCase(a)) {
+                        CrashReporter.breadcrumb("token: is_device_activated_v2=false (v1 fallback="
+                                + TOKEN_FALLBACK_TO_V1 + ")");
+                        if (!TOKEN_FALLBACK_TO_V1) {
+                            // Phase 3 only. Deliberately unreachable in this build.
+                            mSecurePref.putBoolean(PREF_ACTIVE, false);
+                        }
+                    }
+                }
+                return;
+            }
+            long last = mPref.getLong(PREF_TOKEN_ENROLL_AT, 0L);
+            long now = System.currentTimeMillis();
+            if (now - last < 24L * 60 * 60 * 1000) return;
+            mPref.edit().putLong(PREF_TOKEN_ENROLL_AT, now).apply();
+            JSONObject body = new JSONObject();
+            body.put("device_hw_id", getDeviceId());
+            body.put("app_id", DeviceToken.APP_ID);
+            body.put("app_version_code", BuildConfig.VERSION_CODE);
+            String[] r = httpPostRaw(sbUrl + "/rest/v1/rpc/enroll_device", body.toString());
+            int code = Integer.parseInt(r[0]);
+            if (code < 200 || code >= 300) return;          // 404 = backend without Phase 2-H
+            String t = r[1] == null ? "" : r[1].trim();
+            if (t.isEmpty() || "null".equals(t)) return;     // gate closed: try again tomorrow
+            t = unquote(t);
+            if (t.length() < 16 || t.length() > 256) return; // not a token shape we know
+            DeviceToken.set(mContext, t);
+            CrashReporter.breadcrumb("token: enrolled");
+        } catch (Throwable t) {
+            // Nothing here may reach the user or the licence.
+        }
     }
 
     private String httpPost(String urlStr, String jsonBody) throws Exception {
