@@ -13,8 +13,10 @@
 set -e
 
 REPO="csoftqatar2-cyber/TS-Wallpapers"
-KEYSTORE="source/thabthaba.jks"
-LOCALPROPS="source/local.properties"
+# 2026-09-03: secrets live in ~/.ts-secrets/ts-wallpapers (fallback: the old in-repo paths)
+SECRETS_DIR="${TS_SECRETS_DIR:-$HOME/.ts-secrets}/ts-wallpapers"
+KEYSTORE="$SECRETS_DIR/thabthaba.jks";        [ -f "$KEYSTORE" ]   || KEYSTORE="source/thabthaba.jks"
+LOCALPROPS="$SECRETS_DIR/signing.properties"; [ -f "$LOCALPROPS" ] || LOCALPROPS="source/local.properties"
 
 echo "Setting GitHub Actions secrets on $REPO ..."
 

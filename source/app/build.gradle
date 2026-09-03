@@ -6,6 +6,28 @@ if (localPropsFile.exists()) {
     localProps.load(new FileInputStream(localPropsFile))
 }
 
+// 2026-09-03: the signing key and its passwords live OUTSIDE OneDrive in
+// $TS_SECRETS_DIR/ts-wallpapers (default ~/.ts-secrets/ts-wallpapers):
+//   thabthaba.jks + signing.properties (KEYSTORE_PASSWORD / KEY_ALIAS / KEY_PASSWORD).
+// Fallbacks stay exactly as before (source/thabthaba.jks, local.properties, env) so
+// CI - which decodes the keystore into source/ and injects env vars - is unchanged.
+def secretsDir = [
+    System.getenv('TS_SECRETS_DIR') ? new File(System.getenv('TS_SECRETS_DIR'), 'ts-wallpapers') : null,
+    new File(System.getProperty('user.home'), '.ts-secrets/ts-wallpapers')
+].find { it != null && new File(it, 'signing.properties').exists() }
+def signingProps = new Properties()
+if (secretsDir != null) {
+    signingProps.load(new FileInputStream(new File(secretsDir, 'signing.properties')))
+}
+def releaseKeystore = (secretsDir != null && new File(secretsDir, 'thabthaba.jks').exists()) ? new File(secretsDir, 'thabthaba.jks') : file("../thabthaba.jks")
+def signingProp = { String k -> signingProps.getProperty(k, localProps.getProperty(k, System.getenv(k))) }
+logger.lifecycle("signing: keystore=${releaseKeystore.absolutePath} (exists=${releaseKeystore.exists()}), secretsDir=${secretsDir}")
+gradle.taskGraph.whenReady { graph ->
+    if (graph.allTasks.any { it.name.contains('Release') } && !releaseKeystore.exists()) {
+        throw new GradleException("Release signing key not found: ${releaseKeystore.absolutePath} - put thabthaba.jks in ~/.ts-secrets/ts-wallpapers (or set TS_SECRETS_DIR)")
+    }
+}
+
 android {
     defaultConfig {
         applicationId "store.thabthaba.clock"
@@ -26,10 +48,10 @@ android {
         release {
             // Credentials come ONLY from local.properties / env (never hardcoded).
             // See README "Required local secrets". Build fails loudly if missing.
-            storeFile file("../thabthaba.jks")
-            storePassword localProps.getProperty('KEYSTORE_PASSWORD', System.getenv('KEYSTORE_PASSWORD'))
-            keyAlias localProps.getProperty('KEY_ALIAS', System.getenv('KEY_ALIAS'))
-            keyPassword localProps.getProperty('KEY_PASSWORD', System.getenv('KEY_PASSWORD'))
+            storeFile releaseKeystore
+            storePassword signingProp('KEYSTORE_PASSWORD')
+            keyAlias signingProp('KEY_ALIAS')
+            keyPassword signingProp('KEY_PASSWORD')
         }
     }
     buildTypes {
