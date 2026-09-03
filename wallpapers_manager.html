@@ -1797,6 +1797,8 @@
                         <button type="button" class="dev-filter-btn" data-filter="blocked" onclick="setDevicesFilter('blocked')">المحظورة</button>
                         <button type="button" class="dev-filter-btn" data-filter="autoblock" onclick="setDevicesFilter('autoblock')">حظر تلقائي</button>
                         <button type="button" class="dev-filter-btn" data-filter="attempts" onclick="setDevicesFilter('attempts')">محاولات خاطئة</button>
+                        <button type="button" class="dev-filter-btn" data-filter="token" onclick="setDevicesFilter('token')">معها توكن</button>
+                        <button type="button" class="dev-filter-btn" data-filter="conflict" onclick="setDevicesFilter('conflict')">محاولة استنساخ</button>
                     </div>
                 </div>
                 <!-- The fleet by build. This is the answer to "did the update actually land?" —
@@ -2170,6 +2172,27 @@
         }
 
         /**
+         * Per-car token (2026-09-03). Postgres holds only sha256(token); its presence is
+         * what the dashboard shows. token_version counts issues + resets + rotations, so a
+         * value above 1 means the car re-typed its code (reinstall) or an operator reset it.
+         */
+        function hasToken(d) { return !!d.token_hash; }
+
+        /**
+         * enroll_conflicts mirrors D1's 'enroll_conflict' audit: someone tried to enrol a car
+         * that already holds a token. One conflict may be the customer's own reinstall racing
+         * itself; a growing count on a car the customer never touched is a cloned APK knocking.
+         */
+        function tokenLine(d) {
+            const n = d.enroll_conflicts || 0;
+            if (!n) return '';
+            const bits = [`محاولات تسجيل توكن مرفوضة: ${n}`];
+            if (d.last_enroll_conflict_at) bits.push(`آخر محاولة: ${shortDateTime(d.last_enroll_conflict_at)}`);
+            if (!hasToken(d)) bits.push('الجهاز بلا توكن حاليًا');
+            return `<div class="dev-row-mac" style="color:#fbbf24;">${escapeHtml(bits.join('  ·  '))}</div>`;
+        }
+
+        /**
          * The auto-block headline. Counts cars, not attempts: one car tried ten times is one
          * problem, and adding the attempts up would inflate a single stubborn installer into
          * what looks like a fleet-wide event.
@@ -2177,16 +2200,22 @@
         function renderAutoBlockStat() {
             const locked = devicesList.filter(isAutoBlocked).length;
             const knocking = devicesList.filter(d => !d.is_blocked && (d.failed_attempts || 0) > 0).length;
+            const cloning = devicesList.filter(d => (d.enroll_conflicts || 0) > 0).length;
+            const enrolled = devicesList.filter(hasToken).length;
             const card = document.getElementById("stat-card-autoblock");
             const hint = document.getElementById("stat-autoblock-hint");
             document.getElementById("stat-autoblocked").innerText = locked;
-            if (card) card.classList.toggle('alerting', locked > 0);
+            if (card) card.classList.toggle('alerting', locked > 0 || cloning > 0);
             if (hint) {
                 hint.innerHTML = locked > 0
                     ? `<i class="fa-solid fa-triangle-exclamation"></i> اضغط لمراجعة الأجهزة ورفع الحظر`
-                    : (knocking > 0
-                        ? `<i class="fa-solid fa-arrow-pointer"></i> ${knocking} جهاز عليه محاولات خاطئة`
-                        : `<i class="fa-solid fa-circle-check"></i> لا توجد محاولات مشبوهة`);
+                    : (cloning > 0
+                        ? `<i class="fa-solid fa-clone"></i> ${cloning} سيارة عليها محاولة استنساخ توكن`
+                        : (knocking > 0
+                            ? `<i class="fa-solid fa-arrow-pointer"></i> ${knocking} جهاز عليه محاولات خاطئة`
+                            : (enrolled > 0
+                                ? `<i class="fa-solid fa-key"></i> ${enrolled} سيارة معها توكن · لا محاولات مشبوهة`
+                                : `<i class="fa-solid fa-circle-check"></i> لا توجد محاولات مشبوهة`)));
             }
         }
 
@@ -3861,6 +3890,8 @@
                 // Cars still short of the limit. The list an operator watches when a code
                 // has leaked and people are trying it on cars that never bought it.
                 if (devicesModalFilter === 'attempts') return !d.is_blocked && (d.failed_attempts || 0) > 0;
+                if (devicesModalFilter === 'token') return hasToken(d);
+                if (devicesModalFilter === 'conflict') return (d.enroll_conflicts || 0) > 0;
                 return true;
             });
             if (devicesVersionFilter !== 'ALL') {
@@ -3919,19 +3950,28 @@
                 const attemptsBadge = (!d.is_blocked && (d.failed_attempts || 0) > 0)
                     ? `<span class="dev-badge att" title="محاولات تفعيل خاطئة متتالية — يُحظر الجهاز عند ${FAILED_ATTEMPT_LIMIT}"><i class="fa-solid fa-triangle-exclamation"></i> ${d.failed_attempts}/${FAILED_ATTEMPT_LIMIT} محاولة خاطئة</span>`
                     : '';
+                const tokenBadge = hasToken(d)
+                    ? `<span class="dev-badge on" title="هذه السيارة تحمل توكن خاص بها (تطبيق ${escapeHtml(d.token_app_id || '?')}) منذ ${escapeHtml(shortDate(d.token_issued_at))}"><i class="fa-solid fa-key"></i> توكن${(d.token_version || 0) > 1 ? ` · v${d.token_version}` : ''}</span>`
+                    : '';
+                const conflictBadge = (d.enroll_conflicts || 0) > 0
+                    ? `<span class="dev-badge att" title="محاولات تسجيل توكن على سيارة تحمل توكن بالفعل — نسخة APK مستنسخة أو إعادة تثبيت"><i class="fa-solid fa-clone"></i> ${d.enroll_conflicts} محاولة استنساخ</span>`
+                    : '';
                 const nameBit = d.client_name ? ` · ${escapeHtml(d.client_name)}` : '';
                 info.innerHTML = `
                     <div class="dev-row-title">
                         <span class="dev-row-serial">${escapeHtml(d.serial_number || 'بدون كود')}${nameBit}</span>
                         ${statusBadge}
                         ${attemptsBadge}
+                        ${tokenBadge}
+                        ${conflictBadge}
                         ${modeBadge(d.mode)}
                         ${versionBadge(d)}
                         <span class="dev-badge off">${count} صورة</span>
                     </div>
                     <div class="dev-row-mac">${escapeHtml(hwId)}</div>
                     <div class="dev-row-mac">${activationLine(d)}</div>
-                    ${attemptsLine(d)}`;
+                    ${attemptsLine(d)}
+                    ${tokenLine(d)}`;
 
                 const actions = document.createElement("div");
                 actions.className = "dev-row-actions";
