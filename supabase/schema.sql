@@ -782,6 +782,8 @@ create table if not exists public.device_tokens (
     primary key (hardware_id, app_id)
 );
 create unique index if not exists device_tokens_hash_idx on public.device_tokens (token_hash);
+-- 20260908_token_last_verified.sql: evidence the token is actually used (cut-over condition).
+alter table public.device_tokens add column if not exists last_verified_at timestamptz;
 
 alter table public.device_tokens enable row level security;
 drop policy if exists "tok admin read"   on public.device_tokens;
@@ -988,20 +990,35 @@ begin
 end $function$;
 create or replace function public.is_device_activated_v2(device_hw_id text, device_token text, app_id text default 'wallpapers', app_version_code int default null)
 returns boolean
-language sql security definer set search_path to 'public'
+language plpgsql security definer set search_path to 'public'
 as $function$
-  select exists (
-    select 1
-      from public.devices d
-      join public.device_tokens t
-        on t.hardware_id = d.hardware_id
-       and t.app_id = lower(coalesce(nullif(btrim(is_device_activated_v2.app_id), ''), 'wallpapers'))
-     where d.hardware_id = public.resolve_device_id(is_device_activated_v2.device_hw_id)
-       and d.is_active = true and d.is_blocked = false
-       and is_device_activated_v2.device_token is not null
-       and t.token_hash = encode(extensions.digest(is_device_activated_v2.device_token, 'sha256'), 'hex')
-  );
-$function$;
+declare
+    hw    text;
+    v_app text := lower(coalesce(nullif(btrim(is_device_activated_v2.app_id), ''), 'wallpapers'));
+    ok    boolean;
+begin
+    if is_device_activated_v2.device_token is null or is_device_activated_v2.device_hw_id is null then return false; end if;
+    hw := public.resolve_device_id(is_device_activated_v2.device_hw_id);
+    select exists (
+        select 1
+          from public.devices d
+          join public.device_tokens t on t.hardware_id = d.hardware_id and t.app_id = v_app
+         where d.hardware_id = hw
+           and d.is_active = true and d.is_blocked = false
+           and t.token_hash = encode(extensions.digest(is_device_activated_v2.device_token, 'sha256'), 'hex')
+    ) into ok;
+    if ok then
+        begin
+            update public.device_tokens
+               set last_verified_at = now()
+             where hardware_id = hw and app_id = v_app
+               and (last_verified_at is null or last_verified_at < now() - interval '1 hour');
+        exception when others then
+            null;  -- evidence only; never let it cost a car its answer
+        end;
+    end if;
+    return coalesce(ok, false);
+end $function$;
 revoke all on function public.is_device_activated_v2(text, text, text, int) from public;
 grant execute on function public.enroll_device(text, text, int) to anon, authenticated;
 grant execute on function public.activate_device_v2(text, text, text, text, int) to anon, authenticated;

@@ -2184,7 +2184,7 @@
         async function loadDeviceTokens() {
             deviceTokens = {};
             try {
-                const r = await fetch(`${REST_DEVICE_TOKENS}?select=hardware_id,app_id,token_version,token_issued_at,enroll_conflicts,last_enroll_conflict_at`, {
+                const r = await fetch(`${REST_DEVICE_TOKENS}?select=hardware_id,app_id,token_version,token_issued_at,enroll_conflicts,last_enroll_conflict_at,last_verified_at`, {
                     headers: { "apikey": ANON_KEY, "Authorization": `Bearer ${SESSION_TOKEN}` }
                 });
                 if (!r.ok) return;
@@ -3971,7 +3971,7 @@
                     ? `<span class="dev-badge att" title="محاولات تفعيل خاطئة متتالية — يُحظر الجهاز عند ${FAILED_ATTEMPT_LIMIT}"><i class="fa-solid fa-triangle-exclamation"></i> ${d.failed_attempts}/${FAILED_ATTEMPT_LIMIT} محاولة خاطئة</span>`
                     : '';
                 const tokenBadge = tokensOf(d).map(t =>
-                    `<span class="dev-badge on" title="توكن ${escapeHtml(appLabel(t.app_id))} منذ ${escapeHtml(shortDate(t.token_issued_at))}${(t.token_version || 1) > 1 ? ` — أُعيد إصداره ${t.token_version - 1} مرة (إعادة تثبيت أو تصفير)` : ''}"><i class="fa-solid fa-key"></i> ${escapeHtml(appLabel(t.app_id))}${(t.token_version || 1) > 1 ? ` · v${t.token_version}` : ''}</span>`
+                    `<span class="dev-badge on" title="توكن ${escapeHtml(appLabel(t.app_id))} منذ ${escapeHtml(shortDate(t.token_issued_at))}${t.last_verified_at ? ` — آخر استخدام ${escapeHtml(shortDateTime(t.last_verified_at))}` : ' — لم يُستخدم بعد'}${(t.token_version || 1) > 1 ? ` — أُعيد إصداره ${t.token_version - 1} مرة (إعادة تثبيت أو تصفير)` : ''}"><i class="fa-solid fa-key"></i> ${escapeHtml(appLabel(t.app_id))}${(t.token_version || 1) > 1 ? ` · v${t.token_version}` : ''}</span>`
                 ).join('');
                 const conflictBadge = (d.enroll_conflicts || 0) > 0
                     ? `<span class="dev-badge att" title="محاولات تسجيل توكن على سيارة تحمل توكن بالفعل — نسخة APK مستنسخة أو إعادة تثبيت"><i class="fa-solid fa-clone"></i> ${d.enroll_conflicts} محاولة استنساخ</span>`
