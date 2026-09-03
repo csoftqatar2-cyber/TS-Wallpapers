@@ -168,11 +168,28 @@ function shape(row) {
     last_failed_serial: row.last_failed_serial || null,
     blocked_at: row.blocked_at || null,
     block_reason: row.block_reason || null,
-    // Per-car token (2026-09-03). The hash itself never leaves D1.
-    has_token: !!row.token_hash,
-    token_issued_at: row.token_issued_at || null,
-    token_version: row.token_version || 0,
   };
+}
+
+/**
+ * Per-(car, app) tokens live in device_tokens (migration 0004). The legacy
+ * devices.token_* columns from 0003 are no longer read or written; they stay as
+ * inert columns because SQLite cannot drop them cheaply and nothing depends on them.
+ */
+const DEFAULT_APP_ID = 'wallpapers';
+function normalizeAppId(v) {
+  const a = String(v || '').trim().toLowerCase().slice(0, 32);
+  return a || DEFAULT_APP_ID;
+}
+async function getToken(db, hardwareId, appId) {
+  return db.prepare('SELECT * FROM device_tokens WHERE hardware_id = ? AND app_id = ?').bind(hardwareId, appId).first();
+}
+async function listTokens(db, hardwareId) {
+  const { results } = await db
+    .prepare('SELECT app_id, token_issued_at, token_version FROM device_tokens WHERE hardware_id = ? ORDER BY app_id')
+    .bind(hardwareId)
+    .all();
+  return results || [];
 }
 
 /* ----------------------------------------------------------------------------
@@ -187,6 +204,13 @@ function shape(row) {
  * fielded APK keeps the old paths untouched, and a car that never enrols keeps
  * working exactly as before. An enrolled car that loses its token (factory reset,
  * cleared data) is reset by the operator via set-state {reset_token:true}.
+ *
+ * ONE TOKEN PER (CAR, APP) - since 2026-09-03 evening. Six apps unlock from the
+ * same devices row (store, wallpapers, Back Button, TS Link, controller, Leo dash)
+ * but each is its own APK with its own private storage, so a token handed to one
+ * app is unreadable by the others. Storing it per car would let only the first app
+ * enrol and would make every later app look like a cloner. device_tokens is keyed
+ * (hardware_id, app_id); first-come-wins and rotation apply per app.
  * ------------------------------------------------------------------------- */
 async function sha256Hex(text) {
   const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
@@ -200,24 +224,25 @@ function randomTokenHex() {
 }
 
 /**
- * POST /v1/devices/enroll {hardware_id, app_id, app_version_code}
+ * POST /v1/devices/enroll {hardware_id, app_id, app_version_code, activation_serial?}
  *  -> {status:'enrolled', token}            first and only time the plaintext is seen
  *  -> {status:'already_enrolled', token:null}
  *  -> {status:'refused', token:null}        not active, blocked, or unknown
  *
- * First come wins: the UPDATE's `token_hash IS NULL` is the race guard, so two
- * concurrent enrols produce exactly one token. Nothing here ever activates,
+ * First come wins per (car, app): INSERT OR IGNORE on the (hardware_id, app_id)
+ * primary key is the race guard, so two concurrent enrols produce exactly one token. Nothing here ever activates,
  * blocks or renames a car.
  */
 async function handleEnroll(db, body) {
   const hardwareId = (body.hardware_id || '').trim();
-  const appId = String(body.app_id || '').trim().slice(0, 32) || null;
+  const appId = normalizeAppId(body.app_id);
   if (!hardwareId) return json({ error: 'hardware_id required' }, 400);
 
   const before = await getDevice(db, hardwareId);
   if (!before || !before.is_active || before.is_blocked) {
-    return json({ status: 'refused', token: null, row: shape(before) });
+    return json({ status: 'refused', token: null, app_id: appId, row: shape(before) });
   }
+  const existing = await getToken(db, hardwareId, appId);
 
   // Rotation: a car that lost its token (reinstall, factory reset) proves itself the
   // way it always did - by re-typing ITS OWN activation code. Postgres passes that
@@ -226,12 +251,14 @@ async function handleEnroll(db, body) {
   const serial = typeof body.activation_serial === 'string' ? body.activation_serial.trim() : '';
   const rotate = !!serial && !!before.serial_number && secretMatches(serial, before.serial_number);
 
-  if (before.token_hash && !rotate) {
-    // A second enrol on an enrolled car: either a reinstalled genuine unit that has
-    // not re-typed its code yet, or a stranger who lost the race. Either way the
-    // operator must be able to see it, so it is audited, not just refused.
-    await auditStmt(db, hardwareId, 'enroll_conflict', before, { ...shape(before), app_id: appId }).run();
-    return json({ status: 'already_enrolled', token: null, row: shape(before) });
+  if (existing && !rotate) {
+    // A second enrol for this app on an enrolled car: either a reinstalled genuine
+    // unit that has not re-typed its code yet, or a stranger who lost the race.
+    // Either way the operator must be able to see it, so it is audited, not just
+    // refused. (Another APP on the same car enrolling for the first time is NOT a
+    // conflict - it gets its own row.)
+    await auditStmt(db, hardwareId, 'enroll_conflict', before, { ...shape(before), app_id: appId, token_version: existing.token_version }).run();
+    return json({ status: 'already_enrolled', token: null, app_id: appId, row: shape(before) });
   }
 
   const token = randomTokenHex();
@@ -240,43 +267,51 @@ async function handleEnroll(db, body) {
   const result = rotate
     ? await db
         .prepare(
-          `UPDATE devices SET token_hash = ?, token_issued_at = ?, token_version = token_version + 1,
-                              token_app_id = ?, updated_at = ?
-            WHERE hardware_id = ? AND serial_number = ? AND is_active = 1 AND is_blocked = 0`,
+          `INSERT INTO device_tokens (hardware_id, app_id, token_hash, token_issued_at, token_version)
+             VALUES (?, ?, ?, ?, 1)
+           ON CONFLICT(hardware_id, app_id) DO UPDATE SET
+             token_hash = excluded.token_hash, token_issued_at = excluded.token_issued_at,
+             token_version = device_tokens.token_version + 1`,
         )
-        .bind(hash, stamp, appId, stamp, hardwareId, serial)
+        .bind(hardwareId, appId, hash, stamp)
         .run()
     : await db
+        // First come wins per (car, app): OR IGNORE makes two concurrent enrols
+        // produce exactly one token; the loser sees changes = 0.
         .prepare(
-          `UPDATE devices SET token_hash = ?, token_issued_at = ?, token_version = token_version + 1,
-                              token_app_id = ?, updated_at = ?
-            WHERE hardware_id = ? AND token_hash IS NULL AND is_active = 1 AND is_blocked = 0`,
+          `INSERT OR IGNORE INTO device_tokens (hardware_id, app_id, token_hash, token_issued_at, token_version)
+             VALUES (?, ?, ?, ?, 1)`,
         )
-        .bind(hash, stamp, appId, stamp, hardwareId)
+        .bind(hardwareId, appId, hash, stamp)
         .run();
   if (!result || !result.meta || (result.meta.changes ?? 0) === 0) {
-    return json({ status: 'already_enrolled', token: null, row: shape(await getDevice(db, hardwareId)) });
+    return json({ status: 'already_enrolled', token: null, app_id: appId, row: shape(before) });
   }
-  const after = await getDevice(db, hardwareId);
-  await auditStmt(db, hardwareId, rotate && before.token_hash ? 'rotate_token' : 'enroll', before, { ...shape(after), app_id: appId }).run();
-  return json({ status: rotate && before.token_hash ? 'rotated' : 'enrolled', token, row: shape(after) });
+  const after = await getToken(db, hardwareId, appId);
+  const rotated = rotate && !!existing;
+  await auditStmt(db, hardwareId, rotated ? 'rotate_token' : 'enroll', before,
+    { ...shape(before), app_id: appId, token_version: after ? after.token_version : 1 }).run();
+  return json({ status: rotated ? 'rotated' : 'enrolled', token, app_id: appId,
+    token_version: after ? after.token_version : 1, row: shape(before) });
 }
 
 /**
- * POST /v1/devices/verify {hardware_id, token} -> {active, enrolled}
- * `active` is true only for an active, unblocked car whose token matches.
+ * POST /v1/devices/verify {hardware_id, app_id, token} -> {active, enrolled}
+ * `active` is true only for an active, unblocked car whose token FOR THAT APP matches.
  */
 async function handleVerify(db, body) {
   const hardwareId = (body.hardware_id || '').trim();
+  const appId = normalizeAppId(body.app_id);
   const token = typeof body.token === 'string' ? body.token.trim() : '';
   if (!hardwareId) return json({ error: 'hardware_id required' }, 400);
   const row = await getDevice(db, hardwareId);
-  const enrolled = !!(row && row.token_hash);
+  const tok = row ? await getToken(db, hardwareId, appId) : null;
+  const enrolled = !!tok;
   if (!row || !row.is_active || row.is_blocked || !enrolled || !token) {
-    return json({ active: false, enrolled });
+    return json({ active: false, enrolled, app_id: appId });
   }
-  const ok = secretMatches(await sha256Hex(token), row.token_hash);
-  return json({ active: ok, enrolled });
+  const ok = secretMatches(await sha256Hex(token), tok.token_hash);
+  return json({ active: ok, enrolled, app_id: appId });
 }
 
 async function getDevice(db, hardwareId) {
@@ -316,6 +351,8 @@ async function migrateIdentity(db, oldId, newId) {
   await db.batch([
     db.prepare('UPDATE devices SET hardware_id = ?, updated_at = ?, source = ? WHERE hardware_id = ?')
       .bind(newId, nowIso(), 'migrate', oldId),
+    // The car keeps its tokens under its new name (Postgres does the same via FK cascade).
+    db.prepare('UPDATE OR IGNORE device_tokens SET hardware_id = ? WHERE hardware_id = ?').bind(newId, oldId),
     auditStmt(db, newId, 'migrate', source, { ...shape(source), hardware_id: newId }),
   ]);
   return true;
@@ -586,17 +623,19 @@ async function handleSetState(db, body) {
   // the ONLY way a second token is ever issued. Bumping token_version makes the
   // event visible in the audit trail and in the dashboard.
   if (body.reset_token) {
-    await db
-      .prepare(
-        `UPDATE devices SET token_hash = NULL, token_issued_at = NULL, token_version = token_version + 1,
-                            updated_at = ? WHERE hardware_id = ?`,
-      )
-      .bind(stamp, hardwareId)
-      .run();
-    await auditStmt(db, hardwareId, 'reset_token', before, shape(await getDevice(db, hardwareId))).run();
+    // All apps by default; {reset_token_app_id:'store'} limits it to one app.
+    const onlyApp = body.reset_token_app_id ? normalizeAppId(body.reset_token_app_id) : null;
+    const gone = await listTokens(db, hardwareId);
+    if (onlyApp) {
+      await db.prepare('DELETE FROM device_tokens WHERE hardware_id = ? AND app_id = ?').bind(hardwareId, onlyApp).run();
+    } else {
+      await db.prepare('DELETE FROM device_tokens WHERE hardware_id = ?').bind(hardwareId).run();
+    }
+    await auditStmt(db, hardwareId, 'reset_token', before,
+      { ...shape(await getDevice(db, hardwareId)), reset_app_id: onlyApp || '*', removed: gone.filter((t) => !onlyApp || t.app_id === onlyApp).map((t) => t.app_id) }).run();
   }
 
-  return json({ status: 'ok', row: shape(await getDevice(db, hardwareId)) });
+  return json({ status: 'ok', row: shape(await getDevice(db, hardwareId)), tokens: await listTokens(db, hardwareId) });
 }
 
 /**
