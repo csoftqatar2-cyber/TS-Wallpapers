@@ -505,7 +505,9 @@
                                 android:padding="14dp"
                                 android:background="@drawable/chip_accent_bg"
                                 android:visibility="gone">
+                                <!-- Relabelled at runtime in Denza (BaseSettingsActivity). -->
                                 <TextView
+                                    android:id="@+id/textViewLeopardBannerTitle"
                                     android:layout_width="match_parent"
                                     android:layout_height="wrap_content"
                                     android:textColor="@color/gold"
@@ -644,6 +646,12 @@
                                     android:id="@+id/radioModeLeopard"
                                     style="@style/ModeRadio"
                                     android:text="@string/mode_leopard" />
+                                <!-- Denza: the same WallpaperManager hand-off as Leopard, split
+                                     out under its own name so the two cars can be told apart. -->
+                                <RadioButton
+                                    android:id="@+id/radioModeDenza"
+                                    style="@style/ModeRadio"
+                                    android:text="@string/mode_denza" />
                                 <RadioButton
                                     android:id="@+id/radioModeGwm"
                                     style="@style/ModeRadio"

@@ -248,7 +248,8 @@ Roboto Font Copyright (c) Christian Robertson. Licensed under the Apache License
     <!-- Leopard: the app hands the wallpaper to Android and steps out of the way. -->
     <string name="leopard_wallpaper_description">TS Wallpapers — the image or video you picked</string>
     <string name="leopard_title">Choose device wallpaper</string>
-    <string name="leopard_chip">Leopard \\ Denza mode</string>
+    <string name="leopard_chip">Leopard mode</string>
+    <string name="denza_chip">Denza mode</string>
     <string name="lynkco_chip">Lynk and Co mode</string>
     <string name="lynkco_scale">Lynk &amp; Co interface size</string>
     <string name="lynkco_scale_hint">Enlarge or shrink the whole wallpaper picker on Lynk &amp; Co screens.</string>
@@ -291,18 +292,22 @@ Roboto Font Copyright (c) Christian Robertson. Licensed under the Apache License
     <string name="leopard_video_first_ok">Got it, continue</string>
     <string name="leopard_handoff_dont_show">I know these steps — do not show this again</string>
     <string name="leopard_unsupported">This screen does not support Leopard mode.</string>
+    <string name="denza_unsupported">This screen does not support Denza mode.</string>
     <string name="leopard_gif_static_note">This device shows GIFs as a still image.</string>
 
     <!-- Operating mode picker, on the activation screen and in Settings. -->
     <string name="mode_title">Operating mode</string>
-    <string name="mode_exclusive_note">Leopard (FSE) and Leopard \\ Denza cannot be combined — pick one.</string>
+    <string name="mode_exclusive_note">Leopard (FSE), Leopard and Denza cannot be combined — pick one.</string>
     <string name="mode_normal">Others</string>
     <string name="mode_confirm_pick_first">Choose the car type to continue.</string>
     <string name="mode_normal_desc">The app shows wallpapers and the clock on its own screen.</string>
     <string name="mode_fse">Leopard (FSE)</string>
     <string name="mode_fse_desc">Forces a fixed 1920×720 window for very wide screens.</string>
-    <string name="mode_leopard">Leopard \\ Denza</string>
+    <string name="mode_leopard">Leopard</string>
     <string name="mode_leopard_desc">The app hands the wallpaper to Android and disappears — no clock, no switching.</string>
+    <!-- Denza: split out of "Leopard \ Denza"; same behaviour as Leopard today, own name. -->
+    <string name="mode_denza">Denza</string>
+    <string name="mode_denza_desc">The app hands the wallpaper to Android and disappears — no clock, no switching.</string>
     <string name="mode_gwm">GWM</string>
     <string name="mode_gwm_desc">Same as Others, plus a \"Manage GWM images\" section that mirrors the GWM channel into the shared folder the GWM dashboard app reads.</string>
     <string name="mode_jetour">Jetour</string>
@@ -311,11 +316,13 @@ Roboto Font Copyright (c) Christian Robertson. Licensed under the Apache License
     <string name="mode_lynkco_desc">For Lynk &amp; Co / Flyme head units. The app is just a picker — the chosen wallpaper is handed to the car\'s own theme app, which opens a preview with an \"Apply\" button.</string>
     <string name="mode_unavailable_here">This mode is not available on this screen.</string>
     <string name="lynkco_applied">Opening the wallpaper preview — tap \"Apply\" on the car\'s screen to set it.</string>
-    <string name="mode_leopard_unsupported_note">Some screens do not support Leopard \\ Denza — the option is disabled automatically on those.</string>
+    <string name="mode_leopard_unsupported_note">Some screens do not support Leopard — the option is disabled automatically on those.</string>
+    <string name="mode_denza_unsupported_note">Some screens do not support Denza — the option is disabled automatically on those.</string>
     <string name="mode_new_badge">New</string>
 
-    <!-- Settings, in Leopard mode. -->
-    <string name="leopard_settings_banner_title">Leopard \\ Denza mode is on</string>
+    <!-- Settings, in Leopard / Denza mode. -->
+    <string name="leopard_settings_banner_title">Leopard mode is on</string>
+    <string name="denza_settings_banner_title">Denza mode is on</string>
     <string name="leopard_settings_banner_body">Android draws the wallpaper on the home screen — the app is just a picker. Open it, choose, close it.</string>
     <string name="leopard_settings_hidden_note">Hidden: the analog and digital clocks, clock layout, weather and auto-switching — they have no meaning while Android draws the wallpaper.</string>
     <string name="leopard_open_picker">Open the picker</string>
@@ -489,7 +496,8 @@ Roboto Font Copyright (c) Christian Robertson. Licensed under the Apache License
     <string name="leopard_phone_keep_open">⚠ Leave this screen open until the phone has finished uploading — if you close the app the picture will not arrive.</string>
     <string name="leopard_phone_received">Image received ✓ — frame it, then set it</string>
     <string name="leopard_phone_empty">Nothing sent from a phone yet — scan the code to add an image</string>
-    <string name="chip_mode_leopard">Mode: Leopard \\ Denza</string>
+    <string name="chip_mode_leopard">Mode: Leopard</string>
+    <string name="chip_mode_denza">Mode: Denza</string>
     <string name="chip_mode_gwm">Mode: GWM</string>
     <string name="chip_mode_lynkco">Mode: Lynk and Co</string>
     <string name="chip_mode_jetour">Mode: Jetour</string>

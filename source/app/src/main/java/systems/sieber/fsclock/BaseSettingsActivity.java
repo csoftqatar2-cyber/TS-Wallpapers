@@ -445,6 +445,7 @@ public class BaseSettingsActivity extends AppCompatActivity {
             // Leopard — the chip was contradicting the setting it reports on.
             switch(OperatingMode.get(mSharedPref)) {
                 case OperatingMode.LEOPARD: mode.setText(R.string.chip_mode_leopard); break;
+                case OperatingMode.DENZA:   mode.setText(R.string.chip_mode_denza); break;
                 case OperatingMode.FSE:     mode.setText(R.string.chip_mode_fse); break;
                 case OperatingMode.GWM:     mode.setText(R.string.chip_mode_gwm); break;
                 case OperatingMode.JETOUR:  mode.setText(R.string.chip_mode_jetour); break;
@@ -552,6 +553,13 @@ public class BaseSettingsActivity extends AppCompatActivity {
         }
         View banner = findViewById(R.id.leopardBanner);
         if(banner != null) banner.setVisibility(handoff ? View.VISIBLE : View.GONE);
+        // The banner is shared by the hand-off family; only its title names the mode, so a
+        // Denza car must not read "Leopard mode is on".
+        TextView bannerTitle = findViewById(R.id.textViewLeopardBannerTitle);
+        if(bannerTitle != null) {
+            bannerTitle.setText(OperatingMode.isDenza(mSharedPref)
+                    ? R.string.denza_settings_banner_title : R.string.leopard_settings_banner_title);
+        }
         View leopardGroup = findViewById(R.id.groupLeopard);
         if(leopardGroup != null) leopardGroup.setVisibility(handoff ? View.VISIBLE : View.GONE);
         // The UI-size slider is a Lynk & Co concern only (that is the mode that scales its picker).
@@ -1004,12 +1012,14 @@ public class BaseSettingsActivity extends AppCompatActivity {
         // a device that has not been activated, where picking FSE would also quietly switch on
         // start-on-boot. Gate both routes.
         int[] modeViews = { R.id.radioGroupMode, R.id.radioModeNormal, R.id.radioModeFse,
-                R.id.radioModeLeopard, R.id.chipMode };
+                R.id.radioModeLeopard, R.id.radioModeDenza, R.id.chipMode };
         for(int id : modeViews) {
             View v = findViewById(id);
             if(v == null) continue;
-            // Leopard has its own reason to be off; do not overrule it back on here.
-            if(id == R.id.radioModeLeopard && !OperatingMode.isSupported(this)) continue;
+            // Leopard (and Denza, its twin) has its own reason to be off; do not overrule it
+            // back on here.
+            if((id == R.id.radioModeLeopard || id == R.id.radioModeDenza)
+                    && !OperatingMode.isSupported(this)) continue;
             v.setEnabled(state);
         }
         View chip = findViewById(R.id.chipMode);
@@ -2159,12 +2169,18 @@ public class BaseSettingsActivity extends AppCompatActivity {
         if(fseRow != null) fseRow.setVisibility(View.GONE);
 
         final RadioButton leopard = findViewById(R.id.radioModeLeopard);
+        final RadioButton denza = findViewById(R.id.radioModeDenza);
         boolean supported = OperatingMode.isSupported(this);
         if(!supported) {
             // A runtime check with a real state, not a crash and not a silent no-op: some
-            // cheap ROMs ship without the live wallpaper picker at all.
+            // cheap ROMs ship without the live wallpaper picker at all. Denza is the same
+            // hand-off, so it is gated by the same check.
             leopard.setEnabled(false);
             leopard.setAlpha(0.4f);
+            if(denza != null) {
+                denza.setEnabled(false);
+                denza.setAlpha(0.4f);
+            }
         }
 
         // Lynkco is only a real product on a head unit that ships the Flyme theme app we hand the
@@ -2178,13 +2194,14 @@ public class BaseSettingsActivity extends AppCompatActivity {
         }
 
         int mode = OperatingMode.get(mSharedPref);
-        if(mode == OperatingMode.LEOPARD && !supported) mode = OperatingMode.NORMAL;
+        if((mode == OperatingMode.LEOPARD || mode == OperatingMode.DENZA) && !supported) mode = OperatingMode.NORMAL;
         if(mode == OperatingMode.LYNKCO && !lynkcoSupported) mode = OperatingMode.NORMAL;
         group.check(radioFor(mode));
         updateModeDescription(mode, supported);
 
         group.setOnCheckedChangeListener((g, checkedId) -> {
             int m = checkedId == R.id.radioModeLeopard ? OperatingMode.LEOPARD
+                    : checkedId == R.id.radioModeDenza ? OperatingMode.DENZA
                     : checkedId == R.id.radioModeFse ? OperatingMode.FSE
                     : checkedId == R.id.radioModeGwm ? OperatingMode.GWM
                     : checkedId == R.id.radioModeJetour ? OperatingMode.JETOUR
@@ -2202,6 +2219,7 @@ public class BaseSettingsActivity extends AppCompatActivity {
 
     private static int radioFor(int mode) {
         return mode == OperatingMode.LEOPARD ? R.id.radioModeLeopard
+                : mode == OperatingMode.DENZA ? R.id.radioModeDenza
                 : mode == OperatingMode.FSE ? R.id.radioModeFse
                 : mode == OperatingMode.GWM ? R.id.radioModeGwm
                 : mode == OperatingMode.JETOUR ? R.id.radioModeJetour
@@ -2272,12 +2290,14 @@ public class BaseSettingsActivity extends AppCompatActivity {
         final boolean supported = OperatingMode.isSupported(this);
         final boolean lynkcoSupported = OperatingMode.isLynkcoSupported(this);
         final int[] modes = { OperatingMode.NORMAL, OperatingMode.FSE, OperatingMode.LEOPARD,
-                OperatingMode.GWM, OperatingMode.LYNKCO, OperatingMode.JETOUR };
+                OperatingMode.DENZA, OperatingMode.GWM, OperatingMode.LYNKCO, OperatingMode.JETOUR };
         CharSequence[] labels = {
                 getString(R.string.mode_normal),
                 getString(R.string.mode_fse),
                 supported ? getString(R.string.mode_leopard)
                         : getString(R.string.mode_leopard) + " — " + getString(R.string.leopard_unsupported),
+                supported ? getString(R.string.mode_denza)
+                        : getString(R.string.mode_denza) + " — " + getString(R.string.denza_unsupported),
                 getString(R.string.mode_gwm),
                 // The row is the mode name, nothing appended. The note that used to hang off it
                 // ("not a Lynk & Co / Flyme head unit") was shop-facing detail on a screen the
@@ -2289,9 +2309,10 @@ public class BaseSettingsActivity extends AppCompatActivity {
         int current = OperatingMode.get(mSharedPref);
         int checked = current == OperatingMode.LEOPARD ? 2
                 : current == OperatingMode.FSE ? 1
-                : current == OperatingMode.GWM ? 3
-                : current == OperatingMode.LYNKCO ? 4
-                : current == OperatingMode.JETOUR ? 5 : 0;
+                : current == OperatingMode.DENZA ? 3
+                : current == OperatingMode.GWM ? 4
+                : current == OperatingMode.LYNKCO ? 5
+                : current == OperatingMode.JETOUR ? 6 : 0;
 
         new AuroraDialog.Builder(this)
                 .setTitle(R.string.mode_title)
@@ -2300,6 +2321,11 @@ public class BaseSettingsActivity extends AppCompatActivity {
                         // Some cheap ROMs ship no live wallpaper picker at all. Say so rather
                         // than accepting a mode that cannot start.
                         Toast.makeText(this, R.string.leopard_unsupported, Toast.LENGTH_LONG).show();
+                        return;
+                    }
+                    if(modes[which] == OperatingMode.DENZA && !supported) {
+                        // Same gate as Leopard — Denza is the same hand-off.
+                        Toast.makeText(this, R.string.denza_unsupported, Toast.LENGTH_LONG).show();
                         return;
                     }
                     if(modes[which] == OperatingMode.LYNKCO && !lynkcoSupported) {
@@ -2323,14 +2349,17 @@ public class BaseSettingsActivity extends AppCompatActivity {
         TextView desc = findViewById(R.id.textViewModeDesc);
         if(desc == null) return;
         int res = mode == OperatingMode.LEOPARD ? R.string.mode_leopard_desc
+                : mode == OperatingMode.DENZA ? R.string.mode_denza_desc
                 : mode == OperatingMode.FSE ? R.string.mode_fse_desc
                 : mode == OperatingMode.GWM ? R.string.mode_gwm_desc
                 : mode == OperatingMode.JETOUR ? R.string.mode_jetour_desc
                 : mode == OperatingMode.LYNKCO ? R.string.mode_lynkco_desc : R.string.mode_normal_desc;
         String text = getString(res);
         // The unsupported note is about Leopard's live-wallpaper requirement; only append it when
-        // Leopard is the mode being described, so Lynkco/Normal do not carry an unrelated warning.
+        // Leopard (or Denza, the same hand-off) is the mode being described, so Lynkco/Normal do
+        // not carry an unrelated warning.
         if(!leopardSupported && mode == OperatingMode.LEOPARD) text += "\n" + getString(R.string.leopard_unsupported);
+        if(!leopardSupported && mode == OperatingMode.DENZA) text += "\n" + getString(R.string.denza_unsupported);
         desc.setText(text);
     }
 

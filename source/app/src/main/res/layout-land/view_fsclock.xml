@@ -424,6 +424,12 @@
                             style="@style/ActivationModeRadio"
                             android:text="@string/mode_leopard" />
 
+                        <!-- Denza: same hand-off as Leopard, same support gate, own name. -->
+                        <RadioButton
+                            android:id="@+id/radioActivationDenza"
+                            style="@style/ActivationModeRadio"
+                            android:text="@string/mode_denza" />
+
                         <RadioButton
                             android:id="@+id/radioActivationGwm"
                             style="@style/ActivationModeRadio"

@@ -374,7 +374,8 @@
     <!-- Leopard: the app hands the wallpaper to Android and steps out of the way. -->
     <string name="leopard_wallpaper_description">ذبذبة خلفيات — الصورة أو الفيديو الذي اخترته</string>
     <string name="leopard_title">اختر خلفية الجهاز</string>
-    <string name="leopard_chip">وضع Leopard \\ Denza</string>
+    <string name="leopard_chip">وضع Leopard</string>
+    <string name="denza_chip">وضع Denza</string>
     <string name="lynkco_chip">وضع Lynk and Co</string>
     <string name="lynkco_scale">حجم واجهة Lynk &amp; Co</string>
     <string name="lynkco_scale_hint">كبّر أو صغّر واجهة اختيار الخلفية بالكامل على شاشات Lynk &amp; Co.</string>
@@ -412,17 +413,20 @@
     <string name="leopard_video_first_message">ستُفتح الآن شاشة الخلفيات الخاصة بنظام أندرويد، وستظهر فيها معاينة لما اخترته.\n\n١ — اضغط زر «Set wallpaper» في تلك الشاشة.\n٢ — إن سألتك عن مكان التطبيق فاختر «Home screen».\n٣ — ستُغلق وحدها وتظهر الخلفية الجديدة على السيارة.\n\nهذه الشاشة من نظام أندرويد نفسه وليست جزءًا من التطبيق، ولهذا تظهر بالإنجليزية. وهي أيضًا ما يجعل الخلفية تبقى بعد إطفاء السيارة وتشغيلها — لذلك تُفتح في كل مرة، للصور وللخلفيات الحيّة على السواء.</string>
     <string name="leopard_video_first_ok">فهمت، متابعة</string>
     <string name="leopard_handoff_dont_show">أعرف هذه الخطوات — لا تعرض هذه الرسالة مرة أخرى</string>
-    <string name="leopard_unsupported">هذه الشاشة لا تدعم وضع Leopard \\ Denza.</string>
+    <string name="leopard_unsupported">هذه الشاشة لا تدعم وضع Leopard.</string>
+    <string name="denza_unsupported">هذه الشاشة لا تدعم وضع Denza.</string>
     <string name="leopard_gif_static_note">يعرض هذا الجهاز الصور المتحركة كصورة ثابتة.</string>
     <string name="mode_title">وضع التشغيل</string>
-    <string name="mode_exclusive_note">لا يجتمع وضعا Leopard (FSE) و Leopard \\ Denza — الاختيار واحد.</string>
+    <string name="mode_exclusive_note">لا تجتمع أوضاع Leopard (FSE) و Leopard و Denza — الاختيار واحد.</string>
     <string name="mode_normal">Others</string>
     <string name="mode_confirm_pick_first">اختر نوع السيارة للمتابعة.</string>
     <string name="mode_normal_desc">يعرض التطبيق الخلفيات والساعة على شاشته الخاصة.</string>
     <string name="mode_fse">Leopard (FSE)</string>
     <string name="mode_fse_desc">يفرض نافذة ثابتة 1920×720 للشاشات العريضة جداً.</string>
-    <string name="mode_leopard">Leopard \\ Denza</string>
+    <string name="mode_leopard">Leopard</string>
     <string name="mode_leopard_desc">يسلّم التطبيق الخلفية إلى نظام أندرويد ثم يختفي — بلا ساعة ولا تبديل.</string>
+    <string name="mode_denza">Denza</string>
+    <string name="mode_denza_desc">يسلّم التطبيق الخلفية إلى نظام أندرويد ثم يختفي — بلا ساعة ولا تبديل.</string>
     <string name="mode_gwm">GWM</string>
     <string name="mode_gwm_desc">مطابق لوضع Others تماماً، مع إضافة قسم «إدارة صور GWM» الذي يزامن قناة GWM إلى المجلد المشترك الذي يقرأه تطبيق لوحة GWM.</string>
     <string name="mode_jetour">Jetour</string>
@@ -431,9 +435,11 @@
     <string name="mode_lynkco_desc">لشاشات Lynk &amp; Co / Flyme. التطبيق أداة اختيار فقط — تُسلَّم الخلفية المختارة إلى تطبيق الثيم الخاص بالسيارة، فيفتح معاينة فيها زر «تطبيق».</string>
     <string name="mode_unavailable_here">هذا الوضع غير متاح على هذه الشاشة.</string>
     <string name="lynkco_applied">تُفتح الآن معاينة الخلفية — اضغط «تطبيق» على شاشة السيارة لتثبيتها.</string>
-    <string name="mode_leopard_unsupported_note">بعض الشاشات لا تدعم وضع Leopard \\ Denza، ويظهر الخيار معطَّلاً عليها تلقائياً.</string>
+    <string name="mode_leopard_unsupported_note">بعض الشاشات لا تدعم وضع Leopard، ويظهر الخيار معطَّلاً عليها تلقائياً.</string>
+    <string name="mode_denza_unsupported_note">بعض الشاشات لا تدعم وضع Denza، ويظهر الخيار معطَّلاً عليها تلقائياً.</string>
     <string name="mode_new_badge">جديد</string>
-    <string name="leopard_settings_banner_title">وضع Leopard \\ Denza مفعَّل</string>
+    <string name="leopard_settings_banner_title">وضع Leopard مفعَّل</string>
+    <string name="denza_settings_banner_title">وضع Denza مفعَّل</string>
     <string name="leopard_settings_banner_body">يعرض أندرويد الخلفية على الشاشة الرئيسية، والتطبيق أداة اختيار فقط. افتحه، واختر، ثم أغلقه.</string>
     <string name="leopard_settings_hidden_note">أُخفيت: الساعة التناظرية والرقمية، وشكل الساعة، والطقس، والتبديل التلقائي — لا معنى لها ما دام أندرويد هو الذي يرسم الخلفية.</string>
     <string name="leopard_open_picker">افتح المنتقي</string>
@@ -455,7 +461,8 @@
     <string name="leopard_phone_keep_open">⚠ اترك هذه الشاشة مفتوحة حتى ينتهي الرفع من الهاتف — إذا أغلقت التطبيق فلن تصل الصورة.</string>
     <string name="leopard_phone_received">تم استلام الصورة ✓ — اضبط الإطار ثم عيّنها خلفية</string>
     <string name="leopard_phone_empty">لم تُرسَل أي صورة من الهاتف بعد — امسح الرمز لإضافة صورة</string>
-    <string name="chip_mode_leopard">الوضع: Leopard \\ Denza</string>
+    <string name="chip_mode_leopard">الوضع: Leopard</string>
+    <string name="chip_mode_denza">الوضع: Denza</string>
     <string name="chip_mode_gwm">الوضع: GWM</string>
     <string name="chip_mode_lynkco">الوضع: Lynk and Co</string>
     <string name="chip_mode_jetour">الوضع: Jetour</string>

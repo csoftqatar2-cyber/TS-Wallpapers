@@ -277,9 +277,12 @@ public class LeopardPickerActivity extends AppCompatActivity {
         mRepo.reportModeAsync();
 
         // This picker is shared with Leopard, whose header chip reads "Leopard mode". On a Lynk
-        // & Co car that label is wrong — relabel the chip so it names the mode the car is in.
+        // & Co or Denza car that label is wrong — relabel the chip so it names the mode the car
+        // is in.
         if (OperatingMode.isLynkco(mPrefs)) {
             ((TextView) findViewById(R.id.leopardChip)).setText(R.string.lynkco_chip);
+        } else if (OperatingMode.isDenza(mPrefs)) {
+            ((TextView) findViewById(R.id.leopardChip)).setText(R.string.denza_chip);
         }
 
         mFilmstrip = findViewById(R.id.filmstrip);
@@ -2371,7 +2374,7 @@ public class LeopardPickerActivity extends AppCompatActivity {
                 } catch(ActivityNotFoundException e) {
                     clearLeaveAfterApply();
                     // Some cheap ROMs ship without the live wallpaper picker at all.
-                    say(R.string.leopard_unsupported);
+                    say(OperatingMode.isDenza(mPrefs) ? R.string.denza_unsupported : R.string.leopard_unsupported);
                     scheduleTileBind();
                 }
                 return;

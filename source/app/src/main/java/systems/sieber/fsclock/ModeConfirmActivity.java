@@ -73,6 +73,9 @@ public class ModeConfirmActivity extends AppCompatActivity {
         // the worst answer we could record for this car.
         disableUnsupported(R.id.radioConfirmLeopard, R.id.textViewConfirmLeopardNote,
                 R.string.leopard_unsupported, mLeopardSupported);
+        // Denza is the same WallpaperManager hand-off as Leopard: same gate, own label.
+        disableUnsupported(R.id.radioConfirmDenza, R.id.textViewConfirmDenzaNote,
+                R.string.denza_unsupported, OperatingMode.isDenzaSupported(this));
         // Lynkco is dimmed when the unit cannot do it, with no explanatory line: the dimming is
         // the whole message on a customer-facing screen.
         disableUnsupported(R.id.radioConfirmLynkco, 0, 0, mLynkcoSupported);
@@ -206,6 +209,7 @@ public class ModeConfirmActivity extends AppCompatActivity {
         if(id == -1) return MODE_NONE;      // nobody has chosen yet
         if(id == R.id.radioConfirmFse) return OperatingMode.FSE;
         if(id == R.id.radioConfirmLeopard) return OperatingMode.LEOPARD;
+        if(id == R.id.radioConfirmDenza) return OperatingMode.DENZA;
         if(id == R.id.radioConfirmGwm) return OperatingMode.GWM;
         if(id == R.id.radioConfirmJetour) return OperatingMode.JETOUR;
         if(id == R.id.radioConfirmLynkco) return OperatingMode.LYNKCO;
@@ -216,6 +220,7 @@ public class ModeConfirmActivity extends AppCompatActivity {
         if(mDesc == null) return;
         if(mode == MODE_NONE) { mDesc.setText(R.string.mode_confirm_pick_first); return; }
         int res = mode == OperatingMode.LEOPARD ? R.string.mode_leopard_desc
+                : mode == OperatingMode.DENZA ? R.string.mode_denza_desc
                 : mode == OperatingMode.FSE ? R.string.mode_fse_desc
                 : mode == OperatingMode.GWM ? R.string.mode_gwm_desc
                 : mode == OperatingMode.JETOUR ? R.string.mode_jetour_desc

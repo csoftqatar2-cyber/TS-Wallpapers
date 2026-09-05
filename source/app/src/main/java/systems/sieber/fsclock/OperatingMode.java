@@ -7,8 +7,8 @@ import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 
 /**
- * Which product this install is: Normal, FSE, Leopard, GWM, Lynkco, or Jetour. The six are
- * mutually exclusive.
+ * Which product this install is: Normal, FSE, Leopard, GWM, Lynkco, Jetour, or Denza. The seven
+ * are mutually exclusive.
  *
  * - NORMAL  : the app owns the screen and draws wallpaper + clock itself.
  * - FSE     : same, but the window is pinned to 1920x720 for ultra-wide head units.
@@ -29,6 +29,8 @@ import android.content.pm.PackageManager;
  * - JETOUR  : exactly NORMAL on screen, exactly GWM in structure — the same slideshow and clock
  *             plus one folder mirror, this one pointed at /sdcard/Pictures/G700 for the Jetour
  *             G700 head unit's own gallery app. Two cars, one mechanism: see {@link FolderMirror}.
+ * - DENZA   : today exactly LEOPARD (WallpaperManager hand-off) under its own name — see the
+ *             note on the constant.
  *
  * FSE stays on its original boolean key so the six places that already read it, and every
  * device already in the field, keep working untouched. In Leopard/GWM/Jetour that flag reads
@@ -42,11 +44,20 @@ class OperatingMode {
     static final int GWM = 3;
     static final int LYNKCO = 4;
     static final int JETOUR = 5;
+    /**
+     * Denza was carved out of LEOPARD (the radio used to read "Leopard \ Denza"). Today it is
+     * the SAME product — Android's WallpaperManager hand-off, the same picker, the same support
+     * gate — under its own name, so the manager can tell the two cars apart and so the two can
+     * diverge later without another migration. Every behavioural check asks
+     * {@link #isLeopardFamily} / {@link #isHandoff}; only labels and the wire value differ.
+     */
+    static final int DENZA = 6;
 
     private static final String PREF_LEOPARD = "leopard-mode";
     private static final String PREF_GWM = "gwm-mode";
     private static final String PREF_LYNKCO = "lynkco-mode";
     private static final String PREF_JETOUR = "jetour-mode";
+    private static final String PREF_DENZA = "denza-mode";
 
     /**
      * Has a human explicitly chosen this car's mode on a build that knows all six modes?
@@ -78,7 +89,10 @@ class OperatingMode {
     static final String LYNKCO_CUSTOMIZE_PACKAGE = "com.flyme.auto.customize";
 
     static int get(SharedPreferences prefs) {
+        // Ordered: an existing install carrying "leopard-mode" must keep resolving to LEOPARD,
+        // so it is checked before DENZA (which no fielded car has yet).
         if(prefs.getBoolean(PREF_LEOPARD, false)) return LEOPARD;
+        if(prefs.getBoolean(PREF_DENZA, false)) return DENZA;
         if(prefs.getBoolean(PREF_GWM, false)) return GWM;
         if(prefs.getBoolean(PREF_LYNKCO, false)) return LYNKCO;
         if(prefs.getBoolean(PREF_JETOUR, false)) return JETOUR;
@@ -86,10 +100,11 @@ class OperatingMode {
         return NORMAL;
     }
 
-    /** Writes all five flags together, so no two modes can ever both be on. */
+    /** Writes all six flags together, so no two modes can ever both be on. */
     static void set(SharedPreferences prefs, int mode) {
         prefs.edit()
                 .putBoolean(PREF_LEOPARD, mode == LEOPARD)
+                .putBoolean(PREF_DENZA, mode == DENZA)
                 .putBoolean(PREF_GWM, mode == GWM)
                 .putBoolean(PREF_LYNKCO, mode == LYNKCO)
                 .putBoolean(PREF_JETOUR, mode == JETOUR)
@@ -99,6 +114,20 @@ class OperatingMode {
 
     static boolean isLeopard(SharedPreferences prefs) {
         return get(prefs) == LEOPARD;
+    }
+
+    static boolean isDenza(SharedPreferences prefs) {
+        return get(prefs) == DENZA;
+    }
+
+    /**
+     * Leopard and Denza: the WallpaperManager hand-off family. This is what behaviour asks —
+     * {@link #isLeopard}/{@link #isDenza} are for labels only, so a Denza car walks the exact
+     * code path a Leopard car does until somebody deliberately makes them differ.
+     */
+    static boolean isLeopardFamily(SharedPreferences prefs) {
+        int m = get(prefs);
+        return m == LEOPARD || m == DENZA;
     }
 
     static boolean isGwm(SharedPreferences prefs) {
@@ -131,14 +160,19 @@ class OperatingMode {
      * apply step differs (Android WallpaperManager vs the Flyme theme intent).
      */
     static boolean isHandoff(SharedPreferences prefs) {
-        int m = get(prefs);
-        return m == LEOPARD || m == LYNKCO;
+        return isHandoffMode(get(prefs));
+    }
+
+    /** {@link #isHandoff} for a mode value that is not in prefs yet (a picker's selection). */
+    static boolean isHandoffMode(int m) {
+        return m == LEOPARD || m == DENZA || m == LYNKCO;
     }
 
     /** Stable wire value the device reports to the backend / manager. Never rename these. */
     static String wire(SharedPreferences prefs) {
         switch(get(prefs)) {
             case LEOPARD: return "leopard";
+            case DENZA:   return "denza";
             case GWM:     return "gwm";
             case LYNKCO:  return "lynkco";
             case JETOUR:  return "jetour";
@@ -161,6 +195,11 @@ class OperatingMode {
         } catch(Throwable t) {
             return false;
         }
+    }
+
+    /** Denza rides on the same WallpaperManager hand-off as Leopard, so it has the same gate. */
+    static boolean isDenzaSupported(Context ctx) {
+        return isSupported(ctx);
     }
 
     /**

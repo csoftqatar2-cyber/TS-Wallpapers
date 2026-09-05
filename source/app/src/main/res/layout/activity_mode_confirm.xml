@@ -98,6 +98,21 @@
                     android:textSize="12sp"
                     android:visibility="gone" />
 
+                <!-- Denza: same hand-off as Leopard, same support gate, own name. -->
+                <RadioButton
+                    android:id="@+id/radioConfirmDenza"
+                    style="@style/ActivationModeRadio"
+                    android:text="@string/mode_denza" />
+
+                <TextView
+                    android:id="@+id/textViewConfirmDenzaNote"
+                    style="@style/ActivationModeRadio"
+                    android:layout_marginTop="-4dp"
+                    android:paddingTop="0dp"
+                    android:paddingStart="4dp"
+                    android:textSize="12sp"
+                    android:visibility="gone" />
+
                 <RadioButton
                     android:id="@+id/radioConfirmGwm"
                     style="@style/ActivationModeRadio"

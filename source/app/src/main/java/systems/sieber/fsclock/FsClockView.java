@@ -1329,11 +1329,17 @@ public class FsClockView extends FrameLayout {
         if(mRadioGroupActivationMode == null) return;
 
         final android.widget.RadioButton leopard = findViewById(R.id.radioActivationLeopard);
+        final android.widget.RadioButton denza = findViewById(R.id.radioActivationDenza);
         final android.widget.TextView desc = findViewById(R.id.textViewActivationModeDesc);
         final boolean supported = OperatingMode.isSupported(getContext());
         if(leopard != null && !supported) {
             leopard.setEnabled(false);
             leopard.setAlpha(0.4f);
+        }
+        // Denza is the same WallpaperManager hand-off as Leopard, gated by the same check.
+        if(denza != null && !supported) {
+            denza.setEnabled(false);
+            denza.setAlpha(0.4f);
         }
 
         // Nothing is preselected, on purpose — the same rule ModeConfirmActivity follows.
@@ -1386,15 +1392,17 @@ public class FsClockView extends FrameLayout {
             return;
         }
         int res = mode == OperatingMode.LEOPARD ? R.string.mode_leopard_desc
+                : mode == OperatingMode.DENZA ? R.string.mode_denza_desc
                 : mode == OperatingMode.LYNKCO ? R.string.mode_lynkco_desc
                 : mode == OperatingMode.GWM ? R.string.mode_gwm_desc
                 : mode == OperatingMode.JETOUR ? R.string.mode_jetour_desc
                 : mode == OperatingMode.FSE ? R.string.mode_fse_desc : R.string.mode_normal_desc;
         String text = getContext().getString(res);
-        // The note is about the live-wallpaper support Leopard needs; Lynk & Co hands the file
-        // to the theme app instead and does not care either way.
+        // The note is about the live-wallpaper support Leopard (and Denza, the same hand-off)
+        // needs; Lynk & Co hands the file to the theme app instead and does not care either way.
         if(!supported && mode != OperatingMode.LYNKCO) {
-            text += "\n" + getContext().getString(R.string.mode_leopard_unsupported_note);
+            text += "\n" + getContext().getString(mode == OperatingMode.DENZA
+                    ? R.string.mode_denza_unsupported_note : R.string.mode_leopard_unsupported_note);
         }
         desc.setText(text);
     }
@@ -1407,6 +1415,7 @@ public class FsClockView extends FrameLayout {
         int id = mRadioGroupActivationMode.getCheckedRadioButtonId();
         if(id == -1) return MODE_NONE;      // nobody has chosen yet
         if(id == R.id.radioActivationLeopard) return OperatingMode.LEOPARD;
+        if(id == R.id.radioActivationDenza) return OperatingMode.DENZA;
         if(id == R.id.radioActivationGwm) return OperatingMode.GWM;
         if(id == R.id.radioActivationJetour) return OperatingMode.JETOUR;
         if(id == R.id.radioActivationLynkco) return OperatingMode.LYNKCO;
@@ -1460,7 +1469,8 @@ public class FsClockView extends FrameLayout {
             mSharedPref.edit().putBoolean(BootReceiver.PREF_AUTO_START, true).apply();
             OverlayPermission.request(mActivity, null);
         }
-        if(mode == OperatingMode.LEOPARD || mode == OperatingMode.LYNKCO) {
+        if(OperatingMode.isHandoffMode(mode)) {
+            // Leopard, Denza, Lynk & Co.
             // Nothing left for this screen to draw, but the picker it hands over to IS the
             // library — so it goes through the download gate first, exactly like every other
             // mode. Sending it straight on is what left those cars staring at empty cells while
