@@ -8,22 +8,26 @@
     <link rel="apple-touch-icon" sizes="180x180" href="/icon-180.png">
     <link rel="manifest" href="/manifest.webmanifest">
     <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="المولّد">
-    <meta name="theme-color" content="#211a12">
+    <meta name="theme-color" content="#1a130c">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@500;700;800&display=swap" rel="stylesheet">
     <style>
-        :root { --bg:#1a130c; --panel:#211a12; --border:rgba(255,255,255,.08); --text:#f3ede4; --muted:#a89a88; --primary:#f59e0b; --accent:#fbbf24; --ok:#22c55e; --warn:#fbbf24; --bad:#ef4444; }
+        :root { --bg:#1a130c; --panel:#211a12; --border:rgba(255,255,255,.08); --text:#f3ede4; --muted:#a89a88; --primary:#f59e0b; --accent:#fbbf24; --ok:#22c55e; --warn:#fbbf24; --bad:#ef4444; color-scheme: dark; }
         * { box-sizing:border-box; }
-        html, body { height:100%; }
-        body { margin:0; background:radial-gradient(1200px 600px at 50% -10%, #3a2a14 0%, var(--bg) 60%); color:var(--text); font-family:'Cairo', system-ui, sans-serif; display:flex; flex-direction:column; min-height:100vh; }
+        html { background:var(--bg); height:100%; }
+        body { margin:0; min-height:100%; background:radial-gradient(1200px 600px at 50% -10%, #3a2a14 0%, var(--bg) 60%) fixed; color:var(--text); font-family:'Cairo', system-ui, sans-serif; display:flex; flex-direction:column; padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left); }
         header { display:flex; align-items:center; justify-content:space-between; padding:14px 16px; gap:10px; }
         .brand { display:flex; align-items:center; gap:10px; font-weight:800; font-size:1.05rem; }
         .brand img { width:36px; height:36px; border-radius:8px; }
+        .tools { display:flex; align-items:center; gap:8px; }
         .conn { font-size:.8rem; font-weight:700; padding:3px 12px; border-radius:12px; border:1px solid transparent; }
         .conn.ok { color:var(--ok); background:rgba(34,197,94,.12); border-color:rgba(34,197,94,.3); }
         .conn.warn { color:var(--warn); background:rgba(251,191,36,.12); border-color:rgba(251,191,36,.3); }
         .conn.muted { color:var(--muted); background:rgba(255,255,255,.04); border-color:var(--border); }
+        .round { width:40px; height:40px; border-radius:50%; border:1px solid var(--border); background:rgba(255,255,255,.06); color:var(--text); display:inline-flex; align-items:center; justify-content:center; text-decoration:none; }
+        .round svg { width:20px; height:20px; fill:none; stroke:currentColor; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
         main { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:16px; gap:18px; text-align:center; }
         .btn { font:inherit; font-weight:800; font-size:1.35rem; color:#1a1006; background:linear-gradient(135deg, var(--primary), var(--accent)); border:0; border-radius:18px; padding:22px 34px; min-height:72px; min-width:min(92vw, 360px); cursor:pointer; box-shadow:0 14px 34px -14px rgba(245,158,11,.7); }
         .btn:disabled { opacity:.55; cursor:default; }
@@ -37,24 +41,22 @@
         .row.dead { opacity:.55; }
         .row.dead .timer { color:var(--bad); }
         .row .sub { grid-column:1 / -1; font-size:.9rem; color:var(--muted); }
-        .row .vin { grid-column:1 / -1; }
-        .badge { display:inline-block; padding:4px 12px; border-radius:10px; font-size:.95rem; font-weight:700; border:1px solid var(--border); }
-        .badge.ok { color:var(--ok); border-color:rgba(34,197,94,.35); background:rgba(34,197,94,.1); }
-        .badge.warn { color:var(--warn); border-color:rgba(251,191,36,.35); background:rgba(251,191,36,.1); }
-        .badge.bad { color:var(--bad); border-color:rgba(239,68,68,.35); background:rgba(239,68,68,.1); }
-        .vin { direction:ltr; display:inline-block; font-family:ui-monospace, monospace; font-size:1.05rem; margin-top:6px; word-break:break-all; }
+        .row .vin { grid-column:1 / -1; direction:ltr; font-family:ui-monospace, monospace; word-break:break-all; }
         #login { display:flex; flex-direction:column; gap:12px; width:min(92vw, 360px); }
         #login input { font:inherit; font-size:1.1rem; padding:14px; border-radius:14px; border:1px solid var(--border); background:rgba(0,0,0,.25); color:var(--text); text-align:center; }
         .err { color:var(--bad); font-size:.95rem; min-height:1.4em; }
-        footer { padding:12px; text-align:center; color:var(--muted); font-size:.8rem; }
-        footer a { color:var(--accent); text-decoration:none; }
         [hidden] { display:none !important; }
+        * { scrollbar-width:thin; scrollbar-color:rgba(251,191,36,.35) transparent; }
+        *::-webkit-scrollbar { width:6px; height:6px; } *::-webkit-scrollbar-thumb { background:rgba(251,191,36,.35); border-radius:6px; } *::-webkit-scrollbar-track { background:transparent; }
     </style>
 </head>
 <body>
     <header>
         <div class="brand"><img src="/icon-192.png" alt=""> المولّد</div>
-        <span id="conn" class="conn muted" role="status">غير متصل</span>
+        <div class="tools">
+            <span id="conn" class="conn muted" role="status">غير متصل</span>
+            <a class="round" href="/" title="الموقع الرئيسي" aria-label="الموقع الرئيسي"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg></a>
+        </div>
     </header>
     <main>
         <form id="login" hidden autocomplete="off">
@@ -68,23 +70,51 @@
             <button class="btn" id="gen" type="button">إصدار كود تفعيل</button>
             <div class="err" id="err"></div>
         </div>
+        <div class="err" id="boot-err"></div>
     </main>
-    <footer><a href="/">اللوحة الكاملة</a></footer>
 <script>
 (() => {
-    const SUPABASE_URL = "https://ihgmqwzdpugdzddobhbc.supabase.co";
-    const ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImloZ21xd3pkcHVnZHpkZG9iaGJjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI2NTI4ODAsImV4cCI6MjA5ODIyODg4MH0.xG0ch3u5rcbb81pSa8wmybeEYj8kz2LjCGQM_-Xg6Yk";
-    const AUTH_URL = SUPABASE_URL + "/auth/v1";
-    const SESSION_KEY = "ts_cp_session";          // same key as the full panel: one login serves both
-    const ADMIN_EMAIL = "admin@tswallpapers.app";
     const $ = id => document.getElementById(id);
-    let TOKEN = null, REFRESH = null, refreshTimer = null;
-    // Several live codes at once: each row keeps its own countdown and is polled until it is bound
-    // (check mark + the car id) or expires. The button is always available for the next code.
+    let TOKEN = null, refreshTimer = null;
     const codes = new Map();   // serial -> { serial, expiresAt, used_by }
     let ticker = null, poller = null;
+
+    function conn(state, title) { const el = $('conn'); el.className = 'conn ' + state; el.textContent = state === 'muted' ? 'غير متصل' : 'متصل'; el.title = title || ''; }
     function esc(v) { return String(v == null ? '' : v).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
     function fmt(left) { return `${String(Math.floor(left / 60000)).padStart(2, '0')}:${String(Math.floor((left % 60000) / 1000)).padStart(2, '0')}`; }
+    function notify(title, body) { try { if ('Notification' in window && Notification.permission === 'granted') new Notification(title, { body, icon: '/icon-192.png' }); } catch (e) {} }
+
+    // The refresh token never reaches this page: the Worker holds it behind an HttpOnly device
+    // cookie and hands out short-lived access tokens on request. Nothing durable is stored here.
+    function applySession(d) {
+        TOKEN = d.access_token;
+        clearTimeout(refreshTimer); refreshTimer = setTimeout(refreshSession, Math.max(60, (d.expires_in || 3600) - 120) * 1000);
+        $('login').hidden = true; $('app').hidden = false; conn('ok', 'متصل');
+    }
+    async function refreshSession() {
+        try {
+            const res = await fetch('/local/auth/session', { method: 'POST', cache: 'no-store' });
+            if (!res.ok) return false;
+            applySession(await res.json()); return true;
+        } catch (e) { conn('warn', 'تعذّر تجديد الجلسة'); return false; }
+    }
+    async function login(pw) {
+        const res = await fetch('/local/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ password: pw }) });
+        const data = await res.json().catch(() => ({}));
+        if (res.status === 403) throw new Error('تم حظر هذا الجهاز بعد محاولات خاطئة');
+        if (!res.ok) throw new Error('كلمة المرور غير صحيحة' + (data.attempts_left != null ? ` (متبقٍ ${data.attempts_left})` : ''));
+        applySession(data);
+    }
+    async function api(path, body) {
+        const res = await fetch(path, { method: body ? 'POST' : 'GET', headers: Object.assign({ Authorization: `Bearer ${TOKEN}` }, body ? { 'Content-Type': 'application/json' } : {}), body: body ? JSON.stringify(body) : undefined, cache: 'no-store' });
+        const txt = await res.text();
+        if (res.status === 401) { const ok = await refreshSession(); if (ok) return api(path, body); throw new Error('انتهت الجلسة — سجّل الدخول'); }
+        if (!res.ok) { let m = ''; try { m = JSON.parse(txt).message || ''; } catch (e) { m = txt; } conn('warn', m); throw new Error(m || `HTTP ${res.status}`); }
+        conn('ok', 'متصل'); return txt ? JSON.parse(txt) : null;
+    }
+
+    // Several live codes at once: each row keeps its own countdown and is polled until it is bound
+    // (check mark + the car id) or expires. The button is always available for the next code.
     function render() {
         const list = [...codes.values()];
         $('codes').innerHTML = list.map(c => {
@@ -92,7 +122,7 @@
             const cls = c.used_by ? 'row ok' : (left <= 0 ? 'row dead' : 'row');
             const mark = c.used_by ? '<span class="mark" style="color:var(--ok)">&#10003;</span>' : (left <= 0 ? '<span class="mark" style="color:var(--bad)">&#10005;</span>' : '<span class="mark">&#8987;</span>');
             const timer = c.used_by ? 'تم' : (left <= 0 ? 'انتهى' : fmt(left));
-            const sub = c.used_by ? `<span class="vin">اتربط بالعربية: ${esc(c.used_by)}</span>` : (left <= 0 ? '<span class="sub">انتهت الصلاحية — أصدر كودًا جديدًا</span>' : '<span class="sub">اكتب الكود في العربية خلال المدة</span>');
+            const sub = c.used_by ? `<span class="vin">${esc(c.used_by)}</span>` : (left <= 0 ? '<span class="sub">انتهت الصلاحية — أصدر كودًا جديدًا</span>' : '<span class="sub">اكتب الكود في العربية خلال المدة</span>');
             return `<div class="${cls}" data-serial="${esc(c.serial)}">${mark}<div class="code">${esc(c.serial)}</div><div class="timer">${timer}</div>${sub}</div>`;
         }).join('');
         const alive = list.some(c => !c.used_by && c.expiresAt > Date.now());
@@ -108,10 +138,7 @@
         }
         render();
     }
-    function armTimers() {
-        if (!ticker) ticker = setInterval(render, 1000);
-        if (!poller) poller = setInterval(pollAll, 4000);
-    }
+    function armTimers() { if (!ticker) ticker = setInterval(render, 1000); if (!poller) poller = setInterval(pollAll, 4000); }
     async function issue() {
         const b = $('gen'); b.disabled = true; $('err').textContent = '';
         try {
@@ -127,7 +154,10 @@
     $('codes').addEventListener('click', e => { const row = e.target.closest('[data-serial]'); if (row) { try { navigator.clipboard.writeText(row.dataset.serial); } catch (err) {} } });
     $('login').addEventListener('submit', async e => { e.preventDefault(); $('login-err').textContent = ''; try { await login($('pw').value); $('pw').value = ''; } catch (err) { $('login-err').textContent = err.message; } });
     document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && codes.size) pollAll(); });
-    (async () => { if (!(await refreshSession())) { $('login').hidden = false; $('app').hidden = true; conn('muted'); } })();
+    (async () => {
+        try { if (!(await refreshSession())) { $('login').hidden = false; $('app').hidden = true; conn('muted'); } }
+        catch (e) { $('boot-err').textContent = 'خطأ في التحميل: ' + (e.message || e); $('login').hidden = false; }
+    })();
 })();
 </script>
 </body>
