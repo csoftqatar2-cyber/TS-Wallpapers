@@ -69,8 +69,9 @@ function limited(ip) {
 // Supabase admin session remains the only gate.
 const jwks = { at: 0, keys: [] };
 const b64u = s => Uint8Array.from(atob(s.replace(/-/g, "+").replace(/_/g, "/").padEnd(Math.ceil(s.length / 4) * 4, "=")), c => c.charCodeAt(0));
-async function accessKeys(team) {
-  if (Date.now() - jwks.at < 3600_000 && jwks.keys.length) return jwks.keys;
+async function accessKeys(team, force) {
+  if (!force && Date.now() - jwks.at < 3600_000 && jwks.keys.length) return jwks.keys;
+  if (force && Date.now() - jwks.at < 60_000) return jwks.keys;   // rollover refetch, at most once a minute
   const res = await fetch(`https://${team}/cdn-cgi/access/certs`, { cf: { cacheTtl: 3600 } });
   if (!res.ok) return jwks.keys;
   const data = await res.json();
@@ -88,8 +89,17 @@ async function accessOk(req, env) {
   const now = Math.floor(Date.now() / 1000);
   const aud = Array.isArray(payload.aud) ? payload.aud : [payload.aud];
   if (!aud.includes(env.ACCESS_AUD) || !payload.exp || payload.exp < now || payload.iss !== `https://${env.ACCESS_TEAM_DOMAIN}`) return false;
-  const keys = await accessKeys(env.ACCESS_TEAM_DOMAIN);
-  const jwk = keys.find(k => k.kid === header.kid); if (!jwk) return false;
+  // Identity, not just signature: a user token must carry one of the owner's emails; a service
+  // token (curl tests) carries common_name instead of email and is accepted as Access let it in.
+  const allowed = String(env.ACCESS_ALLOWED_EMAILS || "").toLowerCase().split(",").map(x => x.trim()).filter(Boolean);
+  if (allowed.length) {
+    const email = String(payload.email || "").toLowerCase();
+    if (email ? !allowed.includes(email) : !payload.common_name) return false;
+  }
+  let keys = await accessKeys(env.ACCESS_TEAM_DOMAIN);
+  let jwk = keys.find(k => k.kid === header.kid);
+  if (!jwk) { keys = await accessKeys(env.ACCESS_TEAM_DOMAIN, true); jwk = keys.find(k => k.kid === header.kid); }
+  if (!jwk) return false;
   try {
     const key = await crypto.subtle.importKey("jwk", jwk, { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" }, false, ["verify"]);
     return await crypto.subtle.verify("RSASSA-PKCS1-v1_5", key, b64u(parts[2]), new TextEncoder().encode(`${parts[0]}.${parts[1]}`));
@@ -113,18 +123,27 @@ const DEV_COOKIE = "ts_dev", DEV_MAX_AGE = 30 * 24 * 3600;
 function cookieOf(req, name) { const m = new RegExp(`(?:^|;\\s*)${name}=([A-Za-z0-9_-]{10,128})`).exec(req.headers.get("Cookie") || ""); return m ? m[1] : null; }
 function randomId() { const b = new Uint8Array(24); crypto.getRandomValues(b); return btoa(String.fromCharCode(...b)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, ""); }
 function setCookie(id, clear) { return `${DEV_COOKIE}=${clear ? "" : id}; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=${clear ? 0 : DEV_MAX_AGE}`; }
+// { data } on success, { dead: true } when Supabase rejects the token itself (400/401/403 = invalid,
+// already used, or revoked), { data: null } on any upstream/network trouble — the caller must NOT
+// revoke the device session for the last case, or one Supabase hiccup logs the owner out.
 async function supabaseRefresh(env, refreshToken) {
-  const res = await fetch(`${env.SUPABASE_URL}/auth/v1/token?grant_type=refresh_token`, { method: "POST", headers: { apikey: env.SUPABASE_ANON, "Content-Type": "application/json" }, body: JSON.stringify({ refresh_token: refreshToken }) });
-  if (!res.ok) return null;
+  let res;
+  try {
+    res = await fetch(`${env.SUPABASE_URL}/auth/v1/token?grant_type=refresh_token`, { method: "POST", headers: { apikey: env.SUPABASE_ANON, "Content-Type": "application/json" }, body: JSON.stringify({ refresh_token: refreshToken }) });
+  } catch (e) { return { data: null }; }
+  if ([400, 401, 403].includes(res.status)) return { dead: true };
+  if (!res.ok) return { data: null };
   const data = await res.json().catch(() => null);
-  return data && data.access_token ? data : null;
+  return { data: data && data.access_token ? data : null };
 }
 async function handleSession(req, env) {
   const id = cookieOf(req, DEV_COOKIE); if (!id || !env.DB) return json(401, { message: "no device session" });
   const row = await env.DB.prepare("SELECT refresh_token, revoked FROM device_sessions WHERE id = ?").bind(id).first();
   if (!row || row.revoked) return new Response(JSON.stringify({ message: "session revoked" }), { status: 401, headers: { "Content-Type": "application/json; charset=utf-8", "Set-Cookie": setCookie(id, true), ...SEC_HEADERS } });
-  const data = await supabaseRefresh(env, row.refresh_token);
-  if (!data) { await env.DB.prepare("UPDATE device_sessions SET revoked = 1 WHERE id = ?").bind(id).run(); return json(401, { message: "refresh failed" }); }
+  const ref = await supabaseRefresh(env, row.refresh_token);
+  if (ref.dead) { await env.DB.prepare("UPDATE device_sessions SET revoked = 1 WHERE id = ?").bind(id).run(); return new Response(JSON.stringify({ message: "session expired" }), { status: 401, headers: { "Content-Type": "application/json; charset=utf-8", "Set-Cookie": setCookie(id, true), ...SEC_HEADERS } }); }
+  const data = ref.data;
+  if (!data) return json(503, { message: "auth upstream unavailable, try again" });
   if (data.user && data.user.id !== env.ADMIN_UID) return json(403, { message: "not the admin" });
   const c = clientOf(req);
   await env.DB.prepare("UPDATE device_sessions SET refresh_token = ?, last_seen = ?, ip = ?, ua = ? WHERE id = ?").bind(data.refresh_token || row.refresh_token, new Date().toISOString(), c.ip, c.ua, id).run();
@@ -148,6 +167,7 @@ async function handleLogin(req, env) {
   const now = new Date().toISOString();
   // Reserve the attempt FIRST (counted as a failure until proven otherwise), so parallel guesses
   // cannot all read the same count and slip past the limit together.
+  await env.DB.prepare("DELETE FROM login_attempts WHERE at < ?").bind(new Date(Date.now() - 7 * 24 * 3600_000).toISOString()).run().catch(() => {});
   const ins = await env.DB.prepare("INSERT INTO login_attempts (at, ip, email, ua, ok) VALUES (?, ?, ?, ?, 0)").bind(now, c.ip, c.email, c.ua).run();
   const attemptId = ins && ins.meta ? ins.meta.last_row_id : null;
   const fails = await env.DB.prepare("SELECT COUNT(*) AS n FROM login_attempts WHERE ip = ? AND ok = 0 AND at > ?").bind(c.ip, since).first();
@@ -230,8 +250,17 @@ export default {
     if (!(await accessOk(req, env))) return new Response("Access required", { status: 403, headers: { "Content-Type": "text/plain; charset=utf-8", ...SEC_HEADERS } });
     // A client that brute-forced the password is refused everything, page included, for 24 h.
     // If the block list cannot be read the request fails CLOSED.
+    // Exception: a request carrying a live device session (the owner's own phones) is never
+    // locked out by an IP block, so a brute-force from the same network cannot shut him out.
     let blocked = false;
-    try { blocked = await isBlocked(env, clientOf(req).ip); } catch (e) { return json(503, { message: "guard unavailable" }); }
+    try {
+      blocked = await isBlocked(env, clientOf(req).ip);
+      if (blocked && env.DB) {
+        const sid = cookieOf(req, DEV_COOKIE);
+        const live = sid && await env.DB.prepare("SELECT 1 AS x FROM device_sessions WHERE id = ? AND revoked = 0").bind(sid).first();
+        if (live) blocked = false;
+      }
+    } catch (e) { return json(503, { message: "guard unavailable" }); }
     if (blocked) return new Response("blocked", { status: 403, headers: { "Content-Type": "text/plain; charset=utf-8", ...SEC_HEADERS } });
     if (p.startsWith("/local/") && limited(clientOf(req).ip)) return json(429, { message: "slow down" });
     if (req.method === "POST" && p === "/local/auth/login") return handleLogin(req, env);
@@ -274,7 +303,8 @@ export default {
         const ok =
           (method === "PATCH" && /^devices\?hardware_id=eq\.[^&]+$/.test(path) && keys.every(k => k === "client_name")) ||
           (method === "PATCH" && /^admin_settings\?key=eq\.voice\.[a-z_]+$/.test(path) && keys.every(k => ["value", "updated_at"].includes(k))) ||
-          (["POST", "DELETE"].includes(method) && /^(wallpapers|wallpaper_hides)(\?.*)?$/.test(path)) ||
+          (method === "POST" && /^(wallpapers|wallpaper_hides)(\?.*)?$/.test(path)) ||
+          (method === "DELETE" && /^(wallpapers|wallpaper_hides)\?(id|url|wallpaper_id)=eq\.[^&]+(&hardware_id=eq\.[^&]+)?$/.test(path)) ||
           (method === "POST" && /^app_versions(\?.*)?$/.test(path));
         if (!ok) return json(404, { message: "write not allowed" });
         if (!/^return=(minimal|representation)$/.test(prefer)) return json(400, { message: "bad prefer" });

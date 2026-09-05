@@ -63,7 +63,7 @@ export default {
     if (!user || user.id !== ADMIN_ID) return json({ error: 'not authorized' }, 403);
     // 2026-09-05: a browser session alone no longer writes. The admin site's Worker adds the
     // write key server-side; a stolen access token cannot upload or delete.
-    if (env.WRITE_KEY && (req.headers.get('x-write-key') || '') !== env.WRITE_KEY) return json({ error: 'write key required' }, 403);
+    if (!env.WRITE_KEY || (req.headers.get('x-write-key') || '') !== env.WRITE_KEY) return json({ error: 'write key required' }, 403);   // fail CLOSED when the secret is missing
 
     // x-file-name is URI-encoded so Arabic names survive header transport.
     const rawName = req.headers.get('x-file-name');
