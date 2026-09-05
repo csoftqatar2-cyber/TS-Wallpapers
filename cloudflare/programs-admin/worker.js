@@ -134,7 +134,7 @@ export default {
     const p = url.pathname;
     if (!(await accessOk(req, env))) return new Response("Access required", { status: 403, headers: { "Content-Type": "text/plain; charset=utf-8", ...SEC_HEADERS } });
 
-    if (req.method === "GET" && (p === "/" || p === "/index.html" || p === "/control-panel.html")) {
+    if (req.method === "GET" && (p === "/" || p === "/index.html" || p === "/control-panel.html" || p === "/gen" || p === "/gen/")) {
       const n = nonce();
       const html = PAGE.replace(/<script>/g, `<script nonce="${n}">`);
       return new Response(html, { status: 200, headers: { "Content-Type": "text/html; charset=utf-8", "Content-Security-Policy": csp(n), ...SEC_HEADERS } });

@@ -503,6 +503,7 @@
                         <div id="notif-list" aria-live="polite">لا تنبيهات بعد</div>
                     </div>
                 </div>
+                <button class="btn primary" id="gen-open" type="button" title="المولّد — كود تفعيل لعشر دقائق"><i class="fa-solid fa-key"></i> المولّد</button>
                 <button class="btn" id="refresh-btn" type="button"><i class="fa-solid fa-rotate"></i> تحديث الكل</button>
                 <button class="btn" id="logout-btn" type="button" title="تسجيل الخروج"><i class="fa-solid fa-right-from-bracket"></i></button>
             </div>
@@ -2787,7 +2788,6 @@
             <button class="tab" role="tab" data-tab="blocklog"><i class="fa-solid fa-clipboard-list"></i> سجل الحظر <span class="count" id="cnt-blocklog">0</span></button>
             <span style="width:1px;background:var(--panel-border);margin:0 4px;align-self:stretch"></span>
             <span hidden id="cnt-usage"></span><span hidden id="cnt-tokens"></span>
-            <button class="tab" role="tab" data-tab="generator"><i class="fa-solid fa-key"></i> المولّد</button>
             ${APP_TABS.map(a => `<button class="tab" role="tab" data-tab="${a.key}" ${a.key === 'store' ? 'id="tab-store"' : ''}>${APP_ICONS[a.key] ? `<img class="tab-icon" src="${APP_ICONS[a.key]}" alt="">` : `<i class="fa-solid ${a.icon}"></i>`} ${esc(a.label)}</button>`).join('')}`;
         // hidden masters (kept for rendering, never shown as tabs)
         ['panel-versions', 'panel-tokens', 'panel-usage', 'panel-voice'].forEach(id => { const el = $(id); if (el) { el.classList.remove('active'); el.hidden = true; el.dataset.master = '1'; } });
@@ -2938,7 +2938,11 @@
     })();
     restructureTabs();
     updateNotificationToggle();
-    switchTab('devices');
+    // Direct entry for the car: https://<site>/gen (or #gen) lands on the generator immediately.
+    const wantsGen = /^\/gen/.test(location.pathname) || location.hash === '#gen';
+    switchTab(wantsGen ? 'generator' : 'devices');
+    if (wantsGen) window.scrollTo(0, 0);
+    document.addEventListener('click', e => { if (e.target.closest('#gen-open')) { switchTab('generator'); const c = $('tabs'); if (c) c.scrollIntoView({ behavior: 'smooth', block: 'start' }); } });
 
 
     // Wallpaper manager: reference protocol, shared admin session, lazy cached reads.
