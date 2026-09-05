@@ -988,21 +988,30 @@ create or replace function public.activate_device_v2(device_hw_id text, activati
 returns jsonb
 language plpgsql security definer set search_path to 'public'
 as $function$
-declare st text; tok text; hw text;
+#variable_conflict use_column
+declare
+    st         text;
+    tok        text;
+    hw         text;
+    v_app      text := lower(coalesce(nullif(btrim(activate_device_v2.app_id), ''), 'wallpapers'));
+    elapsed_ms numeric;
 begin
-    st := public.activate_device(device_hw_id, activation_serial, legacy_hw_id);
+    st := public.activate_device(activate_device_v2.device_hw_id, activate_device_v2.activation_serial, activate_device_v2.legacy_hw_id);
     if st = 'success' then
-        hw := public.resolve_device_id(device_hw_id);
-        -- A fresh, successful activation is itself proof of presence: stamp the check-in
-        -- so the recency gate passes for this app, then let D1 mint or rotate.
-        if lower(coalesce(app_id,'')) = 'store' then
-            insert into public.store_installs (hw_id) values (device_hw_id)
+        hw := public.resolve_device_id(activate_device_v2.device_hw_id);
+        if v_app = 'store' then
+            insert into public.store_installs (hw_id) values (activate_device_v2.device_hw_id)
             on conflict (hw_id) do update set last_seen = now();
         else
-            update public.devices set last_seen_at = now() where hardware_id = hw;
+            update public.devices dv set last_seen_at = now() where dv.hardware_id = hw;
         end if;
-        perform public.device_ping(device_hw_id, app_id, app_version_code, null);
-        tok := cf.enroll_device_impl(device_hw_id, app_id, app_version_code, activation_serial);
+        perform public.device_ping(activate_device_v2.device_hw_id, v_app, activate_device_v2.app_version_code, null);
+
+        -- Budget guard: only ask D1 for the token when enough of the 3 s statement budget remains.
+        elapsed_ms := extract(epoch from (clock_timestamp() - statement_timestamp())) * 1000;
+        if elapsed_ms < 1400 then
+            tok := cf.enroll_device_impl(activate_device_v2.device_hw_id, v_app, activate_device_v2.app_version_code, activate_device_v2.activation_serial);
+        end if;
     end if;
     return jsonb_build_object('status', st, 'token', tok);
 end $function$;
