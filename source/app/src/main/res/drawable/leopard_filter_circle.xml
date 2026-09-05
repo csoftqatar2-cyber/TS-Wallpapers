@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Leopard picker type filter (video / images). A TOGGLE, not a source: both are normally on,
+     and the one you tap off goes flat. Selected wears the same gradient as the active source
+     circle so "on" reads the same way everywhere on this screen; off is an outline the glyph
+     sits in dimly. Focus is deliberately not a state here — on a toggle, a focus ring that
+     looks like the selected fill would lie about which types are showing. -->
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:state_selected="true">
+        <shape android:shape="oval">
+            <gradient android:angle="315" android:startColor="@color/colorAccent" android:endColor="@color/gold" />
+            <stroke android:width="2dp" android:color="@color/aurora_text" />
+        </shape>
+    </item>
+    <item>
+        <shape android:shape="oval">
+            <solid android:color="#14ffffff" />
+            <stroke android:width="2dp" android:color="@color/aurora_border" />
+        </shape>
+    </item>
+</selector>

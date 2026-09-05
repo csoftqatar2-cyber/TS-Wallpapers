@@ -31,7 +31,10 @@ public class WallpaperSelectAdapter extends BaseAdapter {
     private final Context mContext;
     private final LayoutInflater mInflater;
     private final WallpaperRepo mRepo;
-    private final List<WallpaperItem> mItems;
+    /** Everything the dialog was opened with; the hide state is always keyed on this list. */
+    private final List<WallpaperItem> mAll;
+    /** What the grid shows right now: mAll, or only videos / only images (see setTypeFilter). */
+    private List<WallpaperItem> mItems;
     private final Set<String> mVisibleUrls = new HashSet<>();
 
     /** Told which row's edit button was pressed. */
@@ -63,6 +66,7 @@ public class WallpaperSelectAdapter extends BaseAdapter {
         mContext = context;
         mInflater = LayoutInflater.from(context);
         mRepo = repo;
+        mAll = items;
         mItems = items;
         // The stored hide list may have been written against the host the library used to be
         // served from, so match on the wallpaper's identity rather than on the raw url —
@@ -111,17 +115,30 @@ public class WallpaperSelectAdapter extends BaseAdapter {
         if(cell != null) cell.setActivated(visible);
     }
 
+    /**
+     * Owner's filter semantics (2026-09-05): nothing lit or both lit = every wallpaper; exactly one
+     * lit = that type only. Purely a view over mAll — ticks are kept for the cells that are hidden
+     * by the filter, so saving never un-hides or hides anything the person did not touch.
+     */
+    void setTypeFilter(boolean videos, boolean images) {
+        if(videos == images) { mItems = mAll; notifyDataSetChanged(); return; }
+        List<WallpaperItem> shown = new ArrayList<>();
+        for(WallpaperItem it : mAll) if(it.isVideo() == videos) shown.add(it);
+        mItems = shown;
+        notifyDataSetChanged();
+    }
+
     /** Check or uncheck every row at once. */
     void setAllVisible(boolean visible) {
         mVisibleUrls.clear();
         if(visible) {
-            for(WallpaperItem it : mItems) if(it.url != null) mVisibleUrls.add(it.url);
+            for(WallpaperItem it : mAll) if(it.url != null) mVisibleUrls.add(it.url);
         }
         notifyDataSetChanged();
     }
 
     boolean areAllVisible() {
-        return mVisibleUrls.size() >= mItems.size();
+        return mVisibleUrls.size() >= mAll.size();
     }
 
     int getVisibleCount() {
@@ -131,7 +148,7 @@ public class WallpaperSelectAdapter extends BaseAdapter {
     /** The urls to persist as hidden: everything currently listed that is not checked. */
     List<String> getHiddenUrls() {
         List<String> hidden = new ArrayList<>();
-        for(WallpaperItem it : mItems) {
+        for(WallpaperItem it : mAll) {
             if(it.url != null && !mVisibleUrls.contains(it.url)) hidden.add(it.url);
         }
         return hidden;

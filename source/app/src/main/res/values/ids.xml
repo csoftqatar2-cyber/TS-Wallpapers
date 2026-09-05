@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Stamped on the per-cell type badge the Leopard picker builds in code (typeBadge). The
+         badge is not important for accessibility and carries no text, so without an id nothing
+         in a uiautomator dump tells a video cell from an image cell — and that is exactly what a
+         bench test of the type filter needs to count. Many cells share one id; nothing looks
+         them up. -->
+    <item name="leopardBadgeVideo" type="id" />
+    <item name="leopardBadgeImage" type="id" />
+</resources>

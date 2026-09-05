@@ -85,21 +85,55 @@
         android:layoutDirection="ltr"
         android:baselineAligned="false">
 
-        <!-- LEFT (physical): the cloud library -->
+        <!-- LEFT (physical): the cloud library, with its type filter sitting above it.
+             The rail is the same 210dp the source circle always took, so the band's width guess
+             in buildFilmstrip() (screen minus two 210dp rails) still holds. -->
         <LinearLayout
-            android:id="@+id/sourceCloud"
-            style="@style/LeopardSource">
-            <ImageView
-                android:id="@+id/sourceCloudIcon"
-                style="@style/LeopardSourceCircle"
-                android:src="@drawable/ic_cloud_48dp" />
-            <TextView
-                android:id="@+id/sourceCloudLabel"
-                style="@style/LeopardSourceLabel"
-                android:text="@string/leopard_source_cloud" />
-            <TextView
-                style="@style/LeopardSourceSub"
-                android:text="@string/leopard_source_cloud_sub" />
+            android:layout_width="210dp"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:gravity="center">
+
+            <!-- Video / images, both on by default. Icon-only, and the SAME glyphs the cells
+                 wear as their type badge, so the button and the thing it hides match by eye.
+                 Order is not directional (two symmetric discs) — the body is pinned LTR anyway. -->
+            <LinearLayout
+                android:id="@+id/leopardTypeFilter"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="16dp"
+                android:orientation="horizontal"
+                android:gravity="center"
+                android:baselineAligned="false">
+                <ImageView
+                    android:id="@+id/filterVideo"
+                    style="@style/LeopardTypeFilter"
+                    android:src="@drawable/ic_badge_video_20dp"
+                    android:contentDescription="@string/leopard_filter_video" />
+                <ImageView
+                    android:id="@+id/filterImages"
+                    style="@style/LeopardTypeFilter"
+                    android:layout_marginStart="14dp"
+                    android:src="@drawable/ic_badge_image_20dp"
+                    android:contentDescription="@string/leopard_filter_images" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:id="@+id/sourceCloud"
+                style="@style/LeopardSource">
+                <ImageView
+                    android:id="@+id/sourceCloudIcon"
+                    style="@style/LeopardSourceCircle"
+                    android:src="@drawable/ic_cloud_48dp" />
+                <TextView
+                    android:id="@+id/sourceCloudLabel"
+                    style="@style/LeopardSourceLabel"
+                    android:text="@string/leopard_source_cloud" />
+                <TextView
+                    style="@style/LeopardSourceSub"
+                    android:text="@string/leopard_source_cloud_sub" />
+            </LinearLayout>
+
         </LinearLayout>
 
         <!-- The library: two pictures across, scrolling down.

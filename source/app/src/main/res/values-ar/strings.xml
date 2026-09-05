@@ -388,6 +388,9 @@
     <string name="leopard_set">تعيين الخلفية</string>
     <string name="leopard_badge_current">الحالية</string>
     <string name="leopard_badge_video">فيديو</string>
+    <string name="leopard_filter_video">فيديو</string>
+    <string name="leopard_filter_images">صور</string>
+    <string name="leopard_filter_empty">لا توجد خلفيات من هذا النوع — أعد تفعيل الفلتر الآخر.</string>
     <string name="leopard_loading">جارٍ التحميل…</string>
     <string name="leopard_empty">لا توجد بعد خلفيات مخصَّصة لهذه السيارة.</string>
     <string name="leopard_empty_action">التحقق من الخلفيات الجديدة</string>

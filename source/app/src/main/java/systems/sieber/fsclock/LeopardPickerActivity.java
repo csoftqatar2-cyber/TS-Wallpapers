@@ -80,6 +80,17 @@ public class LeopardPickerActivity extends AppCompatActivity {
     private GridLayout mPhoneGrid;
     private LinearLayout mPhoneQrBox;
     private View mSourceCloud, mSourceLocal, mSourcePhone, mStateBox, mSetButton;
+    /** The video / images toggles above the cloud circle, and the row that holds them. */
+    private View mFilterRow, mFilterVideo, mFilterImages;
+    /**
+     * Type filter on the cloud grid. Both on at every open, on purpose — it is a way to find a
+     * picture faster in a long library, not a setting, and a car that opened on "videos only"
+     * last week would read as "the photos are gone" this week. Nothing is persisted. Purely
+     * what is DRAWN: sync, downloads and the cache do not know the filter exists.
+     */
+    // Owner's semantics (2026-09-05): nothing lit = everything shown; exactly one lit = that type only;
+    // both lit = everything. Both start unlit at every open; nothing is persisted.
+    private boolean mShowVideos = false, mShowImages = false;
     private UploadServer mUploadServer;
     private TextView mStateText, mStateAction, mStatus;
     private ProgressBar mProgress;
@@ -293,6 +304,14 @@ public class LeopardPickerActivity extends AppCompatActivity {
         mPreviewVideo = findViewById(R.id.leopardPreviewVideo);
         mPreviewLoading = findViewById(R.id.leopardPreviewLoading);
 
+        mFilterRow = findViewById(R.id.leopardTypeFilter);
+        mFilterVideo = findViewById(R.id.filterVideo);
+        mFilterImages = findViewById(R.id.filterImages);
+        mFilterVideo.setSelected(mShowVideos);
+        mFilterImages.setSelected(mShowImages);
+        mFilterVideo.setOnClickListener(v -> toggleTypeFilter(true));
+        mFilterImages.setOnClickListener(v -> toggleTypeFilter(false));
+
         mSourceCloud.setOnClickListener(v -> selectSource(SOURCE_CLOUD));
         mSourceLocal.setOnClickListener(v -> selectSource(SOURCE_LOCAL));
         mSourcePhone.setOnClickListener(v -> selectSource(SOURCE_PHONE));
@@ -431,6 +450,13 @@ public class LeopardPickerActivity extends AppCompatActivity {
         mSourceCloud.setSelected(SOURCE_CLOUD.equals(source));
         mSourceLocal.setSelected(SOURCE_LOCAL.equals(source));
         mSourcePhone.setSelected(SOURCE_PHONE.equals(source));
+        // The filter is the cloud library's. Off that source it stays where it is (a control
+        // that jumps around is worse than one that is greyed) but goes quiet, so a tap on it
+        // while the device list is up does not look like a button that ignored you.
+        boolean cloud = SOURCE_CLOUD.equals(source);
+        mFilterRow.setAlpha(cloud ? 1f : 0.35f);
+        mFilterVideo.setEnabled(cloud);
+        mFilterImages.setEnabled(cloud);
         if(SOURCE_CLOUD.equals(source)) {
             showCloud();
         } else if(SOURCE_PHONE.equals(source)) {
@@ -930,8 +956,15 @@ public class LeopardPickerActivity extends AppCompatActivity {
         // the hide list therefore left this list offering the untouched original — while the
         // edited copy sat on the device source — so the edit read as lost. What the owner
         // unticked, this car does not offer.
+        //
+        // The type filter is applied HERE, on the drawn list only. "Is there anything in the
+        // cloud at all" is tracked separately from "is there anything left after the filter":
+        // the first decides whether to sync, the second only what the empty band says.
+        boolean anyCloud = false;
         for(WallpaperItem it : mRepo.visibleItems()) {
-            if(LeopardCache.isRemote(it.url)) mShown.add(it);
+            if(!LeopardCache.isRemote(it.url)) continue;
+            anyCloud = true;
+            if(passesTypeFilter(it)) mShown.add(it);
         }
 
         // Refresh once per open so images deleted (or added) on the manager propagate to the car
@@ -940,22 +973,52 @@ public class LeopardPickerActivity extends AppCompatActivity {
         // quietly underneath, so a wallpaper removed from the website disappears on the next open.
         if(!mTriedAutoSync) {
             mTriedAutoSync = true;
-            if(mShown.isEmpty()) {
+            if(!anyCloud) {
                 refreshCloud();
                 return;
             }
-            hideState();
-            buildFilmstrip();
+            showCloudGrid(anyCloud);
             silentRefresh();
             return;
         }
 
-        if(mShown.isEmpty()) {
+        showCloudGrid(anyCloud);
+    }
+
+    /** The cloud band after {@link #showCloud} has decided the list: cells, or the right empty message. */
+    private void showCloudGrid(boolean anyCloud) {
+        if(!anyCloud) {
             showState(R.string.leopard_empty, R.string.leopard_empty_action, v -> refreshCloud());
+            return;
+        }
+        if(mShown.isEmpty()) {
+            // The library is not empty, the filter is: say that, and do not offer a sync that
+            // would change nothing.
+            showState(R.string.leopard_filter_empty, 0, null);
             return;
         }
         hideState();
         buildFilmstrip();
+    }
+
+    /** True if the type filter lets this item onto the cloud grid. Anything not a video is an image (GIFs included). */
+    private boolean passesTypeFilter(WallpaperItem it) {
+        if(mShowVideos == mShowImages) return true;      // none or both lit: no filtering
+        return it.isVideo() ? mShowVideos : mShowImages;
+    }
+
+    /**
+     * One of the two type toggles was tapped. Flip it, redraw the cloud grid from the cache —
+     * no sync, no download — and drop a selection the filter just hid, or "Set" would apply a
+     * picture that is no longer on screen.
+     */
+    private void toggleTypeFilter(boolean video) {
+        if(video) mShowVideos = !mShowVideos; else mShowImages = !mShowImages;
+        mFilterVideo.setSelected(mShowVideos);
+        mFilterImages.setSelected(mShowImages);
+        if(!SOURCE_CLOUD.equals(mSource)) return;
+        if(mSelected != null && !passesTypeFilter(mSelected)) mSelected = null;
+        showCloud();
     }
 
     /** Sync without disturbing the visible strip; on success re-read the list so anything deleted
@@ -1399,7 +1462,7 @@ public class LeopardPickerActivity extends AppCompatActivity {
                 // The library only — the phone pane is a short list of things you already know.
                 if(shapeToImage) mVideoTiles.add(new VideoTile(cell, local));
             }
-            cell.addView(typeBadge(R.drawable.ic_badge_video_20dp, d));
+            cell.addView(typeBadge(R.drawable.ic_badge_video_20dp, R.id.leopardBadgeVideo, d));
         } else {
             // Full-size originals over a weak link: let Glide downsample to the cell.
             Glide.with(this).load(glideModel(item.url))
@@ -1422,7 +1485,7 @@ public class LeopardPickerActivity extends AppCompatActivity {
                         }
                     })
                     .into(img);
-            cell.addView(typeBadge(R.drawable.ic_badge_image_20dp, d));
+            cell.addView(typeBadge(R.drawable.ic_badge_image_20dp, R.id.leopardBadgeImage, d));
         }
 
         if(!currentUri.isEmpty() && currentUri.equals(samePath(item.url))) {
@@ -1729,8 +1792,9 @@ public class LeopardPickerActivity extends AppCompatActivity {
      * An icon rather than the word: at 326x122 over a busy photo a text badge is a smear, and
      * the two glyphs are told apart at a glance across a cabin in a way two Arabic words are not.
      */
-    private ImageView typeBadge(int iconRes, float d) {
+    private ImageView typeBadge(int iconRes, int id, float d) {
         ImageView v = new ImageView(this);
+        v.setId(id);   // shared by every cell of that type; see ids.xml for why it exists
         int size = Math.round(28 * d);
         FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(size, size);
         lp.gravity = Gravity.BOTTOM | Gravity.START;

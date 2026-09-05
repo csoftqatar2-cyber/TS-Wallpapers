@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Glyph colour for the Leopard picker's type-filter toggles: dark on the selected (gold) fill,
+     muted on the unselected outline. Overrides the gold baked into ic_badge_*_20dp, which is
+     right on a photo but invisible on a gold disc. -->
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:color="#1a1204" android:state_selected="true" />
+    <item android:color="@color/aurora_muted" />
+</selector>

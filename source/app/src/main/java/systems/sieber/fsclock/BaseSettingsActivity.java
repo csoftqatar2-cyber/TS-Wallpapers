@@ -1108,6 +1108,7 @@ public class BaseSettingsActivity extends AppCompatActivity {
         // WallpaperSelectAdapter.getView), because a cell with a button in it never receives the
         // AdapterView's row click.
         ll.addView(hint);
+        ll.addView(buildTypeFilterRow(adapter, pad));
         ll.addView(buildWallpaperGrid(adapter));
 
         final AuroraDialog dialog = new AuroraDialog.Builder(this)
@@ -1191,6 +1192,48 @@ public class BaseSettingsActivity extends AppCompatActivity {
      * margin on the cell, and because the grid is not handing out fixed slots that margin is real
      * space between the frames rather than padding inside them.
      */
+    /**
+     * The same two round type buttons the Leopard picker has, above the manage-images grid:
+     * nothing lit = everything; one lit = that type only; both lit = everything. Both start
+     * unlit at every open and nothing is persisted (owner's rule, 2026-09-05).
+     */
+    private View buildTypeFilterRow(final WallpaperSelectAdapter adapter, int pad) {
+        final float d = getResources().getDisplayMetrics().density;
+        final int size = Math.round(52 * d), inner = Math.round(13 * d), gap = Math.round(12 * d);
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setGravity(android.view.Gravity.CENTER_VERTICAL);
+        row.setPadding(pad, 0, pad, pad / 2);
+        final boolean[] lit = { false, false };   // [video, images]
+        final android.widget.ImageView[] btn = new android.widget.ImageView[2];
+        final int[] icons = { R.drawable.ic_badge_video_20dp, R.drawable.ic_badge_image_20dp };
+        final int[] descs = { R.string.leopard_filter_video, R.string.leopard_filter_images };
+        for(int i = 0; i < 2; i++) {
+            final int idx = i;
+            android.widget.ImageView v = new android.widget.ImageView(this);
+            v.setImageResource(icons[i]);
+            v.setBackgroundResource(R.drawable.leopard_filter_circle);
+            v.setImageTintList(ContextCompat.getColorStateList(this, R.color.leopard_filter_icon_tint));
+            v.setPadding(inner, inner, inner, inner);
+            v.setContentDescription(getString(descs[i]));
+            v.setClickable(true); v.setFocusable(true);
+            v.setSelected(false);
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(size, size);
+            if(i > 0) lp.setMarginStart(gap);
+            v.setLayoutParams(lp);
+            v.setOnClickListener(new View.OnClickListener() {
+                @Override public void onClick(View x) {
+                    lit[idx] = !lit[idx];
+                    btn[idx].setSelected(lit[idx]);
+                    adapter.setTypeFilter(lit[0], lit[1]);
+                }
+            });
+            btn[i] = v;
+            row.addView(v);
+        }
+        return row;
+    }
+
     private View buildWallpaperGrid(final WallpaperSelectAdapter adapter) {
         final float d = getResources().getDisplayMetrics().density;
         final int gap = Math.round(14 * d);

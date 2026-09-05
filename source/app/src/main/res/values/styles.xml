@@ -232,6 +232,19 @@
         <item name="android:padding">6dp</item>
     </style>
 
+    <!-- Leopard picker: the two type-filter toggles (video / images) above the cloud circle.
+         52dp: comfortably over the 48dp car-finger floor, visibly smaller than a source circle so
+         it reads as a switch on the library rather than a fourth library. -->
+    <style name="LeopardTypeFilter">
+        <item name="android:layout_width">52dp</item>
+        <item name="android:layout_height">52dp</item>
+        <item name="android:background">@drawable/leopard_filter_circle</item>
+        <item name="android:padding">13dp</item>
+        <item name="android:tint">@color/leopard_filter_icon_tint</item>
+        <item name="android:focusable">true</item>
+        <item name="android:clickable">true</item>
+    </style>
+
     <style name="LeopardSourceCircleCompact" parent="LeopardSourceCircle">
         <item name="android:layout_width">76dp</item>
         <item name="android:layout_height">76dp</item>

@@ -262,6 +262,9 @@ Roboto Font Copyright (c) Christian Robertson. Licensed under the Apache License
     <string name="leopard_set">Set as wallpaper</string>
     <string name="leopard_badge_current">Current</string>
     <string name="leopard_badge_video">Video</string>
+    <string name="leopard_filter_video">Videos</string>
+    <string name="leopard_filter_images">Images</string>
+    <string name="leopard_filter_empty">Nothing of this type — turn the other filter back on.</string>
     <string name="leopard_loading">Loading…</string>
     <string name="leopard_empty">No wallpapers assigned to this car yet.</string>
     <string name="leopard_empty_action">Check for new wallpapers</string>
