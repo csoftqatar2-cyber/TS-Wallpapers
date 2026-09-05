@@ -2077,7 +2077,7 @@
     function hwLink(hw) {
         if (!hw) return '<span class="sub">—</span>';
         const c = canonicalHw(hw);
-        const known = c && state.merged.some(r => r.hw === c || (r.aliases || []).includes(c));
+        const known = c && !!wallpaperCar(hw);   // case-insensitive, alias-aware, indexed
         return known ? `<a href="#" class="hw-link num" data-hw="${esc(c)}" title="فتح في الأجهزة">${esc(hw)}</a>` : `<span class="num">${esc(hw)}</span><span class="sub">غير معروف في devices</span>`;
     }
     document.addEventListener('click', e => {

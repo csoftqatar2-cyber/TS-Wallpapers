@@ -323,6 +323,8 @@ export default {
       // ---- activation code generator (D1 issued_codes) ----
       if (env.DB && req.method === "POST" && p === "/local/codes/issue") {
         const now = new Date(); const expires = new Date(now.getTime() + 10 * 60_000);
+        // Owner's rule: an expired, never-used code goes back to the pool so it can be minted again later.
+        await env.DB.prepare("DELETE FROM issued_codes WHERE used_by IS NULL AND expires_at < ?").bind(now.toISOString()).run();
         const iso = d => d.toISOString();
         let serial = null;
         for (let i = 0; i < 12 && !serial; i++) {
