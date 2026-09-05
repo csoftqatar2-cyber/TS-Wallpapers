@@ -114,7 +114,8 @@
         .table-wrap::-webkit-scrollbar-thumb:hover, .hscroll-top::-webkit-scrollbar-thumb:hover { background: rgba(251,191,36,.75); }
         .table-wrap::-webkit-scrollbar-button, .hscroll-top::-webkit-scrollbar-button { display: none; width: 0; height: 0; }
         .tab-icon { width: 20px; height: 20px; border-radius: 5px; vertical-align: middle; margin-inline-end: 2px; object-fit: cover; box-shadow: 0 0 0 1px rgba(0,0,0,.25); }
-        .wp-types { gap: 10px; margin-bottom: 10px; }
+        .wp-types { display: flex; gap: 12px; margin-bottom: 12px; justify-content: flex-start; flex-wrap: nowrap; }
+        .wp-types .type-toggle { flex: 0 0 52px; width: 52px; height: 52px; min-width: 52px; }
         .type-toggle { width: 48px; height: 48px; border-radius: 50%; border: 2px solid var(--panel-border-hover); background: rgba(255,255,255,.04); color: var(--text-muted); font-size: 1.15rem; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; transition: all .15s; }
         .type-toggle.on { background: linear-gradient(135deg, var(--primary), var(--accent)); color: #1a1006; border-color: transparent; box-shadow: 0 8px 20px -10px rgba(245,158,11,.8); }
         .type-toggle:hover { transform: translateY(-1px); }
