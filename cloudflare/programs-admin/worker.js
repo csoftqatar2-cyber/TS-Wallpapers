@@ -57,6 +57,41 @@ function limited(ip) {
   slot.n += 1; return slot.n > 240;
 }
 
+// ---------- Cloudflare Access (Zero Trust) in front of everything ----------
+// When ACCESS_TEAM_DOMAIN and ACCESS_AUD are set, every request must carry a valid Access JWT
+// (Cf-Access-Jwt-Assertion, RS256, signed by the team's public keys, aud = this application).
+// This closes the direct-to-workers.dev bypass: the Worker itself refuses anyone Access did not let
+// through. Until the two vars exist (owner enables Zero Trust), the check is skipped and the
+// Supabase admin session remains the only gate.
+const jwks = { at: 0, keys: [] };
+const b64u = s => Uint8Array.from(atob(s.replace(/-/g, "+").replace(/_/g, "/").padEnd(Math.ceil(s.length / 4) * 4, "=")), c => c.charCodeAt(0));
+async function accessKeys(team) {
+  if (Date.now() - jwks.at < 3600_000 && jwks.keys.length) return jwks.keys;
+  const res = await fetch(`https://${team}/cdn-cgi/access/certs`, { cf: { cacheTtl: 3600 } });
+  if (!res.ok) return jwks.keys;
+  const data = await res.json();
+  jwks.keys = (data.keys || []).filter(k => k.kty === "RSA"); jwks.at = Date.now();
+  return jwks.keys;
+}
+async function accessOk(req, env) {
+  if (!env.ACCESS_TEAM_DOMAIN || !env.ACCESS_AUD) return true;        // not enabled yet
+  const jwt = req.headers.get("Cf-Access-Jwt-Assertion") || "";
+  const parts = jwt.split(".");
+  if (parts.length !== 3) return false;
+  let header, payload;
+  try { header = JSON.parse(new TextDecoder().decode(b64u(parts[0]))); payload = JSON.parse(new TextDecoder().decode(b64u(parts[1]))); } catch (e) { return false; }
+  if (header.alg !== "RS256") return false;
+  const now = Math.floor(Date.now() / 1000);
+  const aud = Array.isArray(payload.aud) ? payload.aud : [payload.aud];
+  if (!aud.includes(env.ACCESS_AUD) || !payload.exp || payload.exp < now || payload.iss !== `https://${env.ACCESS_TEAM_DOMAIN}`) return false;
+  const keys = await accessKeys(env.ACCESS_TEAM_DOMAIN);
+  const jwk = keys.find(k => k.kid === header.kid); if (!jwk) return false;
+  try {
+    const key = await crypto.subtle.importKey("jwk", jwk, { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" }, false, ["verify"]);
+    return await crypto.subtle.verify("RSASSA-PKCS1-v1_5", key, b64u(parts[2]), new TextEncoder().encode(`${parts[0]}.${parts[1]}`));
+  } catch (e) { return false; }
+}
+
 const json = (status, obj) => new Response(JSON.stringify(obj), { status, headers: { "Content-Type": "application/json; charset=utf-8", ...SEC_HEADERS } });
 
 // Verified admin tokens are remembered for a minute per isolate so a page full of calls does
@@ -97,6 +132,7 @@ export default {
   async fetch(req, env) {
     const url = new URL(req.url);
     const p = url.pathname;
+    if (!(await accessOk(req, env))) return new Response("Access required", { status: 403, headers: { "Content-Type": "text/plain; charset=utf-8", ...SEC_HEADERS } });
 
     if (req.method === "GET" && (p === "/" || p === "/index.html" || p === "/control-panel.html")) {
       const n = nonce();
