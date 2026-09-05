@@ -118,6 +118,15 @@
         .type-toggle { width: 48px; height: 48px; border-radius: 50%; border: 2px solid var(--panel-border-hover); background: rgba(255,255,255,.04); color: var(--text-muted); font-size: 1.15rem; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; transition: all .15s; }
         .type-toggle.on { background: linear-gradient(135deg, var(--primary), var(--accent)); color: #1a1006; border-color: transparent; box-shadow: 0 8px 20px -10px rgba(245,158,11,.8); }
         .type-toggle:hover { transform: translateY(-1px); }
+        .swal2-popup { font-family: 'Cairo', system-ui, sans-serif !important; background: #1c160e !important; color: #f3ede4 !important; border: 1px solid rgba(255,255,255,.1); border-radius: 18px !important; box-shadow: 0 24px 60px #000a !important; direction: rtl; }
+        .swal2-title { font-size: 1.2rem !important; font-weight: 800 !important; }
+        .swal2-html-container { color: #d9cfc0 !important; font-size: 1rem !important; }
+        .swal2-input { background: rgba(0,0,0,.3) !important; color: #f3ede4 !important; border: 1px solid rgba(255,255,255,.14) !important; border-radius: 12px !important; box-shadow: none !important; font-family: inherit !important; text-align: center; }
+        .swal2-input:focus { border-color: #fbbf24 !important; }
+        .swal2-styled { border-radius: 12px !important; font-family: inherit !important; font-weight: 700 !important; min-height: 44px; }
+        .swal2-styled.swal2-cancel { background: rgba(255,255,255,.08) !important; color: #f3ede4 !important; }
+        .swal2-icon { border-color: #fbbf24 !important; color: #fbbf24 !important; }
+        .swal2-toast { background: #1c160e !important; border: 1px solid rgba(255,255,255,.1) !important; }
         .subtabs { display: flex; gap: 6px; flex-wrap: wrap; margin: 0 0 14px; padding-bottom: 10px; border-bottom: 1px solid var(--panel-border); }
         .subtab { border: 1px solid var(--panel-border); background: rgba(255,255,255,.03); color: var(--text-muted); border-radius: 10px; padding: 6px 12px; cursor: pointer; font: inherit; font-size: .84rem; }
         .subtab:hover { color: var(--text-main); border-color: var(--panel-border-hover); }
@@ -2324,7 +2333,7 @@
     document.addEventListener('click', async e => {
         if (e.target.closest('#sess-btn')) { const b = $('sess-list'); if (!b.hidden) { b.hidden = true; return; } renderSessions(); return; }
         const rn = e.target.closest('[data-rename-dev]');
-        if (rn) { const label = window.prompt('اسم الجهاز / صاحبه:', ''); if (label && label.trim()) { try { await localPost('/local/auth/devices/rename', { id: rn.dataset.renameDev, label: label.trim() }); toast('success', 'تمت التسمية'); renderSessions(); genRecent(); } catch (err) { alertDialog('تعذّرت التسمية', errMsg(err)); } } return; }
+        if (rn) { const label = await promptDialog({ title: 'اسم الجهاز / صاحبه', placeholder: 'مثال: هاتف أحمد' }); if (label && label.trim()) { try { await localPost('/local/auth/devices/rename', { id: rn.dataset.renameDev, label: label.trim() }); toast('success', 'تمت التسمية'); renderSessions(); genRecent(); } catch (err) { alertDialog('تعذّرت التسمية', errMsg(err)); } } return; }
         const rv = e.target.closest('[data-revoke]');
         if (rv) { const ok = await confirmDialog({ title: 'إلغاء جهاز الدخول؟', html: 'سيُطلب من ذلك الجهاز كلمة المرور مجددًا.', confirmText: 'إلغاء الجهاز', danger: true }); if (ok) { try { await localPost('/local/auth/revoke', { id: rv.dataset.revoke }); toast('success', 'أُلغي الجهاز'); renderSessions(); } catch (err) { alertDialog('تعذّر الإلغاء', errMsg(err)); } } }
     });
