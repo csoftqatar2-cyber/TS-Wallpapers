@@ -4,8 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <title>المولّد — Thabthaba</title>
-    <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png">
-    <link rel="apple-touch-icon" sizes="180x180" href="/icon-180.png">
+    <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png?v=3">
+    <link rel="apple-touch-icon" sizes="180x180" href="/icon-180.png?v=3">
     <link rel="manifest" href="/manifest.webmanifest">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -52,7 +52,7 @@
 </head>
 <body>
     <header>
-        <div class="brand"><img src="/icon-192.png" alt=""> المولّد</div>
+        <div class="brand"><img src="/icon-192.png?v=3" alt=""> المولّد</div>
         <div class="tools">
             <span id="conn" class="conn muted" role="status">غير متصل</span>
             <a class="round" href="/" title="الموقع الرئيسي" aria-label="الموقع الرئيسي"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg></a>
@@ -82,7 +82,7 @@
     function conn(state, title) { const el = $('conn'); el.className = 'conn ' + state; el.textContent = state === 'muted' ? 'غير متصل' : 'متصل'; el.title = title || ''; }
     function esc(v) { return String(v == null ? '' : v).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
     function fmt(left) { return `${String(Math.floor(left / 60000)).padStart(2, '0')}:${String(Math.floor((left % 60000) / 1000)).padStart(2, '0')}`; }
-    function notify(title, body) { try { if ('Notification' in window && Notification.permission === 'granted') new Notification(title, { body, icon: '/icon-192.png' }); } catch (e) {} }
+    function notify(title, body) { try { if ('Notification' in window && Notification.permission === 'granted') new Notification(title, { body, icon: '/icon-192.png?v=3' }); } catch (e) {} }
 
     // The refresh token never reaches this page: the Worker holds it behind an HttpOnly device
     // cookie and hands out short-lived access tokens on request. Nothing durable is stored here.

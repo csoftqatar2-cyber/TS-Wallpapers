@@ -221,10 +221,10 @@ export default {
     const p = url.pathname;
     // Home-screen icon + manifest: public, cacheable, and outside Access (installers fetch them cookie-less).
     const icons = { "/icon-180.png": ICON180, "/icon-192.png": ICON192, "/icon-512.png": ICON512, "/apple-touch-icon.png": ICON180, "/favicon.ico": ICON192 };
-    if (req.method === "GET" && icons[p]) return new Response(icons[p], { status: 200, headers: { "Content-Type": "image/png", "Cache-Control": "public, max-age=86400" } });
+    if (req.method === "GET" && icons[p]) return new Response(icons[p], { status: 200, headers: { "Content-Type": "image/png", "Cache-Control": "public, max-age=600" } });
     if (req.method === "GET" && p === "/manifest.webmanifest") {
       return new Response(JSON.stringify({ name: "Thabthaba Programs Admin", short_name: "Thabthaba", start_url: "/gen", display: "standalone", background_color: "#211a12", theme_color: "#211a12", dir: "rtl", lang: "ar",
-        icons: [{ src: "/icon-192.png", sizes: "192x192", type: "image/png" }, { src: "/icon-512.png", sizes: "512x512", type: "image/png" }] }),
+        icons: [{ src: "/icon-192.png?v=3", sizes: "192x192", type: "image/png" }, { src: "/icon-512.png?v=3", sizes: "512x512", type: "image/png" }] }),
         { status: 200, headers: { "Content-Type": "application/manifest+json", "Cache-Control": "public, max-age=3600" } });
     }
     if (!(await accessOk(req, env))) return new Response("Access required", { status: 403, headers: { "Content-Type": "text/plain; charset=utf-8", ...SEC_HEADERS } });
