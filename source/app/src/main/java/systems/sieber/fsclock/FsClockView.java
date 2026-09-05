@@ -397,11 +397,10 @@ public class FsClockView extends FrameLayout {
                         mTextViewActivationStatus.setVisibility(View.VISIBLE);
                         return;
                     }
-                    if (!WallpaperRepo.hasValidSerialPrefix(serial)) {
-                        mTextViewActivationStatus.setText(R.string.activation_error_invalid_serial);
-                        mTextViewActivationStatus.setVisibility(View.VISIBLE);
-                        return;
-                    }
+                    // 185: no local rule about what a code looks like. The server (D1) is the only
+                    // judge — codes are about to change shape (six digits, no prefix) and every car
+                    // must accept whatever the shop hands out without another update. A wrong code
+                    // still reads «الرقم التسلسلي غير صحيح», from the server's answer.
 
                     mTextViewActivationStatus.setText(R.string.activation_checking);
                     mTextViewActivationStatus.setTextColor(Color.YELLOW);

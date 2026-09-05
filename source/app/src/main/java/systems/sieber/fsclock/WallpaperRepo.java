@@ -55,7 +55,10 @@ public class WallpaperRepo {
      */
     static final String[] SERIAL_PREFIXES = { "7078", "578" };
 
-    /** True if the serial looks like one we issue. See {@link #SERIAL_PREFIXES}. */
+    /**
+     * True if the serial looks like one we issue. See {@link #SERIAL_PREFIXES}.
+     * Since 185 no screen calls this before sending: the format is the server's decision alone.
+     */
     static boolean hasValidSerialPrefix(String serial) {
         if(serial == null) return false;
         for(String p : SERIAL_PREFIXES) {
