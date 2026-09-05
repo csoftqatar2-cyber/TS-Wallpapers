@@ -80,18 +80,18 @@
     const gen = { serial: null, expiresAt: 0, tick: null, poll: null, done: false };
 
     function conn(state, title) { const el = $('conn'); el.className = 'conn ' + state; el.textContent = state === 'muted' ? 'غير متصل' : 'متصل'; el.title = title || ''; }
+    // The refresh token never reaches this page: the Worker holds it behind an HttpOnly device
+    // cookie and hands out short-lived access tokens on request. Nothing durable is stored here.
     function applySession(d) {
-        TOKEN = d.access_token; REFRESH = d.refresh_token || REFRESH;
-        try { localStorage.setItem(SESSION_KEY, REFRESH); localStorage.setItem('session:lastActive', String(Date.now())); } catch (e) {}
+        TOKEN = d.access_token;
+        try { localStorage.removeItem(SESSION_KEY); } catch (e) {}
         clearTimeout(refreshTimer); refreshTimer = setTimeout(refreshSession, Math.max(60, (d.expires_in || 3600) - 120) * 1000);
         $('login').hidden = true; $('app').hidden = false; conn('ok', 'متصل');
     }
     async function refreshSession() {
-        let rt = REFRESH; try { rt = rt || localStorage.getItem(SESSION_KEY); } catch (e) {}
-        if (!rt) return false;
         try {
-            const res = await fetch(`${AUTH_URL}/token?grant_type=refresh_token`, { method: 'POST', headers: { apikey: ANON_KEY, 'Content-Type': 'application/json' }, body: JSON.stringify({ refresh_token: rt }) });
-            if (!res.ok) throw new Error('refresh failed');
+            const res = await fetch('/local/auth/session', { method: 'POST', cache: 'no-store' });
+            if (!res.ok) return false;
             applySession(await res.json()); return true;
         } catch (e) { conn('warn', 'تعذّر تجديد الجلسة'); return false; }
     }

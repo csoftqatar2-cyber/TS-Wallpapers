@@ -23,8 +23,8 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800&family=Rajdhani:wght@500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/limonte-sweetalert2/11.10.5/sweetalert2.all.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" integrity="sha384-iw3OoTErCYJJB9mCa8LNS2hbsQ7M3C0EpIsO/H5+EGAkPGc6rk+V8i04oW/K5xq0" crossorigin="anonymous">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/limonte-sweetalert2/11.10.5/sweetalert2.all.min.js" integrity="sha384-F8SYeBSrTVPFojwQeAD1UQo0dI5CKJOzc992kU0M/q72tnFcDlxHwbkiw8GLrXd8" crossorigin="anonymous"></script>
 
     <style>
         :root {
@@ -506,6 +506,8 @@
                     <div id="notif-history" hidden>
                         <div class="notif-state"><span id="notif-label">التنبيهات: متوقفة</span><button class="btn sm" id="notif-toggle" type="button" aria-pressed="false">تفعيل</button></div>
                         <label class="toggle"><input type="checkbox" id="notif-tokens"> تنبيهات التوكن</label>
+                        <button class="btn sm" id="sess-btn" type="button" style="margin-top:6px;"><i class="fa-solid fa-mobile-screen"></i> أجهزة الدخول</button>
+                        <div id="sess-list" hidden style="margin-top:8px;"></div>
                         <strong style="display:block;margin-top:8px;">آخر التنبيهات</strong>
                         <div id="notif-list" aria-live="polite">لا تنبيهات بعد</div>
                     </div>
@@ -796,7 +798,7 @@
 
     <dialog id="wp-private-dialog" class="wp-dialog" aria-labelledby="wp-private-title"><div class="toolbar"><h3 id="wp-private-title">الصور المخصصة حسب السيارة</h3><button class="btn" type="button" data-wp-close="wp-private-dialog">إغلاق</button></div><input type="search" id="wp-private-search" placeholder="بحث باسم السيارة أو الملف أو المعرّف" aria-label="بحث الصور الخاصة"><div id="wp-private-body"></div></dialog>
     <dialog id="wp-target-dialog" class="wp-dialog" aria-labelledby="wp-target-title"><div class="toolbar"><h3 id="wp-target-title">تخصيص الخلفية</h3><button class="btn" type="button" data-wp-close="wp-target-dialog">إغلاق</button></div><p class="note" id="wp-target-note"></p><input type="search" id="wp-dialog-search" aria-label="بحث السيارات" placeholder="اسم السيارة أو الكود أو المعرّف"><div id="wp-dialog-cars" class="wp-car-list"></div><div id="wp-dialog-error" role="alert"></div><div class="toolbar"><button class="btn primary" id="wp-target-save" type="button">حفظ</button></div></dialog>
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.115.0/dist/umd/supabase.js" integrity="sha384-CLZeq1dk8+Uzrs7TVvBUdlFoV5F0DMqgRoeHa8g5wJcuPe5SkVfEvdxB0ZuzlnBQ" crossorigin="anonymous"></script>
     <script>
     // =====================================================================
     //  الثوابت
@@ -877,8 +879,10 @@
 
     function applySession(data) {
         SESSION_TOKEN = data.access_token;
-        SESSION_REFRESH = data.refresh_token;
-        try { localStorage.setItem(SESSION_KEY, data.refresh_token); } catch (e) { /* Memory session still works. */ }
+        SESSION_REFRESH = data.refresh_token || null;
+        // On the site the Worker keeps the refresh token behind an HttpOnly device cookie and the
+        // browser stores nothing durable; the local runner keeps the old in-browser persistence.
+        try { if (SESSION_REFRESH) localStorage.setItem(SESSION_KEY, SESSION_REFRESH); else localStorage.removeItem(SESSION_KEY); } catch (e) { /* Memory session still works. */ }
         startRealtime();
         const ms = Math.max(30, (data.expires_in || 3600) - 60) * 1000;
         if (refreshTimer) clearTimeout(refreshTimer);
@@ -910,9 +914,21 @@
         applySession(await res.json());
     }
     async function refreshSession() {
+        const epoch = sessionEpoch;
+        if (LOCAL_PROXY && LOCAL_FLAGS.sessions) {
+            try {
+                const res = await fetch('/local/auth/session', { method: 'POST', cache: 'no-store' });
+                if (!res.ok) throw new Error('no-session');
+                const data = await res.json();
+                if (epoch !== sessionEpoch) return false;
+                applySession(data); return true;
+            } catch (e) {
+                if (epoch === sessionEpoch) { clearSession(); $('login-overlay').hidden = false; setStatus('off'); }
+                return false;
+            }
+        }
         let token = SESSION_REFRESH;
         try { token = token || localStorage.getItem(SESSION_KEY); } catch (e) {}
-        const epoch = sessionEpoch;
         if (!token) return false;
         if (idleExpired()) { clearSession(); return false; }   // 12 h idle: log in again
         try {
@@ -2273,6 +2289,20 @@
             }).join('') : '<tr><td colspan="5"><div class="empty">لا أكواد بعد</div></td></tr>';
         } catch (e) { setErr('gen-recent', ''); }
     }
+    async function renderSessions() {
+        const box = $('sess-list'); box.hidden = false; box.innerHTML = '<span class="sub">جارٍ التحميل…</span>';
+        if (!(LOCAL_PROXY && LOCAL_FLAGS.sessions)) { box.innerHTML = '<span class="sub">متاح على الموقع فقط</span>'; return; }
+        try {
+            const r = await localGet('/local/auth/devices');
+            const rows = (r && r.devices) || [];
+            box.innerHTML = rows.length ? rows.map(d => `<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:6px 0;border-top:1px solid var(--panel-border)"><div><strong>${esc(d.label || 'جهاز')}</strong>${d.current ? ' <span class="badge ok">هذا الجهاز</span>' : ''}${d.revoked ? ' <span class="badge bad">ملغى</span>' : ''}<span class="hw">${esc(d.ip || '')} · ${esc(relTime(d.last_seen))}</span></div>${d.revoked || d.current ? '' : `<button class="btn sm danger" type="button" data-revoke="${esc(d.id)}">إلغاء</button>`}</div>`).join('') : '<span class="sub">لا أجهزة</span>';
+        } catch (e) { box.innerHTML = `<span class="sub">${esc(errMsg(e))}</span>`; }
+    }
+    document.addEventListener('click', async e => {
+        if (e.target.closest('#sess-btn')) { const b = $('sess-list'); if (!b.hidden) { b.hidden = true; return; } renderSessions(); return; }
+        const rv = e.target.closest('[data-revoke]');
+        if (rv) { const ok = await confirmDialog({ title: 'إلغاء جهاز الدخول؟', html: 'سيُطلب من ذلك الجهاز كلمة المرور مجددًا.', confirmText: 'إلغاء الجهاز', danger: true }); if (ok) { try { await localPost('/local/auth/revoke', { id: rv.dataset.revoke }); toast('success', 'أُلغي الجهاز'); renderSessions(); } catch (err) { alertDialog('تعذّر الإلغاء', errMsg(err)); } } }
+    });
     document.addEventListener('click', e => {
         if (e.target.closest('#gen-btn')) genIssue();
         if (e.target.closest('#gen-copy') && gen.serial) copyText(gen.serial);
@@ -2325,6 +2355,7 @@
 
     $('refresh-btn').addEventListener('click', () => loadAll());
     $('logout-btn').addEventListener('click', () => {
+        if (LOCAL_PROXY && LOCAL_FLAGS.sessions) { try { fetch('/local/auth/logout', { method: 'POST' }); } catch (e) {} }
         clearSession(); eventsRevision++; STORE_SECRET = LOCAL_PROXY ? LOCAL_SENTINEL : ''; storeAuthState = 'none';
         setStatus('off');
         $('login-overlay').hidden = false; $('login-password').value = ''; $('login-secret').value = ''; $('login-password').focus();
@@ -2341,6 +2372,7 @@
             if (j && j.local === true) {
                 LOCAL_PROXY = true;
                 LOCAL_FLAGS = j;
+                if (!SESSION_TOKEN && j.sessions) { refreshSession().then(ok => { if (ok) { $('login-overlay').hidden = true; loadAll(); } }); }
                 if (j.store === true) { STORE_SECRET = LOCAL_SENTINEL; storeAuthState = 'none'; }
                 $('secret-pop').hidden = true;
                 $('login-secret').closest('.form-group').hidden = true;

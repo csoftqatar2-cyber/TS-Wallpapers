@@ -99,15 +99,41 @@ async function accessOk(req, env) {
 // ---------- admin login guard (D1 login_attempts / blocked_clients / security_events) ----------
 const LOGIN_FAILS = 5, LOGIN_WINDOW_MS = 15 * 60_000, BLOCK_HOURS = 24;
 const clientOf = req => ({ ip: req.headers.get("cf-connecting-ip") || "?", email: req.headers.get("cf-access-authenticated-user-email") || null, ua: (req.headers.get("user-agent") || "").slice(0, 200) });
+// Answers true / false, or throws when D1 cannot answer (the caller fails CLOSED with 503).
 async function isBlocked(env, ip) {
   if (!env.DB) return false;
-  try {
-    const row = await env.DB.prepare("SELECT expires_at FROM blocked_clients WHERE ip = ?").bind(ip).first();
-    if (!row) return false;
-    if (String(row.expires_at) > new Date().toISOString()) return true;
-    await env.DB.prepare("DELETE FROM blocked_clients WHERE ip = ?").bind(ip).run();
-    return false;
-  } catch (e) { return false; }
+  const row = await env.DB.prepare("SELECT expires_at FROM blocked_clients WHERE ip = ?").bind(ip).first();
+  if (!row) return false;
+  if (String(row.expires_at) > new Date().toISOString()) return true;
+  await env.DB.prepare("DELETE FROM blocked_clients WHERE ip = ?").bind(ip).run();
+  return false;
+}
+// ---------- device-bound sessions: refresh token stays in D1, the browser gets an HttpOnly id ----------
+const DEV_COOKIE = "ts_dev", DEV_MAX_AGE = 30 * 24 * 3600;
+function cookieOf(req, name) { const m = new RegExp(`(?:^|;\\s*)${name}=([A-Za-z0-9_-]{10,128})`).exec(req.headers.get("Cookie") || ""); return m ? m[1] : null; }
+function randomId() { const b = new Uint8Array(24); crypto.getRandomValues(b); return btoa(String.fromCharCode(...b)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, ""); }
+function setCookie(id, clear) { return `${DEV_COOKIE}=${clear ? "" : id}; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=${clear ? 0 : DEV_MAX_AGE}`; }
+async function supabaseRefresh(env, refreshToken) {
+  const res = await fetch(`${env.SUPABASE_URL}/auth/v1/token?grant_type=refresh_token`, { method: "POST", headers: { apikey: env.SUPABASE_ANON, "Content-Type": "application/json" }, body: JSON.stringify({ refresh_token: refreshToken }) });
+  if (!res.ok) return null;
+  const data = await res.json().catch(() => null);
+  return data && data.access_token ? data : null;
+}
+async function handleSession(req, env) {
+  const id = cookieOf(req, DEV_COOKIE); if (!id || !env.DB) return json(401, { message: "no device session" });
+  const row = await env.DB.prepare("SELECT refresh_token, revoked FROM device_sessions WHERE id = ?").bind(id).first();
+  if (!row || row.revoked) return new Response(JSON.stringify({ message: "session revoked" }), { status: 401, headers: { "Content-Type": "application/json; charset=utf-8", "Set-Cookie": setCookie(id, true), ...SEC_HEADERS } });
+  const data = await supabaseRefresh(env, row.refresh_token);
+  if (!data) { await env.DB.prepare("UPDATE device_sessions SET revoked = 1 WHERE id = ?").bind(id).run(); return json(401, { message: "refresh failed" }); }
+  if (data.user && data.user.id !== env.ADMIN_UID) return json(403, { message: "not the admin" });
+  const c = clientOf(req);
+  await env.DB.prepare("UPDATE device_sessions SET refresh_token = ?, last_seen = ?, ip = ?, ua = ? WHERE id = ?").bind(data.refresh_token || row.refresh_token, new Date().toISOString(), c.ip, c.ua, id).run();
+  return json(200, { access_token: data.access_token, expires_in: data.expires_in || 3600, token_type: "bearer" });
+}
+async function handleLogout(req, env) {
+  const id = cookieOf(req, DEV_COOKIE);
+  if (id && env.DB) await env.DB.prepare("UPDATE device_sessions SET revoked = 1 WHERE id = ?").bind(id).run();
+  return new Response(JSON.stringify({ ok: true }), { status: 200, headers: { "Content-Type": "application/json; charset=utf-8", "Set-Cookie": setCookie(id || "x", true), ...SEC_HEADERS } });
 }
 async function securityEvent(env, kind, c, detail) {
   try { await env.DB.prepare("INSERT INTO security_events (at, kind, ip, email, detail) VALUES (?, ?, ?, ?, ?)").bind(new Date().toISOString(), kind, c.ip, c.email, detail || null).run(); } catch (e) {}
@@ -117,23 +143,32 @@ async function handleLogin(req, env) {
   if (!env.DB) return json(503, { message: "login guard not configured" });
   let body; try { body = await readJsonBody(req); } catch (e) { return json(400, { message: "bad body" }); }
   const password = typeof body.password === "string" ? body.password : "";
+  if (!password || password.length > 256) return json(400, { message: "bad body" });
   const since = new Date(Date.now() - LOGIN_WINDOW_MS).toISOString();
+  const now = new Date().toISOString();
+  // Reserve the attempt FIRST (counted as a failure until proven otherwise), so parallel guesses
+  // cannot all read the same count and slip past the limit together.
+  const ins = await env.DB.prepare("INSERT INTO login_attempts (at, ip, email, ua, ok) VALUES (?, ?, ?, ?, 0)").bind(now, c.ip, c.email, c.ua).run();
+  const attemptId = ins && ins.meta ? ins.meta.last_row_id : null;
   const fails = await env.DB.prepare("SELECT COUNT(*) AS n FROM login_attempts WHERE ip = ? AND ok = 0 AND at > ?").bind(c.ip, since).first();
-  if ((fails && fails.n) >= LOGIN_FAILS) return json(403, { message: "blocked" });
+  const n = (fails && fails.n) || 1;
+  if (n > LOGIN_FAILS) return json(403, { message: "blocked" });
   const res = await fetch(`${env.SUPABASE_URL}/auth/v1/token?grant_type=password`, {
     method: "POST", headers: { apikey: env.SUPABASE_ANON, "Content-Type": "application/json" },
     body: JSON.stringify({ email: env.ADMIN_EMAIL || "admin@tswallpapers.app", password }),
   });
-  const now = new Date().toISOString();
   if (res.ok) {
     const data = await res.json();
     if (data.user && data.user.id !== env.ADMIN_UID) return json(403, { message: "not the admin" });
-    await env.DB.prepare("INSERT INTO login_attempts (at, ip, email, ua, ok) VALUES (?, ?, ?, ?, 1)").bind(now, c.ip, c.email, c.ua).run();
+    if (attemptId != null) await env.DB.prepare("UPDATE login_attempts SET ok = 1 WHERE id = ?").bind(attemptId).run();
     await securityEvent(env, "login_ok", c, null);
-    return json(200, data);
+    // Device-bound session: the refresh token stays here; the browser only gets an HttpOnly id.
+    const id = randomId();
+    await env.DB.prepare("INSERT INTO device_sessions (id, refresh_token, created_at, last_seen, ip, ua, email, label) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
+      .bind(id, data.refresh_token, now, now, c.ip, c.ua, c.email, (c.ua.match(/iPhone|iPad|Android|Windows|Macintosh|Linux/) || ["جهاز"])[0]).run();
+    return new Response(JSON.stringify({ access_token: data.access_token, expires_in: data.expires_in || 3600, token_type: "bearer", user: { id: data.user && data.user.id } }),
+      { status: 200, headers: { "Content-Type": "application/json; charset=utf-8", "Set-Cookie": setCookie(id, false), ...SEC_HEADERS } });
   }
-  await env.DB.prepare("INSERT INTO login_attempts (at, ip, email, ua, ok) VALUES (?, ?, ?, ?, 0)").bind(now, c.ip, c.email, c.ua).run();
-  const n = ((fails && fails.n) || 0) + 1;
   await securityEvent(env, "login_failed", c, `محاولة ${n} من ${LOGIN_FAILS}`);
   if (n >= LOGIN_FAILS) {
     const exp = new Date(Date.now() + BLOCK_HOURS * 3600_000).toISOString();
@@ -194,8 +229,14 @@ export default {
     }
     if (!(await accessOk(req, env))) return new Response("Access required", { status: 403, headers: { "Content-Type": "text/plain; charset=utf-8", ...SEC_HEADERS } });
     // A client that brute-forced the password is refused everything, page included, for 24 h.
-    if (await isBlocked(env, clientOf(req).ip)) return new Response("blocked", { status: 403, headers: { "Content-Type": "text/plain; charset=utf-8", ...SEC_HEADERS } });
+    // If the block list cannot be read the request fails CLOSED.
+    let blocked = false;
+    try { blocked = await isBlocked(env, clientOf(req).ip); } catch (e) { return json(503, { message: "guard unavailable" }); }
+    if (blocked) return new Response("blocked", { status: 403, headers: { "Content-Type": "text/plain; charset=utf-8", ...SEC_HEADERS } });
+    if (p.startsWith("/local/") && limited(clientOf(req).ip)) return json(429, { message: "slow down" });
     if (req.method === "POST" && p === "/local/auth/login") return handleLogin(req, env);
+    if (req.method === "POST" && p === "/local/auth/session") return handleSession(req, env);
+    if (req.method === "POST" && p === "/local/auth/logout") return handleLogout(req, env);
 
     if (req.method === "GET" && (p === "/" || p === "/index.html" || p === "/control-panel.html" || p === "/gen" || p === "/gen/")) {
       const n = nonce();
@@ -203,9 +244,8 @@ export default {
       const html = (p.startsWith("/gen") ? GEN : PAGE).replace(/<script>/g, `<script nonce="${n}">`);
       return new Response(html, { status: 200, headers: { "Content-Type": "text/html; charset=utf-8", "Content-Security-Policy": csp(n), ...SEC_HEADERS } });
     }
-    if (p.startsWith("/local/") && limited(req.headers.get("cf-connecting-ip") || "?")) return json(429, { message: "slow down" });
     if (req.method === "GET" && p === "/local/ping") {
-      return json(200, { local: true, remote: true, store: !!env.STORE_ADMIN_SECRET, tslink: !!env.TSLINK_ADMIN_TOKEN, leo: !!env.LEO_ADMIN_TOKEN, controller: !!env.CONTROLLER_ADMIN_SECRET, codes: !!env.DB, guard: !!env.DB });
+      return json(200, { local: true, remote: true, store: !!env.STORE_ADMIN_SECRET, tslink: !!env.TSLINK_ADMIN_TOKEN, leo: !!env.LEO_ADMIN_TOKEN, controller: !!env.CONTROLLER_ADMIN_SECRET, codes: !!env.DB, guard: !!env.DB, sessions: !!env.DB });
     }
     if (!p.startsWith("/local/")) return json(404, { message: "not found" });
 
@@ -231,7 +271,20 @@ export default {
         const body = await readJsonBody(req); const ip = String(body.ip || "").slice(0, 64);
         if (!ip) return json(400, { message: "ip required" });
         await env.DB.prepare("DELETE FROM blocked_clients WHERE ip = ?").bind(ip).run();
+        await env.DB.prepare("DELETE FROM login_attempts WHERE ip = ? AND ok = 0").bind(ip).run();
         await securityEvent(env, "client_unblocked", clientOf(req), ip);
+        return json(200, { ok: true });
+      }
+      if (env.DB && req.method === "GET" && p === "/local/auth/devices") {
+        const rows = await env.DB.prepare("SELECT id, created_at, last_seen, ip, ua, email, label, revoked FROM device_sessions ORDER BY last_seen DESC LIMIT 50").all();
+        const me = cookieOf(req, DEV_COOKIE);
+        return json(200, { devices: (rows.results || []).map(r => ({ ...r, id: r.id.slice(0, 8), current: r.id === me, full: undefined })) , me: me ? me.slice(0, 8) : null });
+      }
+      if (env.DB && req.method === "POST" && p === "/local/auth/revoke") {
+        const body = await readJsonBody(req); const prefix = String(body.id || "").slice(0, 8);
+        if (!/^[A-Za-z0-9_-]{8}$/.test(prefix)) return json(400, { message: "bad id" });
+        await env.DB.prepare("UPDATE device_sessions SET revoked = 1 WHERE substr(id, 1, 8) = ?").bind(prefix).run();
+        await securityEvent(env, "device_revoked", clientOf(req), prefix);
         return json(200, { ok: true });
       }
       // ---- activation code generator (D1 issued_codes) ----
