@@ -2922,6 +2922,7 @@
         const rows = [];
         if (key === 'wallpapers') state.versions.forEach(v => rows.push({ المصدر: 'app_versions', الإصدار: `${v.version_name} (${v.version_code})`, الملاحظات: v.changelog || '', نُشر: v.created_at, الرابط: v.apk_url }));
         else if (key === 'leo' && state.leo) rows.push({ المصدر: 'latest.json', الإصدار: `${state.leo.versionName} (${state.leo.versionCode})`, الملاحظات: state.leo.notes || '', إلزامي: state.leo.mandatory ? 'نعم' : 'لا', الرابط: state.leo.apkUrl });
+        if (key === 'store') { const lv = latestVersions(); if (lv.store) rows.push({ المصدر: 'كتالوج الستور (تحديث الستور نفسه)', الإصدار: `${lv.store.versionName} (${lv.store.versionCode})`, الملاحظات: lv.store.changelog || lv.store.notes || '', الرابط: lv.store.apkUrl || '' }); }
         const app = APPS.find(a => a.key === key);
         const ca = app && state.catalog ? catalogApp(app.pkg) : null;
         if (ca) rows.push({ المصدر: 'كتالوج الستور', الإصدار: `${ca.versionName} (${ca.versionCode})`, القسم: ca.section || '', السيارات: Array.isArray(ca.cars) ? ca.cars.join(', ') : '', الحجم: ca.sizeBytes ? Math.round(ca.sizeBytes / 1048576) + ' MB' : '', الرابط: ca.apkUrl || ca.url || '' });
