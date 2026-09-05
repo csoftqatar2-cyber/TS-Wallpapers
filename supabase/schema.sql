@@ -851,14 +851,20 @@ declare
 begin
     if device_ping.device_hw_id is null or btrim(device_ping.device_hw_id) = '' then return; end if;
     hw := public.resolve_device_id(device_ping.device_hw_id);
-    if not exists (select 1 from public.devices where hardware_id = hw) then return; end if;
-    insert into public.device_app_seen (hardware_id, app_id, app_version_code, app_version)
+    if not exists (select 1 from public.devices dv where dv.hardware_id = hw) then return; end if;
+    insert into public.device_app_seen as a (hardware_id, app_id, app_version_code, app_version)
     values (hw, left(v_app, 32), v_vc, left(v_ver, 40))
-    on conflict (hardware_id, app_id) do update
+    on conflict on constraint device_app_seen_pkey do update
        set last_seen        = now(),
-           pings            = public.device_app_seen.pings + 1,
-           app_version_code = coalesce(excluded.app_version_code, public.device_app_seen.app_version_code),
-           app_version      = coalesce(excluded.app_version,      public.device_app_seen.app_version);
+           pings            = a.pings + 1,
+           app_version_code = coalesce(excluded.app_version_code, a.app_version_code),
+           app_version      = coalesce(excluded.app_version,      a.app_version);
+    -- Opens per day (2026-09-05): the owner wants "how many times a day" per program.
+    insert into public.device_app_daily as dd (hardware_id, app_id, day, opens, app_version_code)
+    values (hw, left(v_app, 32), (now() at time zone 'Asia/Qatar')::date, 1, v_vc)
+    on conflict on constraint device_app_daily_pkey do update
+       set opens = dd.opens + 1,
+           app_version_code = coalesce(excluded.app_version_code, dd.app_version_code);
 end $function$;
 revoke all on function public.device_ping(text, text, int, text) from public;
 grant execute on function public.device_ping(text, text, int, text) to anon, authenticated;
@@ -1268,3 +1274,24 @@ select a.app_id,
  group by a.app_id;
 revoke all on public.token_adoption from public, anon;
 grant select on public.token_adoption to authenticated;
+
+-- 20260916_device_app_daily_realtime.sql
+create table if not exists public.device_app_daily (
+    hardware_id text not null references public.devices(hardware_id) on update cascade on delete cascade,
+    app_id      text not null,
+    day         date not null,
+    opens       int  not null default 1,
+    app_version_code int,
+    primary key (hardware_id, app_id, day)
+);
+create index if not exists device_app_daily_app_day_idx on public.device_app_daily (app_id, day desc);
+alter table public.device_app_daily enable row level security;
+drop policy if exists "daily admin read" on public.device_app_daily;
+create policy "daily admin read" on public.device_app_daily for select to authenticated using (auth.uid() = '5b8e1336-ce54-4dd9-bd23-243158c178fe'::uuid);
+grant select on public.device_app_daily to authenticated;
+revoke all on public.device_app_daily from anon;
+
+alter publication supabase_realtime add table public.devices;
+alter publication supabase_realtime add table public.device_block_events;
+alter publication supabase_realtime add table public.device_tokens;
+alter publication supabase_realtime add table public.device_app_seen;
