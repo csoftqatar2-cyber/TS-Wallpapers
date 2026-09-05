@@ -2939,7 +2939,7 @@
     restructureTabs();
     updateNotificationToggle();
     // Direct entry for the car: https://<site>/gen (or #gen) lands on the generator immediately.
-    const wantsGen = /^\/gen/.test(location.pathname) || location.hash === '#gen';
+    const wantsGen = location.pathname.replace(/\/+$/, '') === '/gen' || location.hash === '#gen' || new URLSearchParams(location.search).has('gen');
     switchTab(wantsGen ? 'generator' : 'devices');
     if (wantsGen) window.scrollTo(0, 0);
     document.addEventListener('click', e => { if (e.target.closest('#gen-open')) { switchTab('generator'); const c = $('tabs'); if (c) c.scrollIntoView({ behavior: 'smooth', block: 'start' }); } });
