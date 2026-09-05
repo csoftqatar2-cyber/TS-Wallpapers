@@ -546,8 +546,8 @@
             <!-- ---- Per-app usage ---- -->
             <section class="tab-panel" id="panel-wallpapers" role="tabpanel">
                 <div class="toolbar wp-types" role="group" aria-label="نوع المحتوى">
-                    <button class="type-toggle on" id="wp-type-image" type="button" data-type="image" aria-pressed="true" title="الصور" aria-label="الصور"><i class="fa-solid fa-image"></i></button>
-                    <button class="type-toggle on" id="wp-type-video" type="button" data-type="video" aria-pressed="true" title="الفيديو" aria-label="الفيديو"><i class="fa-solid fa-video"></i></button>
+                    <button class="type-toggle" id="wp-type-image" type="button" data-type="image" aria-pressed="false" title="الصور فقط" aria-label="الصور فقط"><i class="fa-solid fa-image"></i></button>
+                    <button class="type-toggle" id="wp-type-video" type="button" data-type="video" aria-pressed="false" title="الفيديو فقط" aria-label="الفيديو فقط"><i class="fa-solid fa-video"></i></button>
                 </div>
                 <div class="toolbar"><button class="btn" id="wp-refresh" type="button"><i class="fa-solid fa-rotate"></i> تحديث المكتبة</button><button class="btn" id="wp-global" type="button">العامة</button><button class="btn" id="wp-private" type="button">الصور حسب السيارة</button><a class="btn" id="wp-old-manager" target="_blank" rel="noopener noreferrer" hidden>فتح مدير الخلفيات القديم</a><span class="note" id="wp-cache-note">تُحمّل المكتبة عند فتح التبويب فقط</span></div>
                 <div id="wp-error" role="alert"></div><div class="stats-grid" id="wp-stats"></div>
@@ -3111,13 +3111,14 @@
         renderWallpapersGrid(); renderGlobalError();
         if ($('wp-private-dialog').open) renderPrivateModal();
     }
-    const wpTypes = { image: true, video: true };   // both on at every open; never persisted
+    // Owner's semantics: nothing lit = everything shown; exactly one lit = that type only; both lit = everything.
+    const wpTypes = { image: false, video: false };
     function wallpaperIsVideo(w) { const f = wallpaperFilename(w.url).toLowerCase(); return w.type === 'video' || WP_VIDEO_EXTS.some(ext => f.endsWith(ext)); }
     function filteredWallpapers() {
         const q = $('wp-search').value.trim().toLowerCase(), filter = $('wp-filter').value, mode = $('wp-mode-filter').value;
         return state.wallpapers.filter(w => {
             const channel = w.channel || 'app';
-            if (!(wallpaperIsVideo(w) ? wpTypes.video : wpTypes.image)) return false;
+            if (wpTypes.image !== wpTypes.video && (wallpaperIsVideo(w) ? !wpTypes.video : !wpTypes.image)) return false;
             if ((filter === 'global' || filter === 'private') && (channel !== 'app' || Boolean(w.is_global) !== (filter === 'global'))) return false;
             if (WP_FOLDER_CHANNELS[filter] && channel !== filter) return false;
             if (mode && wallpaperMode(w) !== mode) return false;
