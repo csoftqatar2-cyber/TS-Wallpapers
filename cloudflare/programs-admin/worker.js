@@ -339,8 +339,9 @@ export default {
         const sub = p.slice("/local/tslink".length) || "/overview";
         if (!TSLINK_GET_ALLOW.test(sub)) return json(404, { message: "path not allowed" });
         if (!env.TSLINK_ADMIN_TOKEN) return json(503, { message: "ts-link token not configured" });
-        const f = env.TSLINK_SVC ? env.TSLINK_SVC.fetch.bind(env.TSLINK_SVC) : fetch;
-        return passthrough(await f(`${TSLINK_ADMIN_BASE}${sub}${url.search}`, { headers: { Authorization: `Bearer ${env.TSLINK_ADMIN_TOKEN}` }, cache: "no-store" }));
+        if (!env.TSLINK_SVC) return json(503, { message: "tslink service binding missing" });
+        const upstream = await env.TSLINK_SVC.fetch(new Request(`${TSLINK_ADMIN_BASE}${sub}${url.search}`, { method: "GET", headers: { Authorization: `Bearer ${env.TSLINK_ADMIN_TOKEN}`, Accept: "application/json" } }));
+        return passthrough(upstream);
       }
       if (req.method === "GET" && p.startsWith("/local/leo")) {
         const sub = p.slice("/local/leo".length);
