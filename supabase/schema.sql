@@ -48,7 +48,7 @@ create table if not exists public.devices (
     -- Operating mode the device last reported
     -- (normal | fse | leopard | gwm | lynkco | jetour).
     -- null = an older APK that does not report yet. Set via report_device_mode RPC.
-    mode          text check (mode is null or mode in ('normal','fse','leopard','gwm','lynkco','jetour')),
+    mode          text check (mode is null or mode in ('normal','fse','leopard','gwm','lynkco','jetour','denza')),
     -- Fleet telemetry, all written by report_device_mode (added 2026-07-29).
     app_version      text,
     app_version_code int,
@@ -71,7 +71,7 @@ create table if not exists public.wallpapers (
     -- When set, this wallpaper only reaches cars whose last reported mode matches
     -- (e.g. 'lynkco' + is_global = "every Lynk & Co car"). null = the normal
     -- library that syncs to every car. See get_wallpapers.
-    target_mode text check (target_mode is null or target_mode in ('normal','fse','leopard','gwm','lynkco','jetour')),
+    target_mode text check (target_mode is null or target_mode in ('normal','fse','leopard','gwm','lynkco','jetour','denza')),
     -- Delivery channel. 'app' = shown by our own slideshow. The others are NOT shown
     -- by us at all: the car downloads them into a folder the head unit's own app
     -- reads — 'gwm_split' into /sdcard/Pictures/GWMSplit_Styles (the same folder the
@@ -540,7 +540,7 @@ begin
 
     update public.devices
        set mode             = case
-                                when device_mode in ('normal','fse','leopard','gwm','lynkco','jetour')
+                                when device_mode in ('normal','fse','leopard','gwm','lynkco','jetour','denza')
                                 then device_mode else mode end,
            app_version      = coalesce(report_device_mode.app_version, devices.app_version),
            app_version_code = coalesce(report_device_mode.app_version_code, devices.app_version_code),
