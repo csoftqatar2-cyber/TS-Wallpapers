@@ -1059,10 +1059,21 @@
         return res.json();
     }
     // POST /rest/v1/rpc/<name> with the admin session (the only write channel besides rename)
+    // Writes never carry the write key from here: the runner / site Worker adds it after checking the session.
+    const viaWorkerWrites = () => LOCAL_PROXY && !!LOCAL_FLAGS.writes;
+    async function restWrite(method, path, body, prefer = 'return=minimal') {
+        if (viaWorkerWrites()) {
+            const res = await fetch('/local/write/rest', { method: 'POST', headers: localHeaders({ 'Content-Type': 'application/json' }), body: JSON.stringify({ method, path, body, prefer }) });
+            return res;
+        }
+        const init = { method, headers: authHeaders({ 'Content-Type': 'application/json', 'Prefer': prefer }) };
+        if (body !== undefined && method !== 'DELETE') init.body = JSON.stringify(body);
+        return fetch(`${REST}/${path}`, init);
+    }
     async function rpcAdmin(name, body) {
-        const res = await fetch(`${REST}/rpc/${name}`, {
-            method: "POST", headers: authHeaders({ "Content-Type": "application/json" }), body: JSON.stringify(body || {})
-        });
+        const res = viaWorkerWrites()
+            ? await fetch(`/local/write/rpc/${encodeURIComponent(name)}`, { method: "POST", headers: localHeaders({ "Content-Type": "application/json" }), body: JSON.stringify(body || {}) })
+            : await fetch(`${REST}/rpc/${name}`, { method: "POST", headers: authHeaders({ "Content-Type": "application/json" }), body: JSON.stringify(body || {}) });
         if (!res.ok) throw await parseErr(res);
         const txt = await res.text();
         return txt ? JSON.parse(txt) : null;
@@ -1588,11 +1599,7 @@
         const ok = await confirmDialog({ title: 'تأكيد التسمية', html: `<b>${esc(trimmed || '(فارغ — مسح الاسم)')}</b><br><small style="opacity:.7;direction:ltr;display:inline-block">${esc(r.hw)}</small>`, confirmText: 'حفظ' });
         if (!ok) return;
         try {
-            const res = await fetch(`${REST}/devices?hardware_id=eq.${encodeURIComponent(r.hw)}`, {
-                method: 'PATCH',
-                headers: authHeaders({ 'Content-Type': 'application/json', 'Prefer': 'return=representation' }),
-                body: JSON.stringify({ client_name: trimmed || null })
-            });
+            const res = await restWrite('PATCH', `devices?hardware_id=eq.${encodeURIComponent(r.hw)}`, { client_name: trimmed || null }, 'return=representation');
             if (!res.ok) throw await parseErr(res);
             const rows = await res.json();
             if (!rows || !rows.length) throw new Error('لم يُحدَّث أي صف (تحقق من الصلاحيات)');
@@ -1983,11 +1990,14 @@
     function renderVoice() {
         setErr('voice-err', state.errors.voice ? `admin_settings: ${state.errors.voice}` : '');
         const drafts = new Map([...document.querySelectorAll('.voice-input')].map(el => [el.dataset.key, el.value]));
-        const list = [...state.voice].sort((a, b) => String(a.key).localeCompare(String(b.key)));
+        const hintRow = state.voice.find(r => r.key === 'voice.openrouter_key_hint');
+        let list = state.voice.filter(r => r.key !== 'voice.openrouter_key_hint');
+        if (!list.some(r => r.key === 'voice.openrouter_key') && state.voice.length) list.push({ key: 'voice.openrouter_key', value: null, hint: hintRow ? hintRow.value : '', updated_at: hintRow ? hintRow.updated_at : null });
+        list = list.sort((a, b) => String(a.key).localeCompare(String(b.key)));
         if (!list.length) { $('voice-body').innerHTML = `<tr><td colspan="5"><div class="empty"><i class="fa-solid fa-microphone-lines"></i>لا صفوف voice.* (أو لا صلاحية قراءة)</div></td></tr>`; return; }
         $('voice-body').innerHTML = list.map(r => {
             const secret = isSecretKey(r.key);
-            const cur = secret ? maskSecret(r.value) : `<span class="num" style="direction:ltr;display:inline-block">${esc(r.value == null ? '' : r.value)}</span>`;
+            const cur = secret ? (r.hint != null ? (r.hint ? `<span class="num" style="direction:ltr;display:inline-block">${esc(r.hint)}</span> <span class="sub">القيمة لا تُقرأ من المتصفح</span>` : '<span class="sub">(فارغ)</span>') : maskSecret(r.value)) : `<span class="num" style="direction:ltr;display:inline-block">${esc(r.value == null ? '' : r.value)}</span>`;
             return `<tr data-key="${esc(r.key)}">
                 <td><span class="name" style="font-size:.9rem">${esc(VOICE_LABELS[r.key] || r.key)}</span><span class="hw">${esc(r.key)}</span></td>
                 <td>${cur}</td>
@@ -2010,11 +2020,7 @@
         const ok = await confirmDialog({ title: `حفظ ${esc(VOICE_LABELS[key] || key)}`, html: `<b style="direction:ltr;display:inline-block">${shown}</b><br><small style="opacity:.7">يستبدل القيمة الحالية كاملة؛ الـ Worker يلتقطها خلال دقيقة.</small>`, confirmText: 'حفظ' });
         if (!ok) return;
         try {
-            const res = await fetch(`${REST}/admin_settings?key=eq.${encodeURIComponent(key)}`, {
-                method: 'PATCH',
-                headers: authHeaders({ 'Content-Type': 'application/json', 'Prefer': 'return=representation' }),
-                body: JSON.stringify({ value: secret ? value : value.trim(), updated_at: new Date().toISOString() })
-            });
+            const res = await restWrite('PATCH', `admin_settings?key=eq.${encodeURIComponent(key)}`, { value: secret ? value : value.trim(), updated_at: new Date().toISOString() }, 'return=representation');
             if (!res.ok) throw await parseErr(res);
             const rows = await res.json();
             if (!rows || !rows.length) throw new Error('لم يُحدَّث أي صف (تحقق من الصلاحيات)');
@@ -3160,7 +3166,7 @@
         ensureWallpaperSession(epoch);
         return new Promise((resolve,reject)=>{
             const xhr=new XMLHttpRequest(); wpManager.requests.add(xhr);
-            xhr.open('POST',R2_UPLOAD_URL);
+            xhr.open('POST', viaWorkerWrites() ? '/local/write/upload' : R2_UPLOAD_URL);
             xhr.setRequestHeader('Authorization',`Bearer ${SESSION_TOKEN}`);
             xhr.setRequestHeader('Content-Type',apk?'application/vnd.android.package-archive':file.type||'application/octet-stream');
             xhr.setRequestHeader('x-file-name',encodeURIComponent(filename));
@@ -3182,7 +3188,7 @@
     async function wallpaperWrite(table, method, query, body, representation=false, epoch=sessionEpoch) {
         ensureWallpaperSession(epoch);
         if(!['wallpapers','wallpaper_hides','app_versions'].includes(table)||!['POST','DELETE'].includes(method)||(table==='app_versions'&&method!=='POST')) throw new Error('عملية محتوى غير مسموحة');
-        const res=await fetch(`${REST}/${table}${query?'?'+query:''}`,{method,headers:authHeaders({'Content-Type':'application/json','Prefer':representation?'return=representation':'return=minimal'}),...(body===undefined?{}:{body:JSON.stringify(body)})});
+        const res=await restWrite(method, `${table}${query?'?'+query:''}`, body, representation?'return=representation':'return=minimal');
         if(!res.ok) throw await parseErr(res);
         ensureWallpaperSession(epoch);
         return representation?res.json():null;
@@ -3275,7 +3281,7 @@
             let warning='';
             try{
                 ensureWallpaperSession(epoch);
-                const res=await fetch(R2_UPLOAD_URL,{method:'DELETE',headers:{'Authorization':`Bearer ${SESSION_TOKEN}`,'x-file-name':encodeURIComponent(filename)}});
+                const res=await fetch(viaWorkerWrites() ? '/local/write/upload' : R2_UPLOAD_URL,{method:'DELETE',headers:{'Authorization':`Bearer ${SESSION_TOKEN}`,'x-file-name':encodeURIComponent(filename)}});
                 if(!res.ok)warning='تعذّر حذف ملف R2؛ حُذفت الصفوف ولن تظهر الخلفية للمستخدمين.';
             }catch(e){warning='تعذّر حذف ملف R2؛ حُذفت الصفوف ولن تظهر الخلفية للمستخدمين.';}
             if(epoch===sessionEpoch){toast(warning?'warning':'success',warning||'تم حذف الخلفية ونسخها');}

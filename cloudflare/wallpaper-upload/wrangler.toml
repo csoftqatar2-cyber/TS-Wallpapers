@@ -1,0 +1,10 @@
+name = "ts-wallpapers-upload"
+main = "worker.js"
+compatibility_date = "2026-08-01"
+workers_dev = true
+
+[[r2_buckets]]
+binding = "BUCKET"
+bucket_name = "ts-wallpapers"
+
+# Secret: WRITE_KEY (wrangler secret put) — same value as the admin Worker's PANEL_WRITE_KEY.

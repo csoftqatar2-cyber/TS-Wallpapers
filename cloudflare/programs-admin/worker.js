@@ -245,7 +245,7 @@ export default {
       return new Response(html, { status: 200, headers: { "Content-Type": "text/html; charset=utf-8", "Content-Security-Policy": csp(n), ...SEC_HEADERS } });
     }
     if (req.method === "GET" && p === "/local/ping") {
-      return json(200, { local: true, remote: true, store: !!env.STORE_ADMIN_SECRET, tslink: !!env.TSLINK_ADMIN_TOKEN, leo: !!env.LEO_ADMIN_TOKEN, controller: !!env.CONTROLLER_ADMIN_SECRET, codes: !!env.DB, guard: !!env.DB, sessions: !!env.DB });
+      return json(200, { local: true, remote: true, store: !!env.STORE_ADMIN_SECRET, tslink: !!env.TSLINK_ADMIN_TOKEN, leo: !!env.LEO_ADMIN_TOKEN, controller: !!env.CONTROLLER_ADMIN_SECRET, codes: !!env.DB, guard: !!env.DB, sessions: !!env.DB, writes: !!env.PANEL_WRITE_KEY });
     }
     if (!p.startsWith("/local/")) return json(404, { message: "not found" });
 
@@ -257,6 +257,39 @@ export default {
     if (!(await isAdmin(req, env))) return json(401, { message: "admin session required" });
 
     try {
+      // ---- writes: the browser never holds the write key; every write is allow-listed here ----
+      if (env.PANEL_WRITE_KEY && req.method === "POST" && p.startsWith("/local/write/rpc/")) {
+        const name = p.slice("/local/write/rpc/".length);
+        if (!/^admin_set_device_block_all$/.test(name)) return json(404, { message: "rpc not allowed" });
+        const body = await readJsonBody(req);
+        return passthrough(await fetch(`${env.SUPABASE_URL}/rest/v1/rpc/${name}`, {
+          method: "POST", headers: { "Content-Type": "application/json", apikey: env.SUPABASE_ANON, Authorization: req.headers.get("Authorization"), "x-write-key": env.PANEL_WRITE_KEY },
+          body: JSON.stringify(body),
+        }));
+      }
+      if (env.PANEL_WRITE_KEY && req.method === "POST" && p === "/local/write/rest") {
+        const w = await readJsonBody(req);
+        const method = String(w.method || "").toUpperCase(), path = String(w.path || ""), prefer = String(w.prefer || "return=minimal");
+        const keys = w.body && typeof w.body === "object" && !Array.isArray(w.body) ? Object.keys(w.body) : [];
+        const ok =
+          (method === "PATCH" && /^devices\?hardware_id=eq\.[^&]+$/.test(path) && keys.every(k => k === "client_name")) ||
+          (method === "PATCH" && /^admin_settings\?key=eq\.voice\.[a-z_]+$/.test(path) && keys.every(k => ["value", "updated_at"].includes(k))) ||
+          (["POST", "DELETE"].includes(method) && /^(wallpapers|wallpaper_hides)(\?.*)?$/.test(path)) ||
+          (method === "POST" && /^app_versions(\?.*)?$/.test(path));
+        if (!ok) return json(404, { message: "write not allowed" });
+        if (!/^return=(minimal|representation)$/.test(prefer)) return json(400, { message: "bad prefer" });
+        const init = { method, headers: { "Content-Type": "application/json", apikey: env.SUPABASE_ANON, Authorization: req.headers.get("Authorization"), "x-write-key": env.PANEL_WRITE_KEY, Prefer: prefer } };
+        if (w.body !== undefined && method !== "DELETE") init.body = JSON.stringify(w.body);
+        return passthrough(await fetch(`${env.SUPABASE_URL}/rest/v1/${path}`, init));
+      }
+      if (env.PANEL_WRITE_KEY && (req.method === "POST" || req.method === "DELETE") && p === "/local/write/upload") {
+        if (!env.UPLOAD_SVC) return json(503, { message: "upload service binding missing" });
+        const h = new Headers();
+        for (const k of ["authorization", "content-type", "x-file-name", "x-prefix"]) { const v = req.headers.get(k); if (v) h.set(k, v); }
+        h.set("x-write-key", env.PANEL_WRITE_KEY);
+        const upstream = await env.UPLOAD_SVC.fetch(new Request("https://ts-wallpapers-upload.tsdash-qatar.workers.dev/", { method: req.method, headers: h, body: req.method === "POST" ? req.body : undefined }));
+        return passthrough(upstream);
+      }
       // ---- security: events for the panel's notifications, blocked list, unblock ----
       if (env.DB && req.method === "GET" && p === "/local/security/events") {
         const since = url.searchParams.get("since") || new Date(Date.now() - 86400_000).toISOString();

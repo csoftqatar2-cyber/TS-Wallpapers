@@ -41,3 +41,7 @@ service = "tslink-bot"
 [[services]]
 binding = "LEO_SVC"
 service = "tsleo-checkin"
+
+[[services]]
+binding = "UPLOAD_SVC"
+service = "ts-wallpapers-upload"
