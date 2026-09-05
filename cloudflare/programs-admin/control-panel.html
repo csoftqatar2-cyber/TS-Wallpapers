@@ -20,11 +20,10 @@
         الكتابة المسموحة: حظر/فك حظر موحّد (admin_set_device_block_all)، تسمية الجهاز (client_name)،
         وإعدادات الأوامر الصوتية (admin_settings.voice.* — جلسة الأدمن فقط).
     -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800&family=Rajdhani:wght@500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" integrity="sha384-iw3OoTErCYJJB9mCa8LNS2hbsQ7M3C0EpIsO/H5+EGAkPGc6rk+V8i04oW/K5xq0" crossorigin="anonymous">
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/limonte-sweetalert2/11.10.5/sweetalert2.all.min.js" integrity="sha384-F8SYeBSrTVPFojwQeAD1UQo0dI5CKJOzc992kU0M/q72tnFcDlxHwbkiw8GLrXd8" crossorigin="anonymous"></script>
+    <!-- Vendor files are served by the site itself (cloudflare/programs-admin/public/vendor) — no CDN in the CSP. -->
+    <link href="/vendor/fonts.css" rel="stylesheet">
+    <link rel="stylesheet" href="/vendor/fa-6.4.0.all.min.css">
+    <script src="/vendor/sweetalert2-11.10.5.all.min.js"></script>
 
     <style>
         :root {
@@ -824,7 +823,7 @@
 
     <dialog id="wp-private-dialog" class="wp-dialog" aria-labelledby="wp-private-title"><div class="toolbar"><h3 id="wp-private-title">الصور المخصصة حسب السيارة</h3><button class="btn" type="button" data-wp-close="wp-private-dialog">إغلاق</button></div><input type="search" id="wp-private-search" placeholder="بحث باسم السيارة أو الملف أو المعرّف" aria-label="بحث الصور الخاصة"><div id="wp-private-body"></div></dialog>
     <dialog id="wp-target-dialog" class="wp-dialog" aria-labelledby="wp-target-title"><div class="toolbar"><h3 id="wp-target-title">تخصيص الخلفية</h3><button class="btn" type="button" data-wp-close="wp-target-dialog">إغلاق</button></div><p class="note" id="wp-target-note"></p><input type="search" id="wp-dialog-search" aria-label="بحث السيارات" placeholder="اسم السيارة أو الكود أو المعرّف"><div id="wp-dialog-cars" class="wp-car-list"></div><div id="wp-dialog-error" role="alert"></div><div class="toolbar"><button class="btn primary" id="wp-target-save" type="button">حفظ</button></div></dialog>
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.115.0/dist/umd/supabase.js" integrity="sha384-CLZeq1dk8+Uzrs7TVvBUdlFoV5F0DMqgRoeHa8g5wJcuPe5SkVfEvdxB0ZuzlnBQ" crossorigin="anonymous"></script>
+    <script src="/vendor/supabase-2.115.0.js"></script>
     <script>
     // =====================================================================
     //  الثوابت

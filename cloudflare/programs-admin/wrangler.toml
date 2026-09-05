@@ -3,6 +3,13 @@ main = "worker.js"
 compatibility_date = "2026-08-01"
 workers_dev = true
 
+# Vendor scripts/fonts under ./public/vendor — the Worker runs first (Access, headers) and hands
+# /vendor/* to the assets binding itself.
+[assets]
+directory = "./public"
+binding = "ASSETS"
+run_worker_first = true
+
 # The page is bundled into the Worker as text; copy the latest panel here before deploying
 # (deploy.cmd does it). It carries only the public Supabase anon key.
 [[rules]]

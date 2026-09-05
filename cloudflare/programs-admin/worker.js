@@ -42,9 +42,9 @@ const SEC_HEADERS = {
 function csp(nonce) {
   return [
     "default-src 'self'",
-    `script-src 'self' 'nonce-${nonce}' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com`,
-    "style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://fonts.googleapis.com",
-    "font-src 'self' https://fonts.gstatic.com https://cdnjs.cloudflare.com",
+    `script-src 'self' 'nonce-${nonce}'`,          // vendor JS is served from /vendor (Static Assets), no CDN
+    "style-src 'self' 'unsafe-inline'",
+    "font-src 'self'",
     "img-src 'self' data: blob: https://*.r2.dev",
     "media-src 'self' blob: https://*.r2.dev",
     "connect-src 'self' https://ihgmqwzdpugdzddobhbc.supabase.co wss://ihgmqwzdpugdzddobhbc.supabase.co https://ts-wallpapers-upload.tsdash-qatar.workers.dev https://*.r2.dev",
@@ -241,6 +241,15 @@ export default {
     const p = url.pathname;
     // Home-screen icon + manifest: public, cacheable, and outside Access (installers fetch them cookie-less).
     const icons = { "/icon-180.png": ICON180, "/icon-192.png": ICON192, "/icon-512.png": ICON512, "/apple-touch-icon.png": ICON180, "/favicon.ico": ICON192 };
+    // Self-hosted vendor files (supabase-js, SweetAlert2, Font Awesome, the two Google fonts) from
+    // ./public via Static Assets. Public like the icons: nothing secret, and the browser fetches
+    // them with the Access cookie anyway. Cached a day; the file names carry their version.
+    if (req.method === "GET" && p.startsWith("/vendor/") && env.ASSETS) {
+      const a = await env.ASSETS.fetch(new Request(url.origin + p, { method: "GET" }));
+      if (a.status !== 200) return a;
+      const h = new Headers(a.headers); h.set("Cache-Control", "public, max-age=86400"); h.set("X-Content-Type-Options", "nosniff");
+      return new Response(a.body, { status: 200, headers: h });
+    }
     if (req.method === "GET" && icons[p]) return new Response(icons[p], { status: 200, headers: { "Content-Type": "image/png", "Cache-Control": "public, max-age=600" } });
     if (req.method === "GET" && p === "/manifest.webmanifest") {
       return new Response(JSON.stringify({ name: "Thabthaba Programs Admin", short_name: "Thabthaba", start_url: "/gen", display: "standalone", background_color: "#211a12", theme_color: "#211a12", dir: "rtl", lang: "ar",
