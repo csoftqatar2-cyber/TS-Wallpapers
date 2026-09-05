@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <title>المولّد — Thabthaba</title>
+    <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="/icon-180.png">
+    <link rel="manifest" href="/manifest.webmanifest">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-title" content="المولّد">
+    <meta name="theme-color" content="#211a12">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@500;700;800&display=swap" rel="stylesheet">
+    <style>
+        :root { --bg:#1a130c; --panel:#211a12; --border:rgba(255,255,255,.08); --text:#f3ede4; --muted:#a89a88; --primary:#f59e0b; --accent:#fbbf24; --ok:#22c55e; --warn:#fbbf24; --bad:#ef4444; }
+        * { box-sizing:border-box; }
+        html, body { height:100%; }
+        body { margin:0; background:radial-gradient(1200px 600px at 50% -10%, #3a2a14 0%, var(--bg) 60%); color:var(--text); font-family:'Cairo', system-ui, sans-serif; display:flex; flex-direction:column; min-height:100vh; }
+        header { display:flex; align-items:center; justify-content:space-between; padding:14px 16px; gap:10px; }
+        .brand { display:flex; align-items:center; gap:10px; font-weight:800; font-size:1.05rem; }
+        .brand img { width:36px; height:36px; border-radius:8px; }
+        .conn { font-size:.8rem; font-weight:700; padding:3px 12px; border-radius:12px; border:1px solid transparent; }
+        .conn.ok { color:var(--ok); background:rgba(34,197,94,.12); border-color:rgba(34,197,94,.3); }
+        .conn.warn { color:var(--warn); background:rgba(251,191,36,.12); border-color:rgba(251,191,36,.3); }
+        .conn.muted { color:var(--muted); background:rgba(255,255,255,.04); border-color:var(--border); }
+        main { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:16px; gap:18px; text-align:center; }
+        .btn { font:inherit; font-weight:800; font-size:1.35rem; color:#1a1006; background:linear-gradient(135deg, var(--primary), var(--accent)); border:0; border-radius:18px; padding:22px 34px; min-height:72px; min-width:min(92vw, 360px); cursor:pointer; box-shadow:0 14px 34px -14px rgba(245,158,11,.7); }
+        .btn:disabled { opacity:.55; cursor:default; }
+        .btn.secondary { background:rgba(255,255,255,.06); color:var(--text); border:1px solid var(--border); font-size:1rem; min-height:48px; padding:12px 20px; box-shadow:none; }
+        #code { font-family:'Cairo', ui-monospace, monospace; font-size:clamp(2.6rem, 12vw, 4.2rem); font-weight:800; letter-spacing:.16em; direction:ltr; user-select:all; line-height:1.1; }
+        #timer { font-size:1.6rem; font-weight:700; direction:ltr; color:var(--warn); }
+        #status { font-size:1.05rem; min-height:1.6em; }
+        .badge { display:inline-block; padding:4px 12px; border-radius:10px; font-size:.95rem; font-weight:700; border:1px solid var(--border); }
+        .badge.ok { color:var(--ok); border-color:rgba(34,197,94,.35); background:rgba(34,197,94,.1); }
+        .badge.warn { color:var(--warn); border-color:rgba(251,191,36,.35); background:rgba(251,191,36,.1); }
+        .badge.bad { color:var(--bad); border-color:rgba(239,68,68,.35); background:rgba(239,68,68,.1); }
+        .vin { direction:ltr; display:inline-block; font-family:ui-monospace, monospace; font-size:1.05rem; margin-top:6px; word-break:break-all; }
+        #login { display:flex; flex-direction:column; gap:12px; width:min(92vw, 360px); }
+        #login input { font:inherit; font-size:1.1rem; padding:14px; border-radius:14px; border:1px solid var(--border); background:rgba(0,0,0,.25); color:var(--text); text-align:center; }
+        .err { color:var(--bad); font-size:.95rem; min-height:1.4em; }
+        footer { padding:12px; text-align:center; color:var(--muted); font-size:.8rem; }
+        footer a { color:var(--accent); text-decoration:none; }
+        [hidden] { display:none !important; }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="brand"><img src="/icon-192.png" alt=""> المولّد</div>
+        <span id="conn" class="conn muted" role="status">غير متصل</span>
+    </header>
+    <main>
+        <form id="login" hidden autocomplete="off">
+            <div style="color:var(--muted)">admin@tswallpapers.app</div>
+            <input type="password" id="pw" placeholder="كلمة مرور الأدمن" autocomplete="current-password" required>
+            <button class="btn secondary" type="submit">دخول</button>
+            <div class="err" id="login-err"></div>
+        </form>
+        <div id="app" hidden>
+            <button class="btn" id="gen" type="button">إصدار كود تفعيل</button>
+            <div id="wrap" hidden style="margin-top:22px;display:flex;flex-direction:column;gap:10px;align-items:center;">
+                <div id="code"></div>
+                <div id="timer">10:00</div>
+                <div id="status"></div>
+                <button class="btn secondary" id="copy" type="button">نسخ الكود</button>
+            </div>
+            <div class="err" id="err"></div>
+        </div>
+    </main>
+    <footer><a href="/">اللوحة الكاملة</a></footer>
+<script>
+(() => {
+    const SUPABASE_URL = "https://ihgmqwzdpugdzddobhbc.supabase.co";
+    const ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImloZ21xd3pkcHVnZHpkZG9iaGJjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI2NTI4ODAsImV4cCI6MjA5ODIyODg4MH0.xG0ch3u5rcbb81pSa8wmybeEYj8kz2LjCGQM_-Xg6Yk";
+    const AUTH_URL = SUPABASE_URL + "/auth/v1";
+    const SESSION_KEY = "ts_cp_session";          // same key as the full panel: one login serves both
+    const ADMIN_EMAIL = "admin@tswallpapers.app";
+    const $ = id => document.getElementById(id);
+    let TOKEN = null, REFRESH = null, refreshTimer = null;
+    const gen = { serial: null, expiresAt: 0, tick: null, poll: null, done: false };
+
+    function conn(state, title) { const el = $('conn'); el.className = 'conn ' + state; el.textContent = state === 'muted' ? 'غير متصل' : 'متصل'; el.title = title || ''; }
+    function applySession(d) {
+        TOKEN = d.access_token; REFRESH = d.refresh_token || REFRESH;
+        try { localStorage.setItem(SESSION_KEY, REFRESH); localStorage.setItem('session:lastActive', String(Date.now())); } catch (e) {}
+        clearTimeout(refreshTimer); refreshTimer = setTimeout(refreshSession, Math.max(60, (d.expires_in || 3600) - 120) * 1000);
+        $('login').hidden = true; $('app').hidden = false; conn('ok', 'متصل');
+    }
+    async function refreshSession() {
+        let rt = REFRESH; try { rt = rt || localStorage.getItem(SESSION_KEY); } catch (e) {}
+        if (!rt) return false;
+        try {
+            const res = await fetch(`${AUTH_URL}/token?grant_type=refresh_token`, { method: 'POST', headers: { apikey: ANON_KEY, 'Content-Type': 'application/json' }, body: JSON.stringify({ refresh_token: rt }) });
+            if (!res.ok) throw new Error('refresh failed');
+            applySession(await res.json()); return true;
+        } catch (e) { conn('warn', 'تعذّر تجديد الجلسة'); return false; }
+    }
+    async function login(pw) {
+        const res = await fetch('/local/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ password: pw }) });
+        const data = await res.json().catch(() => ({}));
+        if (res.status === 403) throw new Error('تم حظر هذا الجهاز بعد محاولات خاطئة');
+        if (!res.ok) throw new Error('كلمة المرور غير صحيحة' + (data.attempts_left != null ? ` (متبقٍ ${data.attempts_left})` : ''));
+        applySession(data);
+    }
+    async function api(path, body) {
+        const res = await fetch(path, { method: body ? 'POST' : 'GET', headers: Object.assign({ Authorization: `Bearer ${TOKEN}` }, body ? { 'Content-Type': 'application/json' } : {}), body: body ? JSON.stringify(body) : undefined, cache: 'no-store' });
+        const txt = await res.text();
+        if (res.status === 401) { const ok = await refreshSession(); if (ok) return api(path, body); throw new Error('انتهت الجلسة — سجّل الدخول'); }
+        if (!res.ok) { let m = ''; try { m = JSON.parse(txt).message || ''; } catch (e) { m = txt; } conn('warn', m); throw new Error(m || `HTTP ${res.status}`); }
+        conn('ok', 'متصل'); return txt ? JSON.parse(txt) : null;
+    }
+    function notify(title, body) {
+        try { if ('Notification' in window && Notification.permission === 'granted') new Notification(title, { body, icon: '/icon-192.png' }); } catch (e) {}
+    }
+    function stop() { clearInterval(gen.tick); clearInterval(gen.poll); gen.tick = gen.poll = null; }
+    function tick() {
+        const left = Math.max(0, gen.expiresAt - Date.now());
+        $('timer').textContent = `${String(Math.floor(left / 60000)).padStart(2, '0')}:${String(Math.floor((left % 60000) / 1000)).padStart(2, '0')}`;
+        if (left <= 0 && !gen.done) { gen.done = true; stop(); $('timer').style.color = 'var(--bad)'; $('status').innerHTML = '<span class="badge bad">انتهت صلاحية الكود</span>'; }
+    }
+    async function poll() {
+        if (!gen.serial || gen.done) return;
+        try {
+            const r = await api(`/local/codes/status?serial=${encodeURIComponent(gen.serial)}`);
+            if (r && r.used_by) {
+                gen.done = true; stop(); $('timer').textContent = '✓'; $('timer').style.color = 'var(--ok)';
+                $('status').innerHTML = `<span class="badge ok">اتربط بالعربية</span><br><span class="vin">${r.used_by.replace(/[<>&]/g, '')}</span>`;
+                notify('تم تفعيل عربية بالكود ' + gen.serial, 'اتربط بالعربية ' + r.used_by);
+            }
+        } catch (e) { /* keep polling */ }
+    }
+    async function issue() {
+        const b = $('gen'); b.disabled = true; $('err').textContent = '';
+        try {
+            if ('Notification' in window && Notification.permission === 'default') { try { await Notification.requestPermission(); } catch (e) {} }
+            const r = await api('/local/codes/issue', {});
+            stop(); gen.serial = r.serial; gen.expiresAt = new Date(r.expires_at).getTime(); gen.done = false;
+            $('code').textContent = r.serial; $('timer').style.color = 'var(--warn)';
+            $('status').innerHTML = '<span class="badge warn">بانتظار التفعيل من العربية</span>';
+            $('wrap').hidden = false; tick(); gen.tick = setInterval(tick, 1000); gen.poll = setInterval(poll, 4000);
+            notify('تم إصدار كود تفعيل ' + r.serial, 'صالح 10 دقائق');
+        } catch (e) { $('err').textContent = e.message || String(e); }
+        finally { b.disabled = false; }
+    }
+    $('gen').addEventListener('click', issue);
+    $('copy').addEventListener('click', () => { if (!gen.serial) return; try { navigator.clipboard.writeText(gen.serial); } catch (e) {} });
+    $('login').addEventListener('submit', async e => { e.preventDefault(); $('login-err').textContent = ''; try { await login($('pw').value); $('pw').value = ''; } catch (err) { $('login-err').textContent = err.message; } });
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && gen.serial && !gen.done) poll(); });
+    (async () => { if (!(await refreshSession())) { $('login').hidden = false; $('app').hidden = true; conn('muted'); } })();
+})();
+</script>
+</body>
+</html>

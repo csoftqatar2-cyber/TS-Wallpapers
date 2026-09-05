@@ -864,8 +864,9 @@
     let refreshTimer = null;
     let STORE_SECRET = "";        // يعيش هنا فقط — لا localStorage ولا sessionStorage
     // serve.mjs (المشغّل المحلي) يحقن سر الستور خادميًا؛ الصفحة لا تراه. يُكتشف عند التحميل عبر /local/ping.
-    // A saved session is honoured for 12 hours of inactivity at most; after that the owner logs in again.
-    const IDLE_LIMIT_MS = 12 * 60 * 60 * 1000;
+    // Owner's rule (2026-09-05): his four devices must never be re-prompted. The saved session is kept
+    // for 30 days of inactivity; Cloudflare Access (30-day session) and the login guard are the real gates.
+    const IDLE_LIMIT_MS = 30 * 24 * 60 * 60 * 1000;
     function touchActivity() { try { localStorage.setItem('session:lastActive', String(Date.now())); } catch (e) {} }
     function idleExpired() { try { const t = Number(localStorage.getItem('session:lastActive') || 0); return t > 0 && Date.now() - t > IDLE_LIMIT_MS; } catch (e) { return false; } }
     ['click', 'keydown', 'touchstart'].forEach(ev => document.addEventListener(ev, touchActivity, { passive: true }));
@@ -891,6 +892,15 @@
         try { localStorage.removeItem(SESSION_KEY); } catch (e) {}
     }
     async function loginWithPassword(password) {
+        if (LOCAL_PROXY && LOCAL_FLAGS.guard) {
+            // On the site every login goes through the Worker: wrong passwords are counted per client
+            // and five in fifteen minutes block that client for 24 h (a security event is raised).
+            const res = await fetch('/local/auth/login', { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ password }) });
+            const data = await res.json().catch(() => ({}));
+            if (res.status === 403) throw new Error("blocked");
+            if (!res.ok) throw new Error(data.attempts_left != null ? `bad-credentials:${data.attempts_left}` : "bad-credentials");
+            applySession(data); return;
+        }
         const res = await fetch(`${AUTH_URL}/token?grant_type=password`, {
             method: "POST",
             headers: { "apikey": ANON_KEY, "Content-Type": "application/json" },
@@ -2383,7 +2393,7 @@
             if ($('panel-wallpapers').classList.contains('active')) loadWallpapers();
             if (STORE_SECRET && storeAuthState === 'bad') alertDialog('غير مصرّح', 'تم الدخول، لكن سر أدمن الستور مرفوض. يمكنك إعادة إدخاله من زر المفتاح.', 'warning');
         } catch (ex) {
-            err.textContent = ex.message === 'bad-credentials' ? 'كلمة المرور غير صحيحة' : `تعذّر الدخول: ${errMsg(ex)}`;
+            err.textContent = ex.message === 'blocked' ? 'تم حظر هذا الجهاز بعد محاولات خاطئة' : ex.message === 'bad-credentials' ? 'كلمة المرور غير صحيحة' : /^bad-credentials:/.test(ex.message) ? `كلمة المرور غير صحيحة (متبقٍ ${ex.message.split(':')[1]})` : `تعذّر الدخول: ${errMsg(ex)}`;
         } finally {
             btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-right-to-bracket"></i> دخول';
         }
@@ -2584,6 +2594,26 @@
         activationWatermark = storeWatermark = blockWatermark = Date.now();
         renderNotificationHistory();
     }
+    // Security events from the Worker (failed logins, blocked clients): a notification each.
+    let securityWatermark = new Date(Date.now() - 60_000).toISOString(), securityTimer = null;
+    async function securityPoll() {
+        clearTimeout(securityTimer);
+        if (SESSION_TOKEN && LOCAL_PROXY && LOCAL_FLAGS.guard) {
+            try {
+                const r = await localGet(`/local/security/events?since=${encodeURIComponent(securityWatermark)}`);
+                const events = ((r && r.events) || []).slice().reverse();
+                for (const ev of events) {
+                    if (ev.at > securityWatermark) securityWatermark = ev.at;
+                    if (ev.kind === 'login_ok') continue;
+                    const who = `${ev.ip || '?'}${ev.email ? ' · ' + ev.email : ''}`;
+                    const title = ev.kind === 'client_blocked' ? 'تم حظر جهاز حاول اختراق اللوحة' : ev.kind === 'login_failed' ? 'محاولة دخول فاشلة' : ev.kind === 'client_unblocked' ? 'رُفع حظر جهاز' : ev.kind;
+                    recordNotice(title, `${who}${ev.detail ? ' — ' + ev.detail : ''}`, '', ts(ev.at) || Date.now(), 'sec-' + ev.id, true);
+                }
+            } catch (e) { /* next round */ }
+        }
+        securityTimer = setTimeout(securityPoll, 15000);
+    }
+    setTimeout(securityPoll, 3000);
     async function fastPoll() {
         if (!SESSION_TOKEN || !pollReady || pollBusy) return;
         clearTimeout(pollTimer);

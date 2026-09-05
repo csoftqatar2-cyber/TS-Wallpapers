@@ -13,6 +13,7 @@
  * CTRL_TELEMETRY_URL, CTRL_TELEMETRY_ANON.
  */
 import PAGE from "./control-panel.html";
+import GEN from "./gen.html";
 import ICON180 from "./icons/icon-180.png";
 import ICON192 from "./icons/icon-192.png";
 import ICON512 from "./icons/icon-512.png";
@@ -95,6 +96,54 @@ async function accessOk(req, env) {
   } catch (e) { return false; }
 }
 
+// ---------- admin login guard (D1 login_attempts / blocked_clients / security_events) ----------
+const LOGIN_FAILS = 5, LOGIN_WINDOW_MS = 15 * 60_000, BLOCK_HOURS = 24;
+const clientOf = req => ({ ip: req.headers.get("cf-connecting-ip") || "?", email: req.headers.get("cf-access-authenticated-user-email") || null, ua: (req.headers.get("user-agent") || "").slice(0, 200) });
+async function isBlocked(env, ip) {
+  if (!env.DB) return false;
+  try {
+    const row = await env.DB.prepare("SELECT expires_at FROM blocked_clients WHERE ip = ?").bind(ip).first();
+    if (!row) return false;
+    if (String(row.expires_at) > new Date().toISOString()) return true;
+    await env.DB.prepare("DELETE FROM blocked_clients WHERE ip = ?").bind(ip).run();
+    return false;
+  } catch (e) { return false; }
+}
+async function securityEvent(env, kind, c, detail) {
+  try { await env.DB.prepare("INSERT INTO security_events (at, kind, ip, email, detail) VALUES (?, ?, ?, ?, ?)").bind(new Date().toISOString(), kind, c.ip, c.email, detail || null).run(); } catch (e) {}
+}
+async function handleLogin(req, env) {
+  const c = clientOf(req);
+  if (!env.DB) return json(503, { message: "login guard not configured" });
+  let body; try { body = await readJsonBody(req); } catch (e) { return json(400, { message: "bad body" }); }
+  const password = typeof body.password === "string" ? body.password : "";
+  const since = new Date(Date.now() - LOGIN_WINDOW_MS).toISOString();
+  const fails = await env.DB.prepare("SELECT COUNT(*) AS n FROM login_attempts WHERE ip = ? AND ok = 0 AND at > ?").bind(c.ip, since).first();
+  if ((fails && fails.n) >= LOGIN_FAILS) return json(403, { message: "blocked" });
+  const res = await fetch(`${env.SUPABASE_URL}/auth/v1/token?grant_type=password`, {
+    method: "POST", headers: { apikey: env.SUPABASE_ANON, "Content-Type": "application/json" },
+    body: JSON.stringify({ email: env.ADMIN_EMAIL || "admin@tswallpapers.app", password }),
+  });
+  const now = new Date().toISOString();
+  if (res.ok) {
+    const data = await res.json();
+    if (data.user && data.user.id !== env.ADMIN_UID) return json(403, { message: "not the admin" });
+    await env.DB.prepare("INSERT INTO login_attempts (at, ip, email, ua, ok) VALUES (?, ?, ?, ?, 1)").bind(now, c.ip, c.email, c.ua).run();
+    await securityEvent(env, "login_ok", c, null);
+    return json(200, data);
+  }
+  await env.DB.prepare("INSERT INTO login_attempts (at, ip, email, ua, ok) VALUES (?, ?, ?, ?, 0)").bind(now, c.ip, c.email, c.ua).run();
+  const n = ((fails && fails.n) || 0) + 1;
+  await securityEvent(env, "login_failed", c, `محاولة ${n} من ${LOGIN_FAILS}`);
+  if (n >= LOGIN_FAILS) {
+    const exp = new Date(Date.now() + BLOCK_HOURS * 3600_000).toISOString();
+    await env.DB.prepare("INSERT OR REPLACE INTO blocked_clients (ip, email, at, expires_at, reason) VALUES (?, ?, ?, ?, ?)").bind(c.ip, c.email, now, exp, "5 wrong passwords in 15 min").run();
+    await securityEvent(env, "client_blocked", c, `حُظر 24 ساعة`);
+    return json(403, { message: "blocked" });
+  }
+  return json(401, { message: "wrong password", attempts_left: LOGIN_FAILS - n });
+}
+
 const json = (status, obj) => new Response(JSON.stringify(obj), { status, headers: { "Content-Type": "application/json; charset=utf-8", ...SEC_HEADERS } });
 
 // Verified admin tokens are remembered for a minute per isolate so a page full of calls does
@@ -144,15 +193,19 @@ export default {
         { status: 200, headers: { "Content-Type": "application/manifest+json", "Cache-Control": "public, max-age=3600" } });
     }
     if (!(await accessOk(req, env))) return new Response("Access required", { status: 403, headers: { "Content-Type": "text/plain; charset=utf-8", ...SEC_HEADERS } });
+    // A client that brute-forced the password is refused everything, page included, for 24 h.
+    if (await isBlocked(env, clientOf(req).ip)) return new Response("blocked", { status: 403, headers: { "Content-Type": "text/plain; charset=utf-8", ...SEC_HEADERS } });
+    if (req.method === "POST" && p === "/local/auth/login") return handleLogin(req, env);
 
     if (req.method === "GET" && (p === "/" || p === "/index.html" || p === "/control-panel.html" || p === "/gen" || p === "/gen/")) {
       const n = nonce();
-      const html = PAGE.replace(/<script>/g, `<script nonce="${n}">`);
+      // /gen is the stand-alone generator page (the car-side shortcut); everything else is the full panel.
+      const html = (p.startsWith("/gen") ? GEN : PAGE).replace(/<script>/g, `<script nonce="${n}">`);
       return new Response(html, { status: 200, headers: { "Content-Type": "text/html; charset=utf-8", "Content-Security-Policy": csp(n), ...SEC_HEADERS } });
     }
     if (p.startsWith("/local/") && limited(req.headers.get("cf-connecting-ip") || "?")) return json(429, { message: "slow down" });
     if (req.method === "GET" && p === "/local/ping") {
-      return json(200, { local: true, remote: true, store: !!env.STORE_ADMIN_SECRET, tslink: !!env.TSLINK_ADMIN_TOKEN, leo: !!env.LEO_ADMIN_TOKEN, controller: !!env.CONTROLLER_ADMIN_SECRET, codes: !!env.DB });
+      return json(200, { local: true, remote: true, store: !!env.STORE_ADMIN_SECRET, tslink: !!env.TSLINK_ADMIN_TOKEN, leo: !!env.LEO_ADMIN_TOKEN, controller: !!env.CONTROLLER_ADMIN_SECRET, codes: !!env.DB, guard: !!env.DB });
     }
     if (!p.startsWith("/local/")) return json(404, { message: "not found" });
 
@@ -164,6 +217,23 @@ export default {
     if (!(await isAdmin(req, env))) return json(401, { message: "admin session required" });
 
     try {
+      // ---- security: events for the panel's notifications, blocked list, unblock ----
+      if (env.DB && req.method === "GET" && p === "/local/security/events") {
+        const since = url.searchParams.get("since") || new Date(Date.now() - 86400_000).toISOString();
+        const rows = await env.DB.prepare("SELECT id, at, kind, ip, email, detail FROM security_events WHERE at > ? ORDER BY at DESC LIMIT 100").bind(since).all();
+        return json(200, { events: rows.results || [] });
+      }
+      if (env.DB && req.method === "GET" && p === "/local/security/blocked") {
+        const rows = await env.DB.prepare("SELECT ip, email, at, expires_at, reason FROM blocked_clients ORDER BY at DESC LIMIT 100").all();
+        return json(200, { blocked: rows.results || [] });
+      }
+      if (env.DB && req.method === "POST" && p === "/local/security/unblock") {
+        const body = await readJsonBody(req); const ip = String(body.ip || "").slice(0, 64);
+        if (!ip) return json(400, { message: "ip required" });
+        await env.DB.prepare("DELETE FROM blocked_clients WHERE ip = ?").bind(ip).run();
+        await securityEvent(env, "client_unblocked", clientOf(req), ip);
+        return json(200, { ok: true });
+      }
       // ---- activation code generator (D1 issued_codes) ----
       if (env.DB && req.method === "POST" && p === "/local/codes/issue") {
         const now = new Date(); const expires = new Date(now.getTime() + 10 * 60_000);
