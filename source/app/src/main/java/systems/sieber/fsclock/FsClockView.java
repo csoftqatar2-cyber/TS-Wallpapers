@@ -121,6 +121,39 @@ public class FsClockView extends FrameLayout {
     // running, without waiting for the app to be restarted. Deleting a public wallpaper
     // then removes it everywhere; deleting a device-specific one removes it on that device.
     static final long PERIODIC_SYNC_INTERVAL_MS = 5 * 60_000;
+
+    /**
+     * Fleet contract (2026-09-03): a blocked screen asks the server again every 30 s for as
+     * long as it is actually on screen, so a block the shop lifts is gone from the car within
+     * half a minute without anyone touching it. It stops by itself the moment the screen is
+     * hidden, detached or no longer blocked; applyBlockedState(true) starts it again.
+     */
+    static final long BLOCKED_RETRY_INTERVAL_MS = 30_000;
+    private final Runnable mBlockedRetryRunnable = new Runnable() {
+        @Override
+        public void run() {
+            if(!mDeviceBlocked || mWallpaperRepo == null || !isAttachedToWindow() || !isShown()) return;
+            mWallpaperRepo.sync(new WallpaperRepo.SyncCallback() {
+                @Override
+                public void done(final boolean success, final int count, String error) {
+                    post(new Runnable() {
+                        @Override
+                        public void run() {
+                            if(!mDeviceBlocked || mWallpaperRepo == null) return;
+                            if(success && mWallpaperRepo.isActive()) {
+                                // The block is lifted: the playlist came back. Redraw as an
+                                // active car (hides the card, hands a Leopard/Lynk car to its picker).
+                                applyBlockedState(false);
+                                loadSettings();
+                                return;
+                            }
+                            postDelayed(mBlockedRetryRunnable, BLOCKED_RETRY_INTERVAL_MS);
+                        }
+                    });
+                }
+            });
+        }
+    };
     private final Runnable mPeriodicSyncRunnable = new Runnable() {
         @Override
         public void run() {
@@ -172,6 +205,8 @@ public class FsClockView extends FrameLayout {
      */
     private void applyBlockedState(boolean blocked) {
         mDeviceBlocked = blocked;
+        removeCallbacks(mBlockedRetryRunnable);
+        if(blocked) postDelayed(mBlockedRetryRunnable, BLOCKED_RETRY_INTERVAL_MS);
         int form = blocked ? View.GONE : View.VISIBLE;
         if(mLayoutActivationEntry != null) mLayoutActivationEntry.setVisibility(form);
         if(mLayoutActivationMode != null) mLayoutActivationMode.setVisibility(form);
@@ -385,9 +420,13 @@ public class FsClockView extends FrameLayout {
                                         applyActivationSuccess(selectedActivationMode());
                                     } else {
                                         mTextViewActivationStatus.setTextColor(Color.RED);
-                                        if ("serial_already_used".equals(result)) {
-                                            mTextViewActivationStatus.setText(R.string.activation_error_already_used);
-                                        } else if ("invalid_format".equals(result)) {
+                                        if ("serial_already_used".equals(result) || "invalid_format".equals(result)) {
+                                            // Owner's rule (2026-09-03): the screen says correct or
+                                            // incorrect and nothing else. "Already used on another
+                                            // car" told whoever was guessing that the code is REAL,
+                                            // which is the one thing a guesser wants to learn. A
+                                            // wrong code and somebody else's real code now read
+                                            // exactly alike here; the server's word is in the log.
                                             mTextViewActivationStatus.setText(R.string.activation_error_invalid_serial);
                                         } else if ("blocked".equals(result)) {
                                             // Either the shop blocked this car, or that was the
@@ -710,6 +749,7 @@ public class FsClockView extends FrameLayout {
 
         getContext().unregisterReceiver(mNotificationBroadcastReceiver);
         removeCallbacks(mPeriodicSyncRunnable);
+        removeCallbacks(mBlockedRetryRunnable);
         removeCallbacks(mWeatherRefreshRunnable);
         unregisterTempSensor();
         unregisterLocation();

@@ -75,16 +75,30 @@ public class WallpaperRepo {
     static final String PREF_LAST_URL = "wallpaper-last-url";
     static final String PREF_DEVICE_ID = "device-id";
     static final String PREF_ACTIVE = "device-active";
-    /** Epoch-ms of the last enroll_device attempt - at most one a day (see maybeEnrollOrVerifyToken). */
+    /**
+     * Stamp of the last enroll_device attempt the server actually answered (2xx):
+     * "yyyy-m-d:versionCode". One attempt per day PER BUILD, so a car updated after the gate
+     * opened does not sit out the rest of the day, and an attempt that never reached the server
+     * (no network, 5xx) leaves no stamp and is simply made again at the next sync.
+     */
+    static final String PREF_TOKEN_ENROLL_STAMP = "device-token-enroll-stamp";
+    /** The 7.6-7.7 epoch-ms stamp. Read nowhere since 184; the key is kept so a downgrade finds it. */
     static final String PREF_TOKEN_ENROLL_AT = "device-token-enroll-at";
     /**
-     * Phase 2-H transition switch. While true, a token that fails is_device_activated_v2 is only
-     * recorded (breadcrumb) and the car keeps the licence the v1 answers give it; nothing in the
-     * token path can deactivate a car. Flip to false ONLY in the build that implements Phase 3
-     * (backend token_enforce_min_version_code.wallpapers), and nowhere else - this is the one
-     * place the fallback is decided.
+     * Fleet rule (2026-09-03): a fleet that boots together must not enrol together. The enrol
+     * request waits a random 0-120 s after the licence check that triggered it.
      */
-    static final boolean TOKEN_FALLBACK_TO_V1 = true;
+    static final long ENROLL_JITTER_MAX_MS = 120_000L;
+    /**
+     * Phase 3 (184). The server, not this build, decides whether the per-car token governs:
+     * licence_status_v2 answers {status, enforced}, and "enforced" is true only once the backend
+     * key token_enforce_min_version_code.wallpapers is at or below this versionCode. Until then a
+     * token that the server calls inactive is a breadcrumb and the v1 playlist answer stands.
+     * There is deliberately no client-side switch any more - the one place this is decided is
+     * the backend key, which the shop can move per app without shipping an APK.
+     */
+    static final String LICENCE_ACTIVE = "active";
+    static final String LICENCE_INACTIVE = "inactive";
     /** The last VIN this car ever reported. A head unit that answers the VIN query today and
      *  comes up empty tomorrow (the settings row is written late in the boot, and on some Geely
      *  builds not at all until the car has been driven) would otherwise fall all the way back to
@@ -1371,16 +1385,27 @@ public class WallpaperRepo {
                         parsed.clear(); // clear it so we don't display "inactive" as a wallpaper
                     }
                     
+                    // Phase 3 (184): a car the playlist calls active asks licence_status_v2
+                    // once, when it holds a token. Exactly two answers change anything: a
+                    // literal "blocked" (any build), or "inactive" while the server says this
+                    // build is enforced. Errors, non-2xx, no token: the v1 playlist answer
+                    // stands, as it has for every car for a year. Without a token the enrol
+                    // runs on its own thread, jittered - see maybeEnrollOrVerifyToken.
+                    if (active) {
+                        String verdict = maybeEnrollOrVerifyToken();
+                        if (STATUS_BLOCKED.equals(verdict) || LICENCE_INACTIVE.equals(verdict)) {
+                            CrashReporter.breadcrumb("licence_status_v2 revoked: " + verdict);
+                            active = false;
+                            parsed.clear();
+                        }
+                    }
+
                     mPref.edit()
                          .putString(PREF_CACHE, toJson(parsed))
                          .apply();
                     mSecurePref.putBoolean(PREF_ACTIVE, active);
 
                     load();
-
-                    // Phase 2-H token: only after a server answer, only on an active car, and
-                    // it can only add a token - see the method's contract.
-                    if (active) maybeEnrollOrVerifyToken();
 
                     // Clean up video cache files that are no longer used
                     try {
@@ -1898,11 +1923,16 @@ public class WallpaperRepo {
                     v2.put("app_version_code", BuildConfig.VERSION_CODE);
                     String[] r = httpPostRaw(getSupabaseUrl() + "/rest/v1/rpc/activate_device_v2", v2.toString());
                     int code = Integer.parseInt(r[0]);
-                    if (code == 404) {
+                    if (code < 200 || code >= 300) {
+                        // 404 = a backend without the wrapper; anything else = the wrapper
+                        // itself failed. Either way activate_device (v1) is the same decision
+                        // (it is what the wrapper calls) and it is what every car ran before.
+                        // 183 threw here, so a 500 in the wrapper read as "activation failed"
+                        // on the screen while the serial had already been accepted server-side;
+                        // v1 on the same car with the same serial answers success again.
+                        CrashReporter.breadcrumb("activate_device_v2 HTTP " + code + " -> v1");
                         String response = httpPost(getSupabaseUrl() + "/rest/v1/rpc/activate_device", body.toString());
                         result = unquote(response);
-                    } else if (code < 200 || code >= 300) {
-                        throw new Exception("HTTP " + code + " for activate_device_v2");
                     } else {
                         JSONObject answer = new JSONObject(r[1]);
                         result = answer.optString("status", "");
@@ -1913,6 +1943,11 @@ public class WallpaperRepo {
                     if (success) {
                         mSecurePref.putBoolean(PREF_ACTIVE, true);
                         if (token != null) DeviceToken.set(mContext, token);
+                        // Activated through v1 (wrapper 404/5xx/over budget - the backend skips
+                        // its own enrol when the activation alone ate the anon time budget):
+                        // ask for the token now, not at tomorrow's sync. No jitter here - this
+                        // is one car with a technician in front of it, not a fleet rebooting.
+                        else if (DeviceToken.get(mContext) == null) scheduleEnroll(getSupabaseUrl(), true);
                     }
                     if (cb != null) cb.done(success, result, null);
                 } catch (Exception e) {
@@ -1969,62 +2004,101 @@ public class WallpaperRepo {
     }
 
     /**
-     * Phase 2-H, the only place the token is asked about, and it can only ever ADD a token.
+     * Phase 3 (184), the only place the token is asked about.
      *
-     * Runs on the sync thread after a server answer that left the car active. With a token:
-     * is_device_activated_v2 is asked and a false is recorded as a breadcrumb - while
-     * {@link #TOKEN_FALLBACK_TO_V1} is true it changes nothing, the licence is whatever the v1
-     * answers said. Without a token: enroll_device is asked at most once a day; null means
-     * "gate closed or car not recent", not an error, and nothing is written except the
-     * attempt time. Every failure here is swallowed: a car that already showed its playlist
-     * must never be touched by a call that exists only to make it safer later.
+     * Runs on the sync thread after a v1 answer that left the car active. With a token it asks
+     * licence_status_v2 once and hands back a verdict for the caller to obey:
+     * {@link #STATUS_BLOCKED} (any build), {@link #LICENCE_INACTIVE} (only while the server says
+     * this build is enforced), {@link #LICENCE_ACTIVE}, or null - no token, no network, non-2xx,
+     * unparseable - which means "the v1 answer stands". Without a token it schedules one
+     * enrol on its own thread and returns null. Nothing in here throws: a car that already has
+     * its playlist must never be broken by the call that exists only to make it safer.
      */
-    private void maybeEnrollOrVerifyToken() {
+    private String maybeEnrollOrVerifyToken() {
         try {
             String sbUrl = getSupabaseUrl();
-            if (sbUrl.contains("YOUR_SUPABASE_PROJECT")) return;
+            if (sbUrl.contains("YOUR_SUPABASE_PROJECT")) return null;
             String token = DeviceToken.get(mContext);
-            if (token != null) {
-                JSONObject body = new JSONObject();
-                body.put("device_hw_id", getDeviceId());
-                body.put("device_token", token);
-                body.put("app_id", DeviceToken.APP_ID);
-                body.put("app_version_code", BuildConfig.VERSION_CODE);
-                String[] r = httpPostRaw(sbUrl + "/rest/v1/rpc/is_device_activated_v2", body.toString());
-                int code = Integer.parseInt(r[0]);
-                if (code >= 200 && code < 300) {
-                    String a = unquote(r[1]);
-                    if ("false".equalsIgnoreCase(a)) {
-                        CrashReporter.breadcrumb("token: is_device_activated_v2=false (v1 fallback="
-                                + TOKEN_FALLBACK_TO_V1 + ")");
-                        if (!TOKEN_FALLBACK_TO_V1) {
-                            // Phase 3 only. Deliberately unreachable in this build.
-                            mSecurePref.putBoolean(PREF_ACTIVE, false);
-                        }
-                    }
-                }
-                return;
+            if (token == null) {
+                scheduleEnroll(sbUrl, false);
+                return null;
             }
-            long last = mPref.getLong(PREF_TOKEN_ENROLL_AT, 0L);
-            long now = System.currentTimeMillis();
-            if (now - last < 24L * 60 * 60 * 1000) return;
-            mPref.edit().putLong(PREF_TOKEN_ENROLL_AT, now).apply();
             JSONObject body = new JSONObject();
             body.put("device_hw_id", getDeviceId());
+            body.put("device_token", token);
             body.put("app_id", DeviceToken.APP_ID);
             body.put("app_version_code", BuildConfig.VERSION_CODE);
-            String[] r = httpPostRaw(sbUrl + "/rest/v1/rpc/enroll_device", body.toString());
+            String[] r = httpPostRaw(sbUrl + "/rest/v1/rpc/licence_status_v2", body.toString());
             int code = Integer.parseInt(r[0]);
-            if (code < 200 || code >= 300) return;          // 404 = backend without Phase 2-H
-            String t = r[1] == null ? "" : r[1].trim();
-            if (t.isEmpty() || "null".equals(t)) return;     // gate closed: try again tomorrow
-            t = unquote(t);
-            if (t.length() < 16 || t.length() > 256) return; // not a token shape we know
-            DeviceToken.set(mContext, t);
-            CrashReporter.breadcrumb("token: enrolled");
+            if (code < 200 || code >= 300) return null;      // 404 = backend without Phase 3
+            JSONObject a = new JSONObject(r[1]);
+            String status = a.optString("status", "");
+            boolean enforced = a.optBoolean("enforced", false);
+            if (STATUS_BLOCKED.equals(status)) return STATUS_BLOCKED;
+            if (LICENCE_INACTIVE.equals(status)) {
+                CrashReporter.breadcrumb("licence_status_v2=inactive enforced=" + enforced);
+                return enforced ? LICENCE_INACTIVE : LICENCE_ACTIVE;
+            }
+            return LICENCE_ACTIVE;
         } catch (Throwable t) {
-            // Nothing here may reach the user or the licence.
+            return null;
         }
+    }
+
+    /**
+     * One enrol at a time, per process. Two screens syncing within seconds of each other (the
+     * clock and the picker, or a widget) used to both ask enroll_device before either had
+     * written the token file - the backend logged that as a "conflict" for the same car. The
+     * flag stops the second one in this process; re-reading the token file after the jitter
+     * stops a second process.
+     */
+    private static final java.util.concurrent.atomic.AtomicBoolean sEnrollInFlight =
+            new java.util.concurrent.atomic.AtomicBoolean(false);
+
+    /**
+     * @param now true right after a successful activation on this screen: no daily stamp, no
+     *            jitter - the car has just been paid for and should hold its token before the
+     *            technician walks away. false from the sync path: once a day per build, jittered.
+     */
+    private void scheduleEnroll(final String sbUrl, final boolean now) {
+        final String stamp = enrollStamp();
+        if (!now && stamp.equals(mPref.getString(PREF_TOKEN_ENROLL_STAMP, ""))) return;   // answered today, this build
+        if (!sEnrollInFlight.compareAndSet(false, true)) return;                          // another screen is on it
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    if (!now) Thread.sleep((long) (Math.random() * ENROLL_JITTER_MAX_MS));
+                    if (DeviceToken.get(mContext) != null) return;                // the other process won
+                    if (!now && stamp.equals(mPref.getString(PREF_TOKEN_ENROLL_STAMP, ""))) return;
+                    JSONObject body = new JSONObject();
+                    body.put("device_hw_id", getDeviceId());
+                    body.put("app_id", DeviceToken.APP_ID);
+                    body.put("app_version_code", BuildConfig.VERSION_CODE);
+                    String[] r = httpPostRaw(sbUrl + "/rest/v1/rpc/enroll_device", body.toString());
+                    int code = Integer.parseInt(r[0]);
+                    if (code < 200 || code >= 300) return;          // no stamp: ask again next sync
+                    mPref.edit().putString(PREF_TOKEN_ENROLL_STAMP, stamp).apply();
+                    String t = r[1] == null ? "" : r[1].trim();
+                    if (t.isEmpty() || "null".equals(t)) return;     // gate closed: tomorrow
+                    t = unquote(t);
+                    if (t.length() < 16 || t.length() > 256) return; // not a token shape we know
+                    DeviceToken.set(mContext, t);
+                    CrashReporter.breadcrumb("token: enrolled");
+                } catch (Throwable ignored) {
+                    // Nothing here may reach the user or the licence.
+                } finally {
+                    sEnrollInFlight.set(false);
+                }
+            }
+        }, "ts-enrol").start();
+    }
+
+    /** "yyyy-m-d:versionCode" in local time - the day boundary only has to be consistent on this car. */
+    private static String enrollStamp() {
+        java.util.Calendar c = java.util.Calendar.getInstance();
+        return c.get(java.util.Calendar.YEAR) + "-" + (c.get(java.util.Calendar.MONTH) + 1) + "-"
+                + c.get(java.util.Calendar.DAY_OF_MONTH) + ":" + BuildConfig.VERSION_CODE;
     }
 
     private String httpPost(String urlStr, String jsonBody) throws Exception {
