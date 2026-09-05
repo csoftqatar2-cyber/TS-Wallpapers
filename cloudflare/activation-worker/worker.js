@@ -502,10 +502,22 @@ async function handleActivate(db, body) {
   // serials actually issued count (see CLOSED_BLOCKS). '7078...' is valid only
   // when it's already on file — a genuinely new (never-seen) 7078 code no
   // longer activates anything.
+  // Minted codes (issued_codes, migration 0005): a code the owner generated from the admin
+  // site is valid for ten minutes and for one car. ADDITIVE on purpose: a serial that is not
+  // in that table follows exactly the rules below, unchanged — every car in the field and
+  // every sold-but-unused code keeps working. A missing table reads as "not minted".
+  let minted = null;
+  try {
+    minted = await db.prepare('SELECT expires_at, used_by FROM issued_codes WHERE serial = ?').bind(serial).first();
+  } catch (e) { minted = null; }
+  const mintedOk = !minted || ownedByThisCar ||
+    ((!minted.used_by || minted.used_by === hardwareId) && String(minted.expires_at) > nowIso());
+
   const validFormat =
     ownedByThisCar ||
-    (serial.startsWith(NEW_SERIAL_PREFIX) && !isUnissuedInClosedBlock(serial)) ||
-    (serial.startsWith(LEGACY_SERIAL_PREFIX) && !!serialOwner);
+    (mintedOk && (
+      (serial.startsWith(NEW_SERIAL_PREFIX) && !isUnissuedInClosedBlock(serial)) ||
+      (serial.startsWith(LEGACY_SERIAL_PREFIX) && !!serialOwner)));
 
   // Both rejections count the same. A code belonging to someone else's car is
   // not a typo — if anything it is the more deliberate of the two.
@@ -551,6 +563,13 @@ async function handleActivate(db, body) {
     ).bind(hardwareId, serial, activatedAt, nowIso()),
     auditStmt(db, hardwareId, 'activate', before, after),
   ]);
+  // A minted code is now bound to this car (no-op for every other serial).
+  if (minted) {
+    try {
+      await db.prepare('UPDATE issued_codes SET used_by = ?, used_at = ? WHERE serial = ? AND (used_by IS NULL OR used_by = ?)')
+        .bind(hardwareId, nowIso(), serial, hardwareId).run();
+    } catch (e) { /* the activation already succeeded; the binding mark is best-effort */ }
+  }
 
   return json({
     status: RESULT.SUCCESS,

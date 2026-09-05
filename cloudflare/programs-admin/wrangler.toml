@@ -20,3 +20,9 @@ ACCESS_AUD = "92e539ee78567d88d9e5b09c8fad24dad46deb7d3a9d3200f97c1e3044728caf"
 CTRL_TELEMETRY_ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFnaHllbGhndXNwaGthdGhna29tIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODMzMzU5MDUsImV4cCI6MjA5ODkxMTkwNX0.1FT6mF7apILQE1IEn3HVvnDOkKixomvlGLI5zud0pD8"
 
 # Secrets (never in this file): STORE_ADMIN_SECRET, TSLINK_ADMIN_TOKEN, LEO_ADMIN_TOKEN, CONTROLLER_ADMIN_SECRET
+
+# Same D1 as the activation Worker: the generator writes minted codes here and reads their state.
+[[d1_databases]]
+binding = "DB"
+database_name = "ts-activation"
+database_id = "978813d3-eeb3-4697-9d73-241242d0cfde"

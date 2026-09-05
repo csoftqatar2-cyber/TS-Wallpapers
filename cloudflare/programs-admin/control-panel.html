@@ -89,8 +89,16 @@
         .table-wrap.dragging { cursor: grabbing; user-select: none; }
         .table-wrap a, .table-wrap button, .table-wrap input, .table-wrap select, .table-wrap textarea, .table-wrap label { cursor: auto; }
         .table-wrap button, .table-wrap a { cursor: pointer; }
-        .hscroll-top { position: sticky; top: 0; z-index: 5; overflow-x: auto; overflow-y: hidden; height: 14px; margin-bottom: 2px; }
+        /* Thin, themed horizontal scrollbars: the sticky mirror on top and the native one below. */
+        .hscroll-top { position: sticky; top: 0; z-index: 5; overflow-x: auto; overflow-y: hidden; height: 10px; margin: 0 0 4px; border-radius: 8px; }
         .hscroll-top > div { height: 1px; }
+        .table-wrap, .hscroll-top { scrollbar-width: thin; scrollbar-color: rgba(251,191,36,.45) rgba(255,255,255,.05); }
+        .table-wrap::-webkit-scrollbar, .hscroll-top::-webkit-scrollbar { height: 8px; width: 8px; }
+        .table-wrap::-webkit-scrollbar-track, .hscroll-top::-webkit-scrollbar-track { background: rgba(255,255,255,.05); border-radius: 8px; }
+        .table-wrap::-webkit-scrollbar-thumb, .hscroll-top::-webkit-scrollbar-thumb { background: rgba(251,191,36,.45); border-radius: 8px; }
+        .table-wrap::-webkit-scrollbar-thumb:hover, .hscroll-top::-webkit-scrollbar-thumb:hover { background: rgba(251,191,36,.75); }
+        .table-wrap::-webkit-scrollbar-button, .hscroll-top::-webkit-scrollbar-button { display: none; width: 0; height: 0; }
+        .tab-icon { width: 20px; height: 20px; border-radius: 5px; vertical-align: middle; margin-inline-end: 2px; object-fit: cover; box-shadow: 0 0 0 1px rgba(0,0,0,.25); }
         .subtabs { display: flex; gap: 6px; flex-wrap: wrap; margin: 0 0 14px; padding-bottom: 10px; border-bottom: 1px solid var(--panel-border); }
         .subtab { border: 1px solid var(--panel-border); background: rgba(255,255,255,.03); color: var(--text-muted); border-radius: 10px; padding: 6px 12px; cursor: pointer; font: inherit; font-size: .84rem; }
         .subtab:hover { color: var(--text-main); border-color: var(--panel-border-hover); }
@@ -328,7 +336,8 @@
         #notif-error { width: 8px; height: 8px; border-radius: 50%; background: #ff6060; }
         /* Opens from the bell at the far inline-end of the header and grows INTO the page, capped to the viewport,
            so nothing is ever clipped by the header or the window edge. */
-        #notif-history { position: absolute; inset-inline-start: 0; inset-inline-end: auto; top: calc(100% + 8px); width: min(420px, calc(100vw - 32px)); max-height: min(480px, 70vh); overflow: auto; background: #211a12; border: 1px solid var(--panel-border-hover); border-radius: 14px; padding: 14px; z-index: 60; box-shadow: 0 16px 40px #0008; overflow-wrap: anywhere; }
+        /* Fixed to the viewport and positioned by JS under the bell, clamped so it never leaves the screen. */
+        #notif-history { position: fixed; top: 64px; left: 12px; width: min(420px, calc(100vw - 24px)); max-height: min(520px, calc(100vh - 80px)); overflow: auto; background: #211a12; border: 1px solid var(--panel-border-hover); border-radius: 14px; padding: 14px; z-index: 60; box-shadow: 0 16px 40px #0008; overflow-wrap: anywhere; }
         header, .header-tools, #notif-wrap { overflow: visible; }
         .notif-item { display: block; width: 100%; text-align: start; margin-top: 8px; white-space: normal; overflow-wrap: anywhere; }
         .usage-source { max-width: 260px; white-space: normal; }
@@ -368,6 +377,87 @@
         .wp-car-list { max-height:50vh; overflow:auto; margin:14px 0; }
         .wp-car-option { display:flex; gap:10px; padding:10px; border-bottom:1px solid var(--panel-border); align-items:center; cursor:pointer; }
         .wp-car-option input { accent-color:var(--primary); width:18px; height:18px; }
+        /* ---------- Phone layout (portrait 360-430px) ---------- */
+        @media (max-width: 700px) {
+            /* Top tab row: one horizontally scrollable strip instead of 5 wrapped rows. */
+            .tabs { flex-wrap: nowrap; overflow-x: auto; overflow-y: hidden; -webkit-overflow-scrolling: touch; overscroll-behavior-x: contain; scrollbar-width: thin; scrollbar-color: rgba(251,191,36,.45) rgba(255,255,255,.05); gap: 4px; padding-bottom: 8px; margin-inline: -4px; padding-inline: 4px; }
+            .tabs::-webkit-scrollbar { height: 6px; } .tabs::-webkit-scrollbar-track { background: rgba(255,255,255,.05); border-radius: 6px; } .tabs::-webkit-scrollbar-thumb { background: rgba(251,191,36,.45); border-radius: 6px; }
+            .tab { flex: 0 0 auto; white-space: nowrap; min-height: 42px; padding: 8px 12px; font-size: .9rem; }
+            /* 40px+ tap targets for every small control. */
+            .btn, .subtab, .chip, .tab, .expander, .toggle input { min-height: 40px; }
+            .btn.sm { padding: 6px 12px; font-size: .84rem; }
+            .btn.icon-only { min-width: 40px; justify-content: center; }
+            .subtab { padding: 8px 12px; font-size: .88rem; }
+            .chip { padding: 6px 12px; }
+            .expander { min-width: 40px; }
+            .toggle input { width: 20px; height: 20px; min-height: 0; }
+            .wp-card-body .toolbar .btn { min-height: 40px; }
+            /* Stat tiles: two per row, compact. */
+            .stats-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-bottom: 18px; }
+            .stat-card { padding: 12px; border-radius: 14px; gap: 8px; min-width: 0; }
+            .stat-card:hover { transform: none; }
+            .stat-info { min-width: 0; }
+            .stat-info h3 { font-size: .74rem; line-height: 1.3; }
+            .stat-info p { font-size: 1.35rem; }
+            .stat-info p.small { font-size: .85rem; }
+            .stat-icon { width: 36px; height: 36px; font-size: 1rem; border-radius: 10px; }
+            .stat-card:has(p.small) { grid-column: 1 / -1; }
+            /* Header: smaller logo and title, one compact row of tools. */
+            header { gap: 10px; margin-bottom: 18px; padding-bottom: 12px; }
+            .logo-area { gap: 10px; }
+            #brand-logo { height: 40px; }
+            .logo-text h1 { font-size: 1.05rem; line-height: 1.3; }
+            .logo-text p { font-size: .74rem; }
+            .conn { margin-inline-start: 6px; font-size: .72rem; }
+            .header-tools { width: 100%; }
+            .header-tools .btn { flex: 0 0 auto; }
+            #refresh-btn { flex: 1 1 auto; justify-content: center; }
+            /* Store-secret popover: anchored to the start edge (right in RTL) so it opens into the page, never past the viewport. */
+            #secret-pop { left: auto; inset-inline-start: 0; width: min(300px, calc(100vw - 44px)); }
+            /* Tables: keep names/ids readable instead of squeezing the first data column to one word per line. */
+            .table-wrap td .hw, .table-wrap td .name, .table-wrap td .sub { word-break: normal; overflow-wrap: normal; white-space: nowrap; }
+            .table-wrap td:first-child + td { min-width: 150px; }
+            .table-wrap .hw-link { white-space: nowrap; }
+            /* Rows that span the whole (wide) table: keep their content pinned to the visible part. */
+            .table-wrap td[colspan] > .empty, .table-wrap td[colspan] > .detail-body, tr.detail-row td > div { position: sticky; inset-inline-start: 0; max-width: calc(100vw - 72px); box-sizing: border-box; }
+            tr.detail-row td { padding: 12px; }
+            .detail-grid { grid-template-columns: minmax(0, 1fr); }
+            /* Daily bars: never wider than the card. */
+            .daily { gap: 2px; overflow-x: auto; }
+            .daily .d { min-width: 7px; }
+            .daily .d span { font-size: .5rem; }
+            .bar-row { grid-template-columns: 80px 1fr 44px; font-size: .78rem; }
+            .card { border-radius: 16px; }
+            .card-title { font-size: 1rem; }
+            .toolbar { gap: 8px; }
+            .subtabs { gap: 5px; }
+            footer { font-size: .74rem; }
+            .wp-dialog { width: min(820px, 100vw - 16px); padding: 14px; max-height: 92vh; }
+            .login-box { padding: 24px 20px; border-radius: 18px; }
+            .login-box h2 { font-size: 1.1rem; }
+        }
+        @media (max-width: 480px) {
+            .container { padding: 12px 8px 32px; }
+            .card { padding: 10px; }
+            .logo-text p { display: none; }
+            .logo-text h1 { font-size: 1rem; }
+            #brand-logo { height: 36px; }
+            .stat-card { padding: 10px; }
+            .stat-info p { font-size: 1.25rem; }
+            .stat-icon { width: 32px; height: 32px; font-size: .9rem; }
+            .tab { padding: 8px 10px; font-size: .86rem; }
+            .chips { gap: 5px; }
+            .toolbar .search { flex-basis: 100%; }
+            .wp-form-grid { grid-template-columns: minmax(0, 1fr); }
+            #wp-filter, #wp-mode-filter { flex: 1 1 45%; }
+            .wp-grid { grid-template-columns: minmax(0, 1fr); }
+            .wp-media { height: 160px; }
+            thead th { padding: 9px 8px; }
+            tbody td { padding: 8px; }
+            .table-wrap td[colspan] > .empty, .table-wrap td[colspan] > .detail-body, tr.detail-row td > div { max-width: calc(100vw - 56px); }
+            #notif-history { padding: 12px; }
+            pre.crash, pre.report { font-size: .72rem; }
+        }
     </style>
 </head>
 <body>
@@ -1242,7 +1332,7 @@
         $('cnt-blocklog').textContent = state.blockEvents.length;
         $('cnt-devices').textContent = state.merged.length;
         $('cnt-crashes').textContent = state.crashes.length;
-        $('cnt-tokens').textContent = state.tokens.length;
+        if ($('cnt-tokens')) $('cnt-tokens').textContent = state.tokens.length;
         renderGlobalError();
     }
 
@@ -1281,7 +1371,7 @@
                 <div class="stat-icon ${s.c}"><i class="fa-solid ${s.ic}"></i></div>
             </div>`).join('');
         html += `
-            <div class="stat-card clickable" data-tab="wallpapers" data-sub="versions" tabindex="0" role="button" title="إصدارات الخلفيات">
+            <div class="stat-card clickable" data-tab="releases" tabindex="0" role="button" title="الإصدارات المنشورة لكل البرامج">
                 <div class="stat-info"><h3>آخر الإصدارات المنشورة</h3>
                     <p class="small">
                         <span title="app_versions">الخلفيات: ${esc(verText(lv.wp, 'version_code', 'version_name'))}</span>
@@ -2115,16 +2205,75 @@
     $('ctl-refresh').addEventListener('click', () => loadController());
 
     // =====================================================================
+    //  المولّد — ten-minute activation codes minted on the admin site
+    // =====================================================================
+    const gen = { serial: null, expiresAt: 0, timer: null, poll: null, done: false };
+    function genAvailable() { return LOCAL_PROXY && !!LOCAL_FLAGS.codes; }
+    function genStop() { clearInterval(gen.timer); clearInterval(gen.poll); gen.timer = gen.poll = null; }
+    function genTick() {
+        const left = Math.max(0, gen.expiresAt - Date.now());
+        const m = Math.floor(left / 60000), sec = Math.floor((left % 60000) / 1000);
+        $('gen-timer').textContent = `${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
+        if (left <= 0 && !gen.done) { gen.done = true; genStop(); $('gen-timer').style.color = 'var(--danger)'; $('gen-status').innerHTML = '<span class="badge bad">انتهت صلاحية الكود</span> أصدر كودًا جديدًا.'; }
+    }
+    async function genPollStatus() {
+        if (!gen.serial || gen.done) return;
+        try {
+            const r = await localGet(`/local/codes/status?serial=${encodeURIComponent(gen.serial)}`);
+            if (r && r.used_by) {
+                gen.done = true; genStop();
+                $('gen-timer').textContent = 'تم'; $('gen-timer').style.color = 'var(--success)';
+                $('gen-status').innerHTML = `<span class="badge ok">اتربط بالعربية</span> <span class="num" style="direction:ltr;display:inline-block">${esc(r.used_by)}</span>`;
+                recordNotice('تم تفعيل عربية بالكود ' + gen.serial, 'اتربط بالعربية ' + r.used_by, r.used_by, Date.now(), 'gen-used-' + gen.serial, true);
+                genRecent();
+            }
+        } catch (e) { /* keep polling */ }
+    }
+    async function genIssue() {
+        if (!genAvailable()) { $('gen-unavailable').hidden = false; return; }
+        const btn = $('gen-btn'); btn.disabled = true;
+        try {
+            const r = await localPost('/local/codes/issue', {});
+            genStop(); gen.serial = r.serial; gen.expiresAt = new Date(r.expires_at).getTime(); gen.done = false;
+            $('gen-code').textContent = r.serial; $('gen-timer').style.color = 'var(--warn)';
+            $('gen-status').innerHTML = '<span class="badge warn">بانتظار التفعيل من العربية</span> اكتب الكود في أي برنامج من برامجنا على العربية.';
+            $('gen-code-wrap').hidden = false;
+            genTick(); gen.timer = setInterval(genTick, 1000); gen.poll = setInterval(genPollStatus, 5000);
+            recordNotice('تم إصدار كود تفعيل ' + r.serial, 'صالح 10 دقائق', '', Date.now(), 'gen-issued-' + r.serial, true);
+            genRecent();
+        } catch (e) { alertDialog('تعذّر إصدار الكود', errMsg(e)); }
+        finally { btn.disabled = false; }
+    }
+    async function genRecent() {
+        if (!genAvailable()) return;
+        try {
+            const r = await localGet('/local/codes/recent'); const rows = (r && r.codes) || [];
+            $('gen-recent').innerHTML = rows.length ? rows.map(c => {
+                const expired = !c.used_by && ts(c.expires_at) < Date.now();
+                const st = c.used_by ? '<span class="badge ok">مستخدم</span>' : expired ? '<span class="badge">منتهٍ</span>' : '<span class="badge warn">صالح</span>';
+                return `<tr><td><span class="num">${esc(c.serial)}</span></td><td>${timeCell(c.issued_at)}</td><td>${timeCell(c.expires_at)}</td><td>${st}</td><td>${c.used_by ? hwLink(c.used_by) : '<span class="sub">—</span>'}</td></tr>`;
+            }).join('') : '<tr><td colspan="5"><div class="empty">لا أكواد بعد</div></td></tr>';
+        } catch (e) { setErr('gen-recent', ''); }
+    }
+    document.addEventListener('click', e => {
+        if (e.target.closest('#gen-btn')) genIssue();
+        if (e.target.closest('#gen-copy') && gen.serial) copyText(gen.serial);
+    });
+
+    // =====================================================================
     //  التبويبات والأحداث
     // =====================================================================
     function switchTab(name) {
         if (!$('panel-' + name)) return;
         document.querySelectorAll('.tab').forEach(t => { const active = t.dataset.tab === name; t.classList.toggle('active', active); t.setAttribute('aria-selected', String(active)); t.tabIndex = active ? 0 : -1; t.setAttribute('aria-controls', 'panel-' + t.dataset.tab); });
         document.querySelectorAll('.tab-panel').forEach(p => p.classList.toggle('active', p.id === `panel-${name}`));
+        // Phone: the tab strip scrolls sideways; keep the chosen tab in view (horizontal only, no-op when nothing overflows).
+        { const bar = $('tabs'), at = bar.querySelector('.tab.active'); if (at && bar.scrollWidth > bar.clientWidth + 1) { const br = bar.getBoundingClientRect(), ar = at.getBoundingClientRect(); if (ar.left < br.left) bar.scrollLeft += ar.left - br.left - 8; else if (ar.right > br.right) bar.scrollLeft += ar.right - br.right + 8; } }
         // The per-app backends are heavier and behind the local runner: fetched the first time only.
         if (name === 'tslink' && !state.tslinkLoaded) loadTslink();
         if (name === 'controller' && !state.ctlLoaded) loadController();
         if ((name === 'crashes' || name === 'leo') && !state.leoCrashesLoaded) loadLeoCrashes();
+        if (name === 'generator') { $('gen-unavailable').hidden = genAvailable(); if (genAvailable()) genRecent(); }
         if (name === 'wallpapers' && subState.wallpapers === 'library') { loadWallpapers(); refreshTargetScopeUi(); renderVersionSummary(); }
     }
     $('tabs').addEventListener('click', e => {
@@ -2351,7 +2500,7 @@
             const summary = versions.size ? num(versions.size) + ' مجموعات؛ وسّع للتفصيل' : hasDaily ? 'وسّع للإصدارات اليومية' : sourceFailed ? unavailable : missing;
             return `<tr><td>${expandable ? `<button class="expander" data-usage="${key}" aria-expanded="${open}" aria-label="تفصيل الإصدارات"><i class="fa-solid ${open ? 'fa-chevron-up' : 'fa-chevron-down'}"></i></button>` : ''}</td><td><span class="name">${esc(usageLabels[key])}</span><span class="hw">${esc(app.pkg)}</span>${shared ? '<span class="badge warn">أعداد مشتركة من devices والتوكنات؛ ليست فتح التطبيق</span>' : ''}</td><td>${countCell(0)}</td><td>${countCell(1)}</td><td>${countCell(7)}</td><td>${countCell(30)}</td><td>${summary}</td><td>${last ? timeCell(last) : missing}</td><td>${perCar}</td><td>${fleet}</td><td>${today}</td><td>${week}</td><td>${spark}</td><td class="sub num">${esc(source)}</td></tr>${expandable && open ? `<tr class="detail-row"><td colspan="14">${details ? `<table style="min-width:600px"><thead><tr><th>اسم الإصدار / الكود</th><th>سيارات</th><th>من السيارات المبلّغة</th><th>أحدث ظهور</th></tr></thead><tbody>${details}</tbody></table>` : ''}${hasDaily ? dailyVersionHtml(daily) : ''}</td></tr>` : ''}`;
         }).join('');
-        $('cnt-usage').textContent = reporting;
+        if ($('cnt-usage')) $('cnt-usage').textContent = reporting;
     }
     document.addEventListener('click', e => {
         const b = e.target.closest('[data-usage]'); if (!b) return;
@@ -2603,7 +2752,16 @@
         try { localStorage.setItem('notif:on', notifOn ? '1' : '0'); } catch (e) { /* Harmless preference only. */ }
         updateNotificationToggle();
     });
-    $('notif-bell').addEventListener('click', () => { const pop = $('notif-history'); pop.hidden = !pop.hidden; $('notif-bell').setAttribute('aria-expanded', String(!pop.hidden)); if (!pop.hidden) { updateNotificationToggle(); renderNotificationHistory(); } });
+    function placeNotifPopup() {
+        const pop = $('notif-history'), bell = $('notif-bell'); if (pop.hidden) return;
+        const r = bell.getBoundingClientRect(), vw = document.documentElement.clientWidth;
+        const w = Math.min(420, vw - 24);
+        // Prefer the popup's edge under the bell; clamp inside the viewport with a 12px margin.
+        let left = Math.round(r.left); if (left + w > vw - 12) left = vw - 12 - w; if (left < 12) left = 12;
+        pop.style.left = left + 'px'; pop.style.top = Math.round(r.bottom + 8) + 'px'; pop.style.width = w + 'px';
+    }
+    $('notif-bell').addEventListener('click', () => { const pop = $('notif-history'); pop.hidden = !pop.hidden; $('notif-bell').setAttribute('aria-expanded', String(!pop.hidden)); if (!pop.hidden) { updateNotificationToggle(); renderNotificationHistory(); placeNotifPopup(); } });
+    window.addEventListener('resize', placeNotifPopup); window.addEventListener('scroll', placeNotifPopup, { passive: true });
     $('notif-list').addEventListener('click', e => { const b = e.target.closest('[data-notice]'); const n = b && notifications[Number(b.dataset.notice)]; if (n) showDevice(n.hw); });
     document.addEventListener('click', e => { if (!e.target.closest('#notif-wrap')) { $('notif-history').hidden = true; $('notif-bell').setAttribute('aria-expanded', 'false'); } });
     // =====================================================================
@@ -2615,8 +2773,8 @@
         { key: 'tslink', label: 'TS Link', icon: 'fa-link', own: [{ key: 'cars', label: 'السيارات والمرسِلون' }] },
         { key: 'controller', label: 'الكونترولر', icon: 'fa-gauge-high', own: [{ key: 'voice', label: 'الأوامر الصوتية' }, { key: 'telemetry', label: 'التليمتري' }] },
         { key: 'leo', label: 'TS Leo Dash', icon: 'fa-car', own: [] },
-        { key: 'backbutton', label: 'Back Button', icon: 'fa-arrow-left', own: [] },
     ];
+    const APP_ICONS = {"wallpapers": "data:image/png;base64,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", "store": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACgAAAAoCAYAAACM/rhtAAAFn0lEQVR42tWZWWxc1RnHf+fcbeaOx+OxTWKcpEAWW0TBITaQ0hQKFCGrhE1ILAKpCgUhwVuREHmqQPBGn/pQpSqqeKvaVEkFUkUDCmkSpKQOURJl3/ES7DgZL7Pd5ZzTh+skJI2TOI7d6ZGuNBrdmfvT/zvf//+dGdG1ooNJlmF2l7jam3YNgF353MtAZY3ATcogawzuv1hkDcJdBimp8SVrVL2LKtqz5iFi4gKMAX2DstizBVcJDFGsAbCkwE9JhEhg/6eAxkA11HS1+XQs9rElHBsI2La3mABY4pqQciZVSwANa7qb6F5ZT7GsOD+uuK/N592XW8ikLWJ16d5ZU1CbpPWUMrQv8Og9G/LJP86htUEgiJTh511ZXngkzx8/P4ttydkDNAZ8T+C5gsKY5sSZkF1HKvgpSV3aAgxSCDbvHqel0eHOFo/TgyGuc/VS39ISW1IQxZrXVzfz0a/m0bEojTHwzEM57m/3UUqjNWhtcG1B72BAQ1YSK4OYKQUFIOSlZggiw5c94zRmbe5r83m8M0tXu4/rCNb+YYCD31XJpCRKw5y8w2AhvqYR29PzNUEcG6qBxrUFC1s9Vi3L0NnmMzdv0z8c0tnus2HrCFGsOV+McR1BFBt8T/BoZx2/3zicdPKtApQTtQiixNeachYP31vPQx0Z2ualyPqSgXMRv/3LIM05h+4HBCMlxfqvCzQ3OESxIVaGta+0EASGY/0BaU9OajX2lBQDyoFBYLir1eNny+t4cFmGet/CGBgYjvhq0zhDIzFDBcWcBifZWyZROwg1C1tc3ni6mQW3uaxd148lxfSNWsrky7U2LF+cpvuBHCuWpMmkJKe+DxnTCgO8/+kZHBvW/fpHbN5d4sDpMiDwPcmqe3yeXZVn2aIUR3sD3lvXT9/ZiJQrrhl79o2UtFhRLLzd5aXHGrn/7jSWFBzpC/lixxh7jpf58LVWIm0oVRRd7Rk8V1INFc0NDuVAs/on9eSzefqGI373tyG27CkhBNeFuy6gEFAONE/+OMcvuxtxHcG+41W+2DnGt0fLFCuaxmySqVKCMck+KFU1K5dmyPqSsVLMYCHm038W2L6vSDXQZNLykqHf7LAgBRSrmhcfybPmySZ6DpXZsHWEfScqRHFixnW+REzkVBhq5uZtnn84R6wMShk29RSxLcGmnjEO91bJ+RZ1vkTrG29KezLlgsiwuNXjqVU5Pv7zIF/vLqKBtCtwHTCaiw+SFgQRvPpEI/ObXSwp2Hmwwjf7i3z81jy+Gwo4eSZESKYEN2mSCAHVyLByqc/GbSN8tn2UtCfw3SSOjL7cqbUCPyU52hewcdso6ZREY1jUmsBaUqC1uemJ+uqxNaHivuNVclkbPTFkSgHK/GBimXhtWbB+S4Hh0fiidYSxufiZ6Yz8k55YlIbmBptiWSGFwJKJD2bTkl88mCOOzaWxCvBciWMnsScEuI7ElnB+XCHkLQQ0BjxH8u9DJZ79aY7ONp9iRVGsKObkLd55cS4D50LC2CAn5LmQBEqBJaEwpmiqt9h/KmDX4TIpV055/03aJMaAayfJ8NfNI7z9XDPnRhWRMtze5PD3raPsPFAm60scS2A7MD6uqQaaurSkVNHsOFgk7Vl89s0YShlsW1x3vJ+SzWgDvifpOVLmcF+Vu+9IYVuCE/0BJ78P+OC1Viqh4ZPPz9JQZ7PrUBmloXco4jd/GmCwoLCkwpLipuGua9R6YvgMI8OOAyUMkHKTwVNraJ/v8eYzt9E7GLH+XyNkMxZ7T1QwJkmJC5vzZuEARNeKDjOVKcaQeJkUsGSBh2tL9p+qEMUGxxaXbZNbsewpnTN+4JMG2Hu8ijGGtCdxplHGGTt2+p4AksCfCbhpA+oZgrrSBwW1u8T/xa9b1KiK4sqoE7UGd7UsFrUEN1kXi1r6G+I/0oZmzvJpeHkAAAAASUVORK5CYII=", "leo": "data:image/png;base64,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", "controller": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACgAAAAoCAYAAACM/rhtAAAIWUlEQVR42rWZe4xV9RHHPzPnnHvv3rsLKCIgLykKUVRMEJX1QVCrYiU2VQo1mjTVoLZp1KQPkxpb2yp/aPyjtUbxQaLGWqxSlLS2tZUgrTZqVUCp+EKs4KLCsnd37+M8pn+cc5f7OHfZjXaTmz27Z/bMd38z3/nOzBGSL1u7DPnmE9iy4+HCieCI4bnghyAaG4kc/NT/jIBQd93m57TrnAfVMDZ+dQty61tDWBIrsPvmI9e8it1/NnR4huPEAMohaAJO65wNB07r7qcCb7IDyGdiP2EIpVDkksex+1Yi16xGhk7u3kXQ6RmqUAkTUNrqoB245pNtBnRIO4NcJr7ur8Qg1y5LTvD+RVDIGL5BGIGj7cNG/SnQBITWdGhr1wS+9t11IOtC2Re58FHE1iwCUyPnxiGtgTtUWGtOG8JaA1e7rtkBaEr468DVfAHkPSgHkFVRQgc6PahG7cHJaMHJ8OAkDRwH/ZYC6MpBOcLFwQhrd9ucHCnhaCFEE7i2ds1hlVa/CkQG6ppLxj3I1v8zIQxB0kpO2j82GECHh+K3AZcWVkkjhBzSLrL4I0783DCydB/1wFWgEqANrGsX1vqck5Hk3EE7M9CODNqVpb8SURXBOSwPKpiRDq7mQxW3tQwMA26UhDADyXts+WA/v3rqLfYeKCEqLJxzJNcvO5EOz8XCKHlcM7j4uWIPn28jkq9RKEQUGWFkuPkM7+wpcs8zb7PktGnM+8rhlKoh61/6iF27+/j5ytMoJH4lDYMIYo9cYF8qISypYwn5du7uY9KETnJjslDy43w/osCTG/5DUA1ZvmQOUbGKOil6L4J+mYQwM6Ksy9rnP+CW1S+z70CZo2cfgSlx4UWIgoiwZ4CL509loOQTlQPEqdN7afThDptzIyGECAZEoWGA2+GR8Rw2b+lh2oQCuZzHqse20j13AnffcCY5je1FhWLJxw+MbA0gdX6S6LhfhBCRCRYZTsbB6cxAZGx/93N29vTz388H2fb+fp7YvJMzT5hEsRQQBCGBKm5nljff/pS3d/WS7cwSDlZxhrqmxirgjlYhTCCK4qTWjjjX9u8v8dcX3+P3L3zIsy9/TLEMP15+PFPG5+npDbjuG3NZNH8aYV8ZN58hcpUf3vMily2eBRkHBtIqSOzTHQ0hIjNUiE/LYNsHvfx2007++NJH7NjdjwN8/azprFg8i+4F01iz7k0iAz8wNOeiTgfv7TrA1as2ImJctXQu1leJCdKcaolfNx1cc8tEDK4zg4XGX17ezYPP7uDpf+3BFRg/NsOYnMNDNy1iyWnTOPeGP/GP7Z9x9FGdCBBhvLLtE37zu61s+OcuzlkwldU/WoSncYqItu+83Vbtbcw5MxBH0YLHpi093P7YVv78708Zl4crzz2a7y8/ibsee531m3dx6uwJbP+wl79v2Uv3vCPpH/RxBb531wv0fFbmpGOP4OFbzmHJWTOhFGJ+lDC4XsFICXGbfs4McJSqI/zk3le486l3OOpwl5tXHMeV5x/D7OnjoMNDEEIDPzJCg/GdyuPPvcu+virTJ+U4aeZ4rr5xLhctnAGuQ1SsIiqxNg9FikYMOlRm2hEiNrKsw+W/3MTfXtvLqm+fyFUXHMOEiV3gh/jFKg5x2XAdob8ScNujr1H2I7IZhx98ax6Kce0lJzB2YhdRbwWTMGZsE1tbUovmHGwiRGiGMybLmg076OmtsPWBpUyd3AXlgLCvgqigjqKOEobGmEKGNeu389K2vRDBsvOOpfvkKXz1+g10nzyF7nF5RMAZhhBpDa02S0uN1SICobH1/X08eONCpk7uwu+tYIHhuIqqokn75DjCwKDP/LkTueO7p1MO4ke9/u5n+CGUqhGO62BDoDQ+LUlpEJq6bW0pK4l8qaNYJWTW5C5mjs/jH6jgeYoBJgqOMliNe0kRoeJHnHfqdCaNzxNa/PB81jnYoAqtdQ5aupfm1ktblYShEEshw0A1ZOueIt6kTlBF8xlkTJY7ntzGnt5yPIVZ/Oelsk8QRKjGnXNvv49jxpyph0FgqDZ30doKThvDrw0jHzLUzwmCBRFfWziDXzzyBk8/9z4fFyu8tquXa1dtBBGOOW4iVgmJzJL8ioFFkTFnylgU4/brFjBj+jiiSoCotidECrhGLW7KB3UUKwecMOtwbr7iZO5Yu4UHntkBRCw5YwbfuXAOmzbv5OzTZ6AiFHIOh43Lc2Cgh4tOn8LSM2aiImQ7MjDoo7VtxTCEaBnORBB76lJru3NJTkPzGXCUvgNlClkPZ3IXT/7hLS772UbeuHcpl9/2PItPmcqvb1rMvk+KFAoZsp4LkRFFpEhZylhLeo8ptu5SG3aoFiFKkl49xSIjEuHTfp+7122jv+xz5LgCNy6fR85VRBTMYgVSSRnmh8+55q5JbN1lNrQgSpuw6iZ+k2RsBPAcyLn41Qgv58XdcpTIoxADrc/vUYNraLdGNlRL3T0LDev38VQIixU0KTdxXZB0cDJCcHVlyCXnJtusNns8SR8NRST5teBou1waHSEa/JpAIYNSCeP9XH0h1UMM1amVf3QK0TastftdWShVUUwFz2mc6BtmkmHAoSkpMTKFGHasFQFXwRBlfxYGqvGoSMoiZ1hwtA79X4AQDWNrsQL9nckCc8MKyCcLzMDAGQZcu8VkGiFkhIRoWWB6MFgRmX8namuXIRc/DsVqHOqCd2hwkuZU0pftIwWnAoVsvF3tGxSZf2fdCjhZWNv6K6DLMzyNWVTbBLRU/nYqMEKFaF5adubie4FBqSKy4C7slZXIKauHGu2DryF+ejx0nwKOWry+CIi3/tJackb82kHSX2MYUMhAJYhV4OmdyK1PNLyG+B//nc4hsUZTJAAAAABJRU5ErkJggg==", "backbutton": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACgAAAAoCAYAAACM/rhtAAAFVklEQVR42tWZeWxUVRSHv3vfm5p0KKNlscimAu1UaJvSFqEolhQRATfEKIIEQgBxIdEIgRgTEwQx+LdLDErYkWCAIspOKfsiFAyhBYolQbayTJnSdt579/rHMBMGutFOyXiTyST3vTnvu+fc8zv3vBFaa+oZ9V5opSHqmjRjAOze50aAyhiBq5dBxhjcfSwyBuEiICUxPmSMei/sRfNhPUkpFUxRIQhJm5SNB1DoBoQwam7QGiFEk+cb08HoK7AQHDp4mMLCIqr8fjweD4Pz88jISG8UslU8qLUOh1EIwcaNf3K69DT9ns0hMTGRSxcvsf/AAdLT0xk+fFjDkLqVh8/n0wcOHKzz2qJfFuvSklKttdaO49R5T3QBVfCrsrJSnzl9Rtu2ff8tSoXnr1y5ogsKfm8QMKo6aDs2Sim2bN7K3Dlfs35tARrN9u07Wb+2AP8tP0IIpDQAaNvWQ6C2tsGMNqO134QQmGbQ3MDncrlw4SInT57CV1lJwboN3Lzp4/qNG0yYOB7HsZFSUlVVRUVFRYMZbbYUTEoZNlxefp69e/axu2gPJadKGfveGLZs2kpWViZ5+YNp1y4x4ndbt2xDqWAyaaURRhQAlVIIIcKf6urqoITsKOLYseNUVFyjc+ckZn8+k+5PdmP1qjUI0yA3t3/Yhsvl4vChI6xauZoF385v4DT4AID3qn95+XkKdxRSuHMXly9fRWtNt+7dGD9hLKnPeEGDZdloreAuJfP7/fy2Zh0rlq9k8pRJPN3jqbBHmw2olAobOHHibzZu+IN9e/fj81WSmppC+/btCFgBvpzzBY937Mj7Uz7CHR/P9E8+RAiBUpqysjI2b9rKju07MaTBrNkzeCFvUITtZgGGVlf+TznLlq5gV+FulKPIyExjxMgR5PTLYuZns7FuWLRNSOD69etcvnSJ9Ix0KiquERf3CMVHj7OnaA9ut5tXX3uFUaNfx+12NwrXKGDIwPp1Bfz040Is2yZ3YH+Gj3iZvtmZSCGx7WAYg4cBgXIcTJfJmdNnmTdnPtKQdOqUxMDn3+ClYUPxeDz3RaVZgCHP/bxwEUuXrCB/SB5vjh6F15sSvq6UCmYfQW2zLYsli5dTU12LFJK8wYNIeiKJnj17kJmZGZFkTYGrFzC0uuLi42zbtoNvFswlJyf7Pt2TUqKkwlEKd5s2rF27jt1FezFNk569ejJ12hQmT5pGWnpvMjIy0FpjGMYDH1jrHUVFRXw8/QNycrJxHCdi9XefMaQUWFYtnkc9TJ46Ecu2iIuLo6zsHP9euIBjO0gpm+y1Rj0YEt7ExxLp06c3ylERgnxvaZJCUn27mpEjR3CurIzamgAAhmHgcsXh3DmsNvfIX6/mCaCmpgZpSBzHwXGc8BYoLNwVDre+s6hAIEAgYCGFBA1SCGw7mN13241aiHslJ7Ni2Sps28Y0TQzDQCnF99/9gGVZAOHQhyqBNAwc5eBOiOd29W3i4+N5ceiQZnuwzhCH9lh2ThZnz5Yxc8YsUr1eDMPgVEkJaWlpDBmSH94OAnCZJi6Xi0AggGVb5OYOoEOHDsz75itSvMkNVotmyUyouXn7nbfIzMzgryNH0cCkSRNJ8aawcuWvOLbD2HFjuHWrii5du9zZcy5mzPyU3IEDAEhKSmpS79EsoQ5BJqckk5ySHLFHi4+d4OqVyyS0TaA2UMu48e8C4PWmRGhlcz33QD2JUjpY9O9ASynx3fRx6PBh/P4qsrP60qVrl7CnmlologbYktaypcOMVufWGnAPrXFv6bsZEcN84n/xdosY9aK4t9SJWIOrqxaLWIKrT2ZELP0N8R/IVKXJcLpAYAAAAABJRU5ErkJggg==", "tslink": "data:image/png;base64,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"};
     const COMMON_SUBS = [{ key: 'overview', label: 'نظرة عامة' }, { key: 'versions', label: 'الإصدارات' }, { key: 'crashes', label: 'الأعطال' }, { key: 'tokens', label: 'التوكنات' }];
     const subState = {};
     function moveChildren(from, to) { if (!from || !to) return; while (from.firstChild) to.appendChild(from.firstChild); }
@@ -2628,7 +2786,9 @@
             <button class="tab" role="tab" data-tab="crashes"><i class="fa-solid fa-bug"></i> الأعطال <span class="count" id="cnt-crashes">0</span></button>
             <button class="tab" role="tab" data-tab="blocklog"><i class="fa-solid fa-clipboard-list"></i> سجل الحظر <span class="count" id="cnt-blocklog">0</span></button>
             <span style="width:1px;background:var(--panel-border);margin:0 4px;align-self:stretch"></span>
-            ${APP_TABS.map(a => `<button class="tab" role="tab" data-tab="${a.key}" ${a.key === 'store' ? 'id="tab-store"' : ''}><i class="fa-solid ${a.icon}"></i> ${esc(a.label)}</button>`).join('')}`;
+            <span hidden id="cnt-usage"></span><span hidden id="cnt-tokens"></span>
+            <button class="tab" role="tab" data-tab="generator"><i class="fa-solid fa-key"></i> المولّد</button>
+            ${APP_TABS.map(a => `<button class="tab" role="tab" data-tab="${a.key}" ${a.key === 'store' ? 'id="tab-store"' : ''}>${APP_ICONS[a.key] ? `<img class="tab-icon" src="${APP_ICONS[a.key]}" alt="">` : `<i class="fa-solid ${a.icon}"></i>`} ${esc(a.label)}</button>`).join('')}`;
         // hidden masters (kept for rendering, never shown as tabs)
         ['panel-versions', 'panel-tokens', 'panel-usage', 'panel-voice'].forEach(id => { const el = $(id); if (el) { el.classList.remove('active'); el.hidden = true; el.dataset.master = '1'; } });
         APP_TABS.forEach(app => {
@@ -2651,6 +2811,26 @@
             $(`sub-${app.key}-crashes`).innerHTML = `<h3 class="app-h">أعطال ${esc(app.label)}</h3><div id="appcrash-${app.key}"></div>`;
             $(`sub-${app.key}-tokens`).innerHTML = `<h3 class="app-h">توكنات ${esc(app.label)}</h3><div class="table-wrap"><table style="min-width:700px;"><thead>${$('adopt-table').tHead.innerHTML}</thead><tbody id="adopt-body-${app.key}"></tbody></table></div><h4 class="app-h" style="margin-top:14px;font-size:.9rem;color:var(--text-muted)">التوكنات الصادرة</h4><div class="table-wrap"><table style="min-width:700px;"><thead>${$('tok-table').tHead.innerHTML}</thead><tbody id="tok-body-${app.key}"></tbody></table></div>`;
         });
+        // «المولّد»: one button that mints a ten-minute activation code (admin site only — needs the D1 binding).
+        const gen = document.createElement('section'); gen.className = 'tab-panel'; gen.id = 'panel-generator'; gen.setAttribute('role', 'tabpanel');
+        gen.innerHTML = `
+            <div id="gen-box" style="text-align:center;padding:18px 8px;">
+                <button class="btn primary" id="gen-btn" type="button" style="font-size:1.15rem;padding:16px 28px;min-height:56px;"><i class="fa-solid fa-key"></i> إصدار كود تفعيل</button>
+                <div id="gen-unavailable" hidden class="note" style="margin-top:12px;">المولّد يعمل من الموقع فقط (thabthaba-programs-admin) لأنه يكتب في قاعدة التفعيل مباشرة.</div>
+                <div id="gen-code-wrap" hidden style="margin-top:22px;">
+                    <div id="gen-code" class="num" style="font-size:2.6rem;font-weight:800;letter-spacing:.18em;direction:ltr;user-select:all;"></div>
+                    <div id="gen-timer" class="num" style="font-size:1.3rem;margin-top:6px;color:var(--warn);direction:ltr;">10:00</div>
+                    <div id="gen-status" style="margin-top:10px;font-size:1rem;"></div>
+                    <button class="btn sm" id="gen-copy" type="button" style="margin-top:10px;"><i class="fa-solid fa-copy"></i> نسخ الكود</button>
+                </div>
+            </div>
+            <h3 class="app-h" style="margin-top:18px;">آخر الأكواد المُصدَرة</h3>
+            <div class="table-wrap"><table style="min-width:640px;"><thead><tr><th>الكود</th><th>أُصدر</th><th>ينتهي</th><th>الحالة</th><th>السيارة</th></tr></thead><tbody id="gen-recent"><tr><td colspan="5"><div class="empty">—</div></td></tr></tbody></table></div>`;
+        panelsHost.appendChild(gen);
+        // «الإصدارات المنشورة»: reached from the stat tile only; the one place Back Button still appears.
+        const rel = document.createElement('section'); rel.className = 'tab-panel'; rel.id = 'panel-releases'; rel.setAttribute('role', 'tabpanel');
+        rel.innerHTML = '<h3 class="app-h">الإصدارات المنشورة لكل البرامج</h3><div id="releases-list"></div>';
+        panelsHost.appendChild(rel);
         // controller: voice settings become its own sub-tab
         moveChildren($('panel-voice'), $('sub-controller-voice'));
         // crashes tab: app filter chips over the two blocks
@@ -2701,6 +2881,18 @@
             const keys = []; rows.forEach(r => Object.keys(r).forEach(x => { if (!keys.includes(x)) keys.push(x); }));
             el.innerHTML = `<div class="table-wrap"><table style="min-width:700px;"><thead><tr>${keys.map(x => `<th>${esc(x)}</th>`).join('')}</tr></thead><tbody>${rows.map(r => `<tr>${keys.map(x => `<td>${x === 'الرابط' && r[x] ? `<a href="${esc(r[x])}" target="_blank" rel="noopener" class="num" style="color:var(--accent);font-size:.78rem;word-break:break-all">${esc(String(r[x]).slice(-48))}</a>` : (x === 'نُشر' && r[x]) ? timeCell(r[x]) : esc(r[x] == null ? '' : String(r[x]))}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
         });
+        // fleet-wide published versions (all six apps)
+        const rl = $('releases-list');
+        if (rl) {
+            const labels = { wallpapers: 'ذبذبة خلفيات', store: 'ذبذبة ستور', tslink: 'TS Link', controller: 'ذبذبة داشبورد', leo: 'TS Leo Dash', backbutton: 'TS Back Button' };
+            rl.innerHTML = order.map(k => {
+                const rows = versionRows(k); const first = rows[0];
+                const icon = APP_ICONS[k] ? `<img class="tab-icon" src="${APP_ICONS[k]}" alt="" style="width:28px;height:28px">` : '<i class="fa-solid fa-cube"></i>';
+                const cur = first ? `<span class="badge info">${esc(first['الإصدار'] || '')}</span> <span class="sub" style="display:inline">${esc(first['المصدر'] || '')}</span>` : '<span class="sub">لا إصدار معروف</span>';
+                const link = first && first['الرابط'] ? ` <a href="${esc(first['الرابط'])}" target="_blank" rel="noopener" class="num" style="color:var(--accent);font-size:.78rem">تنزيل</a>` : '';
+                return `<div class="card" style="margin-bottom:10px;display:flex;gap:12px;align-items:center;flex-wrap:wrap"><div style="display:flex;gap:8px;align-items:center;min-width:180px">${icon}<strong>${esc(labels[k] || k)}</strong></div><div>${cur}${link}</div></div>`;
+            }).join('');
+        }
         // crashes → per app
         order.forEach(k => {
             const el = $('appcrash-' + k); if (!el) return;

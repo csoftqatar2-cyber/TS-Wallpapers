@@ -141,7 +141,7 @@ export default {
     }
     if (p.startsWith("/local/") && limited(req.headers.get("cf-connecting-ip") || "?")) return json(429, { message: "slow down" });
     if (req.method === "GET" && p === "/local/ping") {
-      return json(200, { local: true, remote: true, store: !!env.STORE_ADMIN_SECRET, tslink: !!env.TSLINK_ADMIN_TOKEN, leo: !!env.LEO_ADMIN_TOKEN, controller: !!env.CONTROLLER_ADMIN_SECRET });
+      return json(200, { local: true, remote: true, store: !!env.STORE_ADMIN_SECRET, tslink: !!env.TSLINK_ADMIN_TOKEN, leo: !!env.LEO_ADMIN_TOKEN, controller: !!env.CONTROLLER_ADMIN_SECRET, codes: !!env.DB });
     }
     if (!p.startsWith("/local/")) return json(404, { message: "not found" });
 
@@ -153,6 +153,34 @@ export default {
     if (!(await isAdmin(req, env))) return json(401, { message: "admin session required" });
 
     try {
+      // ---- activation code generator (D1 issued_codes) ----
+      if (env.DB && req.method === "POST" && p === "/local/codes/issue") {
+        const now = new Date(); const expires = new Date(now.getTime() + 10 * 60_000);
+        const iso = d => d.toISOString();
+        let serial = null;
+        for (let i = 0; i < 12 && !serial; i++) {
+          const r = new Uint32Array(1); crypto.getRandomValues(r);
+          const cand = "578" + String(r[0] % 1000000).padStart(6, "0");
+          if (cand.startsWith("578300")) continue;                       // the sold closed block
+          const taken = await env.DB.prepare("SELECT 1 AS x FROM devices WHERE serial_number = ? UNION ALL SELECT 1 FROM issued_codes WHERE serial = ?").bind(cand, cand).first();
+          if (!taken) serial = cand;
+        }
+        if (!serial) return json(503, { message: "could not mint a unique code" });
+        await env.DB.prepare("INSERT INTO issued_codes (serial, issued_at, expires_at, issued_by, note) VALUES (?, ?, ?, ?, ?)")
+          .bind(serial, iso(now), iso(expires), "programs-admin", "generator").run();
+        return json(200, { serial, issued_at: iso(now), expires_at: iso(expires) });
+      }
+      if (env.DB && req.method === "GET" && p === "/local/codes/status") {
+        const serial = (url.searchParams.get("serial") || "").trim();
+        if (!/^578\d{6}$/.test(serial)) return json(400, { message: "bad serial" });
+        const row = await env.DB.prepare("SELECT serial, issued_at, expires_at, used_by, used_at FROM issued_codes WHERE serial = ?").bind(serial).first();
+        if (!row) return json(404, { message: "unknown code" });
+        return json(200, row);
+      }
+      if (env.DB && req.method === "GET" && p === "/local/codes/recent") {
+        const rows = await env.DB.prepare("SELECT serial, issued_at, expires_at, used_by, used_at FROM issued_codes ORDER BY issued_at DESC LIMIT 30").all();
+        return json(200, { codes: rows.results || [] });
+      }
       if (req.method === "POST" && p.startsWith("/local/store/")) {
         const name = p.slice("/local/store/".length);
         if (!RPC_ALLOW.test(name)) return json(404, { message: "rpc not allowed" });
