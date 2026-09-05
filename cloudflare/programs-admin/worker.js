@@ -313,6 +313,12 @@ export default {
         const me = cookieOf(req, DEV_COOKIE);
         return json(200, { devices: (rows.results || []).map(r => ({ ...r, id: r.id.slice(0, 8), current: r.id === me, full: undefined })) , me: me ? me.slice(0, 8) : null });
       }
+      if (env.DB && req.method === "POST" && p === "/local/auth/devices/rename") {
+        const body = await readJsonBody(req); const prefix = String(body.id || "").slice(0, 8); const label = String(body.label || "").trim().slice(0, 40);
+        if (!/^[A-Za-z0-9_-]{8}$/.test(prefix) || !label) return json(400, { message: "bad id/label" });
+        await env.DB.prepare("UPDATE device_sessions SET label = ? WHERE substr(id, 1, 8) = ?").bind(label, prefix).run();
+        return json(200, { ok: true });
+      }
       if (env.DB && req.method === "POST" && p === "/local/auth/revoke") {
         const body = await readJsonBody(req); const prefix = String(body.id || "").slice(0, 8);
         if (!/^[A-Za-z0-9_-]{8}$/.test(prefix)) return json(400, { message: "bad id" });
@@ -335,9 +341,11 @@ export default {
           if (!taken) serial = cand;
         }
         if (!serial) return json(503, { message: "could not mint a unique code" });
+        // issued_by = the first 8 chars of the minting device's session id (its label is joined at read time)
+        const dev = cookieOf(req, DEV_COOKIE); const by = dev ? dev.slice(0, 8) : "programs-admin";
         await env.DB.prepare("INSERT INTO issued_codes (serial, issued_at, expires_at, issued_by, note) VALUES (?, ?, ?, ?, ?)")
-          .bind(serial, iso(now), iso(expires), "programs-admin", "generator").run();
-        return json(200, { serial, issued_at: iso(now), expires_at: iso(expires) });
+          .bind(serial, iso(now), iso(expires), by, "generator").run();
+        return json(200, { serial, issued_at: iso(now), expires_at: iso(expires), issued_by: by });
       }
       if (env.DB && req.method === "GET" && p === "/local/codes/status") {
         const serial = (url.searchParams.get("serial") || "").trim();
@@ -347,7 +355,7 @@ export default {
         return json(200, row);
       }
       if (env.DB && req.method === "GET" && p === "/local/codes/recent") {
-        const rows = await env.DB.prepare("SELECT serial, issued_at, expires_at, used_by, used_at FROM issued_codes ORDER BY issued_at DESC LIMIT 30").all();
+        const rows = await env.DB.prepare("SELECT ic.serial, ic.issued_at, ic.expires_at, ic.used_by, ic.used_at, ic.issued_by, ds.label AS issued_by_label FROM issued_codes ic LEFT JOIN device_sessions ds ON substr(ds.id, 1, 8) = ic.issued_by ORDER BY ic.issued_at DESC LIMIT 30").all();
         return json(200, { codes: rows.results || [] });
       }
       if (req.method === "POST" && p.startsWith("/local/store/")) {

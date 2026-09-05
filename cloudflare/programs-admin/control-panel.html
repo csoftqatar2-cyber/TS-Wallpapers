@@ -2299,8 +2299,9 @@
             $('gen-recent').innerHTML = rows.length ? rows.map(c => {
                 const expired = !c.used_by && ts(c.expires_at) < Date.now();
                 const st = c.used_by ? '<span class="badge ok">مستخدم</span>' : expired ? '<span class="badge">منتهٍ</span>' : '<span class="badge warn">صالح</span>';
-                return `<tr><td><span class="num">${esc(c.serial)}</span></td><td>${timeCell(c.issued_at)}</td><td>${timeCell(c.expires_at)}</td><td>${st}</td><td>${c.used_by ? hwLink(c.used_by) : '<span class="sub">—</span>'}</td></tr>`;
-            }).join('') : '<tr><td colspan="5"><div class="empty">لا أكواد بعد</div></td></tr>';
+                const by = c.issued_by_label ? esc(c.issued_by_label) : (c.issued_by && c.issued_by !== 'programs-admin' ? `<span class="num">${esc(c.issued_by)}</span>` : '<span class="sub">—</span>');
+                return `<tr><td><span class="num">${esc(c.serial)}</span></td><td>${timeCell(c.issued_at)}</td><td>${by}</td><td>${timeCell(c.expires_at)}</td><td>${st}</td><td>${c.used_by ? hwLink(c.used_by) : '<span class="sub">—</span>'}</td></tr>`;
+            }).join('') : '<tr><td colspan="6"><div class="empty">لا أكواد بعد</div></td></tr>';
         } catch (e) { setErr('gen-recent', ''); }
     }
     async function renderSessions() {
@@ -2309,11 +2310,13 @@
         try {
             const r = await localGet('/local/auth/devices');
             const rows = (r && r.devices) || [];
-            box.innerHTML = rows.length ? rows.map(d => `<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:6px 0;border-top:1px solid var(--panel-border)"><div><strong>${esc(d.label || 'جهاز')}</strong>${d.current ? ' <span class="badge ok">هذا الجهاز</span>' : ''}${d.revoked ? ' <span class="badge bad">ملغى</span>' : ''}<span class="hw">${esc(d.ip || '')} · ${esc(relTime(d.last_seen))}</span></div>${d.revoked || d.current ? '' : `<button class="btn sm danger" type="button" data-revoke="${esc(d.id)}">إلغاء</button>`}</div>`).join('') : '<span class="sub">لا أجهزة</span>';
+            box.innerHTML = rows.length ? rows.map(d => `<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:6px 0;border-top:1px solid var(--panel-border)"><div><strong>${esc(d.label || 'جهاز')}</strong>${d.current ? ' <span class="badge ok">هذا الجهاز</span>' : ''}${d.revoked ? ' <span class="badge bad">ملغى</span>' : ''}<span class="hw">${esc(d.ip || '')} · ${esc(relTime(d.last_seen))}</span></div><span style="display:flex;gap:4px"><button class="btn sm" type="button" data-rename-dev="${esc(d.id)}" title="تسمية الجهاز"><i class="fa-solid fa-pen"></i></button>${d.revoked || d.current ? '' : `<button class="btn sm danger" type="button" data-revoke="${esc(d.id)}">إلغاء</button>`}</span></div>`).join('') : '<span class="sub">لا أجهزة</span>';
         } catch (e) { box.innerHTML = `<span class="sub">${esc(errMsg(e))}</span>`; }
     }
     document.addEventListener('click', async e => {
         if (e.target.closest('#sess-btn')) { const b = $('sess-list'); if (!b.hidden) { b.hidden = true; return; } renderSessions(); return; }
+        const rn = e.target.closest('[data-rename-dev]');
+        if (rn) { const label = window.prompt('اسم الجهاز / صاحبه:', ''); if (label && label.trim()) { try { await localPost('/local/auth/devices/rename', { id: rn.dataset.renameDev, label: label.trim() }); toast('success', 'تمت التسمية'); renderSessions(); genRecent(); } catch (err) { alertDialog('تعذّرت التسمية', errMsg(err)); } } return; }
         const rv = e.target.closest('[data-revoke]');
         if (rv) { const ok = await confirmDialog({ title: 'إلغاء جهاز الدخول؟', html: 'سيُطلب من ذلك الجهاز كلمة المرور مجددًا.', confirmText: 'إلغاء الجهاز', danger: true }); if (ok) { try { await localPost('/local/auth/revoke', { id: rv.dataset.revoke }); toast('success', 'أُلغي الجهاز'); renderSessions(); } catch (err) { alertDialog('تعذّر الإلغاء', errMsg(err)); } } }
     });
@@ -2914,7 +2917,7 @@
                 </div>
             </div>
             <h3 class="app-h" style="margin-top:18px;">آخر الأكواد المُصدَرة</h3>
-            <div class="table-wrap"><table style="min-width:640px;"><thead><tr><th>الكود</th><th>أُصدر</th><th>ينتهي</th><th>الحالة</th><th>السيارة</th></tr></thead><tbody id="gen-recent"><tr><td colspan="5"><div class="empty">—</div></td></tr></tbody></table></div>`;
+            <div class="table-wrap"><table style="min-width:640px;"><thead><tr><th>الكود</th><th>أُصدر</th><th>الجهاز المُصدِر</th><th>ينتهي</th><th>الحالة</th><th>السيارة</th></tr></thead><tbody id="gen-recent"><tr><td colspan="5"><div class="empty">—</div></td></tr></tbody></table></div>`;
         panelsHost.appendChild(gen);
         // «الإصدارات المنشورة»: reached from the stat tile only; the one place Back Button still appears.
         const rel = document.createElement('section'); rel.className = 'tab-panel'; rel.id = 'panel-releases'; rel.setAttribute('role', 'tabpanel');
