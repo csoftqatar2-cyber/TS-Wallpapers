@@ -339,13 +339,15 @@ export default {
         const sub = p.slice("/local/tslink".length) || "/overview";
         if (!TSLINK_GET_ALLOW.test(sub)) return json(404, { message: "path not allowed" });
         if (!env.TSLINK_ADMIN_TOKEN) return json(503, { message: "ts-link token not configured" });
-        return passthrough(await fetch(`${TSLINK_ADMIN_BASE}${sub}${url.search}`, { headers: { Authorization: `Bearer ${env.TSLINK_ADMIN_TOKEN}` }, cache: "no-store" }));
+        const f = env.TSLINK_SVC ? env.TSLINK_SVC.fetch.bind(env.TSLINK_SVC) : fetch;
+        return passthrough(await f(`${TSLINK_ADMIN_BASE}${sub}${url.search}`, { headers: { Authorization: `Bearer ${env.TSLINK_ADMIN_TOKEN}` }, cache: "no-store" }));
       }
       if (req.method === "GET" && p.startsWith("/local/leo")) {
         const sub = p.slice("/local/leo".length);
         if (!LEO_GET_ALLOW.test(sub)) return json(404, { message: "path not allowed" });
         if (!env.LEO_ADMIN_TOKEN) return json(503, { message: "leo token not configured" });
-        return passthrough(await fetch(`${LEO_ADMIN_BASE}${sub}${url.search}`, { headers: { "X-Admin-Token": env.LEO_ADMIN_TOKEN }, cache: "no-store" }));
+        const f = env.LEO_SVC ? env.LEO_SVC.fetch.bind(env.LEO_SVC) : fetch;
+        return passthrough(await f(`${LEO_ADMIN_BASE}${sub}${url.search}`, { headers: { "X-Admin-Token": env.LEO_ADMIN_TOKEN }, cache: "no-store" }));
       }
       return json(404, { message: "not found" });
     } catch (e) {

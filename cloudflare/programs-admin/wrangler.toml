@@ -31,3 +31,13 @@ CTRL_TELEMETRY_ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFz
 binding = "DB"
 database_name = "ts-activation"
 database_id = "978813d3-eeb3-4697-9d73-241242d0cfde"
+
+# Sibling Workers are reached through service bindings (public workers.dev fetches between Workers of
+# the same account fail with error 1042).
+[[services]]
+binding = "TSLINK_SVC"
+service = "tslink-bot"
+
+[[services]]
+binding = "LEO_SVC"
+service = "tsleo-checkin"

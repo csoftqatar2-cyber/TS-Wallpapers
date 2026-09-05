@@ -28,9 +28,16 @@
         .btn { font:inherit; font-weight:800; font-size:1.35rem; color:#1a1006; background:linear-gradient(135deg, var(--primary), var(--accent)); border:0; border-radius:18px; padding:22px 34px; min-height:72px; min-width:min(92vw, 360px); cursor:pointer; box-shadow:0 14px 34px -14px rgba(245,158,11,.7); }
         .btn:disabled { opacity:.55; cursor:default; }
         .btn.secondary { background:rgba(255,255,255,.06); color:var(--text); border:1px solid var(--border); font-size:1rem; min-height:48px; padding:12px 20px; box-shadow:none; }
-        #code { font-family:'Cairo', ui-monospace, monospace; font-size:clamp(2.6rem, 12vw, 4.2rem); font-weight:800; letter-spacing:.16em; direction:ltr; user-select:all; line-height:1.1; }
-        #timer { font-size:1.6rem; font-weight:700; direction:ltr; color:var(--warn); }
-        #status { font-size:1.05rem; min-height:1.6em; }
+        .row { display:grid; grid-template-columns:auto 1fr auto; align-items:center; gap:12px; padding:12px 14px; margin-bottom:10px; border:1px solid var(--border); border-radius:16px; background:rgba(0,0,0,.22); text-align:start; }
+        .row .code { font-family:'Cairo', ui-monospace, monospace; font-size:clamp(1.9rem, 9vw, 2.8rem); font-weight:800; letter-spacing:.14em; direction:ltr; user-select:all; line-height:1.1; }
+        .row .timer { font-size:1.25rem; font-weight:700; direction:ltr; color:var(--warn); min-width:4.2em; text-align:center; }
+        .row .mark { font-size:1.8rem; width:2em; text-align:center; }
+        .row.ok { border-color:rgba(34,197,94,.45); background:rgba(34,197,94,.08); }
+        .row.ok .timer { color:var(--ok); }
+        .row.dead { opacity:.55; }
+        .row.dead .timer { color:var(--bad); }
+        .row .sub { grid-column:1 / -1; font-size:.9rem; color:var(--muted); }
+        .row .vin { grid-column:1 / -1; }
         .badge { display:inline-block; padding:4px 12px; border-radius:10px; font-size:.95rem; font-weight:700; border:1px solid var(--border); }
         .badge.ok { color:var(--ok); border-color:rgba(34,197,94,.35); background:rgba(34,197,94,.1); }
         .badge.warn { color:var(--warn); border-color:rgba(251,191,36,.35); background:rgba(251,191,36,.1); }
@@ -56,14 +63,9 @@
             <button class="btn secondary" type="submit">دخول</button>
             <div class="err" id="login-err"></div>
         </form>
-        <div id="app" hidden>
+        <div id="app" hidden style="width:min(96vw, 520px);display:flex;flex-direction:column;gap:14px;align-items:stretch;">
+            <div id="codes"></div>
             <button class="btn" id="gen" type="button">إصدار كود تفعيل</button>
-            <div id="wrap" hidden style="margin-top:22px;display:flex;flex-direction:column;gap:10px;align-items:center;">
-                <div id="code"></div>
-                <div id="timer">10:00</div>
-                <div id="status"></div>
-                <button class="btn secondary" id="copy" type="button">نسخ الكود</button>
-            </div>
             <div class="err" id="err"></div>
         </div>
     </main>
@@ -77,75 +79,54 @@
     const ADMIN_EMAIL = "admin@tswallpapers.app";
     const $ = id => document.getElementById(id);
     let TOKEN = null, REFRESH = null, refreshTimer = null;
-    const gen = { serial: null, expiresAt: 0, tick: null, poll: null, done: false };
-
-    function conn(state, title) { const el = $('conn'); el.className = 'conn ' + state; el.textContent = state === 'muted' ? 'غير متصل' : 'متصل'; el.title = title || ''; }
-    // The refresh token never reaches this page: the Worker holds it behind an HttpOnly device
-    // cookie and hands out short-lived access tokens on request. Nothing durable is stored here.
-    function applySession(d) {
-        TOKEN = d.access_token;
-        try { localStorage.removeItem(SESSION_KEY); } catch (e) {}
-        clearTimeout(refreshTimer); refreshTimer = setTimeout(refreshSession, Math.max(60, (d.expires_in || 3600) - 120) * 1000);
-        $('login').hidden = true; $('app').hidden = false; conn('ok', 'متصل');
+    // Several live codes at once: each row keeps its own countdown and is polled until it is bound
+    // (check mark + the car id) or expires. The button is always available for the next code.
+    const codes = new Map();   // serial -> { serial, expiresAt, used_by }
+    let ticker = null, poller = null;
+    function esc(v) { return String(v == null ? '' : v).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
+    function fmt(left) { return `${String(Math.floor(left / 60000)).padStart(2, '0')}:${String(Math.floor((left % 60000) / 1000)).padStart(2, '0')}`; }
+    function render() {
+        const list = [...codes.values()];
+        $('codes').innerHTML = list.map(c => {
+            const left = Math.max(0, c.expiresAt - Date.now());
+            const cls = c.used_by ? 'row ok' : (left <= 0 ? 'row dead' : 'row');
+            const mark = c.used_by ? '<span class="mark" style="color:var(--ok)">&#10003;</span>' : (left <= 0 ? '<span class="mark" style="color:var(--bad)">&#10005;</span>' : '<span class="mark">&#8987;</span>');
+            const timer = c.used_by ? 'تم' : (left <= 0 ? 'انتهى' : fmt(left));
+            const sub = c.used_by ? `<span class="vin">اتربط بالعربية: ${esc(c.used_by)}</span>` : (left <= 0 ? '<span class="sub">انتهت الصلاحية — أصدر كودًا جديدًا</span>' : '<span class="sub">اكتب الكود في العربية خلال المدة</span>');
+            return `<div class="${cls}" data-serial="${esc(c.serial)}">${mark}<div class="code">${esc(c.serial)}</div><div class="timer">${timer}</div>${sub}</div>`;
+        }).join('');
+        const alive = list.some(c => !c.used_by && c.expiresAt > Date.now());
+        if (!alive) { clearInterval(ticker); clearInterval(poller); ticker = poller = null; }
     }
-    async function refreshSession() {
-        try {
-            const res = await fetch('/local/auth/session', { method: 'POST', cache: 'no-store' });
-            if (!res.ok) return false;
-            applySession(await res.json()); return true;
-        } catch (e) { conn('warn', 'تعذّر تجديد الجلسة'); return false; }
+    async function pollAll() {
+        for (const c of codes.values()) {
+            if (c.used_by || c.expiresAt <= Date.now()) continue;
+            try {
+                const r = await api(`/local/codes/status?serial=${encodeURIComponent(c.serial)}`);
+                if (r && r.used_by) { c.used_by = r.used_by; notify('تم تفعيل عربية بالكود ' + c.serial, 'اتربط بالعربية ' + r.used_by); }
+            } catch (e) { /* next round */ }
+        }
+        render();
     }
-    async function login(pw) {
-        const res = await fetch('/local/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ password: pw }) });
-        const data = await res.json().catch(() => ({}));
-        if (res.status === 403) throw new Error('تم حظر هذا الجهاز بعد محاولات خاطئة');
-        if (!res.ok) throw new Error('كلمة المرور غير صحيحة' + (data.attempts_left != null ? ` (متبقٍ ${data.attempts_left})` : ''));
-        applySession(data);
-    }
-    async function api(path, body) {
-        const res = await fetch(path, { method: body ? 'POST' : 'GET', headers: Object.assign({ Authorization: `Bearer ${TOKEN}` }, body ? { 'Content-Type': 'application/json' } : {}), body: body ? JSON.stringify(body) : undefined, cache: 'no-store' });
-        const txt = await res.text();
-        if (res.status === 401) { const ok = await refreshSession(); if (ok) return api(path, body); throw new Error('انتهت الجلسة — سجّل الدخول'); }
-        if (!res.ok) { let m = ''; try { m = JSON.parse(txt).message || ''; } catch (e) { m = txt; } conn('warn', m); throw new Error(m || `HTTP ${res.status}`); }
-        conn('ok', 'متصل'); return txt ? JSON.parse(txt) : null;
-    }
-    function notify(title, body) {
-        try { if ('Notification' in window && Notification.permission === 'granted') new Notification(title, { body, icon: '/icon-192.png' }); } catch (e) {}
-    }
-    function stop() { clearInterval(gen.tick); clearInterval(gen.poll); gen.tick = gen.poll = null; }
-    function tick() {
-        const left = Math.max(0, gen.expiresAt - Date.now());
-        $('timer').textContent = `${String(Math.floor(left / 60000)).padStart(2, '0')}:${String(Math.floor((left % 60000) / 1000)).padStart(2, '0')}`;
-        if (left <= 0 && !gen.done) { gen.done = true; stop(); $('timer').style.color = 'var(--bad)'; $('status').innerHTML = '<span class="badge bad">انتهت صلاحية الكود</span>'; }
-    }
-    async function poll() {
-        if (!gen.serial || gen.done) return;
-        try {
-            const r = await api(`/local/codes/status?serial=${encodeURIComponent(gen.serial)}`);
-            if (r && r.used_by) {
-                gen.done = true; stop(); $('timer').textContent = '✓'; $('timer').style.color = 'var(--ok)';
-                $('status').innerHTML = `<span class="badge ok">اتربط بالعربية</span><br><span class="vin">${r.used_by.replace(/[<>&]/g, '')}</span>`;
-                notify('تم تفعيل عربية بالكود ' + gen.serial, 'اتربط بالعربية ' + r.used_by);
-            }
-        } catch (e) { /* keep polling */ }
+    function armTimers() {
+        if (!ticker) ticker = setInterval(render, 1000);
+        if (!poller) poller = setInterval(pollAll, 4000);
     }
     async function issue() {
         const b = $('gen'); b.disabled = true; $('err').textContent = '';
         try {
             if ('Notification' in window && Notification.permission === 'default') { try { await Notification.requestPermission(); } catch (e) {} }
             const r = await api('/local/codes/issue', {});
-            stop(); gen.serial = r.serial; gen.expiresAt = new Date(r.expires_at).getTime(); gen.done = false;
-            $('code').textContent = r.serial; $('timer').style.color = 'var(--warn)';
-            $('status').innerHTML = '<span class="badge warn">بانتظار التفعيل من العربية</span>';
-            $('wrap').hidden = false; tick(); gen.tick = setInterval(tick, 1000); gen.poll = setInterval(poll, 4000);
+            codes.set(r.serial, { serial: r.serial, expiresAt: new Date(r.expires_at).getTime(), used_by: null });
+            render(); armTimers();
             notify('تم إصدار كود تفعيل ' + r.serial, 'صالح 10 دقائق');
         } catch (e) { $('err').textContent = e.message || String(e); }
         finally { b.disabled = false; }
     }
     $('gen').addEventListener('click', issue);
-    $('copy').addEventListener('click', () => { if (!gen.serial) return; try { navigator.clipboard.writeText(gen.serial); } catch (e) {} });
+    $('codes').addEventListener('click', e => { const row = e.target.closest('[data-serial]'); if (row) { try { navigator.clipboard.writeText(row.dataset.serial); } catch (err) {} } });
     $('login').addEventListener('submit', async e => { e.preventDefault(); $('login-err').textContent = ''; try { await login($('pw').value); $('pw').value = ''; } catch (err) { $('login-err').textContent = err.message; } });
-    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && gen.serial && !gen.done) poll(); });
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && codes.size) pollAll(); });
     (async () => { if (!(await refreshSession())) { $('login').hidden = false; $('app').hidden = true; conn('muted'); } })();
 })();
 </script>
