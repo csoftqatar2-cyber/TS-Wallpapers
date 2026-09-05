@@ -32,6 +32,31 @@ const SEC_HEADERS = {
   "Strict-Transport-Security": "max-age=31536000; includeSubDomains",
   "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
 };
+// Content Security Policy: the page's one inline script gets a per-response nonce; everything else
+// is pinned to the few hosts the panel actually uses. SweetAlert injects inline styles, hence
+// 'unsafe-inline' for styles only (never scripts).
+function csp(nonce) {
+  return [
+    "default-src 'self'",
+    `script-src 'self' 'nonce-${nonce}' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com`,
+    "style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://fonts.googleapis.com",
+    "font-src 'self' https://fonts.gstatic.com https://cdnjs.cloudflare.com",
+    "img-src 'self' data: blob: https://*.r2.dev",
+    "media-src 'self' blob: https://*.r2.dev",
+    "connect-src 'self' https://ihgmqwzdpugdzddobhbc.supabase.co wss://ihgmqwzdpugdzddobhbc.supabase.co https://ts-wallpapers-upload.tsdash-qatar.workers.dev https://*.r2.dev",
+    "frame-ancestors 'none'", "base-uri 'self'", "form-action 'self'", "object-src 'none'", "upgrade-insecure-requests",
+  ].join("; ");
+}
+function nonce() { const b = new Uint8Array(16); crypto.getRandomValues(b); return btoa(String.fromCharCode(...b)); }
+
+// Per-IP rate limit for the proxies (per isolate; a coarse brake, not the only one).
+const hits = new Map();
+function limited(ip) {
+  const now = Date.now(); const slot = hits.get(ip);
+  if (!slot || now - slot.t > 60_000) { hits.set(ip, { t: now, n: 1 }); if (hits.size > 5000) hits.clear(); return false; }
+  slot.n += 1; return slot.n > 240;
+}
+
 const json = (status, obj) => new Response(JSON.stringify(obj), { status, headers: { "Content-Type": "application/json; charset=utf-8", ...SEC_HEADERS } });
 
 // Verified admin tokens are remembered for a minute per isolate so a page full of calls does
@@ -74,8 +99,11 @@ export default {
     const p = url.pathname;
 
     if (req.method === "GET" && (p === "/" || p === "/index.html" || p === "/control-panel.html")) {
-      return new Response(PAGE, { status: 200, headers: { "Content-Type": "text/html; charset=utf-8", ...SEC_HEADERS } });
+      const n = nonce();
+      const html = PAGE.replace(/<script>/g, `<script nonce="${n}">`);
+      return new Response(html, { status: 200, headers: { "Content-Type": "text/html; charset=utf-8", "Content-Security-Policy": csp(n), ...SEC_HEADERS } });
     }
+    if (p.startsWith("/local/") && limited(req.headers.get("cf-connecting-ip") || "?")) return json(429, { message: "slow down" });
     if (req.method === "GET" && p === "/local/ping") {
       return json(200, { local: true, remote: true, store: !!env.STORE_ADMIN_SECRET, tslink: !!env.TSLINK_ADMIN_TOKEN, leo: !!env.LEO_ADMIN_TOKEN, controller: !!env.CONTROLLER_ADMIN_SECRET });
     }
