@@ -2300,7 +2300,7 @@
                 const expired = !c.used_by && ts(c.expires_at) < Date.now();
                 const st = c.used_by ? '<span class="badge ok">مستخدم</span>' : expired ? '<span class="badge">منتهٍ</span>' : '<span class="badge warn">صالح</span>';
                 const by = c.issued_by_label ? esc(c.issued_by_label) : (c.issued_by && c.issued_by !== 'programs-admin' ? `<span class="num">${esc(c.issued_by)}</span>` : '<span class="sub">—</span>');
-                return `<tr><td><span class="num">${esc(c.serial)}</span></td><td>${timeCell(c.issued_at)}</td><td>${by}</td><td>${timeCell(c.expires_at)}</td><td>${st}</td><td>${c.used_by ? hwLink(c.used_by) : '<span class="sub">—</span>'}</td></tr>`;
+                return `<tr><td><span class="num">${esc(c.serial)}</span></td><td>${timeCell(c.issued_at)}</td><td>${by}</td><td>${c.used_by ? '<span class="sub">—</span>' : timeCell(c.expires_at)}</td><td>${st}</td><td>${c.used_by ? hwLink(c.used_by) : '<span class="sub">—</span>'}</td></tr>`;
             }).join('') : '<tr><td colspan="6"><div class="empty">لا أكواد بعد</div></td></tr>';
         } catch (e) { setErr('gen-recent', ''); }
     }
