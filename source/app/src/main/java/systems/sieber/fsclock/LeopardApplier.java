@@ -176,7 +176,11 @@ class LeopardApplier {
      */
     static void keepTaskOutOfRecents(android.app.Activity activity) {
         try {
-            if(!isOurServiceActive(activity)) return;
+            // Same two witnesses as wasTakenFromUs, and for a sharper reason: on a ROM where
+            // getWallpaperInfo() denies a wallpaper we are actually painting (BYD DiLink 5.1),
+            // asking it alone left the recents card in place on exactly the cars that cannot
+            // survive it — the swipe force-stops us and the wallpaper is gone.
+            if(!isOurServiceActive(activity) && !MediaWallpaperService.isEngineLive()) return;
             android.app.ActivityManager am = (android.app.ActivityManager)
                     activity.getSystemService(Context.ACTIVITY_SERVICE);
             if(am == null) return;
