@@ -392,6 +392,11 @@ public class LeopardPickerActivity extends AppCompatActivity {
     /** Asked at most once per visit, so a declined offer does not come back on every resume. */
     private boolean mRestoreOffered;
 
+    private static final int RESTORE_CONFIRM_TRIES = 12;        // x 500ms = 6s
+    private static final long RESTORE_CONFIRM_POLL_MS = 500;
+    /** A confirmation chain is already running; onResume must not start a second one. */
+    private boolean mRestoreConfirming;
+
     /**
      * Offer to put back a wallpaper the head unit took away.
      *
@@ -408,12 +413,32 @@ public class LeopardPickerActivity extends AppCompatActivity {
      * back — instead of finding it in the library again.
      */
     private void offerWallpaperRestore() {
-        if(mRestoreOffered || isFinishing()) return;
+        if(mRestoreConfirming) return;
+        offerWallpaperRestore(0);
+    }
+
+    private void offerWallpaperRestore(final int attempt) {
+        mRestoreConfirming = false;
+        if(mRestoreOffered || gone()) return;
         if(!LeopardApplier.wasTakenFromUs(this)) return;
+        // Looked gone — ask again before believing it. A cold start resumes this screen inside a
+        // process the system may still be binding the wallpaper into, and one look there reads
+        // "taken" from a car whose picture is a moment from appearing. Same shape, and the same
+        // reason, as awaitSystemScreenResult.
+        if(attempt < RESTORE_CONFIRM_TRIES) {
+            mRestoreConfirming = true;
+            mSetButton.postDelayed(() -> offerWallpaperRestore(attempt + 1), RESTORE_CONFIRM_POLL_MS);
+            return;
+        }
         final String uri = mPrefs.getString(MediaWallpaperService.PREF_URI, null);
         final String type = mPrefs.getString(LeopardApplier.PREF_TYPE, null);
         if(uri == null) return;
         mRestoreOffered = true;
+        // Asked about THIS wallpaper now — so the next launch does not ask about it again.
+        mPrefs.edit()
+                .putLong(LeopardApplier.PREF_RESTORE_ASKED_REV,
+                        mPrefs.getLong(MediaWallpaperService.PREF_REV, 0L))
+                .apply();
         CrashReporter.breadcrumb("leopard: offering to restore a wallpaper that was cleared");
         new AuroraDialog.Builder(this)
                 .setTitle(R.string.leopard_restore_title)
@@ -2482,6 +2507,9 @@ public class LeopardPickerActivity extends AppCompatActivity {
     private void awaitSystemScreenResult(final int msg, final int attempt) {
         if(gone()) return;
         if(LeopardApplier.isOurServiceActive(this)) {
+            // This car does hand the wallpaper to our component — remember it, because the
+            // restore offer is only honest on a car that does. See LeopardApplier.PREF_LIVE_OWNED.
+            LeopardApplier.noteLiveOwnership(this, true);
             // Note left in place on purpose — see resumeAfterApply. Binding that wallpaper is
             // itself about to restart this activity, and the note is what tells its replacement
             // to carry on leaving.
@@ -2491,6 +2519,10 @@ public class LeopardPickerActivity extends AppCompatActivity {
             return;
         }
         if(attempt >= SYSTEM_RESULT_TRIES) {
+            // Either the owner backed out, or this ROM keeps the picture as a bitmap and never
+            // binds us (BYD DiLink 5.1 does exactly that). Both mean the same thing for the
+            // restore offer: we do not own a live wallpaper here, so stop claiming one was taken.
+            LeopardApplier.noteLiveOwnership(this, false);
             clearLeaveAfterApply();
             restartTilePlayers();   // the rest of onResume was skipped for this
             return;

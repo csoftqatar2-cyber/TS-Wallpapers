@@ -20,6 +20,7 @@ import android.service.wallpaper.WallpaperService;
 import android.view.SurfaceHolder;
 
 import java.io.InputStream;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Live wallpaper that plays a user-picked image, GIF, or video, scaled center-crop to fill the
@@ -64,6 +65,33 @@ public class MediaWallpaperService extends WallpaperService {
 
     private enum Mode { NONE, IMAGE, GIF, VIDEO }
 
+    /**
+     * How many real (non-preview) engines of ours exist in this process right now.
+     *
+     * This is the honest answer to "is our wallpaper still on the screen?", and it exists because
+     * the polite answer is not. {@link LeopardApplier#isOurServiceActive} asks
+     * WallpaperManager.getWallpaperInfo(), and on a BYD DiLink 5.1 head unit that reports NO
+     * component at all while this engine is bound and painting — dumpsys agrees with itself:
+     *
+     *     mWallpaperComponent=null
+     *     Window #22 Window{... u0 systems.sieber.fsclock.MediaWallpaperService}
+     *
+     * So the car offered to restore a wallpaper that was never lost, on every single launch.
+     * A counter cannot be wrong the same way: the engine and the picker share one process (no
+     * android:process anywhere in the manifest), and the case the restore offer is FOR — a
+     * force-stop from the recents card — takes the whole process with it, so a fresh start reads
+     * zero exactly when it should.
+     *
+     * A preview engine is deliberately not counted: one exists for as long as the system's
+     * live-wallpaper screen is up, which is precisely when nothing has been set yet.
+     */
+    private static final AtomicInteger sLiveEngines = new AtomicInteger();
+
+    /** True while an engine of ours is bound in this process. See {@link #sLiveEngines}. */
+    static boolean isEngineLive() {
+        return sLiveEngines.get() > 0;
+    }
+
     @Override
     public Engine onCreateEngine() {
         return new MediaEngine();
@@ -90,6 +118,9 @@ public class MediaWallpaperService extends WallpaperService {
          */
         private boolean canvasUsed;
 
+        /** Whether this engine is counted in {@link #sLiveEngines} — a preview never is. */
+        private boolean counted;
+
 
         // image / gif
         private Bitmap bitmap;
@@ -113,6 +144,10 @@ public class MediaWallpaperService extends WallpaperService {
         public void onCreate(SurfaceHolder surfaceHolder) {
             super.onCreate(surfaceHolder);
             prefs.registerOnSharedPreferenceChangeListener(this);
+            if(!isPreview()) {
+                counted = true;
+                sLiveEngines.incrementAndGet();
+            }
             trace("engine created" + (isPreview() ? " (preview)" : ""));
         }
 
@@ -231,6 +266,10 @@ public class MediaWallpaperService extends WallpaperService {
         public void onDestroy() {
             super.onDestroy();
             prefs.unregisterOnSharedPreferenceChangeListener(this);
+            if(counted) {
+                counted = false;
+                sLiveEngines.decrementAndGet();
+            }
             release();
         }
 

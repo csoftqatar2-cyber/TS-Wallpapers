@@ -217,15 +217,65 @@ class LeopardApplier {
      * Only counts files that went to our own live wallpaper: a Lynkco still lives in the Flyme
      * theme app, which no force-stop of ours can disturb, and claiming otherwise would offer to
      * "restore" a wallpaper that was never lost.
+     *
+     * Two answers are needed, not one. {@link #isOurServiceActive} is the question Android is
+     * meant to answer, and a BYD DiLink 5.1 answers it wrongly: getWallpaperInfo() reports no
+     * component while our engine holds a window and paints the picture, so the car asked to
+     * restore a wallpaper it was still showing, every time the app was opened. Our own engine
+     * count ({@link MediaWallpaperService#isEngineLive}) cannot disagree with reality — and the
+     * one case this offer exists for, a force-stop, kills the process that holds it.
      */
     static boolean wasTakenFromUs(Context ctx) {
         try {
             SharedPreferences p = prefs(ctx);
             if(p.getString(MediaWallpaperService.PREF_URI, null) == null) return false;
             if(!needsSystemScreen(ctx, p.getString(PREF_TYPE, null))) return false;
-            return !isOurServiceActive(ctx);
+            if(isOurServiceActive(ctx)) return false;
+            if(MediaWallpaperService.isEngineLive()) return false;
+            // A car whose ROM never hands the wallpaper to our component has nothing to lose and
+            // nothing to restore; see PREF_LIVE_OWNED.
+            if(!p.getBoolean(PREF_LIVE_OWNED, true)) return false;
+            // And a car we are not sure about is asked once per applied wallpaper — never once
+            // per launch. See PREF_RESTORE_ASKED_REV.
+            return p.getLong(PREF_RESTORE_ASKED_REV, -1L)
+                    != p.getLong(MediaWallpaperService.PREF_REV, 0L);
         } catch(Throwable t) {
             return false;
+        }
+    }
+
+    /**
+     * Whether Android has ever actually handed this car's wallpaper to OUR component.
+     *
+     * Not every head unit does. A BYD DiLink 5.1 takes the picture from the system's
+     * live-wallpaper screen and keeps it as a plain bitmap: the owner's picture is on the screen
+     * and stays there across a reboot, while {@code mWallpaperComponent} is null and our engine
+     * is never bound. Nothing was taken from us there — we were never given it — so the offer to
+     * put it back is pure noise, and it was arriving on every single launch.
+     *
+     * Written by the picker, which is the only place that can see the answer: it already waits a
+     * few seconds after the system screen to find out whether the wallpaper became ours
+     * (LeopardPickerActivity.awaitSystemScreenResult). True and false are both worth recording.
+     *
+     * Defaults to TRUE for a car that has not been through an apply since this shipped: the offer
+     * exists for cars that lost a wallpaper before the fix reached them, and defaulting to false
+     * would quietly retire it for exactly that population.
+     */
+    static final String PREF_LIVE_OWNED = "leopard-live-owned";
+
+    /**
+     * The apply revision ({@link MediaWallpaperService#PREF_REV}) the restore offer was last
+     * raised for — the difference between asking about a wallpaper and nagging about it. Written
+     * when the dialog is shown, whichever button the owner then presses.
+     */
+    static final String PREF_RESTORE_ASKED_REV = "leopard-restore-asked-rev";
+
+    static void noteLiveOwnership(Context ctx, boolean owned) {
+        try {
+            prefs(ctx).edit().putBoolean(PREF_LIVE_OWNED, owned).apply();
+            CrashReporter.breadcrumb("leopard: live wallpaper owned by us = " + owned);
+        } catch(Throwable t) {
+            Log.w(TAG, "could not record live-wallpaper ownership", t);
         }
     }
 
