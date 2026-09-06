@@ -1954,6 +1954,9 @@
         let hideModalWpId = null;      // wallpaper currently open in the hide modal
         let hideModalSelection = null; // Set of hardware_ids ticked in that modal
         let selectedFiles = [];
+        // Every video container the app can play, lowercase. One list, because two places need
+        // it: classifying an upload as type "video", and the pre-upload silence check below.
+        const VIDEO_EXTS = ['.mp4', '.mkv', '.webm', '.3gp', '.m4v', '.mov', '.bin'];
         let targetType = 'global'; // global or private
         // 'app' (our slideshow) or one of the mirrored-folder channels below.
         let uploadChannel = 'app';
@@ -2808,6 +2811,101 @@
             submitBtn.disabled = !isValid;
         }
 
+        /**
+         * Does this file carry an audio track?  true / false / null (could not be parsed).
+         *
+         * Wallpapers are silent by contract: every player in the app calls setVolume(0, 0), so a
+         * clip with sound is inaudible today. The file itself still matters — it is handed to
+         * head-unit wallpaper engines, copied into mirrored folders and pulled off cars by
+         * technicians, and an unwanted audio track is one such hop away from talking over the
+         * radio. Three clips already had to be stripped off R2 after the fact (2026-09-06);
+         * catching it here is cheaper.
+         *
+         * Walks the ISO-BMFF box tree (MP4 / MOV / 3GP / M4V) straight off the File: only the
+         * header of each top-level box plus "moov" itself is read, never the media payload, so
+         * a 50 MB clip costs a few hundred KB. Matroska/WebM and opaque .bin clips are not
+         * ISO-BMFF and come back as null — unknown, not "silent".
+         */
+        async function readBytes(file, start, length) {
+            const end = Math.min(file.size, start + length);
+            if (end <= start) return null;
+            return new DataView(await file.slice(start, end).arrayBuffer());
+        }
+
+        function boxType(view, off) {
+            let s = '';
+            for (let i = 0; i < 4; i++) s += String.fromCharCode(view.getUint8(off + i));
+            return s;
+        }
+
+        // Iterate the boxes inside [start, end) of an already-loaded view.
+        function walkBoxes(view, start, end, visit) {
+            let off = start;
+            while (off + 8 <= end) {
+                let size = view.getUint32(off);
+                const type = boxType(view, off + 4);
+                let header = 8;
+                if (size === 1) {                       // 64-bit size follows the type
+                    if (off + 16 > end) return;
+                    size = view.getUint32(off + 8) * 4294967296 + view.getUint32(off + 12);
+                    header = 16;
+                } else if (size === 0) {                // "to the end of the enclosing box"
+                    size = end - off;
+                }
+                if (size < header) return;              // malformed — stop instead of looping
+                visit(type, off + header, Math.min(off + size, end));
+                off += size;
+            }
+        }
+
+        async function mediaHasAudioTrack(file) {
+            try {
+                // Find "moov" by hopping between top-level box headers. It sits at the end of a
+                // file that was not written with +faststart, which is why this walks rather
+                // than assuming an offset.
+                let isIso = false, moovStart = 0, moovSize = 0;
+                for (let off = 0; off + 8 <= file.size && !moovSize; ) {
+                    const head = await readBytes(file, off, 16);
+                    if (!head || head.byteLength < 8) break;
+                    let size = head.getUint32(0);
+                    const type = boxType(head, 4);
+                    let header = 8;
+                    if (size === 1) {
+                        if (head.byteLength < 16) break;
+                        size = head.getUint32(8) * 4294967296 + head.getUint32(12);
+                        header = 16;
+                    } else if (size === 0) {
+                        size = file.size - off;
+                    }
+                    if (size < header) break;
+                    if (type === 'ftyp') isIso = true;
+                    if (type === 'moov') { moovStart = off + header; moovSize = size - header; }
+                    off += size;
+                }
+                // No ftyp, or no moov: not a container this parser understands.
+                if (!isIso || moovSize <= 0 || moovSize > 64 * 1024 * 1024) return null;
+
+                const moov = await readBytes(file, moovStart, moovSize);
+                if (!moov) return null;
+
+                let found = false;
+                walkBoxes(moov, 0, moov.byteLength, (t, s, e) => {          // moov
+                    if (t !== 'trak') return;
+                    walkBoxes(moov, s, e, (t2, s2, e2) => {                 // trak
+                        if (t2 !== 'mdia') return;
+                        walkBoxes(moov, s2, e2, (t3, s3, e3) => {           // mdia
+                            // hdlr := version+flags(4) pre_defined(4) handler_type(4)
+                            if (t3 === 'hdlr' && s3 + 12 <= e3 && boxType(moov, s3 + 8) === 'soun') found = true;
+                        });
+                    });
+                });
+                return found;
+            } catch (err) {
+                console.warn('audio-track check failed for ' + file.name + ':', err);
+                return null;
+            }
+        }
+
         // Upload loop
         async function startUpload() {
             const submitBtn = document.getElementById("submit-btn");
@@ -2837,6 +2935,41 @@
                     confirmButtonText: 'تسجيل الدخول'
                 }).then(() => showLogin());
                 return;
+            }
+
+            // Wallpapers are silent — refuse to be the reason a clip with sound reaches a car.
+            // Advisory, not a hard block: the admin may know the track is empty, and every
+            // player in the app mutes anyway. See mediaHasAudioTrack.
+            progressStatus.innerText = "جارٍ فحص الفيديوهات…";
+            const withAudio = [];
+            for (const file of selectedFiles) {
+                const lower = file.name.toLowerCase();
+                if (!VIDEO_EXTS.some(ext => lower.endsWith(ext))) continue;
+                const hasAudio = await mediaHasAudioTrack(file);
+                if (hasAudio === true) withAudio.push(file.name);
+                else if (hasAudio === null) console.warn('audio check skipped (unknown container): ' + file.name);
+            }
+            if (withAudio.length > 0) {
+                const answer = await Swal.fire({
+                    icon: 'warning',
+                    title: 'فيه صوت جوّا الفيديو',
+                    html: 'الخلفيات لازم تكون بدون صوت. الملفات دي فيها مسار صوت:'
+                        + '<div style="text-align:right;max-height:160px;overflow:auto;font-size:13px;margin:10px 0;">'
+                        + withAudio.map(n => '\u2022 ' + n).join('<br>') + '</div>'
+                        + 'شيل الصوت كده قبل الرفع:'
+                        + '<div style="direction:ltr;text-align:left;background:rgba(0,0,0,.06);padding:8px;border-radius:6px;font-family:monospace;font-size:12px;margin-top:6px;">'
+                        + 'ffmpeg -i in.mp4 -an -c copy out.mp4</div>'
+                        + '<small style="opacity:.75;">نسخ بدون إعادة ترميز — الجودة ما تتغيّرش.</small>',
+                    showCancelButton: true,
+                    focusCancel: true,
+                    confirmButtonText: 'ارفع برضه',
+                    cancelButtonText: 'إلغاء'
+                });
+                if (!answer.isConfirmed) {
+                    progressContainer.style.display = "none";
+                    submitBtn.disabled = false;
+                    return;
+                }
             }
 
             let successCount = 0;
@@ -2921,9 +3054,8 @@
             // Classify every video container the app can play (case-insensitive);
             // previously .mkv / uppercase .MP4 were stored as type "image" and the
             // device tried to render them with the image pipeline.
-            const videoExts = ['.mp4', '.mkv', '.webm', '.3gp', '.m4v', '.mov', '.bin'];
             const lowerName = file.name.toLowerCase();
-            const fileType = videoExts.some(ext => lowerName.endsWith(ext)) ? 'video' : 'image';
+            const fileType = VIDEO_EXTS.some(ext => lowerName.endsWith(ext)) ? 'video' : 'image';
 
             // Give every upload a unique random name BEFORE sending it. Customers very
             // often send files with identical names ("1.jpg", "IMG_0001.jpg"...); storing
