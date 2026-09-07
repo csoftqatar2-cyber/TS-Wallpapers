@@ -376,6 +376,7 @@
     <string name="leopard_title">اختر خلفية الجهاز</string>
     <string name="leopard_chip">وضع Leopard</string>
     <string name="denza_chip">وضع Denza</string>
+    <string name="icar03t_chip">وضع ICAR 03T</string>
     <string name="lynkco_chip">وضع Lynk and Co</string>
     <string name="lynkco_scale">حجم واجهة Lynk &amp; Co</string>
     <string name="lynkco_scale_hint">كبّر أو صغّر واجهة اختيار الخلفية بالكامل على شاشات Lynk &amp; Co.</string>
@@ -415,6 +416,16 @@
     <string name="leopard_handoff_dont_show">أعرف هذه الخطوات — لا تعرض هذه الرسالة مرة أخرى</string>
     <string name="leopard_unsupported">هذه الشاشة لا تدعم وضع Leopard.</string>
     <string name="denza_unsupported">هذه الشاشة لا تدعم وضع Denza.</string>
+    <string name="icar03t_unsupported">هذه الشاشة لا تدعم وضع ICAR 03T.</string>
+    <string name="icar03t_video_unsupported">هذه السيارة تقبل الصور فقط كخلفية — اختر صورة.</string>
+    <string name="icar03t_download">تنزيل الخلفية</string>
+    <string name="icar03t_manage">إدارة خلفيات السيارة</string>
+    <string name="icar03t_manage_title">خلفيات السيارة</string>
+    <string name="icar03t_remove_ours">شيل خلفيتنا من السيارة</string>
+    <string name="icar03t_open_car_gallery">افتح شاشة خلفيات السيارة</string>
+    <string name="icar03t_removed">تم شيل خلفيتنا من السيارة.</string>
+    <string name="icar03t_nothing_ours">لم يضع هذا التطبيق خلفية على هذه السيارة.</string>
+    <string name="icar03t_car_gallery_hint">الصور التي جاءت مع السيارة تديرها السيارة نفسها — امسحها من شاشتها.</string>
     <string name="leopard_gif_static_note">يعرض هذا الجهاز الصور المتحركة كصورة ثابتة.</string>
     <string name="mode_title">وضع التشغيل</string>
     <string name="mode_exclusive_note">لا تجتمع أوضاع Leopard (FSE) و Leopard و Denza — الاختيار واحد.</string>
@@ -427,6 +438,8 @@
     <string name="mode_leopard_desc">يسلّم التطبيق الخلفية إلى نظام أندرويد ثم يختفي — بلا ساعة ولا تبديل.</string>
     <string name="mode_denza">Denza</string>
     <string name="mode_denza_desc">يسلّم التطبيق الخلفية إلى نظام أندرويد ثم يختفي — بلا ساعة ولا تبديل.</string>
+    <string name="mode_icar03t">ICAR 03T</string>
+    <string name="mode_icar03t_desc">يسلّم التطبيق الخلفية إلى نظام أندرويد ثم يختفي — بلا ساعة ولا تبديل.</string>
     <string name="mode_gwm">GWM</string>
     <string name="mode_gwm_desc">مطابق لوضع Others تماماً، مع إضافة قسم «إدارة صور GWM» الذي يزامن قناة GWM إلى المجلد المشترك الذي يقرأه تطبيق لوحة GWM.</string>
     <string name="mode_jetour">Jetour</string>
@@ -437,9 +450,11 @@
     <string name="lynkco_applied">تُفتح الآن معاينة الخلفية — اضغط «تطبيق» على شاشة السيارة لتثبيتها.</string>
     <string name="mode_leopard_unsupported_note">بعض الشاشات لا تدعم وضع Leopard، ويظهر الخيار معطَّلاً عليها تلقائياً.</string>
     <string name="mode_denza_unsupported_note">بعض الشاشات لا تدعم وضع Denza، ويظهر الخيار معطَّلاً عليها تلقائياً.</string>
+    <string name="mode_icar03t_unsupported_note">بعض الشاشات لا تدعم وضع ICAR 03T، ويظهر الخيار معطَّلاً عليها تلقائياً.</string>
     <string name="mode_new_badge">جديد</string>
     <string name="leopard_settings_banner_title">وضع Leopard مفعَّل</string>
     <string name="denza_settings_banner_title">وضع Denza مفعَّل</string>
+    <string name="icar03t_settings_banner_title">وضع ICAR 03T مفعَّل</string>
     <string name="leopard_settings_banner_body">يعرض أندرويد الخلفية على الشاشة الرئيسية، والتطبيق أداة اختيار فقط. افتحه، واختر، ثم أغلقه.</string>
     <string name="leopard_settings_hidden_note">أُخفيت: الساعة التناظرية والرقمية، وشكل الساعة، والطقس، والتبديل التلقائي — لا معنى لها ما دام أندرويد هو الذي يرسم الخلفية.</string>
     <string name="leopard_open_picker">افتح المنتقي</string>
@@ -463,6 +478,7 @@
     <string name="leopard_phone_empty">لم تُرسَل أي صورة من الهاتف بعد — امسح الرمز لإضافة صورة</string>
     <string name="chip_mode_leopard">الوضع: Leopard</string>
     <string name="chip_mode_denza">الوضع: Denza</string>
+    <string name="chip_mode_icar03t">الوضع: ICAR 03T</string>
     <string name="chip_mode_gwm">الوضع: GWM</string>
     <string name="chip_mode_lynkco">الوضع: Lynk and Co</string>
     <string name="chip_mode_jetour">الوضع: Jetour</string>

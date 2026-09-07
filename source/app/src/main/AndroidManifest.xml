@@ -46,6 +46,8 @@
          where the receiver lives under a component the package name alone does not resolve. -->
     <queries>
         <package android:name="com.flyme.auto.customize" />
+        <!-- ICAR 03T: the launcher whose wallpaper carousel we write into. -->
+        <package android:name="com.mengbo.launcher3" />
         <intent>
             <action android:name="com.flyme.auto.customize.wallpaper.setting" />
         </intent>

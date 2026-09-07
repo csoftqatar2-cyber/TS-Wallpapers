@@ -652,6 +652,11 @@
                                     android:id="@+id/radioModeDenza"
                                     style="@style/ModeRadio"
                                     android:text="@string/mode_denza" />
+                                <!-- ICAR 03T: the same hand-off again, for the Chery unit. -->
+                                <RadioButton
+                                    android:id="@+id/radioModeIcar03t"
+                                    style="@style/ModeRadio"
+                                    android:text="@string/mode_icar03t" />
                                 <RadioButton
                                     android:id="@+id/radioModeGwm"
                                     style="@style/ModeRadio"

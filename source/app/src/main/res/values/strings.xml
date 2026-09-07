@@ -250,6 +250,7 @@ Roboto Font Copyright (c) Christian Robertson. Licensed under the Apache License
     <string name="leopard_title">Choose device wallpaper</string>
     <string name="leopard_chip">Leopard mode</string>
     <string name="denza_chip">Denza mode</string>
+    <string name="icar03t_chip">ICAR 03T mode</string>
     <string name="lynkco_chip">Lynk and Co mode</string>
     <string name="lynkco_scale">Lynk &amp; Co interface size</string>
     <string name="lynkco_scale_hint">Enlarge or shrink the whole wallpaper picker on Lynk &amp; Co screens.</string>
@@ -293,6 +294,19 @@ Roboto Font Copyright (c) Christian Robertson. Licensed under the Apache License
     <string name="leopard_handoff_dont_show">I know these steps — do not show this again</string>
     <string name="leopard_unsupported">This screen does not support Leopard mode.</string>
     <string name="denza_unsupported">This screen does not support Denza mode.</string>
+    <string name="icar03t_unsupported">This screen does not support ICAR 03T mode.</string>
+    <!-- The car's launcher decodes a still for its carousel; there is nowhere to play a clip. -->
+    <string name="icar03t_video_unsupported">This car only accepts pictures as a wallpaper — pick an image.</string>
+    <!-- On ICAR 03T the app does not set the wallpaper, it puts the picture into the car's
+         own carousel — so the button says download, not set. -->
+    <string name="icar03t_download">Download the wallpaper</string>
+    <string name="icar03t_manage">Manage the car wallpapers</string>
+    <string name="icar03t_manage_title">Car wallpapers</string>
+    <string name="icar03t_remove_ours">Remove our wallpaper from the car</string>
+    <string name="icar03t_open_car_gallery">Open the wallpaper screen of the car</string>
+    <string name="icar03t_removed">Our wallpaper was removed from the car.</string>
+    <string name="icar03t_nothing_ours">This app has not put a wallpaper on this car.</string>
+    <string name="icar03t_car_gallery_hint">The pictures the car came with are managed by the car itself — delete them from its own screen.</string>
     <string name="leopard_gif_static_note">This device shows GIFs as a still image.</string>
 
     <!-- Operating mode picker, on the activation screen and in Settings. -->
@@ -308,6 +322,10 @@ Roboto Font Copyright (c) Christian Robertson. Licensed under the Apache License
     <!-- Denza: split out of "Leopard \ Denza"; same behaviour as Leopard today, own name. -->
     <string name="mode_denza">Denza</string>
     <string name="mode_denza_desc">The app hands the wallpaper to Android and disappears — no clock, no switching.</string>
+    <!-- ICAR 03T: the Chery iCAR 03T head unit uses Android's own wallpaper system, so this
+         is Leopard's behaviour under its own name. -->
+    <string name="mode_icar03t">ICAR 03T</string>
+    <string name="mode_icar03t_desc">The app hands the wallpaper to Android and disappears — no clock, no switching.</string>
     <string name="mode_gwm">GWM</string>
     <string name="mode_gwm_desc">Same as Others, plus a \"Manage GWM images\" section that mirrors the GWM channel into the shared folder the GWM dashboard app reads.</string>
     <string name="mode_jetour">Jetour</string>
@@ -318,11 +336,13 @@ Roboto Font Copyright (c) Christian Robertson. Licensed under the Apache License
     <string name="lynkco_applied">Opening the wallpaper preview — tap \"Apply\" on the car\'s screen to set it.</string>
     <string name="mode_leopard_unsupported_note">Some screens do not support Leopard — the option is disabled automatically on those.</string>
     <string name="mode_denza_unsupported_note">Some screens do not support Denza — the option is disabled automatically on those.</string>
+    <string name="mode_icar03t_unsupported_note">Some screens do not support ICAR 03T — the option is disabled automatically on those.</string>
     <string name="mode_new_badge">New</string>
 
     <!-- Settings, in Leopard / Denza mode. -->
     <string name="leopard_settings_banner_title">Leopard mode is on</string>
     <string name="denza_settings_banner_title">Denza mode is on</string>
+    <string name="icar03t_settings_banner_title">ICAR 03T mode is on</string>
     <string name="leopard_settings_banner_body">Android draws the wallpaper on the home screen — the app is just a picker. Open it, choose, close it.</string>
     <string name="leopard_settings_hidden_note">Hidden: the analog and digital clocks, clock layout, weather and auto-switching — they have no meaning while Android draws the wallpaper.</string>
     <string name="leopard_open_picker">Open the picker</string>
@@ -498,6 +518,7 @@ Roboto Font Copyright (c) Christian Robertson. Licensed under the Apache License
     <string name="leopard_phone_empty">Nothing sent from a phone yet — scan the code to add an image</string>
     <string name="chip_mode_leopard">Mode: Leopard</string>
     <string name="chip_mode_denza">Mode: Denza</string>
+    <string name="chip_mode_icar03t">Mode: ICAR 03T</string>
     <string name="chip_mode_gwm">Mode: GWM</string>
     <string name="chip_mode_lynkco">Mode: Lynk and Co</string>
     <string name="chip_mode_jetour">Mode: Jetour</string>

@@ -283,6 +283,18 @@ public class LeopardPickerActivity extends AppCompatActivity {
             ((TextView) findViewById(R.id.leopardChip)).setText(R.string.lynkco_chip);
         } else if (OperatingMode.isDenza(mPrefs)) {
             ((TextView) findViewById(R.id.leopardChip)).setText(R.string.denza_chip);
+        } else if (OperatingMode.isIcar03t(mPrefs)) {
+            ((TextView) findViewById(R.id.leopardChip)).setText(R.string.icar03t_chip);
+            // On this car the app is not setting the wallpaper — it is putting a picture into
+            // the launcher's own carousel, which the owner then swipes to. "Set" would promise
+            // something the car does not do; "Download" is what actually happens.
+            setTextIfPresent(R.id.buttonSetWallpaper, R.string.icar03t_download);
+            setTextIfPresent(R.id.buttonPreviewSet, R.string.icar03t_download);
+            View manage = findViewById(R.id.buttonIcarManage);
+            if(manage != null) {
+                manage.setVisibility(View.VISIBLE);
+                manage.setOnClickListener(v -> showIcarManageDialog());
+            }
         }
 
         mFilmstrip = findViewById(R.id.filmstrip);
@@ -391,6 +403,63 @@ public class LeopardPickerActivity extends AppCompatActivity {
 
     /** Asked at most once per visit, so a declined offer does not come back on every resume. */
     private boolean mRestoreOffered;
+
+    private void setTextIfPresent(int viewId, int stringRes) {
+        View v = findViewById(viewId);
+        if(v instanceof TextView) ((TextView) v).setText(stringRes);
+    }
+
+    /**
+     * What "manage" can honestly mean on an ICAR 03T.
+     *
+     * Our picture is one entry in the launcher's carousel and we can take it back out — that is
+     * the whole of our reach. The pictures the car shipped with live inside the launcher and are
+     * added and deleted from its own screen; no broadcast or provider exposes them (checked the
+     * whole manifest). So the second choice hands the owner to that screen rather than pretending
+     * we can delete them.
+     */
+    private void showIcarManageDialog() {
+        final boolean haveOurs = mPrefs.getString(Icar03tApplier.PREF_SLOT, null) != null;
+        CharSequence[] items = {
+                getString(R.string.icar03t_remove_ours),
+                getString(R.string.icar03t_open_car_gallery)
+        };
+        new AuroraDialog.Builder(this)
+                .setTitle(R.string.icar03t_manage_title)
+                .setMessage(R.string.icar03t_car_gallery_hint)
+                .setItems(items, (d, which) -> {
+                    d.dismiss();
+                    if(which == 0) {
+                        if(!haveOurs) { sayLoud(R.string.icar03t_nothing_ours); return; }
+                        Icar03tApplier.clear(this);
+                        sayLoud(R.string.icar03t_removed);
+                        return;
+                    }
+                    openCarWallpaperScreen();
+                })
+                .setNegativeButton(R.string.update_cancel, null)
+                .show();
+    }
+
+    /** The launcher's own wallpaper screen — the only place the car's own pictures can be deleted. */
+    private void openCarWallpaperScreen() {
+        try {
+            Intent i = new Intent();
+            i.setClassName(Icar03tApplier.LAUNCHER_PACKAGE, "com.mengbo.wallpager.WallPaperActivity");
+            i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            LeopardApplier.startOnSameDisplay(this, i);
+        } catch(Throwable t) {
+            // Some builds only answer the action; try it before giving up.
+            try {
+                Intent i = new Intent("com.mengbo.launcher3.ENTER_WALLPAPER_SETTING");
+                i.setPackage(Icar03tApplier.LAUNCHER_PACKAGE);
+                i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                LeopardApplier.startOnSameDisplay(this, i);
+            } catch(Throwable t2) {
+                sayLoud(R.string.leopard_apply_failed);
+            }
+        }
+    }
 
     private static final int RESTORE_CONFIRM_TRIES = 12;        // x 500ms = 6s
     private static final long RESTORE_CONFIRM_POLL_MS = 500;
@@ -2300,6 +2369,10 @@ public class LeopardPickerActivity extends AppCompatActivity {
         // falls through to the Leopard path below (our own MediaWallpaperService live wallpaper),
         // which is the one way to play an arbitrary local video on these units without root.
         final boolean lynkcoImage = OperatingMode.isLynkco(mPrefs) && !WallpaperItem.TYPE_VIDEO.equals(type);
+        // ICAR 03T does not go through Android's wallpaper system at all — its launcher paints
+        // its own carousel over ours. The picture is written into the folder that launcher reads.
+        // Stills only: the launcher decodes a PNG, so a clip has nowhere to go on this car.
+        final boolean icar = OperatingMode.isIcar03t(mPrefs);
         // Screen size for the fill/fit reframing — read on the UI thread, where window access is safe.
         final android.util.DisplayMetrics dm = new android.util.DisplayMetrics();
         getWindowManager().getDefaultDisplay().getRealMetrics(dm);
@@ -2307,6 +2380,22 @@ public class LeopardPickerActivity extends AppCompatActivity {
         // A baked image is already the size of the screen, so the theme app is handed it raw.
         final int scaleMode = isBaked(url) ? LynkcoApplier.SCALE_NONE : mLynkcoScaleMode;
         new Thread(() -> {
+            if(icar) {
+                if(WallpaperItem.TYPE_VIDEO.equals(type) || WallpaperItem.TYPE_GIF.equals(type)) {
+                    // Said plainly rather than failed silently: the grid shows clips because the
+                    // library has them, and "apply failed" would read as our bug, not the car's limit.
+                    runOnUiThread(() -> { setBusy(false, 0); sayLoud(R.string.icar03t_video_unsupported); });
+                    return;
+                }
+                runOnUiThread(() -> say(R.string.leopard_preparing));
+                final int r = Icar03tApplier.apply(this, url, canvasW, canvasH);
+                runOnUiThread(() -> {
+                    setBusy(false, 0);
+                    if(r == Icar03tApplier.RESULT_APPLIED) onApplied(LeopardApplier.RESULT_APPLIED_LIVE, type);
+                    else sayLoud(R.string.leopard_apply_failed);
+                });
+                return;
+            }
             // Lynkco hands the image to the head unit's own theme app, which reads a plain file
             // path off shared storage. LynkcoApplier stages the download/copy there itself and
             // opens the theme app's preview — a different path from Leopard's WallpaperManager.
@@ -2399,7 +2488,9 @@ public class LeopardPickerActivity extends AppCompatActivity {
                 } catch(ActivityNotFoundException e) {
                     clearLeaveAfterApply();
                     // Some cheap ROMs ship without the live wallpaper picker at all.
-                    say(OperatingMode.isDenza(mPrefs) ? R.string.denza_unsupported : R.string.leopard_unsupported);
+                    say(OperatingMode.isDenza(mPrefs) ? R.string.denza_unsupported
+                            : OperatingMode.isIcar03t(mPrefs) ? R.string.icar03t_unsupported
+                            : R.string.leopard_unsupported);
                     scheduleTileBind();
                 }
                 return;

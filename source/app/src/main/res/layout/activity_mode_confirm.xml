@@ -113,6 +113,21 @@
                     android:textSize="12sp"
                     android:visibility="gone" />
 
+                <!-- ICAR 03T: same hand-off as Leopard, same support gate, own name. -->
+                <RadioButton
+                    android:id="@+id/radioConfirmIcar03t"
+                    style="@style/ActivationModeRadio"
+                    android:text="@string/mode_icar03t" />
+
+                <TextView
+                    android:id="@+id/textViewConfirmIcar03tNote"
+                    style="@style/ActivationModeRadio"
+                    android:layout_marginTop="-4dp"
+                    android:paddingTop="0dp"
+                    android:paddingStart="4dp"
+                    android:textSize="12sp"
+                    android:visibility="gone" />
+
                 <RadioButton
                     android:id="@+id/radioConfirmGwm"
                     style="@style/ActivationModeRadio"

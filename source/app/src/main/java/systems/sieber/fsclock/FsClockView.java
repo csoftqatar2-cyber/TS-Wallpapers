@@ -1330,6 +1330,7 @@ public class FsClockView extends FrameLayout {
 
         final android.widget.RadioButton leopard = findViewById(R.id.radioActivationLeopard);
         final android.widget.RadioButton denza = findViewById(R.id.radioActivationDenza);
+        final android.widget.RadioButton icar03t = findViewById(R.id.radioActivationIcar03t);
         final android.widget.TextView desc = findViewById(R.id.textViewActivationModeDesc);
         final boolean supported = OperatingMode.isSupported(getContext());
         if(leopard != null && !supported) {
@@ -1340,6 +1341,11 @@ public class FsClockView extends FrameLayout {
         if(denza != null && !supported) {
             denza.setEnabled(false);
             denza.setAlpha(0.4f);
+        }
+        // ICAR 03T is gated by its launcher instead — a different car, a different mechanism.
+        if(icar03t != null && !OperatingMode.isIcar03tSupported(getContext())) {
+            icar03t.setEnabled(false);
+            icar03t.setAlpha(0.4f);
         }
 
         // Nothing is preselected, on purpose — the same rule ModeConfirmActivity follows.
@@ -1393,6 +1399,7 @@ public class FsClockView extends FrameLayout {
         }
         int res = mode == OperatingMode.LEOPARD ? R.string.mode_leopard_desc
                 : mode == OperatingMode.DENZA ? R.string.mode_denza_desc
+                : mode == OperatingMode.ICAR03T ? R.string.mode_icar03t_desc
                 : mode == OperatingMode.LYNKCO ? R.string.mode_lynkco_desc
                 : mode == OperatingMode.GWM ? R.string.mode_gwm_desc
                 : mode == OperatingMode.JETOUR ? R.string.mode_jetour_desc
@@ -1400,9 +1407,10 @@ public class FsClockView extends FrameLayout {
         String text = getContext().getString(res);
         // The note is about the live-wallpaper support Leopard (and Denza, the same hand-off)
         // needs; Lynk & Co hands the file to the theme app instead and does not care either way.
-        if(!supported && mode != OperatingMode.LYNKCO) {
+        if(!supported && mode != OperatingMode.LYNKCO && mode != OperatingMode.ICAR03T) {
             text += "\n" + getContext().getString(mode == OperatingMode.DENZA
-                    ? R.string.mode_denza_unsupported_note : R.string.mode_leopard_unsupported_note);
+                    ? R.string.mode_denza_unsupported_note
+                    : R.string.mode_leopard_unsupported_note);
         }
         desc.setText(text);
     }
@@ -1416,6 +1424,7 @@ public class FsClockView extends FrameLayout {
         if(id == -1) return MODE_NONE;      // nobody has chosen yet
         if(id == R.id.radioActivationLeopard) return OperatingMode.LEOPARD;
         if(id == R.id.radioActivationDenza) return OperatingMode.DENZA;
+        if(id == R.id.radioActivationIcar03t) return OperatingMode.ICAR03T;
         if(id == R.id.radioActivationGwm) return OperatingMode.GWM;
         if(id == R.id.radioActivationJetour) return OperatingMode.JETOUR;
         if(id == R.id.radioActivationLynkco) return OperatingMode.LYNKCO;

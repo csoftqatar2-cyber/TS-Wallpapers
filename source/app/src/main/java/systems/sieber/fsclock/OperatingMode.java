@@ -7,8 +7,8 @@ import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 
 /**
- * Which product this install is: Normal, FSE, Leopard, GWM, Lynkco, Jetour, or Denza. The seven
- * are mutually exclusive.
+ * Which product this install is: Normal, FSE, Leopard, GWM, Lynkco, Jetour, Denza, or
+ * ICAR 03T. The eight are mutually exclusive.
  *
  * - NORMAL  : the app owns the screen and draws wallpaper + clock itself.
  * - FSE     : same, but the window is pinned to 1920x720 for ultra-wide head units.
@@ -31,6 +31,13 @@ import android.content.pm.PackageManager;
  *             G700 head unit's own gallery app. Two cars, one mechanism: see {@link FolderMirror}.
  * - DENZA   : today exactly LEOPARD (WallpaperManager hand-off) under its own name — see the
  *             note on the constant.
+ * - ICAR03T : a hand-off like LYNKCO, to the Chery iCAR 03T's launcher rather than to Android.
+ *             The unit looks like a Leopard car — it declares FEATURE_LIVE_WALLPAPER, ships the
+ *             AOSP live-wallpaper picker, and its launcher window carries FLAG_SHOW_WALLPAPER —
+ *             and setting our live wallpaper there works and is never seen, because
+ *             com.mengbo.launcher3 paints its own carousel of pictures on top. The picture that
+ *             reaches the screen goes into a folder the launcher reads. See
+ *             {@link Icar03tApplier}.
  *
  * FSE stays on its original boolean key so the six places that already read it, and every
  * device already in the field, keep working untouched. In Leopard/GWM/Jetour that flag reads
@@ -52,12 +59,19 @@ class OperatingMode {
      * {@link #isLeopardFamily} / {@link #isHandoff}; only labels and the wire value differ.
      */
     static final int DENZA = 6;
+    /**
+     * Chery iCAR 03T. Like {@link #DENZA}, a name rather than a behaviour: the head unit uses
+     * Android's stock wallpaper system, so the product is Leopard's, and the separate constant
+     * exists so the manager can target and count these cars on their own.
+     */
+    static final int ICAR03T = 7;
 
     private static final String PREF_LEOPARD = "leopard-mode";
     private static final String PREF_GWM = "gwm-mode";
     private static final String PREF_LYNKCO = "lynkco-mode";
     private static final String PREF_JETOUR = "jetour-mode";
     private static final String PREF_DENZA = "denza-mode";
+    private static final String PREF_ICAR03T = "icar03t-mode";
 
     /**
      * Has a human explicitly chosen this car's mode on a build that knows all six modes?
@@ -93,6 +107,7 @@ class OperatingMode {
         // so it is checked before DENZA (which no fielded car has yet).
         if(prefs.getBoolean(PREF_LEOPARD, false)) return LEOPARD;
         if(prefs.getBoolean(PREF_DENZA, false)) return DENZA;
+        if(prefs.getBoolean(PREF_ICAR03T, false)) return ICAR03T;
         if(prefs.getBoolean(PREF_GWM, false)) return GWM;
         if(prefs.getBoolean(PREF_LYNKCO, false)) return LYNKCO;
         if(prefs.getBoolean(PREF_JETOUR, false)) return JETOUR;
@@ -100,11 +115,12 @@ class OperatingMode {
         return NORMAL;
     }
 
-    /** Writes all six flags together, so no two modes can ever both be on. */
+    /** Writes every flag together, so no two modes can ever both be on. */
     static void set(SharedPreferences prefs, int mode) {
         prefs.edit()
                 .putBoolean(PREF_LEOPARD, mode == LEOPARD)
                 .putBoolean(PREF_DENZA, mode == DENZA)
+                .putBoolean(PREF_ICAR03T, mode == ICAR03T)
                 .putBoolean(PREF_GWM, mode == GWM)
                 .putBoolean(PREF_LYNKCO, mode == LYNKCO)
                 .putBoolean(PREF_JETOUR, mode == JETOUR)
@@ -120,10 +136,18 @@ class OperatingMode {
         return get(prefs) == DENZA;
     }
 
+    static boolean isIcar03t(SharedPreferences prefs) {
+        return get(prefs) == ICAR03T;
+    }
+
     /**
      * Leopard and Denza: the WallpaperManager hand-off family. This is what behaviour asks —
      * {@link #isLeopard}/{@link #isDenza} are for labels only, so a Denza car walks the exact
      * code path a Leopard car does until somebody deliberately makes them differ.
+     *
+     * ICAR 03T is deliberately NOT here. It is a hand-off too, but to its launcher, and every
+     * check in this family — the restore offer, the live-wallpaper support gate, "was it taken
+     * from us" — is about Android's wallpaper system, which that car ignores.
      */
     static boolean isLeopardFamily(SharedPreferences prefs) {
         int m = get(prefs);
@@ -165,7 +189,7 @@ class OperatingMode {
 
     /** {@link #isHandoff} for a mode value that is not in prefs yet (a picker's selection). */
     static boolean isHandoffMode(int m) {
-        return m == LEOPARD || m == DENZA || m == LYNKCO;
+        return m == LEOPARD || m == DENZA || m == ICAR03T || m == LYNKCO;
     }
 
     /** Stable wire value the device reports to the backend / manager. Never rename these. */
@@ -173,6 +197,7 @@ class OperatingMode {
         switch(get(prefs)) {
             case LEOPARD: return "leopard";
             case DENZA:   return "denza";
+            case ICAR03T: return "icar03t";
             case GWM:     return "gwm";
             case LYNKCO:  return "lynkco";
             case JETOUR:  return "jetour";
@@ -200,6 +225,15 @@ class OperatingMode {
     /** Denza rides on the same WallpaperManager hand-off as Leopard, so it has the same gate. */
     static boolean isDenzaSupported(Context ctx) {
         return isSupported(ctx);
+    }
+
+    /**
+     * ICAR 03T needs the launcher that owns the wallpaper carousel, not Android's live-wallpaper
+     * picker — the unit ships that picker and it is beside the point there. The package is
+     * declared in {@code <queries>} or this returns false on API 30+ regardless of the car.
+     */
+    static boolean isIcar03tSupported(Context ctx) {
+        return Icar03tApplier.isAvailable(ctx);
     }
 
     /**

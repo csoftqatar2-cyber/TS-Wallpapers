@@ -132,7 +132,14 @@ public final class AuroraDialog implements DialogInterface {
                     RadioButton radio = convertView instanceof RadioButton
                             ? (RadioButton) convertView : new RadioButton(context);
                     radio.setButtonDrawable(R.drawable.dialog_radio);
+                    // Not clickable AND not focusable. A RadioButton is focusable by default,
+                    // and one focusable child is enough for a ListView to hand the touch to the
+                    // row and never call onItemClick — the rows drew, highlighted, and did
+                    // nothing, while the Cancel button beside them worked. Reported from an
+                    // ICAR 03T where the mode could not be changed from the header chip at all.
                     radio.setClickable(false);
+                    radio.setFocusable(false);
+                    radio.setFocusableInTouchMode(false);
                     radio.setGravity(Gravity.CENTER_VERTICAL | Gravity.START);
                     row = radio;
                 } else {
