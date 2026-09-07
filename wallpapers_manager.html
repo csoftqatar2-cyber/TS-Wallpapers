@@ -1992,7 +1992,9 @@
                 mode: 'leopard',
                 label: 'TS Leo Dash',
                 folder: 'TS Leo Dashboard',
-                hint: 'صور وفيديوهات لا تظهر داخل تطبيقنا. تُنزَّل في مجلد ‎/sdcard/Pictures/TS Leo Dashboard‎ على السيارة ليعرضها تطبيق TS Leo Dash على شاشة الداشبورد، ولا تصل إلا إلى سيارات وضع Leopard. لا تؤثر على الخلفية التي يختارها العميل من التطبيق.',
+                // 1920x720 measured on the car, 2026-09-07: this feeds an instrument screen, so a
+                // wrongly-proportioned upload is cropped on every Leopard car at once.
+                hint: 'صور وفيديوهات لا تظهر داخل تطبيقنا. تُنزَّل في مجلد ‎/sdcard/Pictures/TS Leo Dashboard‎ على السيارة ليعرضها تطبيق TS Leo Dash على شاشة الداشبورد، ولا تصل إلا إلى سيارات وضع Leopard. المقاس المناسب 1920×720. لا تؤثر على الخلفية التي يختارها العميل من التطبيق.',
             },
         };
         // null = the shared library every car sees. Otherwise one of devices.mode, and the image

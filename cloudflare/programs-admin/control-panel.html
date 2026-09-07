@@ -3063,7 +3063,10 @@
     const WP_FOLDER_CHANNELS = {
         gwm_split: { mode: 'gwm', label: 'GWM Split', folder: '/sdcard/Pictures/GWMSplit_Styles' },
         jetour_g700: { mode: 'jetour', label: 'Jetour G700', folder: '/sdcard/Pictures/G700' },
-        leopard_dash: { mode: 'leopard', label: 'شاشة داشبورد الليبرد', folder: '/sdcard/Pictures/TS Leo Dashboard' }
+        // 1920x720 measured on the car by the TS Leo Dash side, 2026-09-07. Stated here because
+        // this channel feeds an instrument screen, not a wallpaper: an upload at the wrong ratio
+        // is cropped or letterboxed on 182 cars and nobody finds out from this page.
+        leopard_dash: { mode: 'leopard', label: 'شاشة داشبورد الليبرد', folder: '/sdcard/Pictures/TS Leo Dashboard', size: '1920×720' }
     };
     const WP_APP_CHANNEL_LABEL = 'تطبيق ذبذبة — شاشة الخلفيات';
     /** Destinations that exist for a car in this mode: our app always, plus its folder if it has one. */
@@ -3207,7 +3210,7 @@
         $('wp-car-fields').hidden=$('wp-target').value!=='private';
         const mode=folder?.mode || $('wp-target-mode').value;
         const n=state.merged.filter(r=>r.dev && (!mode || r.dev.mode===mode)).length;
-        $('wp-scope-note').textContent = (folder ? `تُنزّل في ${folder.folder} ليقرأها ${folder.label} على السيارة، ولا تظهر داخل تطبيق ذبذبة نفسه. ` : '') + (mode ? `النطاق: ${modeLabel(mode)} فقط؛ ${n} سيارة أبلغت هذا الوضع. السيارات بلا وضع معلن لا تستقبل هذه الخلفيات.` : 'كل الأوضاع يعني كل السيارات؛ «عربية محددة» يعني السيارة التي تختارها وحدها.');
+        $('wp-scope-note').textContent = (folder ? `تُنزّل في ${folder.folder} ليقرأها ${folder.label} على السيارة، ولا تظهر داخل تطبيق ذبذبة نفسه. ${folder.size ? `المقاس المناسب لهذه الشاشة ${folder.size}. ` : ''}` : '') + (mode ? `النطاق: ${modeLabel(mode)} فقط؛ ${n} سيارة أبلغت هذا الوضع. السيارات بلا وضع معلن لا تستقبل هذه الخلفيات.` : 'كل الأوضاع يعني كل السيارات؛ «عربية محددة» يعني السيارة التي تختارها وحدها.');
         renderWallpaperCars();
     }
     function renderWallpaperCars() {
