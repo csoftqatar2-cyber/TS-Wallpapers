@@ -395,7 +395,7 @@
         .wp-wide { grid-column:1/-1; }
         #panel-wallpapers textarea, #panel-wallpapers input[type=number] { width:100%; padding:10px; color:var(--text-main); background:#18120d; border:1px solid var(--panel-border); border-radius:10px; font:inherit; }
         #panel-wallpapers input[type=file] { max-width:100%; margin:8px 0; font:inherit; }
-        #wp-search { flex:1 1 220px; width:auto; } #wp-filter, #wp-mode-filter { width:auto; max-width:100%; }
+        #wp-search { flex:1 1 220px; width:auto; } #wp-filter, #wp-mode-filter, #wp-scope-filter { width:auto; max-width:100%; }
         .wp-drop { padding:18px; border:2px dashed var(--panel-border); border-radius:14px; } .wp-drop.dragover { border-color:var(--primary); }
         .wp-queue { max-height:300px; overflow:auto; } .wp-queue-row { padding:10px; border-bottom:1px solid var(--panel-border); overflow-wrap:anywhere; }
         .wp-queue-row progress { display:block; width:100%; accent-color:var(--primary); }
@@ -477,7 +477,7 @@
             .chips { gap: 5px; }
             .toolbar .search { flex-basis: 100%; }
             .wp-form-grid { grid-template-columns: minmax(0, 1fr); }
-            #wp-filter, #wp-mode-filter { flex: 1 1 45%; }
+            #wp-filter, #wp-mode-filter, #wp-scope-filter { flex: 1 1 45%; }
             .wp-grid { grid-template-columns: minmax(0, 1fr); }
             .wp-media { height: 160px; }
             thead th { padding: 9px 8px; }
@@ -566,13 +566,13 @@
                     <button class="type-toggle" id="wp-type-image" type="button" data-type="image" aria-pressed="false" title="الصور فقط" aria-label="الصور فقط"><i class="fa-solid fa-image"></i></button>
                     <button class="type-toggle" id="wp-type-video" type="button" data-type="video" aria-pressed="false" title="الفيديو فقط" aria-label="الفيديو فقط"><i class="fa-solid fa-video"></i></button>
                 </div>
-                <div class="toolbar"><button class="btn" id="wp-refresh" type="button"><i class="fa-solid fa-rotate"></i> تحديث المكتبة</button><button class="btn" id="wp-global" type="button">العامة</button><button class="btn" id="wp-private" type="button">الصور حسب السيارة</button><a class="btn" id="wp-old-manager" target="_blank" rel="noopener noreferrer" hidden>فتح مدير الخلفيات القديم</a><span class="note" id="wp-cache-note">تُحمّل المكتبة عند فتح التبويب فقط</span></div>
+                <div class="toolbar"><button class="btn" id="wp-refresh" type="button"><i class="fa-solid fa-rotate"></i> تحديث المكتبة</button><button class="btn" id="wp-global" type="button">العامة</button><button class="btn" id="wp-private" type="button">الصور حسب السيارة</button><span class="note" id="wp-private-count"></span><a class="btn" id="wp-old-manager" target="_blank" rel="noopener noreferrer" hidden>فتح مدير الخلفيات القديم</a><span class="note" id="wp-cache-note">تُحمّل المكتبة عند فتح التبويب فقط</span></div>
                 <div id="wp-error" role="alert"></div><div class="stats-grid" id="wp-stats"></div>
                 <details class="group" open><summary class="card-title">رفع خلفيات جديدة</summary>
                     <form id="wp-upload-form">
                         <fieldset id="wp-upload-fields" class="wp-form-grid">
-                            <label>وجهة التسليم<select id="wp-channel"><option value="app">تطبيق ذبذبة</option><option value="gwm_split">GWM Split — GWMSplit_Styles</option><option value="jetour_g700">Jetour G700 — /sdcard/Pictures/G700</option></select></label>
-                            <label id="wp-mode-label">وضع التشغيل<select id="wp-target-mode"><option value="">كل الأوضاع</option><option value="leopard">Leopard</option><option value="denza">Denza</option><option value="fse">Leopard (FSE)</option><option value="normal">Others</option><option value="lynkco">Lynk and Co</option><option value="gwm">GWM</option><option value="jetour">Jetour</option></select></label>
+                            <label id="wp-mode-label">١ — نوع العربية (وضع التشغيل)<select id="wp-target-mode"><option value="">كل الأوضاع — المكتبة المشتركة</option><option value="leopard">Leopard</option><option value="denza">Denza</option><option value="icar03t">ICAR 03T</option><option value="fse">Leopard (FSE)</option><option value="normal">Others</option><option value="lynkco">Lynk and Co</option><option value="gwm">GWM</option><option value="jetour">Jetour</option></select></label>
+                            <label>٢ — وجهة التسليم داخل العربية<select id="wp-channel"></select></label>
                             <label>من يرى الخلفية؟<select id="wp-target"><option value="global">عام</option><option value="private">عربية محددة</option></select></label>
                             <p id="wp-scope-note" class="note wp-wide"></p>
                             <div id="wp-car-fields" class="wp-wide" hidden><label for="wp-car-search">ابحث بالاسم أو الكود أو المعرّف</label><input type="search" id="wp-car-search"><select id="wp-car-select" aria-label="السيارة المستهدفة"></select><label for="wp-custom-hw">أو معرّف العتاد يدويًا</label><input type="text" id="wp-custom-hw" class="num"><label for="wp-qr-file">قراءة معرّف السيارة من صورة QR</label><input type="file" id="wp-qr-file" accept="image/*"><p class="note" id="wp-qr-result" role="status"></p></div>
@@ -582,7 +582,7 @@
                     </form>
                     <div id="wp-upload-queue" class="wp-queue" aria-live="polite"></div>
                 </details>
-                <div class="toolbar"><input id="wp-search" type="search" aria-label="بحث الخلفيات" placeholder="اسم الملف أو اسم السيارة أو الكود أو المعرّف"><select id="wp-filter" aria-label="نطاق المكتبة"><option value="all">الكل — جميع القنوات</option><option value="global">عامة — التطبيق</option><option value="private">خاصة — التطبيق</option><option value="gwm_split">GWM Split</option><option value="jetour_g700">Jetour G700</option></select><select id="wp-mode-filter" aria-label="فلتر وضع التشغيل"><option value="">كل الأوضاع</option></select></div>
+                <div class="toolbar"><input id="wp-search" type="search" aria-label="بحث الخلفيات" placeholder="اسم الملف أو اسم السيارة أو الكود أو المعرّف"><select id="wp-mode-filter" aria-label="فلتر نوع العربية"><option value="">كل الأوضاع</option></select><select id="wp-filter" aria-label="فلتر وجهة التسليم"><option value="all">كل الوجهات</option></select><select id="wp-scope-filter" aria-label="فلتر النطاق"><option value="all">عامة وخاصة</option><option value="global">العامة فقط</option><option value="private">المخصصة لسيارة</option></select></div>
                 <div id="wp-grid" class="wp-grid"><p class="empty">بانتظار تحميل المكتبة…</p></div>
                 <div class="toolbar wp-pagination"><button class="btn" id="wp-prev" type="button">السابق</button><span id="wp-page-note" class="note"></span><button class="btn" id="wp-next" type="button">التالي</button></div>
                 <div class="group"><h3 class="card-title">نشر إصدار يدويًا</h3><p class="note">الدفع إلى main ينشر التحديث تلقائيًا عبر CI؛ استخدم النشر اليدوي عند الحاجة. يجب أن يتجاوز الكود أعلى إصدار منشور.</p><p id="wp-latest-version" class="note">أحدث إصدار: —</p><div id="wp-version-summary" class="chips"></div>
@@ -877,7 +877,7 @@
         'tslink': 'TS Link', 'controller': 'الكونترولر', 'leo': 'Leo',
     };
     const MODE_LABELS = {
-        normal: 'عادي', others: 'عادي', fse: 'FSE', leopard: 'Leopard', gwm: 'GWM', lynkco: 'Lynk & Co', jetour: 'Jetour', denza: 'Denza',
+        normal: 'عادي', others: 'عادي', fse: 'FSE', leopard: 'Leopard', gwm: 'GWM', lynkco: 'Lynk & Co', jetour: 'Jetour', denza: 'Denza', icar03t: 'ICAR 03T',
     };
     const KIND_LABELS = {
         install: 'تثبيت', install_ok: 'تثبيت ناجح', install_fail: 'فشل تثبيت', open: 'فتح المتجر', check_in: 'تسجيل حضور',
@@ -3056,11 +3056,27 @@
 
 
     // Wallpaper manager: reference protocol, shared admin session, lazy cached reads.
+    // A folder channel is a file drop into a folder ANOTHER app on the car reads, and each one
+    // belongs to exactly one car type — nothing but a GWM unit reads GWMSplit_Styles. That is why
+    // the operating mode is chosen FIRST here and the destinations are derived from it: offering
+    // "GWM Split" to somebody who just picked Leopard is offering a delivery no car will collect.
     const WP_FOLDER_CHANNELS = {
-        gwm_split: { mode: 'gwm', label: 'GWM Split', folder: 'GWMSplit_Styles' },
-        jetour_g700: { mode: 'jetour', label: 'Jetour G700', folder: '/sdcard/Pictures/G700' }
+        gwm_split: { mode: 'gwm', label: 'GWM Split', folder: '/sdcard/Pictures/GWMSplit_Styles' },
+        jetour_g700: { mode: 'jetour', label: 'Jetour G700', folder: '/sdcard/Pictures/G700' },
+        leopard_dash: { mode: 'leopard', label: 'شاشة داشبورد الليبرد', folder: '/sdcard/Pictures/TS Leo Dashboard' }
     };
-    const WP_VIDEO_EXTS = ['.mp4', '.mkv', '.webm', '.3gp', '.m4v', '.mov', '.bin'];
+    const WP_APP_CHANNEL_LABEL = 'تطبيق ذبذبة — شاشة الخلفيات';
+    /** Destinations that exist for a car in this mode: our app always, plus its folder if it has one. */
+    function wpChannelsForMode(mode) {
+        const out = [['app', WP_APP_CHANNEL_LABEL]];
+        for (const [key, c] of Object.entries(WP_FOLDER_CHANNELS)) {
+            if (!mode || c.mode === mode) out.push([key, c.label + ' — ' + c.folder]);
+        }
+        return out;
+    }
+    // '.avi' and '.ts' are here for the Leopard dashboard folder: TS Leo Dash plays both, and a
+    // clip filed as type 'image' shows the wrong icon and the wrong type badge in this library.
+    const WP_VIDEO_EXTS = ['.mp4', '.mkv', '.webm', '.3gp', '.m4v', '.mov', '.avi', '.ts', '.bin'];
     const wpManager = { loaded:false, loading:null, busy:false, page:0, pageSize:48, files:[], errors:{}, requests:new Set(), dialog:null, selected:new Set(), original:new Set() };
     function wallpaperFilename(url) {
         const value = String(url || '').split('/').pop() || '';
@@ -3123,21 +3139,40 @@
         for (const [mode,n] of modes) cards.push(['وضع ' + modeLabel(mode),n]);
         $('wp-stats').innerHTML = cards.map(([title,value]) => `<div class="stat-card"><div class="stat-info"><h3>${esc(title)}</h3><p>${wpManager.errors.wallpapers ? '—' : esc(value)}</p></div></div>`).join('');
         const select = $('wp-mode-filter'), previous = select.value;
-        select.innerHTML = '<option value="">كل الأوضاع</option>' + [...new Set([...Object.keys(MODE_LABELS), ...modes.keys()])].map(mode => `<option value="${esc(mode)}">${esc(modeLabel(mode))}</option>`).join('');
-        select.value = previous;
+        // 'others' is an alias of 'normal' in MODE_LABELS; listing both would put the same fleet
+        // in the list twice under one name.
+        const known = [...new Set([...Object.keys(MODE_LABELS).filter(m => m !== 'others'), ...modes.keys()])];
+        select.innerHTML = '<option value="">كل الأوضاع</option>' + known.map(mode => `<option value="${esc(mode)}">${esc(modeLabel(mode))}</option>`).join('');
+        select.value = known.includes(previous) ? previous : '';
+        renderChannelFilterOptions();
+        const perCar = privateWallpaperGroups();
+        $('wp-private-count').textContent = perCar.length
+            ? `${perCar.length} سيارة لها صور مخصصة (${perCar.reduce((n,[,rows]) => n + rows.length, 0)} ملف)`
+            : 'لا توجد صور مخصصة لسيارة بعد';
         renderWallpapersGrid(); renderGlobalError();
         if ($('wp-private-dialog').open) renderPrivateModal();
+    }
+    /** The library's destination filter, restricted to the destinations the chosen mode has. */
+    function renderChannelFilterOptions() {
+        const mode = $('wp-mode-filter').value, select = $('wp-filter'), wanted = select.value || 'all';
+        const options = [['all','كل الوجهات'], ...wpChannelsForMode(mode)];
+        select.innerHTML = options.map(([value,label]) => `<option value="${esc(value)}">${esc(label)}</option>`).join('');
+        select.value = options.some(([value]) => value === wanted) ? wanted : 'all';
     }
     // Owner's semantics: nothing lit = everything shown; exactly one lit = that type only; both lit = everything.
     const wpTypes = { image: false, video: false };
     function wallpaperIsVideo(w) { const f = wallpaperFilename(w.url).toLowerCase(); return w.type === 'video' || WP_VIDEO_EXTS.some(ext => f.endsWith(ext)); }
     function filteredWallpapers() {
-        const q = $('wp-search').value.trim().toLowerCase(), filter = $('wp-filter').value, mode = $('wp-mode-filter').value;
+        // Three questions, three controls. They used to be one select where "خاصة" and
+        // "GWM Split" were alternatives, so there was no way to ask "which pictures are assigned
+        // to one car inside the GWM folder" — the commonest question the owner actually has.
+        const q = $('wp-search').value.trim().toLowerCase(), filter = $('wp-filter').value;
+        const mode = $('wp-mode-filter').value, scope = $('wp-scope-filter').value;
         return state.wallpapers.filter(w => {
             const channel = w.channel || 'app';
             if (wpTypes.image !== wpTypes.video && (wallpaperIsVideo(w) ? !wpTypes.video : !wpTypes.image)) return false;
-            if ((filter === 'global' || filter === 'private') && (channel !== 'app' || Boolean(w.is_global) !== (filter === 'global'))) return false;
-            if (WP_FOLDER_CHANNELS[filter] && channel !== filter) return false;
+            if (filter !== 'all' && channel !== filter) return false;
+            if (scope !== 'all' && Boolean(w.is_global) !== (scope === 'global')) return false;
             if (mode && wallpaperMode(w) !== mode) return false;
             return !q || [wallpaperFilename(w.url), w.hardware_id, wallpaperCarLabel(w.hardware_id)].join(' ').toLowerCase().includes(q);
         });
@@ -3149,21 +3184,30 @@
             const filename = wallpaperFilename(w.url), url = wallpaperUrl(w.url), mode = wallpaperMode(w);
             const hidden = state.wallpaperHides.filter(h=>String(h.wallpaper_id)===String(w.id)).length;
             const video = w.type === 'video' || WP_VIDEO_EXTS.some(ext=>filename.toLowerCase().endsWith(ext));
-            return `<article class="wp-card"><div class="wp-media">${video && url ? `<video class="wp-thumb" src="${esc(url)}#t=0.5" preload="metadata" muted playsinline disablepictureinpicture aria-label="${esc(filename)}"></video><i class="fa-solid fa-play wp-play" aria-hidden="true"></i>` : video ? '<i class="fa-solid fa-file-video" aria-label="فيديو"></i>' : url ? `<img src="${esc(url)}" alt="${esc(filename)}" loading="lazy" decoding="async" referrerpolicy="no-referrer">` : '<i class="fa-solid fa-image" aria-label="رابط غير متاح"></i>'}</div><div class="wp-card-body"><strong class="wp-filename" title="${esc(filename)}">${esc(filename)}</strong><span class="badge">${esc(w.type || (video?'video':'image'))}</span><span class="badge ${w.is_global?'ok':'warn'}">${w.is_global?'عام':'خاص'}</span>${mode?`<span class="badge info">${esc(modeLabel(mode))}</span>`:''}<span class="sub">${esc(WP_FOLDER_CHANNELS[w.channel]?.label || w.channel || 'app')}</span><span class="sub">${w.is_global ? (mode?'كل سيارات '+esc(modeLabel(mode)):'جميع السيارات') : esc(wallpaperCarLabel(w.hardware_id))}</span>${hidden?`<span class="badge bad">مخفية عن ${esc(hidden)} سيارة</span>`:''}${timeCell(w.created_at)}<div class="toolbar">${url?`<a class="btn sm" href="${esc(url)}" target="_blank" rel="noopener noreferrer">معاينة</a>`:''}<button class="btn sm" data-wp-act="assign" data-wp-id="${esc(w.id)}" type="button">تخصيص</button>${w.is_global?`<button class="btn sm" data-wp-act="hide" data-wp-id="${esc(w.id)}" type="button">إخفاء</button>`:''}<button class="btn danger sm" data-wp-act="delete" data-wp-id="${esc(w.id)}" type="button">حذف</button></div></div></article>`;
+            return `<article class="wp-card"><div class="wp-media">${video && url ? `<video class="wp-thumb" src="${esc(url)}#t=0.5" preload="metadata" muted playsinline disablepictureinpicture aria-label="${esc(filename)}"></video><i class="fa-solid fa-play wp-play" aria-hidden="true"></i>` : video ? '<i class="fa-solid fa-file-video" aria-label="فيديو"></i>' : url ? `<img src="${esc(url)}" alt="${esc(filename)}" loading="lazy" decoding="async" referrerpolicy="no-referrer">` : '<i class="fa-solid fa-image" aria-label="رابط غير متاح"></i>'}</div><div class="wp-card-body"><strong class="wp-filename" title="${esc(filename)}">${esc(filename)}</strong><span class="badge">${esc(w.type || (video?'video':'image'))}</span><span class="badge ${w.is_global?'ok':'warn'}">${w.is_global?'عام':'خاص'}</span>${mode?`<span class="badge info">${esc(modeLabel(mode))}</span>`:''}<span class="sub" title="${esc(WP_FOLDER_CHANNELS[w.channel]?.folder || '')}">${esc(WP_FOLDER_CHANNELS[w.channel]?.label || (!w.channel || w.channel === 'app' ? 'تطبيق ذبذبة' : w.channel))}</span><span class="sub">${w.is_global ? (mode?'كل سيارات '+esc(modeLabel(mode)):'جميع السيارات') : esc(wallpaperCarLabel(w.hardware_id))}</span>${hidden?`<span class="badge bad">مخفية عن ${esc(hidden)} سيارة</span>`:''}${timeCell(w.created_at)}<div class="toolbar">${url?`<a class="btn sm" href="${esc(url)}" target="_blank" rel="noopener noreferrer">معاينة</a>`:''}<button class="btn sm" data-wp-act="assign" data-wp-id="${esc(w.id)}" type="button">تخصيص</button>${w.is_global?`<button class="btn sm" data-wp-act="hide" data-wp-id="${esc(w.id)}" type="button">إخفاء</button>`:''}<button class="btn danger sm" data-wp-act="delete" data-wp-id="${esc(w.id)}" type="button">حذف</button></div></div></article>`;
         }).join('') || `<p class="empty">${wpManager.errors.wallpapers ? 'تعذّر تحميل المكتبة' : 'لا خلفيات تطابق البحث'}</p>`;
         $('wp-page-note').textContent = `${wpManager.page+1} / ${pages} · ${rows.length} خلفية · حتى ${wpManager.pageSize} معاينة في الصفحة`;
         $('wp-prev').disabled = wpManager.page===0; $('wp-next').disabled = wpManager.page>=pages-1;
         $('wp-grid').querySelectorAll('button[data-wp-act]').forEach(b=>b.disabled=wpManager.busy);
     }
-    function showGlobalWallpapers() { $('wp-search').value=''; $('wp-filter').value='global'; $('wp-mode-filter').value=''; wpManager.page=0; renderWallpapersGrid(); $('wp-grid').scrollIntoView({behavior:'smooth',block:'start'}); }
+    function showGlobalWallpapers() { $('wp-search').value=''; $('wp-mode-filter').value=''; renderChannelFilterOptions(); $('wp-filter').value='all'; $('wp-scope-filter').value='global'; wpManager.page=0; renderWallpapersGrid(); $('wp-grid').scrollIntoView({behavior:'smooth',block:'start'}); }
+    // The mode is the first question and everything below follows it: the destination list is
+    // rebuilt from it, so a Leopard upload is never offered the GWM folder. A destination that
+    // no longer belongs to the chosen mode falls back to our own app rather than being written
+    // to a channel no car in that mode ever reads.
+    function renderChannelOptions() {
+        const mode = $('wp-target-mode').value, select = $('wp-channel'), wanted = select.value || 'app';
+        const options = wpChannelsForMode(mode);
+        select.innerHTML = options.map(([value,label]) => `<option value="${esc(value)}">${esc(label)}</option>`).join('');
+        select.value = options.some(([value]) => value === wanted) ? wanted : 'app';
+    }
     function refreshTargetScopeUi() {
+        renderChannelOptions();
         const channel = $('wp-channel').value, folder = WP_FOLDER_CHANNELS[channel];
-        if (folder) $('wp-target-mode').value='';
-        $('wp-mode-label').hidden=!!folder;
         $('wp-car-fields').hidden=$('wp-target').value!=='private';
         const mode=folder?.mode || $('wp-target-mode').value;
         const n=state.merged.filter(r=>r.dev && (!mode || r.dev.mode===mode)).length;
-        $('wp-scope-note').textContent = (folder ? `تُنزّل في ${folder.folder} لتطبيق ${folder.label}، ولا تظهر في تطبيق الخلفيات. ` : '') + (mode ? `النطاق: ${modeLabel(mode)} فقط؛ ${n} سيارة أبلغت هذا الوضع. السيارات بلا وضع معلن لا تستقبل هذه الخلفيات.` : 'عام يعني جميع الأوضاع؛ خاص يعني السيارة التي تختارها فقط.');
+        $('wp-scope-note').textContent = (folder ? `تُنزّل في ${folder.folder} ليقرأها ${folder.label} على السيارة، ولا تظهر داخل تطبيق ذبذبة نفسه. ` : '') + (mode ? `النطاق: ${modeLabel(mode)} فقط؛ ${n} سيارة أبلغت هذا الوضع. السيارات بلا وضع معلن لا تستقبل هذه الخلفيات.` : 'كل الأوضاع يعني كل السيارات؛ «عربية محددة» يعني السيارة التي تختارها وحدها.');
         renderWallpaperCars();
     }
     function renderWallpaperCars() {
@@ -3174,7 +3218,7 @@
         if(rows.some(r=>r.dev.hardware_id===selected)) $('wp-car-select').value=selected;
     }
     function wallpaperScope() {
-        const channel=$('wp-channel').value, mode=WP_FOLDER_CHANNELS[channel] ? null : $('wp-target-mode').value || null;
+        const channel=$('wp-channel').value || 'app', mode=WP_FOLDER_CHANNELS[channel] ? null : $('wp-target-mode').value || null;
         const isGlobal=$('wp-target').value==='global', hw=isGlobal?null:$('wp-custom-hw').value.trim();
         if(!isGlobal&&!hw) throw new Error('اختر سيارة أو أدخل معرّف العتاد');
         const required=WP_FOLDER_CHANNELS[channel]?.mode || mode, car=hw&&wallpaperCar(hw);
@@ -3263,14 +3307,46 @@
     function openPrivateModal() {
         if(wpManager.busy)return;$('wp-private-search').value='';renderPrivateModal();$('wp-private-dialog').showModal();
     }
+    /** Every private row grouped by car, newest car first inside a name-sorted list. */
+    function privateWallpaperGroups() {
+        const groups = new Map();
+        // Every channel, not just our app's. A picture assigned to ONE car inside a folder
+        // channel is still a picture that car alone receives, and leaving those out of this
+        // view is what made "which pictures does this car have?" unanswerable for GWM, Jetour
+        // and now the Leopard dashboard folder.
+        state.wallpapers.filter(w => !w.is_global && w.hardware_id).forEach(w => {
+            if (!groups.has(w.hardware_id)) groups.set(w.hardware_id, []);
+            groups.get(w.hardware_id).push(w);
+        });
+        return [...groups].sort((a, b) => wallpaperCarLabel(a[0]).localeCompare(wallpaperCarLabel(b[0]), 'ar'));
+    }
     function renderPrivateModal() {
-        const q=$('wp-private-search').value.trim().toLowerCase(), groups=new Map();
-        state.wallpapers.filter(w=>(w.channel||'app')==='app'&&!w.is_global&&w.hardware_id).forEach(w=>{if(!groups.has(w.hardware_id))groups.set(w.hardware_id,[]);groups.get(w.hardware_id).push(w);});
+        const q = $('wp-private-search').value.trim().toLowerCase();
+        const groups = privateWallpaperGroups().filter(([hw, rows]) =>
+            !q || [wallpaperCarLabel(hw), ...rows.map(w => wallpaperFilename(w.url))].join(' ').toLowerCase().includes(q));
+        const total = groups.reduce((n, [, rows]) => n + rows.length, 0);
+        $('wp-private-title').textContent = `الصور المخصصة حسب السيارة — ${groups.length} سيارة · ${total} ملف`;
         // Text-only groups leave the main grid as the only mounted media collection.
-        $('wp-private-body').innerHTML=[...groups].filter(([hw,rows])=>!q||[wallpaperCarLabel(hw),...rows.map(w=>wallpaperFilename(w.url))].join(' ').toLowerCase().includes(q)).map(([hw,rows])=>`<div class="group"><strong>${esc(wallpaperCarLabel(hw))}</strong><span class="badge">${rows.length} خلفية</span><button class="btn sm" type="button" data-wp-add-car="${esc(hw)}">رفع صور لهذه السيارة</button><button class="btn sm" type="button" data-wp-view-car="${esc(hw)}">عرض المكتبة</button>${rows.map(w=>`<div class="toolbar"><span class="sub">${esc(wallpaperFilename(w.url))}</span><button class="btn sm danger" type="button" data-wp-act="delete" data-wp-id="${esc(w.id)}">حذف للجميع</button></div>`).join('')}</div>`).join('')||'<p class="empty">لا صور خاصة تطابق البحث</p>';
+        $('wp-private-body').innerHTML = groups.map(([hw, rows]) => {
+            const car = wallpaperCar(hw), mode = car?.dev?.mode;
+            const head = `<strong>${esc(wallpaperCarLabel(hw))}</strong>`
+                + `<span class="badge">${rows.length} ملف</span>`
+                + (mode ? `<span class="badge info">${esc(modeLabel(mode))}</span>` : '<span class="badge warn">لم تبلّغ وضعًا</span>')
+                + `<button class="btn sm" type="button" data-wp-add-car="${esc(hw)}">رفع صور لهذه السيارة</button>`
+                + `<button class="btn sm" type="button" data-wp-view-car="${esc(hw)}">عرض المكتبة</button>`;
+            const body = rows.map(w => {
+                const folder = WP_FOLDER_CHANNELS[w.channel];
+                // Says where the file actually lands, so "the car has it but nothing shows on
+                // the screen" is answerable without opening the row: a folder-channel file is
+                // read by another app on the car, never by ours.
+                const where = folder ? `<span class="badge info" title="${esc(folder.folder)}">${esc(folder.label)}</span>` : '<span class="badge">تطبيق ذبذبة</span>';
+                return `<div class="toolbar"><span class="sub">${esc(wallpaperFilename(w.url))}</span>${where}<span class="badge">${esc(wallpaperIsVideo(w) ? 'فيديو' : 'صورة')}</span><button class="btn sm danger" type="button" data-wp-act="delete" data-wp-id="${esc(w.id)}">حذف نهائيًا</button></div>`;
+            }).join('');
+            return `<div class="group">${head}${body}</div>`;
+        }).join('') || '<p class="empty">لا صور مخصصة تطابق البحث</p>';
     }
     function addWallpaperForDevice(hw) {
-        $('wp-private-dialog').close();$('wp-channel').value='app';$('wp-target-mode').value='';$('wp-target').value='private';$('wp-custom-hw').value=hw;refreshTargetScopeUi();$('wp-upload-form').scrollIntoView({behavior:'smooth',block:'start'});$('wp-custom-hw').focus();
+        $('wp-private-dialog').close();$('wp-target-mode').value='';$('wp-channel').value='app';$('wp-target').value='private';$('wp-custom-hw').value=hw;refreshTargetScopeUi();$('wp-upload-form').scrollIntoView({behavior:'smooth',block:'start'});$('wp-custom-hw').focus();
     }
     function openHideModal(id) { openWallpaperTargetDialog(id,'hide'); }
     function openWallpaperTargetDialog(id,kind) {
@@ -3387,9 +3463,10 @@
     }
     $('wp-refresh').addEventListener('click',()=>{if(!wpManager.busy)loadWallpapers(true);});
     $('wp-global').addEventListener('click',showGlobalWallpapers);$('wp-private').addEventListener('click',openPrivateModal);
-    ['wp-search','wp-filter','wp-mode-filter'].forEach(id=>$(id).addEventListener(id==='wp-search'?'input':'change',()=>{wpManager.page=0;renderWallpapersGrid();}));
+    ['wp-search','wp-filter','wp-mode-filter','wp-scope-filter'].forEach(id=>$(id).addEventListener(id==='wp-search'?'input':'change',()=>{if(id==='wp-mode-filter')renderChannelFilterOptions();wpManager.page=0;renderWallpapersGrid();}));
     $('wp-prev').addEventListener('click',()=>{wpManager.page=Math.max(0,wpManager.page-1);renderWallpapersGrid();});$('wp-next').addEventListener('click',()=>{wpManager.page++;renderWallpapersGrid();});
     ['wp-channel','wp-target-mode','wp-target'].forEach(id=>$(id).addEventListener('change',refreshTargetScopeUi));
+    renderChannelOptions(); renderChannelFilterOptions();
     $('wp-car-search').addEventListener('input',renderWallpaperCars);$('wp-car-select').addEventListener('change',e=>{if(e.target.value)$('wp-custom-hw').value=e.target.value;});
     ['wp-files','wp-folder'].forEach(id=>$(id).addEventListener('change',e=>{addWallpaperFiles(e.target.files);e.target.value='';}));
     ['dragenter','dragover','dragleave','drop'].forEach(kind=>$('wp-drop').addEventListener(kind,e=>{e.preventDefault();$('wp-drop').classList.toggle('dragover',kind==='dragenter'||kind==='dragover');if(kind==='drop')addWallpaperFiles(e.dataTransfer.files);}));
@@ -3402,7 +3479,7 @@
         if(action.dataset.wpAct==='delete')performDelete(row);else if(action.dataset.wpAct==='hide')openHideModal(row.id);else openWallpaperTargetDialog(row.id,'assign');
     });
     $('wp-private-search').addEventListener('input',renderPrivateModal);
-    $('wp-private-body').addEventListener('click',e=>{const add=e.target.closest('[data-wp-add-car]'),view=e.target.closest('[data-wp-view-car]');if(wpManager.busy)return;if(add)addWallpaperForDevice(add.dataset.wpAddCar);if(view){$('wp-private-dialog').close();$('wp-filter').value='private';$('wp-search').value=view.dataset.wpViewCar;wpManager.page=0;renderWallpapersGrid();}});
+    $('wp-private-body').addEventListener('click',e=>{const add=e.target.closest('[data-wp-add-car]'),view=e.target.closest('[data-wp-view-car]');if(wpManager.busy)return;if(add)addWallpaperForDevice(add.dataset.wpAddCar);if(view){$('wp-private-dialog').close();$('wp-mode-filter').value='';renderChannelFilterOptions();$('wp-filter').value='all';$('wp-scope-filter').value='private';$('wp-search').value=view.dataset.wpViewCar;wpManager.page=0;renderWallpapersGrid();$('wp-grid').scrollIntoView({behavior:'smooth',block:'start'});}});
     $('wp-dialog-search').addEventListener('input',renderHideModal);$('wp-dialog-cars').addEventListener('change',e=>{const hw=e.target.dataset.wpCar;if(!hw||wpManager.busy)return;if(e.target.checked)wpManager.selected.add(hw);else wpManager.selected.delete(hw);});
     $('wp-target-save').addEventListener('click',saveHides);$('wp-qr-file').addEventListener('change',handleQrUpload);
     if(WALLPAPERS_MANAGER_URL&&wallpaperUrl(WALLPAPERS_MANAGER_URL)){$('wp-old-manager').href=WALLPAPERS_MANAGER_URL;$('wp-old-manager').hidden=false;}
