@@ -374,8 +374,10 @@ export default {
         let serial = null;
         for (let i = 0; i < 12 && !serial; i++) {
           const r = new Uint32Array(1); crypto.getRandomValues(r);
-          const cand = "578" + String(r[0] % 1000000).padStart(6, "0");
-          if (cand.startsWith("578300")) continue;                       // the sold closed block
+          // Owner's rule (2026-09-07): six random digits, no prefix. Never shaped like the
+          // reserve block (572xxx), the closed 578 space, or a legacy 7078xx code.
+          const cand = String(r[0] % 1000000).padStart(6, "0");
+          if (/^(572|578|7078)/.test(cand)) continue;
           const taken = await env.DB.prepare("SELECT 1 AS x FROM devices WHERE serial_number = ? UNION ALL SELECT 1 FROM issued_codes WHERE serial = ?").bind(cand, cand).first();
           if (!taken) serial = cand;
         }
@@ -388,7 +390,7 @@ export default {
       }
       if (env.DB && req.method === "GET" && p === "/local/codes/status") {
         const serial = (url.searchParams.get("serial") || "").trim();
-        if (!/^578\d{6}$/.test(serial)) return json(400, { message: "bad serial" });
+        if (!/^(\d{6}|578\d{6})$/.test(serial)) return json(400, { message: "bad serial" });
         const row = await env.DB.prepare("SELECT serial, issued_at, expires_at, used_by, used_at FROM issued_codes WHERE serial = ?").bind(serial).first();
         if (!row) return json(404, { message: "unknown code" });
         return json(200, row);

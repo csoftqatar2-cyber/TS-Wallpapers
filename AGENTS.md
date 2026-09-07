@@ -202,8 +202,10 @@ shared secret (lives only in the live functions — never commit it).
 - RPC `is_device_activated(device_hw_id)` — used by the companion programs; activation
   in ANY program activates all of them on that device (shared hardware id).
 - `app_versions` columns `version_code, version_name, apk_url, changelog` (anon-readable);
-  hardware-id prefix format; serial prefixes `7078` (legacy) and `578` (issued from
-  2026-08-02 on) — both also enforced server-side.
+  hardware-id prefix format; activation codes since 2026-09-07: **6 random digits minted by
+  the admin-site generator** (D1 `issued_codes`, 10 min, one car), the owner's reserve `572`+3
+  digits, the sold block 578300001–100, and every code already on file (7078/578). The open
+  `578` space is closed — the Cloudflare worker decides, Postgres only commits.
 - RPC `report_crash(device_hw_id, crash_text, app_version, app_version_code, device_mode,
   crash_at, legacy_hw_id)` — deliberately forgiving (unknown device still stored, bad input
   is a silent no-op): a crash report must never be the thing that errors on a car that is

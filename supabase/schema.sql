@@ -40,7 +40,8 @@ create table if not exists public.devices (
     -- Two issued prefixes: '7078' for every code up to 2026-08-02 (~530 cars in
     -- the field), '578' for everything issued after. Length is not constrained;
     -- serials in the field run from 5 to 14 characters.
-    serial_number text unique check (serial_number like '7078%' or serial_number like '578%'),
+    serial_number text unique check (serial_number like '7078%' or serial_number like '578%'
+                              or serial_number ~ '^572[0-9]{3}$' or serial_number ~ '^[0-9]{6}$'),  -- 2026-09-07: generator codes + 572 reserve
     client_name   text,
     is_active     boolean default false,
     created_at    timestamptz not null default timezone('utc', now()),

@@ -38,9 +38,15 @@
  */
 
 /**
- * Accepted activation-code prefixes.
- *   '578'  — everything issued from 2026-08-02 onward (578001, 578002, ...).
- *            Always valid for a brand-new activation.
+ * Accepted activation codes (owner's rule of 2026-09-07 — the open '578' space is CLOSED):
+ *   generator — a 6-digit code minted on the admin site (issued_codes): valid for ten
+ *               minutes and for one car. This is the normal path from now on.
+ *   '572' + 3 digits — the owner's reserve block (572001 … 572999), typed by hand when the
+ *               generator is unavailable. Single use, like every other code.
+ *   '578'  — was the open space from 2026-08-02 to 2026-09-07. A new 578 code activates
+ *            NOTHING any more, except the sold closed blocks below (CLOSED_BLOCKS), whose
+ *            issued codes keep working exactly as sold. Every car already activated with
+ *            a 578 code keeps re-activating with it (ownedByThisCar, see handleActivate).
  *   '7078' — the ~530 codes already in the field, issued up to 2026-08-02.
  *            Retired for NEW activations as of 2026-08-05: only honored when
  *            the serial is already on file (an existing car re-activating).
@@ -48,7 +54,7 @@
  *            time. See handleActivate, which checks this against serialOwner.
  * Codes vary in length; only the prefix is checked, as it always has been.
  */
-const NEW_SERIAL_PREFIX = '578';
+const RESERVE_SERIAL_RE = /^572[0-9]{3}$/;
 const LEGACY_SERIAL_PREFIX = '7078';
 
 /**
@@ -498,10 +504,10 @@ async function handleActivate(db, body) {
   // field — the worst a bad rule can do is refuse a NEW activation.
   const ownedByThisCar = !!serialOwner && serialOwner.hardware_id === hardwareId;
 
-  // '578...' is always valid, EXCEPT inside a closed block, where only the
-  // serials actually issued count (see CLOSED_BLOCKS). '7078...' is valid only
-  // when it's already on file — a genuinely new (never-seen) 7078 code no
-  // longer activates anything.
+  // Since 2026-09-07 a '578...' code is valid ONLY inside a closed block and only when
+  // that block actually issued it (the sold codes). The open 578 space is closed. '7078...'
+  // is valid only when it's already on file — a genuinely new (never-seen) 7078 code no
+  // longer activates anything. '572' + 3 digits is the owner's hand-typed reserve.
   // Minted codes (issued_codes, migration 0005): a code the owner generated from the admin
   // site is valid for ten minutes and for one car. ADDITIVE on purpose: a serial that is not
   // in that table follows exactly the rules below, unchanged — every car in the field and
@@ -513,11 +519,14 @@ async function handleActivate(db, body) {
   const mintedOk = !minted || ownedByThisCar ||
     ((!minted.used_by || minted.used_by === hardwareId) && String(minted.expires_at) > nowIso());
 
+  const isMinted = !!minted && mintedOk;
+  const soldCode = CLOSED_BLOCKS.some(b => serial.startsWith(b.prefix)) && !isUnissuedInClosedBlock(serial);
   const validFormat =
     ownedByThisCar ||
-    (mintedOk && (
-      (serial.startsWith(NEW_SERIAL_PREFIX) && !isUnissuedInClosedBlock(serial)) ||
-      (serial.startsWith(LEGACY_SERIAL_PREFIX) && !!serialOwner)));
+    isMinted ||
+    soldCode ||
+    RESERVE_SERIAL_RE.test(serial) ||
+    (serial.startsWith(LEGACY_SERIAL_PREFIX) && !!serialOwner);
 
   // Both rejections count the same. A code belonging to someone else's car is
   // not a typo — if anything it is the more deliberate of the two.
