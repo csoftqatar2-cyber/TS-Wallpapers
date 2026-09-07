@@ -334,7 +334,7 @@ public class LeopardPickerActivity extends AppCompatActivity {
         findViewById(R.id.buttonPreviewSet).setOnClickListener(v -> applySelection());
         findViewById(R.id.buttonPreviewChange).setOnClickListener(v -> hidePreview());
         findViewById(R.id.buttonLeopardSettings).setOnClickListener(v ->
-                startActivity(new Intent(this, SettingsActivity.class)));
+                LeopardApplier.startOnSameDisplay(this, new Intent(this, SettingsActivity.class)));
 
         // Scrolling changes which clips are on screen, and the pool of decoders has to follow.
         // A tree-wide scroll listener rather than View.setOnScrollChangeListener: this runs on
@@ -379,7 +379,9 @@ public class LeopardPickerActivity extends AppCompatActivity {
         // the user switched back in Settings, which we launch plainly and get no result from —
         // it has to stand down.
         if(!OperatingMode.isHandoff(mPrefs)) {
-            startActivity(new Intent(this, FullscreenActivity.class));
+            // Same display, always: hosted inside the dashboard's panel this stand-down would
+            // otherwise open our clock screen full-screen on display 0.
+            LeopardApplier.startOnSameDisplay(this, new Intent(this, FullscreenActivity.class));
             finish();
             return;
         }
@@ -1152,7 +1154,7 @@ public class LeopardPickerActivity extends AppCompatActivity {
      */
     private boolean standDownIfInactive(boolean success) {
         if(!success || mRepo.isActive()) return false;
-        startActivity(new Intent(this, FullscreenActivity.class));
+        LeopardApplier.startOnSameDisplay(this, new Intent(this, FullscreenActivity.class));
         finish();
         return true;
     }
@@ -2654,13 +2656,18 @@ public class LeopardPickerActivity extends AppCompatActivity {
         if(isFinishing() || isDestroyed()) return;
         // Consumed. Leaving it behind would close the app on the next person to open it.
         clearLeaveAfterApply();
-        try {
-            Intent home = new Intent(Intent.ACTION_MAIN);
-            home.addCategory(Intent.CATEGORY_HOME);
-            home.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-            startActivity(home);
-        } catch(Throwable ignored) {
-            // No launcher that will take the intent: closing still beats staying on a dead screen.
+        // HOME is the main screen's, nobody else's. Hosted on the dashboard's virtual display
+        // this call was handing display 0 to the launcher and pulling the car's whole screen out
+        // from under whatever was on it — leaving on our own is the whole job there.
+        if(LeopardApplier.onDefaultDisplay(this)) {
+            try {
+                Intent home = new Intent(Intent.ACTION_MAIN);
+                home.addCategory(Intent.CATEGORY_HOME);
+                home.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                startActivity(home);
+            } catch(Throwable ignored) {
+                // No launcher that will take the intent: closing still beats a dead screen.
+            }
         }
         // finishAffinity, not finish: Settings, the fit editor and the mode screens can all be
         // stacked underneath this one, and finishing only the picker leaves the app's own UI in

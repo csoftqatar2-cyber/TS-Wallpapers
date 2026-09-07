@@ -80,7 +80,10 @@ public class LeopardEntryActivity extends LeopardPickerActivity {
         super.onCreate(savedInstanceState);
         Intent next = (gated != null) ? gated : new Intent(this, FullscreenActivity.class);
         try {
-            startActivity(next);
+            // Pinned: this activity is a router, and on a car where the dashboard hosts us on
+            // its own virtual display a plain startActivity puts the screen it routes to on
+            // display 0 — our app jumping to the main screen out of the panel that opened it.
+            LeopardApplier.startOnSameDisplay(this, next);
         } catch(Throwable ignored) {
         }
     }

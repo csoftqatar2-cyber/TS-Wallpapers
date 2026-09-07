@@ -454,6 +454,19 @@ class LeopardApplier {
     }
 
     /** Which screen this context is on, or -1 when it cannot be told. */
+    /**
+     * Are we the screen the car boots to, or a guest inside somebody else's window?
+     *
+     * The THABTHABA dashboard hosts our picker on a virtual display of its own. Everything that
+     * used to be "go back to where the app lives" is wrong there: HOME belongs to display 0, and
+     * asking for it hands the whole main screen to the launcher while the panel that opened us
+     * loses what it was showing.
+     */
+    static boolean onDefaultDisplay(Context ctx) {
+        int id = displayIdOf(ctx);
+        return id < 0 || id == android.view.Display.DEFAULT_DISPLAY;
+    }
+
     private static int displayIdOf(Context ctx) {
         try {
             android.view.Display d = null;
