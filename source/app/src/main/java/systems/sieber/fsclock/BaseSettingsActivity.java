@@ -494,7 +494,7 @@ public class BaseSettingsActivity extends AppCompatActivity {
     private static final int[][] NAV_RAIL_SECTIONS = {
             { R.id.sectionGeneral },
             { R.id.sectionAnalog, R.id.sectionDigital, R.id.sectionClockLayout },
-            { R.id.sectionWallpapers, R.id.sectionGwm, R.id.sectionJetour },
+            { R.id.sectionWallpapers, R.id.sectionGwm, R.id.sectionJetour, R.id.sectionLeopardDash },
             { R.id.sectionAbout }
     };
 
@@ -588,17 +588,21 @@ public class BaseSettingsActivity extends AppCompatActivity {
         boolean handoff = OperatingMode.isHandoff(mSharedPref);
         boolean gwm = OperatingMode.isGwm(mSharedPref);
         boolean jetour = OperatingMode.isJetour(mSharedPref);
+        boolean leopard = OperatingMode.isLeopard(mSharedPref);
         for(int i = 0; i < NAV_RAIL_ITEMS.length; i++) {
             findViewById(NAV_RAIL_ITEMS[i]).setSelected(i == section);
             for(int card : NAV_RAIL_SECTIONS[i]) {
                 // Belt and braces: in a hand-off mode the whole Clock rail entry is gone anyway,
                 // but a card must never appear just because its group happens to be selected. The
                 // folder-management cards are likewise only meaningful in their own mode — and a
-                // GWM car must never be offered the Jetour folder, or vice versa.
+                // GWM car must never be offered the Jetour folder, or vice versa. The Leopard card
+                // is the one that appears in a hand-off mode, so it is listed here rather than
+                // among the cards that mode hides.
                 boolean show = i == section
                         && !(handoff && isLeopardHiddenCard(card))
                         && !(card == R.id.sectionGwm && !gwm)
-                        && !(card == R.id.sectionJetour && !jetour);
+                        && !(card == R.id.sectionJetour && !jetour)
+                        && !(card == R.id.sectionLeopardDash && !leopard);
                 findViewById(card).setVisibility(show ? View.VISIBLE : View.GONE);
             }
         }
@@ -2277,9 +2281,10 @@ public class BaseSettingsActivity extends AppCompatActivity {
             requestOverlayPermissionIfNeeded();
         }
 
-        // GWM and Jetour are the on-switches for their folder mirrors. Entering one does what the
-        // old enable checkbox did: get the storage grant (or run a first sync when we already have
-        // it). Leaving needs nothing — the mirror's isEnabled() reads false and it stops.
+        // GWM, Jetour and Leopard are the on-switches for their folder mirrors. Entering one does
+        // what the old enable checkbox did: get the storage grant (or run a first sync when we
+        // already have it). Leaving needs nothing — the mirror's isEnabled() reads false and it
+        // stops.
         refreshMirrorSections();
         MirrorSection section = activeMirrorSection();
         if(section != null) {
@@ -2474,17 +2479,17 @@ public class BaseSettingsActivity extends AppCompatActivity {
         return 0;
     }
 
-    // ===== External folder sections (GWM Split / Jetour G700) ================================
+    // ===== External folder sections (GWM Split / Jetour G700 / TS Leo Dash) ==================
     // A self-contained sync into an external folder for a separate app. Independent of every
     // other feature here; each card only appears in its own mode, and that mode IS its on-switch.
 
     /**
      * One settings card driving one {@link FolderMirror}.
      *
-     * The GWM card and the Jetour card are the same card twice — a folder line, a permission
-     * button, a QR upload, a "sync now" and a status line — over different ids and different
-     * strings. They are therefore the same code twice: adding the third car should be a
-     * constructor call, not another copy of this.
+     * The GWM, Jetour and Leopard cards are the same card three times — a folder line, a
+     * permission button, a QR upload, a "sync now" and a status line — over different ids and
+     * different strings. They are therefore the same code three times: adding the fourth car is
+     * a constructor call, not another copy of this.
      */
     private final class MirrorSection {
         private final FolderMirror mirror;
@@ -2606,6 +2611,7 @@ public class BaseSettingsActivity extends AppCompatActivity {
 
     private MirrorSection mGwmSection;
     private MirrorSection mJetourSection;
+    private MirrorSection mLeopardDashSection;
     /** True after we sent the user to the all-files-access screen so onResume can start the sync. */
     private boolean mMirrorPendingSyncAfterGrant;
 
@@ -2618,19 +2624,27 @@ public class BaseSettingsActivity extends AppCompatActivity {
                 R.id.textViewJetourFolder, R.id.buttonJetourPermission, R.id.textViewJetourStatus,
                 R.id.buttonJetourSyncNow, R.id.buttonJetourPairPhone,
                 R.string.jetour_folder, R.string.jetour_pair_phone);
+        mLeopardDashSection = new MirrorSection(FolderMirror.LEOPARD,
+                R.id.textViewLeopardDashFolder, R.id.buttonLeopardDashPermission,
+                R.id.textViewLeopardDashStatus, R.id.buttonLeopardDashSyncNow,
+                R.id.buttonLeopardDashPairPhone,
+                R.string.leopard_dash_folder, R.string.leopard_dash_pair_phone);
         mGwmSection.init();
         mJetourSection.init();
+        mLeopardDashSection.init();
     }
 
     private void refreshMirrorSections() {
         if(mGwmSection != null) mGwmSection.refresh();
         if(mJetourSection != null) mJetourSection.refresh();
+        if(mLeopardDashSection != null) mLeopardDashSection.refresh();
     }
 
     /** The card for the mode this car is actually in, or null when the mode has no mirror. */
     private MirrorSection activeMirrorSection() {
         if(mGwmSection != null && mGwmSection.isEnabled()) return mGwmSection;
         if(mJetourSection != null && mJetourSection.isEnabled()) return mJetourSection;
+        if(mLeopardDashSection != null && mLeopardDashSection.isEnabled()) return mLeopardDashSection;
         return null;
     }
 

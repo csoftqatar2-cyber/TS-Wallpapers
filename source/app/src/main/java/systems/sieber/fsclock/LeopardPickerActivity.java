@@ -347,6 +347,19 @@ public class LeopardPickerActivity extends AppCompatActivity {
 
     /** When this screen last asked the server (elapsed-realtime ms); 0 = never. */
     private long mLastSyncAskedMs;
+
+    /**
+     * One folder-mirror pass, if this car runs one. Today that is Leopard and its TS Leo Dash
+     * dashboard folder; the call is written against {@link FolderMirror#active} rather than
+     * against the mode so a second hand-off car with a folder needs no change here.
+     */
+    private void kickFolderMirror() {
+        try {
+            FolderMirror mirror = FolderMirror.active(mPrefs);
+            if(mirror == null) return;
+            mirror.syncAsync(getApplicationContext(), mRepo, null);
+        } catch(Throwable ignored) { }
+    }
     /** Fleet contract 2026-09-03: a real return to the foreground re-checks, at most once a minute. */
     private static final long RESUME_RECHECK_MIN_MS = 60_000L;
 
@@ -370,6 +383,11 @@ public class LeopardPickerActivity extends AppCompatActivity {
             finish();
             return;
         }
+        // A hand-off mode has no clock view, so the 5-minute timer that drives the GWM and Jetour
+        // mirrors does not exist here: this screen opening IS the periodic trigger for the
+        // Leopard car's dashboard folder. Debounced to 30s inside the mirror, and null in every
+        // mode without one, so calling it on every resume is free.
+        kickFolderMirror();
         // An apply that is already finished, or a system screen we are coming back from. Read
         // before anything else touches the screen: in the common case this instance was built a
         // moment ago by the configuration change the apply itself caused, and it exists only to

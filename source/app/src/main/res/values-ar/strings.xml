@@ -371,6 +371,13 @@
     <string name="jetour_folder">المجلد: %1$s</string>
     <string name="jetour_pair_phone">رفع من الهاتف (QR)</string>
 
+    <!-- مجلد داشبورد الليبرد: نفس آلية GWM Split بمجلد مختلف، لتطبيق TS Leo Dash على شاشة العداد.
+         رسائل الإذن والحالة مشتركة مع gwm_*. -->
+    <string name="leopard_dash_section">صور شاشة الداشبورد</string>
+    <string name="leopard_dash_subtitle">ينزّل الصور والفيديوهات المعلَّمة \"Leopard\" من السحابة إلى مجلد على السيارة ليعرضها تطبيق TS Leo Dash على شاشة الداشبورد. لا علاقة له بالخلفية التي تختارها بالأعلى.</string>
+    <string name="leopard_dash_folder">المجلد: %1$s</string>
+    <string name="leopard_dash_pair_phone">رفع من الهاتف (QR)</string>
+
     <!-- Leopard: the app hands the wallpaper to Android and steps out of the way. -->
     <string name="leopard_wallpaper_description">ذبذبة خلفيات — الصورة أو الفيديو الذي اخترته</string>
     <string name="leopard_title">اختر خلفية الجهاز</string>

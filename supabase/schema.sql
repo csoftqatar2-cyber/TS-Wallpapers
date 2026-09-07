@@ -77,9 +77,12 @@ create table if not exists public.wallpapers (
     -- by us at all: the car downloads them into a folder the head unit's own app
     -- reads — 'gwm_split' into /sdcard/Pictures/GWMSplit_Styles (the same folder the
     -- Cars-installer script pushes photos to on a GWM car), 'jetour_g700' into
-    -- /sdcard/Pictures/G700. Every channel has exactly one RPC and they must never
-    -- leak into one another — see get_wallpapers / get_gwm_wallpapers /
-    -- get_jetour_wallpapers. Deliberately unconstrained text: adding a car means
+    -- /sdcard/Pictures/G700, 'leopard_dash' into '/sdcard/Pictures/TS Leo Dashboard'
+    -- for TS Leo Dash on a Leopard car (that one carries video as well as stills,
+    -- and it rides on a hand-off mode: the wallpaper the driver picks in the app is
+    -- a separate thing and is untouched). Every channel has exactly one RPC and they
+    -- must never leak into one another — see get_wallpapers / get_gwm_wallpapers /
+    -- get_jetour_wallpapers / get_leopard_wallpapers. Unconstrained text: adding a car means
     -- adding an RPC, not migrating a check constraint.
     channel     text not null default 'app',
     created_at  timestamptz not null default timezone('utc', now())
@@ -497,6 +500,42 @@ begin
     end if;
 end;
 $function$;
+
+-- Leopard dashboard channel playlist. The same function again over channel
+-- 'leopard_dash', for TS Leo Dash (com.codex.clusterlauncher) — the Leopard car's
+-- own instrument-screen launcher, which reads its media from
+-- '/sdcard/Pictures/TS Leo Dashboard'. This is the one folder mirror on a hand-off
+-- mode: the wallpaper the driver picks still goes to Android's WallpaperManager,
+-- and this channel does not touch it. Applied live 2026-09-07.
+CREATE OR REPLACE FUNCTION public.get_leopard_wallpapers(device_hw_id text, legacy_hw_id text DEFAULT NULL::text)
+ RETURNS TABLE(url text, type text)
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare
+    hw text;
+begin
+    perform public.migrate_device_hardware_id(legacy_hw_id, device_hw_id);
+    hw := public.resolve_device_id(device_hw_id);
+
+    if exists (
+        select 1 from public.devices d
+        where d.hardware_id = hw and d.is_active = true and d.is_blocked = false
+    ) then
+        return query
+        select w.url, w.type
+        from public.wallpapers w
+        where w.channel = 'leopard_dash'
+          and (w.is_global = true or w.hardware_id = hw)
+        order by w.created_at desc;
+    else
+        return query select 'inactive'::text, 'image'::text;
+    end if;
+end;
+$function$;
+
+grant execute on function public.get_leopard_wallpapers(text, text) to anon, authenticated;
 
 -- SECURITY: migrate_device_hardware_id is internal-only. Revoke direct REST
 -- access so it cannot be used to hijack a device by its (guessable) VIN. The

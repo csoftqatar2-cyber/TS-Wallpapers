@@ -152,7 +152,21 @@ public class BootReceiver extends BroadcastReceiver {
             @Override
             public void run() {
                 try {
-                    new WallpaperRepo(app).reportModeAsync();
+                    WallpaperRepo repo = new WallpaperRepo(app);
+                    repo.reportModeAsync();
+                    // Same reasoning as the check-in above, and the same one thread: on a car
+                    // whose mode runs a folder mirror the app may not be opened for weeks, so a
+                    // start is the one reliable moment to collect what the operator published.
+                    // FsClockApp's launch pass covers the car whose driver DOES open the app;
+                    // this covers the one who never does. No-ops in every mode without a mirror.
+                    try {
+                        FolderMirror mirror = FolderMirror.active(app.getSharedPreferences(
+                                BaseSettingsActivity.SHARED_PREF_DOMAIN, Context.MODE_PRIVATE));
+                        if(mirror != null) mirror.syncBlocking(app, repo);
+                    } catch(Throwable mt) {
+                        // A missing permission or no network on boot is the normal case here.
+                        Log.w(TAG, "folder mirror on start failed", mt);
+                    }
                 } catch(Throwable t) {
                     // A car with no network on boot is the normal case, not an error worth
                     // taking the rest of the receiver down for.

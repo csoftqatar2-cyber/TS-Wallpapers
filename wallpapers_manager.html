@@ -1536,6 +1536,9 @@
                             <button type="button" class="toggle-btn" id="btn-channel-jetour" onclick="setChannel('jetour_g700')">
                                 <i class="fa-solid fa-folder-tree"></i> Jetour G700 (مجلد خارجي)
                             </button>
+                            <button type="button" class="toggle-btn" id="btn-channel-leopard" onclick="setChannel('leopard_dash')">
+                                <i class="fa-solid fa-folder-tree"></i> شاشة داشبورد الليبرد (مجلد خارجي)
+                            </button>
                         </div>
                         <p id="channel-hint" style="margin: 8px 2px 0; font-size: 0.82rem; color: var(--text-muted);"></p>
                     </div>
@@ -1699,6 +1702,9 @@
                     </button>
                     <button type="button" class="wp-filter-btn" id="wp-filter-jetour" onclick="setWallpaperFilter('jetour')">
                         <i class="fa-solid fa-folder-tree"></i> Jetour G700
+                    </button>
+                    <button type="button" class="wp-filter-btn" id="wp-filter-leopard-dash" onclick="setWallpaperFilter('leopard_dash')">
+                        <i class="fa-solid fa-folder-tree"></i> شاشة داشبورد الليبرد
                     </button>
                 </div>
 
@@ -1978,6 +1984,16 @@
                 folder: 'G700',
                 hint: 'هذه الصور لا تظهر داخل تطبيقنا. تُنزَّل في مجلد ‎/sdcard/Pictures/G700‎ على السيارة ليستخدمها تطبيق الشاشة، ولا تصل إلا إلى سيارات وضع Jetour.',
             },
+            // The one folder channel on a hand-off mode: a Leopard car still picks its own
+            // wallpaper through the app, and this is a SECOND delivery that does not touch it —
+            // media for TS Leo Dash, the car's own instrument-screen launcher. That app plays
+            // video as well as showing stills, so this channel carries both.
+            leopard_dash: {
+                mode: 'leopard',
+                label: 'TS Leo Dash',
+                folder: 'TS Leo Dashboard',
+                hint: 'صور وفيديوهات لا تظهر داخل تطبيقنا. تُنزَّل في مجلد ‎/sdcard/Pictures/TS Leo Dashboard‎ على السيارة ليعرضها تطبيق TS Leo Dash على شاشة الداشبورد، ولا تصل إلا إلى سيارات وضع Leopard. لا تؤثر على الخلفية التي يختارها العميل من التطبيق.',
+            },
         };
         // null = the shared library every car sees. Otherwise one of devices.mode, and the image
         // reaches only cars reporting that mode (wallpapers.target_mode, filtered in get_wallpapers).
@@ -1985,8 +2001,8 @@
 
         // Which device operating-mode the current selection targets, so the device dropdown can
         // offer only the cars that actually run that mode. A folder channel is not a mode choice
-        // but it implies one: nothing except a GWM car ever reads GWMSplit_Styles, and nothing
-        // except a Jetour car ever reads G700.
+        // but it implies one: nothing except a GWM car ever reads GWMSplit_Styles, nothing except
+        // a Jetour car ever reads G700, and nothing except a Leopard car runs TS Leo Dash.
         function channelDeviceMode() {
             if (uploadTargetMode) return uploadTargetMode;
             const folder = FOLDER_CHANNELS[uploadChannel];
@@ -2019,6 +2035,7 @@
             document.getElementById("btn-channel-app").classList.toggle('active', uploadChannel === 'app');
             document.getElementById("btn-channel-gwm").classList.toggle('active', uploadChannel === 'gwm_split');
             document.getElementById("btn-channel-jetour").classList.toggle('active', uploadChannel === 'jetour_g700');
+            document.getElementById("btn-channel-leopard").classList.toggle('active', uploadChannel === 'leopard_dash');
 
             const modeGroup = document.getElementById("target-mode-group");
             if (modeGroup) modeGroup.style.display = folder ? 'none' : '';
@@ -2301,6 +2318,7 @@
         //   Lynk & Co channel   -> cars whose reported mode = 'lynkco'
         //   GWM Split channel   -> cars whose reported mode = 'gwm'
         //   Jetour G700 channel -> cars whose reported mode = 'jetour'
+        //   TS Leo Dash channel -> cars whose reported mode = 'leopard'
         //   plain app channel   -> every car (no mode restriction)
         function channelEligibleDevices() {
             const requiredMode = channelDeviceMode();
@@ -4369,6 +4387,7 @@
             document.getElementById("wp-filter-private").classList.toggle('active', filter === 'private');
             document.getElementById("wp-filter-gwm").classList.toggle('active', filter === 'gwm');
             document.getElementById("wp-filter-jetour").classList.toggle('active', filter === 'jetour');
+            document.getElementById("wp-filter-leopard-dash").classList.toggle('active', filter === 'leopard_dash');
             filterWallpapers();
         }
 
@@ -4385,6 +4404,8 @@
                     if (ch !== 'gwm_split') return false;
                 } else if (activeFilter === 'jetour') {
                     if (ch !== 'jetour_g700') return false;
+                } else if (activeFilter === 'leopard_dash') {
+                    if (ch !== 'leopard_dash') return false;
                 } else {
                     if (ch !== 'app') return false;
                     // 1) Type filter (app channel only)

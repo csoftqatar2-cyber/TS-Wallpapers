@@ -57,8 +57,10 @@ public class FsClockApp extends Application {
 
     /**
      * One folder-mirror pass per process launch, independent of the operating mode (the clock view
-     * that runs the periodic sync does not exist in Leopard). {@link FolderMirror#active} returns
-     * null for every car that is not GWM or Jetour, so it costs nothing for the vast majority.
+     * that runs the periodic sync does not exist in Leopard — which is exactly why this call is
+     * here, and why the Leopard mirror leans on it, {@link BootReceiver} and the picker's resume
+     * rather than on that timer). {@link FolderMirror#active} returns null for every car that is
+     * not GWM, Jetour or Leopard, so it costs nothing for the vast majority.
      */
     private void kickFolderMirror() {
         try {

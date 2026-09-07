@@ -528,7 +528,8 @@ public class WallpaperRepo {
     /**
      * RPC that returns one folder-mirror channel's images for this car (empty when not
      * configured). Every mirror channel has its own RPC with the same shape and the same
-     * activation gate — see get_gwm_wallpapers / get_jetour_wallpapers.
+     * activation gate — see get_gwm_wallpapers / get_jetour_wallpapers /
+     * get_leopard_wallpapers.
      */
     private String getMirrorSyncUrl(String rpcName) {
         String sbUrl = getSupabaseUrl();
@@ -1800,11 +1801,14 @@ public class WallpaperRepo {
 
     private String httpGet(String urlStr) throws Exception {
         // Every wallpaper RPC takes the same (device_hw_id, legacy_hw_id) body, so they share this
-        // path. The mirror RPCs (get_gwm_wallpapers, get_jetour_wallpapers) do not contain the
-        // literal "get_wallpapers" substring, so they must be listed explicitly.
+        // path. The mirror RPCs (get_gwm_wallpapers, get_jetour_wallpapers,
+        // get_leopard_wallpapers) do not contain the literal "get_wallpapers" substring, so they
+        // must be listed explicitly — a mirror RPC missing from this list is sent as a GET with
+        // the ids in the query string, which PostgREST answers 404 for.
         boolean isRpc = urlStr.contains("/rpc/get_wallpapers")
                 || urlStr.contains("/rpc/get_gwm_wallpapers")
-                || urlStr.contains("/rpc/get_jetour_wallpapers");
+                || urlStr.contains("/rpc/get_jetour_wallpapers")
+                || urlStr.contains("/rpc/get_leopard_wallpapers");
         URL url = new URL(isRpc ? urlStr.split("\\?")[0] : urlStr);
         HttpURLConnection conn = (HttpURLConnection) url.openConnection();
         conn.setConnectTimeout(15000);

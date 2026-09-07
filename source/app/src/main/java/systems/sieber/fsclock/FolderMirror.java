@@ -35,9 +35,10 @@ import java.util.Set;
  * through the QR upload (tracked separately, see prefLocal), and the ones some other app or the
  * Cars-installer cable push left there (tracked nowhere at all).
  *
- * Two mirrors exist, and they are the same mechanism twice over with different addresses:
- *   {@link #GWM}    — 'gwm_split' -> /sdcard/Pictures/GWMSplit_Styles, for GWM head units.
- *   {@link #JETOUR} — 'jetour_g700' -> /sdcard/Pictures/G700, for the Jetour G700.
+ * Three mirrors exist, and they are the same mechanism three times over with different addresses:
+ *   {@link #GWM}     — 'gwm_split' -> /sdcard/Pictures/GWMSplit_Styles, for GWM head units.
+ *   {@link #JETOUR}  — 'jetour_g700' -> /sdcard/Pictures/G700, for the Jetour G700.
+ *   {@link #LEOPARD} — 'leopard_dash' -> /sdcard/Pictures/TS Leo Dashboard, for TS Leo Dash.
  * Everything below is shared between them on purpose: this class used to be GwmSync, and a
  * second copy of it would have meant fixing every download bug twice. Each instance keeps its
  * OWN pref keys — in particular its own managed-files list, or one mirror's pass would happily
@@ -59,8 +60,26 @@ class FolderMirror {
             "jetour-g700-folder", "jetour-g700-managed-files", "jetour-g700-local-files",
             "G700", "get_jetour_wallpapers", "jetour_");
 
+    /**
+     * BYD Leopard: the same mechanism again, and the first one on a hand-off mode.
+     *
+     * A Leopard car already hands its picked wallpaper to Android's WallpaperManager; that is
+     * untouched and has nothing to do with this. What the mirror adds is a SECOND, independent
+     * delivery for the car's own dashboard launcher, TS Leo Dash (com.codex.clusterlauncher),
+     * which shows the driver a picture on the instrument screen and reads its choices from
+     * {@code /storage/emulated/0/Pictures/TS Leo Dashboard} — see ScreenTheme.CAR_THEME_DIR in
+     * that project. It lists stills, GIFs and video alike, so this channel carries all three.
+     *
+     * The folder name is that app's, spaces and capitals included: it is a fixed string on the
+     * other side, so "tidying" it here would simply stop the pictures arriving.
+     */
+    static final FolderMirror LEOPARD = new FolderMirror(
+            OperatingMode.LEOPARD,
+            "leopard-dash-folder", "leopard-dash-managed-files", "leopard-dash-local-files",
+            "TS Leo Dashboard", "get_leopard_wallpapers", "leo_");
+
     /** Every mirror there is, for the callers that just want to kick "whatever applies". */
-    static final FolderMirror[] ALL = { GWM, JETOUR };
+    static final FolderMirror[] ALL = { GWM, JETOUR, LEOPARD };
 
     /** The operating mode that switches this mirror on — the mode IS the enable flag. */
     final int mode;
@@ -105,7 +124,8 @@ class FolderMirror {
      * The mirror this car should be running, or null for a car in a mode that has none.
      *
      * There is exactly one at a time because the modes are exclusive: a GWM car mirrors the GWM
-     * folder, a Jetour car the G700 folder, everybody else nothing at all.
+     * folder, a Jetour car the G700 folder, a Leopard car the TS Leo Dash folder, everybody else
+     * nothing at all.
      */
     static FolderMirror active(SharedPreferences p) {
         int m = OperatingMode.get(p);

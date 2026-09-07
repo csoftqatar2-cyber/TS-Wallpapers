@@ -15,6 +15,10 @@ import android.content.pm.PackageManager;
  * - LEOPARD : the app draws nothing. It hands the chosen file to Android's wallpaper system
  *             and gets out of the way — no clock, no weather, no slideshow. See §8 of the
  *             Leopard brief: this is not a setting, it is a different product.
+ *             It ALSO carries a folder mirror (the only hand-off mode that does): the
+ *             'leopard_dash' cloud channel is mirrored into /sdcard/Pictures/TS Leo Dashboard
+ *             for TS Leo Dash, the car's own instrument-screen launcher. That is a second,
+ *             independent delivery and it does not touch the wallpaper hand-off above.
  * - GWM     : screen-wise IDENTICAL to NORMAL (app draws wallpaper + clock). The only thing the
  *             mode carries is the "GWM images management" section: it mirrors the 'gwm_split'
  *             cloud channel into an external folder that a SEPARATE app on GWM head units reads.
@@ -171,6 +175,9 @@ class OperatingMode {
      * Jetour are on this list because on screen they ARE Others; all they add is a folder mirror
      * running behind it. Everything that used to ask "is this NORMAL?" about the screen should
      * ask this instead, or the two folder-mirror modes silently lose a piece of Others.
+     *
+     * Leopard runs a folder mirror too and is deliberately NOT on this list: there the mirror is
+     * bolted onto a hand-off product and nothing about the screen changes.
      */
     static boolean isOthersLike(SharedPreferences prefs) {
         int m = get(prefs);

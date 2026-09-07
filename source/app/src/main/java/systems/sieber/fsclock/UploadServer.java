@@ -98,7 +98,7 @@ public class UploadServer extends NanoHTTPD {
     private final Context mContext;
     private final WallpaperRepo mRepo;
     private final UploadListener mListener;
-    /** Non-null when uploads land in an external mirrored folder (GWM Split / Jetour G700) rather
+    /** Non-null when uploads land in an external mirrored folder (GWM / Jetour / TS Leo Dash) rather
      *  than our wallpaper folder. Those files are NOT made the current wallpaper — they belong to
      *  a different app entirely. */
     private final FolderMirror mMirror;
@@ -129,7 +129,7 @@ public class UploadServer extends NanoHTTPD {
         return startNew(c, repo, listener, null);
     }
 
-    /** Variant whose uploads go straight into an external mirrored folder (GWM Split / Jetour). */
+    /** Variant whose uploads go into an external mirrored folder (GWM / Jetour / TS Leo Dash). */
     public static UploadServer startNewMirror(Context c, WallpaperRepo repo, UploadListener listener,
                                               FolderMirror mirror) throws IOException {
         return startNew(c, repo, listener, mirror);
@@ -469,7 +469,7 @@ public class UploadServer extends NanoHTTPD {
         // the person holding the phone is standing at a car choosing THE picture. Letting them send
         // twelve only moved the choosing onto the head unit — a tick-list on a dashboard, in front
         // of a customer, that ended with eleven pictures nobody framed. The mirrors (GWM Split,
-        // Jetour G700) are the exception and keep the batch: there the files go into another app's
+        // Jetour G700, TS Leo Dash) are the exception and keep the batch: there the files go into another app's
         // slideshow folder, never through our editor, so "several" is the whole point of it.
         final boolean many = mMirror != null;
         // One control, one gesture: picking the file starts the upload. A second "send" button

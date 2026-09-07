@@ -425,6 +425,16 @@ Roboto Font Copyright (c) Christian Robertson. Licensed under the Apache License
     <string name="jetour_folder">Folder: %1$s</string>
     <string name="jetour_pair_phone">Upload from phone (QR)</string>
 
+    <!-- Leopard dashboard folder: the third instance of the same mirror, and the first on a
+         hand-off mode. The wallpaper the driver picks still goes to Android; this card is a
+         separate delivery for TS Leo Dash, the car's own dashboard launcher, which reads
+         pictures AND video from its folder under Pictures. Permission/status strings are the
+         shared gwm_* ones. -->
+    <string name="leopard_dash_section">TS Leo Dash images</string>
+    <string name="leopard_dash_subtitle">Downloads pictures and videos tagged \"Leopard\" from the cloud into a folder on this car for the TS Leo Dash dashboard app to show. Does not affect the wallpaper you pick above.</string>
+    <string name="leopard_dash_folder">Folder: %1$s</string>
+    <string name="leopard_dash_pair_phone">Upload from phone (QR)</string>
+
     <!-- Device identity block in the Wallpapers section. These were concatenated in Java, which
          is why they stayed Arabic in every locale. -->
     <string name="device_id_status">Device ID: %1$s\nStatus: %2$s</string>
