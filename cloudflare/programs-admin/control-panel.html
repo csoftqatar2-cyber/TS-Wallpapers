@@ -403,6 +403,12 @@
         .car-type { display: block; font-weight: 600; }
         .car-type + .sub { display: block; }
         pre.report { direction: ltr; text-align: left; white-space: pre-wrap; font-family: var(--mono); font-size: .74rem; background: rgba(0,0,0,.25); padding: 10px; border-radius: 10px; max-height: 360px; overflow: auto; }
+        #controller-settings { display: grid; gap: 14px; margin-top: 16px; }
+        #controller-settings fieldset { display: grid; gap: 12px; min-width: 0; }
+        #controller-settings label { display: flex; flex-direction: column; gap: 6px; }
+        #controller-settings input, #controller-settings textarea { width: 100%; padding: 10px; color: var(--text-main); background: #18120d; border: 1px solid var(--panel-border); border-radius: 10px; font: inherit; }
+        #controller-settings .table-wrap input { min-width: 180px; }
+        #controller-settings fieldset:has(#fleet-fuel-price) { grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); align-items: end; }
         #global-err { overflow-wrap: anywhere; }
         @media (max-width: 700px) { .card { padding: 12px; } .logo-text h1 { font-size: 1.2rem; } .logo-area { width: 100%; } .tab { padding: 8px 10px; } }
         @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; } }
@@ -703,7 +709,7 @@
             <!-- ---- Crashes ---- -->
             <section class="tab-panel" id="panel-crashes" role="tabpanel">
                 <div id="crashes-err"></div>
-                <p class="note" style="margin-bottom:12px;">آخر 300 تقرير من device_crashes مجمّعة حسب الجهاز — الأحدث أولًا.</p>
+                <p class="note" style="margin-bottom:12px;">التقارير المحمّلة مجمّعة حسب التطبيق وتوقيع العطل؛ الأعطال المحلولة منفصلة عن الحالية.</p>
                 <div id="crashes-list"></div>
                 <div id="leo-crashes" style="margin-top:22px;">
                     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px;">
@@ -757,10 +763,6 @@
                     <div class="table-wrap"><table style="min-width:500px;"><thead><tr><th>VIN</th><th>اليوم</th><th>أوامر</th></tr></thead><tbody id="ctl-voice-body"></tbody></table></div>
                     <h3 class="ctl-h">الفجوات (طلبات السائقين غير المطابقة، 30 يومًا)</h3>
                     <div class="table-wrap"><table style="min-width:600px;"><thead id="ctl-gaps-head"></thead><tbody id="ctl-gaps-body"></tbody></table></div>
-                    <h3 class="ctl-h">سجل سعر الوقود</h3>
-                    <div class="table-wrap"><table style="min-width:500px;"><thead id="ctl-fuel-head"></thead><tbody id="ctl-fuel-body"></tbody></table></div>
-                    <h3 class="ctl-h">نسخ موجّه النظام (الصوت)</h3>
-                    <div class="table-wrap"><table style="min-width:500px;"><thead id="ctl-overlay-head"></thead><tbody id="ctl-overlay-body"></tbody></table></div>
                     <p class="note" style="margin-top:10px;">النشر (سعر الوقود، موجّه النظام) والاستعادة من لوحة الكونترولر الأصلية فقط. لا مفتاح OpenRouter هنا.</p>
                 </div>
             </section>
@@ -898,7 +900,7 @@
     ];
     // device_app_seen.app_id / device_tokens.app_id -> canonical app key (short ids and package names both tolerated)
     const APP_KEY_BY_ID = {
-        'wallpapers': 'wallpapers', 'store.thabthaba.clock': 'wallpapers',
+        'wallpapers': 'wallpapers', 'store.thabthaba.clock': 'wallpapers', 'systems.sieber.fsclock': 'wallpapers',
         'store': 'store', 'com.thabthaba.store': 'store',
         'backbutton': 'backbutton', 'com.csoft.backbutton': 'backbutton',
         'tslink': 'tslink', 'com.thabthaba.tslink': 'tslink',
@@ -958,6 +960,9 @@
         SESSION_TOKEN = null;
         if (refreshTimer) { clearTimeout(refreshTimer); refreshTimer = null; }
         SESSION_REFRESH = null; sessionEpoch++;
+        state.crashResolutions = []; state.storeCrashes = []; state.leoCrashes = []; state.leoCrashesLoaded = false;
+        state.ctl = null; state.ctlLoaded = false; carCache.crashes.clear();
+        glossaryDraft = null; glossaryDirty = false; glossaryText = '';
         stopFastPoll(); stopRealtime(); resetWallpaperManager();
         try { localStorage.removeItem(SESSION_KEY); } catch (e) {}
     }
@@ -1086,7 +1091,7 @@
     function fallbackCopy(text, done) {
         const ta = document.createElement('textarea'); ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
         document.body.appendChild(ta); ta.select();
-        try { document.execCommand('copy'); done(); } catch (e) { window.prompt('انسخ المعرّف:', text); }
+        try { document.execCommand('copy'); done(); } catch (e) { promptDialog({ title: 'انسخ المعرّف', value: text }); }
         document.body.removeChild(ta);
     }
     const hasSwal = () => typeof window.Swal !== 'undefined';
@@ -1103,8 +1108,7 @@
             });
             return c.isConfirmed;
         }
-        const tmp = document.createElement('div'); tmp.innerHTML = html || '';
-        return window.confirm(`${title}\n\n${tmp.textContent.trim()}`);
+        return themedFallbackDialog({ title, html, confirmText: confirmText || 'نعم' });
     }
     async function promptDialog({ title, value, placeholder }) {
         if (hasSwal()) {
@@ -1114,11 +1118,20 @@
             });
             return c.isConfirmed ? c.value : null;
         }
-        return window.prompt(title, value || '');
+        return themedFallbackDialog({ title, value: value || '', placeholder, input: true, confirmText: 'حفظ' });
     }
     function alertDialog(title, text, icon) {
         if (hasSwal()) Swal.fire({ icon: icon || 'error', titleText: title, text, background: '#1c160e', color: '#fff', confirmButtonColor: '#ff9a3d' });
-        else window.alert(`${title}\n${text || ''}`);
+        else return themedFallbackDialog({ title, html: esc(text || ''), confirmText: 'حسنًا', cancel: false });
+    }
+    function themedFallbackDialog({ title, html = '', input = false, value = '', placeholder = '', confirmText, cancel = true }) {
+        return new Promise(resolve => {
+            const dialog = document.createElement('dialog'); dialog.dir = 'rtl'; dialog.className = 'wp-dialog';
+            dialog.style.cssText = 'background:var(--panel,#1c160e);color:var(--text,#fff);border:1px solid var(--panel-border,#69513b);border-radius:16px;padding:24px;max-width:90vw;width:480px';
+            dialog.innerHTML = `<form method="dialog"><h3>${esc(title)}</h3><div>${html}</div>${input ? `<input type="text" aria-label="${esc(title)}" value="${esc(value)}" placeholder="${esc(placeholder)}" style="width:100%;margin:16px 0">` : ''}<div class="toolbar" style="margin-top:18px"><button class="btn" value="ok">${esc(confirmText)}</button>${cancel ? '<button class="btn" value="cancel" formnovalidate>إلغاء</button>' : ''}</div></form>`;
+            dialog.addEventListener('close', () => { const result = dialog.returnValue === 'ok' ? input ? dialog.querySelector('input').value : true : input ? null : false; dialog.remove(); resolve(result); }, { once: true });
+            document.body.appendChild(dialog); dialog.showModal();
+        });
     }
 
     // =====================================================================
@@ -1191,7 +1204,7 @@
     //  الحالة
     // =====================================================================
     const state = {
-        devices: [], tokens: [], versions: [], crashes: [], aliases: [], appSeen: [], appDaily: [], blockEvents: [],
+        devices: [], tokens: [], versions: [], crashes: [], crashResolutions: [], storeCrashes: [], aliases: [], appSeen: [], appDaily: [], blockEvents: [],
         storeList: [], storeStats: null, storeEvents: [],
         catalog: null, leo: null,
         wallpapers: [], wallpaperHides: [],
@@ -1235,7 +1248,11 @@
             devices: () => restGet('devices?select=*&order=last_seen_at.desc.nullslast&limit=5000'),
             tokens: () => restGet('device_tokens?select=hardware_id,app_id,token_version,token_issued_at,enroll_conflicts,last_enroll_conflict_at&order=enroll_conflicts.desc,token_issued_at.desc&limit=5000'),
             versions: () => restGet('app_versions?select=version_code,version_name,apk_url,changelog,created_at&order=version_code.desc&limit=30'),
-            crashes: () => restGet('device_crashes?select=hardware_id,app_version,device_mode,crash_at,received_at,crash_text&order=received_at.desc&limit=300'),
+            crashes: () => restGet('device_crashes?select=hardware_id,app_version,version_code,device_mode,crash_at,received_at,crash_text&order=received_at.desc&limit=300'),
+            crashResolutions: () => restGet('crash_resolutions?select=*&order=resolved_at.desc&limit=1000'),
+            storeCrashes: () => rpcStore('store_admin_crashes', { p_limit: 200, p_hw_id: null }),
+            ctlCrashData: () => loadControllerCrashData(),
+            leoCrashes: async () => LOCAL_PROXY && LOCAL_FLAGS.leo ? crashRows(await localGet('/local/leo/crashes?limit=200')) : [],
             aliases: () => restGet('device_id_aliases?select=old_id,current_id&limit=5000'),
             appDaily: () => restGet('device_app_daily?select=hardware_id,app_id,day,opens,app_version_code&day=gte.' + qatarDay(-30) + '&limit=20000'),
             appSeen: () => restGet('device_app_seen?select=hardware_id,app_id,last_seen,first_seen,pings,app_version_code,app_version&order=last_seen.desc&limit=10000'),
@@ -1278,6 +1295,8 @@
         if (!Array.isArray(state.tokens)) state.tokens = [];
         if (!Array.isArray(state.versions)) state.versions = [];
         if (!Array.isArray(state.crashes)) state.crashes = [];
+        state.ctl = { ...(state.ctl || {}), ...(state.ctlCrashData || {}) };
+        state.leoCrashesLoaded = !!(LOCAL_PROXY && LOCAL_FLAGS.leo);
         if (!Array.isArray(state.aliases)) state.aliases = [];
         if (!Array.isArray(state.appSeen)) state.appSeen = [];
         if (!Array.isArray(state.appDaily)) state.appDaily = [];
@@ -1390,7 +1409,13 @@
             if (!c || !c.hardware_id) continue;
             const r = get(resolve(c.hardware_id));
             r.crashes.push(c);
-            if (ts(c.received_at || c.crash_at) >= cutoff) r.crashes7++;
+        }
+        const crashDeviceIds = new Map([...rows.keys()].map(hw => [canonicalHw(hw), hw]));
+        for (const c of unresolvedReports(allCrashReports())) {
+            if (c.hw && ts(c.at) >= cutoff) {
+                const canonical = canonicalHw(c.hw), hw = crashDeviceIds.get(canonical) || resolve(c.hw);
+                get(hw).crashes7++; crashDeviceIds.set(canonical, hw);
+            }
         }
         const catBlocked = new Set();
         if (state.catalog && Array.isArray(state.catalog.blockedDevices)) {
@@ -1462,7 +1487,7 @@
         if ($('panel-wallpapers').classList.contains('active')) renderVersionSummary();
         $('cnt-blocklog').textContent = state.blockEvents.length;
         $('cnt-devices').textContent = state.merged.length;
-        $('cnt-crashes').textContent = state.crashes.length;
+        updateCrashCounts();
         if ($('cnt-tokens')) $('cnt-tokens').textContent = state.tokens.length;
         renderGlobalError();
     }
@@ -1493,7 +1518,7 @@
             { h: 'محاولات فاشلة > 0', v: m.filter(r => r.attempts > 0).length, ic: 'fa-hand', c: 'yellow', f: 'attempts' },
             { h: 'توكنات صادرة', v: state.tokens.length, ic: 'fa-ticket', c: 'cyan', f: 'notoken' },
             { h: 'تعارضات تسجيل', v: m.filter(r => r.conflicts > 0).length, ic: 'fa-triangle-exclamation', c: 'red', f: 'conflict' },
-            { h: 'أعطال آخر 7 أيام', v: state.crashes.filter(c => ts(c.received_at || c.crash_at) >= cutoff).length, ic: 'fa-bug', c: 'purple', f: null, t: 'crashes' },
+            { h: 'أعطال آخر 7 أيام', v: unresolvedReports(allCrashReports()).filter(c => ts(c.at) >= cutoff).length, ic: 'fa-bug', c: 'purple', f: null, t: 'crashes' },
         ];
         const lv = latestVersions();
         let html = stats.map(s => `
@@ -1753,7 +1778,7 @@
             </li>`).join('')}</ul>`
             : '<div class="note">لا أحداث حظر مسجّلة</div>';
         const aliasBox = r.aliases.length ? `<ul class="ev-list">${r.aliases.map(a => `<li><span class="num">${esc(a)}</span></li>`).join('')}</ul>` : '<div class="note">لا معرّفات قديمة</div>';
-        const crashBox = r.crashes.length ? r.crashes.map(crashItemHtml).join('') : '<div class="note">لا أعطال في آخر 300 تقرير</div>';
+        const crashBox = `<div id="device-crashes-${esc(encodeURIComponent(r.hw))}"></div>`;
         box.innerHTML = `
             <div class="detail-grid">
                 <div class="detail-box"><h4><i class="fa-solid fa-image"></i> الخلفيات (devices)</h4>${devBox}</div>
@@ -1763,8 +1788,9 @@
                 <div class="detail-box"><h4><i class="fa-solid fa-link"></i> المعرّفات القديمة (aliases)</h4>${aliasBox}</div>
                 <div class="detail-box"><h4><i class="fa-solid fa-clipboard-list"></i> سجل الحظر (${r.blockEvents.length})</h4>${blockBox}</div>
                 <div class="detail-box" style="grid-column:1/-1"><h4><i class="fa-solid fa-list"></i> آخر 20 حدث في الستور</h4><div class="ev-box" data-ev="${esc(r.hw)}"><span class="note">جارٍ التحميل…</span></div></div>
-                <div class="detail-box" style="grid-column:1/-1"><h4><i class="fa-solid fa-bug"></i> الأعطال (${r.crashes.length})</h4>${crashBox}</div>
+                <div class="detail-box" style="grid-column:1/-1"><h4><i class="fa-solid fa-bug"></i> الأعطال</h4>${crashBox}</div>
             </div>`;
+        renderCrashView('device-crashes-' + encodeURIComponent(r.hw), carCrashReports(r.hw));
         loadRowEvents(r, box.querySelector('.ev-box'));
     }
     async function loadRowEvents(r, el) {
@@ -1875,54 +1901,162 @@
     }
 
     // ---------- الأعطال ----------
-    function crashFirstLine(txt) {
-        const lines = String(txt || '').split('\n').map(l => l.trim()).filter(Boolean);
-        const ex = lines.find(l => /Exception|Error|Throwable/.test(l) && !/^(app_version|mode|hardware|breadcrumb)/i.test(l));
-        return ex || lines[0] || '';
+    // All apps share one signature and resolution policy. Unknown version codes never
+    // imply a regression; only a report above the recorded fixed code reopens a group.
+    function crashSignature(text) {
+        const lines = String(text || '').split(/\r?\n/).map(s => s.trim());
+        const exception = lines.find(s => /Exception|Error|Throwable/.test(s)) || '';
+        const classPart = exception.replace(/^(?:Caused by|Suppressed):\s*/, '').split(':')[0];
+        const names = classPart.match(/(?:[\w$]+\.)*[\w$]*(?:Exception|Error|Throwable)[\w$]*/g) || [];
+        const name = names.find(n => n.includes('.')) || names[0] || 'Unknown';
+        const frames = lines.filter(s => /^at\s+/.test(s));
+        const frame = frames.find(s => /systems\.sieber\.fsclock|com\.thabthaba\.store|com\.thabthaba\.controller|com\.codex\.clusterlauncher/.test(s)) || frames[0] || '';
+        return name + '@' + frame.replace(/:\d+(?=\))/g, '').replace(/\s+/g, ' ');
     }
-    function crashItemHtml(c) {
-        return `<details class="crash-item">
-            <summary>
-                <span class="crash-head" title="${esc(fmtDate(c.crash_at || c.received_at))}">${esc(relTime(c.crash_at || c.received_at))}</span>
-                <span class="badge muted"><span class="num">${esc(c.app_version || '—')}</span></span>
-                <span class="badge muted">${esc(modeLabel(c.device_mode))}</span>
-                <span class="crash-first">${esc(crashFirstLine(c.crash_text))}</span>
-            </summary>
-            <pre class="crash">${esc(c.crash_text || '')}</pre>
-        </details>`;
+    function crashRows(value) { const rows = Array.isArray(value) ? value : value && (value.rows || value.crashes || value.groups); return Array.isArray(rows) ? rows : []; }
+    async function loadControllerCrashData() {
+        if (!LOCAL_PROXY || !LOCAL_FLAGS.controller) return { crashes: [], crashGroups: [], crashUnavailable: true };
+        const results = await Promise.allSettled([
+            localPost('/local/controller/thab_admin_crashes', { p_vin: null, p_limit: 50 }),
+            localPost('/local/controller/thab_admin_crash_groups', { p_days: 30, p_limit: 50 })
+        ]);
+        return { crashes: results[0].status === 'fulfilled' ? crashRows(results[0].value) : [], crashGroups: results[1].status === 'fulfilled' ? crashRows(results[1].value) : [], crashUnavailable: results.some(r => r.status === 'rejected' || r.value?.error) };
     }
-    function renderCrashes() {
-        renderCrashesContent();
-        pageCrashGroups('crashes-list', 'crashes-list');
+    function crashAppLabel(app) { return ({ wallpapers: 'ذبذبة خلفيات', store: 'ذبذبة ستور', leo: 'ليو داش', controller: 'ذبذبة داشبورد' })[app] || app; }
+    function normalizeCrash(app, c) {
+        const text = c.crash_text || c.report || [c.exc, c.stack].filter(Boolean).join('\n');
+        const rawCode = c.version_code ?? c.versionCode ?? c.app_version_code;
+        return { app, raw: c, text: String(text || ''), signature: app === 'controller' && c.fingerprint ? c.fingerprint : crashSignature(text),
+            hw: c.vin ? 'VIN-' + c.vin : c.hardware_id || c.hwId || c.hw_id || c.hardwareId || '',
+            vin: c.vin || '', car: c.car || '', version: c.version_name || c.app_version || c.versionName || c.version || '',
+            code: rawCode == null || rawCode === '' ? null : Number(rawCode), at: c.at || c.crash_at || c.receivedAt || c.received_at };
     }
-    function renderCrashesContent() {
-        setErr('crashes-err', state.errors.crashes ? `device_crashes: ${state.errors.crashes}` : '');
-        const groups = new Map();
-        for (const c of state.crashes) {
-            const k = c.hardware_id || '?';
-            if (!groups.has(k)) groups.set(k, []);
-            groups.get(k).push(c);
+    function allCrashReports() {
+        const reports = [['wallpapers', state.crashes], ['store', state.storeCrashes], ['leo', state.leoCrashes], ['controller', state.ctl && state.ctl.crashes]]
+            .flatMap(([app, rows]) => crashRows(rows).map(c => normalizeCrash(app, c)));
+        const seen = new Set(reports.filter(c => c.app === 'controller').map(controllerCrashIdentity));
+        for (const cached of carCache.crashes.values()) for (const raw of cached.rows || []) {
+            const c = normalizeCrash('controller', raw), key = controllerCrashIdentity(c);
+            if (!seen.has(key)) { seen.add(key); reports.push(c); }
         }
-        if (!groups.size) { $('crashes-list').innerHTML = `<div class="empty"><i class="fa-solid fa-face-smile"></i>${state.errors.crashes ? 'تعذّر تحميل الأعطال' : 'لا أعطال'}</div>`; return; }
-        const arr = [...groups.entries()].sort((a, b) => ts(b[1][0].received_at || b[1][0].crash_at) - ts(a[1][0].received_at || a[1][0].crash_at));
-        $('crashes-list').innerHTML = arr.map(([hw, list]) => {
-            const r = state.merged.find(x => x.hw === hw || x.aliases.includes(hw));
-            return `<div class="group">
-                <div class="group-head">
-                    <span class="name">${esc(r ? (r.name || r.serial || 'بدون اسم') : 'جهاز غير معروف')}</span>
-                    <span class="hw" style="display:inline">${esc(hw)}</span>
-                    <span class="badge bad"><span class="num">${list.length}</span> عطل</span>
-                    ${r ? `<span class="badge muted">${esc(modeLabel(r.dev && r.dev.mode))}</span>` : ''}
-                    <span class="sub">آخر: ${esc(relTime(list[0].received_at || list[0].crash_at))}</span>
-                    <button class="btn sm icon-only" type="button" data-copy="${esc(hw)}" title="نسخ المعرّف">📋</button>
-                </div>
-                ${list.map(crashItemHtml).join('')}
-            </div>`;
-        }).join('');
-        $('crashes-list').querySelectorAll('[data-copy]').forEach(b => b.addEventListener('click', () => copyText(b.dataset.copy)));
+        return reports;
     }
-
-    // ---------- الستور ----------
+    function controllerCrashIdentity(c) { return String(c.raw.id ?? c.raw.rid ?? [c.vin, c.at, c.signature].join('|')); }
+    function crashResolution(app, signature) { return (state.crashResolutions || []).find(r => appKey(r.app_id) === app && r.signature === signature); }
+    function crashGroups(reports) {
+        const groups = new Map();
+        for (const c of reports) {
+            const key = JSON.stringify([c.app, c.signature]);
+            if (!groups.has(key)) groups.set(key, { app: c.app, signature: c.signature, reports: [], resolution: crashResolution(c.app, c.signature) });
+            const group = groups.get(key);
+            if (c.raw._aggregate) group.sample = c; else group.reports.push(c);
+        }
+        for (const g of groups.values()) {
+            if (!g.reports.length && g.sample) g.reports.push(g.sample);
+            g.reports.sort((a, b) => ts(b.at) - ts(a.at));
+            g.regressed = !!g.resolution && g.reports.some(c => Number.isFinite(c.code) && g.resolution.fixed_version_code != null && c.code > Number(g.resolution.fixed_version_code));
+            g.resolved = !!g.resolution && !g.regressed;
+            const aggregate = g.sample?.raw;
+            g.count = aggregate ? aggregate.count ?? aggregate.n ?? aggregate.total ?? aggregate.crash_count ?? '—' : g.reports.length;
+            const cars = aggregate && (aggregate.cars ?? aggregate.car_count ?? aggregate.vin_count ?? aggregate.distinct_cars ?? aggregate.vins);
+            g.cars = aggregate ? Array.isArray(cars) ? cars.length : cars ?? '—' : new Set(g.reports.map(c => canonicalHw(c.hw) || c.hw).filter(Boolean)).size;
+            g.versions = aggregate?.versions ? (Array.isArray(aggregate.versions) ? aggregate.versions.map(v => typeof v === 'object' ? JSON.stringify(v) : v).join('، ') : String(aggregate.versions)) : [...new Set(g.reports.map(c => `${c.version || '—'} (${c.code ?? '—'})`))].join('، ');
+            g.firstAt = aggregate?.first_at || aggregate?.first_seen || g.reports[g.reports.length - 1].at;
+            g.lastAt = aggregate?.last_at || aggregate?.last_seen || g.reports[0].at;
+        }
+        return [...groups.values()].sort((a, b) => ts(b.reports[0].at) - ts(a.reports[0].at));
+    }
+    function unresolvedReports(reports) { return crashGroups(reports).filter(g => !g.resolved).flatMap(g => g.reports); }
+    function updateCrashCounts() {
+        const reports = unresolvedReports(allCrashReports());
+        $('cnt-crashes').textContent = reports.length;
+        $('cnt-crashes').title = 'تقارير الأعطال الحالية المحمّلة';
+        for (const app of ['wallpapers', 'store', 'leo', 'controller']) {
+            const button = document.querySelector(`#panel-${app} .subtab[data-sub="crashes"]`);
+            if (button) button.innerHTML = `الأعطال <span class="badge num">${reports.filter(c => c.app === app).length}</span>`;
+        }
+    }
+    function crashReportHtml(c) {
+        const r = c.raw;
+        return `<details class="crash-item"><summary><span class="badge">${esc(crashAppLabel(c.app))}</span>${c.vin ? vinCell(c.vin) : hwLink(c.hw)} ${esc(c.car)} <span class="num">${esc(c.version)} (${esc(c.code ?? '—')})</span>${timeCell(c.at)}<span class="crash-first">${esc([r.exc, String(r.stack || c.text).split('\n')[0]].filter(Boolean).join(' · '))}</span></summary><pre class="report">${esc(c.text)}</pre>${r.breadcrumbs ? `<h4>خطوات ما قبل العطل</h4><pre class="report">${esc(typeof r.breadcrumbs === 'string' ? r.breadcrumbs : JSON.stringify(r.breadcrumbs, null, 2))}</pre>` : ''}${r.logcat_tail ? `<h4>سجل الجهاز</h4><pre class="report">${esc(r.logcat_tail)}</pre>` : ''}</details>`;
+    }
+    function renderCrashView(hostId, reports, notice = '') {
+        const host = typeof hostId === 'string' ? $(hostId) : hostId; if (!host) return;
+        const key = host.id; host.dataset.crashView = 'true';
+        const groups = crashGroups(reports), current = groups.filter(g => !g.resolved), resolved = groups.filter(g => g.resolved);
+        host.innerHTML = `${notice ? `<p class="note">${esc(notice)}</p>` : ''}${state.errors.crashResolutions ? '<p class="note">تعذّر تحميل سجل الحلول؛ العدادات مؤقتة وإجراءات الحل غير متاحة حتى التحديث.</p>' : ''}<h4>الأعطال الحالية (${current.length})</h4><div id="${key}-current"></div><details><summary>أعطال محلولة (${resolved.length})</summary><div id="${key}-resolved"></div></details>`;
+        for (const [suffix, rows] of [['current', current], ['resolved', resolved]]) {
+            const id = key + '-' + suffix;
+            listControls({ hostId: id, rows, key: id, searchText: g => [crashAppLabel(g.app), g.signature, g.resolution?.note, ...g.reports.map(c => [c.hw, c.car, c.version, c.code, c.text].join(' '))].join(' '), render: page => {
+                $(id).innerHTML = page.length ? `<div class="table-wrap"><table><thead><tr><th>التطبيق / التوقيع</th><th>العدد</th><th>السيارات</th><th>الإصدارات</th><th>أول / آخر ظهور</th><th>الحل</th></tr></thead><tbody>${page.map((g, i) => {
+                    const rr = g.resolution;
+                    return `<tr><td><span class="badge">${esc(crashAppLabel(g.app))}</span> <span class="num" title="${esc(g.signature)}">${esc(g.signature.slice(0, 100))}</span>${g.regressed ? '<span class="badge bad">رجع تاني</span>' : ''}<details><summary>التقارير</summary><div id="${id}-reports-${i}"></div></details></td><td class="num">${esc(g.count)}</td><td class="num">${esc(g.cars)}</td><td>${esc(g.versions)}</td><td>${timeCell(g.firstAt)} / ${timeCell(g.lastAt)}</td><td>${rr ? `<p>${esc(rr.note || 'بلا ملاحظة')}</p><span class="sub">نسخة الإصلاح: ${esc(rr.fixed_version_code ?? '—')}</span>${timeCell(rr.resolved_at)}` : ''}<button type="button" class="btn sm" data-crash-action="${g.resolved ? 'undo' : 'resolve'}" data-crash-app="${esc(g.app)}" data-signature="${esc(g.signature)}" ${state.errors.crashResolutions ? 'disabled' : ''}>${g.resolved ? 'إلغاء الحل' : 'تم الحل ✓'}</button></td></tr>`;
+                }).join('')}</tbody></table></div>` : '<div class="empty">لا أعطال</div>';
+                page.forEach((g, i) => listControls({ hostId: `${id}-reports-${i}`, key: id + ':reports:' + JSON.stringify([g.app, g.signature]), rows: g.reports, searchText: c => [c.hw, c.version, c.text].join(' '), render: list => { $(`${id}-reports-${i}`).innerHTML = list.map(crashReportHtml).join(''); } }));
+            } });
+        }
+    }
+    function controllerCrashNotice() { return !LOCAL_PROXY || !LOCAL_FLAGS.controller || !state.ctl || state.ctl.crashUnavailable || (!crashRows(state.ctl.crashes).length && !crashRows(state.ctl.crashGroups).length) ? 'تبليغ الأعطال لم يصل بعد للسيارات (ينتظر تشغيل الهجرة ونشر إصدار)' : ''; }
+    function renderControllerCrashGroups(host) {
+        if (!host) return;
+        host.innerHTML = `<p class="note">حدود التبليغ: ٢٠ تقريرًا لكل سيارة يوميًا، و٥ ملفات معلّقة على السيارة.</p><h4>مجموعات الأسطول خلال ٣٠ يومًا</h4><div id="${host.id}-server-groups"></div><details><summary>أحدث التقارير المحمّلة</summary><div id="${host.id}-latest"></div></details>`;
+        const latestReports = allCrashReports().filter(c => c.app === 'controller');
+        const reports = crashRows(state.ctl?.crashGroups).map(r => {
+            const latest = latestReports.filter(c => c.signature === r.fingerprint).map(c => c.raw);
+            const codes = [r.max_version_code, r.version_code, ...(Array.isArray(r.version_codes) ? r.version_codes : []), ...latest.map(c => c.version_code)].filter(c => c != null && c !== '').map(Number).filter(Number.isFinite);
+            return normalizeCrash('controller', { ...r, _aggregate: true, at: r.last_at || r.last_seen || r.at, version_code: codes.length ? Math.max(...codes) : null });
+        });
+        renderCrashView(host.id + '-server-groups', [...reports, ...latestReports], controllerCrashNotice());
+        renderCrashView(host.id + '-latest', latestReports);
+    }
+    function latestCrashVersion(app) {
+        const meta = APPS.find(a => a.key === app);
+        const source = app === 'wallpapers' ? state.versions[0] : app === 'leo' ? state.leo : app === 'store' ? latestVersions().store : meta ? catalogApp(meta.pkg) : null;
+        return source?.version_code ?? source?.versionCode ?? '';
+    }
+    async function refreshResolutions() {
+        state.crashResolutions = await restGet('crash_resolutions?select=*&order=resolved_at.desc&limit=1000');
+        delete state.errors.crashResolutions;
+    }
+    function refreshCrashViews() {
+        buildMerged(); renderCrashes(); renderAppViews(); renderStats(); renderDevices(); updateCrashCounts();
+        if (carOpen) renderCarPage(carOpen);
+    }
+    document.addEventListener('click', async e => {
+        const b = e.target.closest('[data-crash-action]'); if (!b || b.disabled) return;
+        b.disabled = true;
+        try {
+            const app = b.dataset.crashApp, signature = b.dataset.signature;
+            await refreshResolutions();
+            const existing = crashResolution(app, signature);
+            let method, path, body;
+            if (b.dataset.crashAction === 'undo') {
+                if (!existing) { refreshCrashViews(); return; }
+                if (!await confirmDialog({ title: 'إلغاء الحل؟', html: esc(signature), confirmText: 'إلغاء الحل', danger: true })) return;
+                method = 'DELETE'; path = 'crash_resolutions?id=eq.' + encodeURIComponent(existing.id);
+            } else {
+                const note = await promptDialog({ title: 'ملاحظة حل العطل', value: existing?.note || '', placeholder: 'ما الذي تم إصلاحه؟' });
+                if (note === null) return;
+                const input = await promptDialog({ title: 'كود الإصدار الذي أصلح العطل', value: String(latestCrashVersion(app) || existing?.fixed_version_code || ''), placeholder: 'رقم صحيح' });
+                if (input === null) return;
+                const code = Number(input);
+                if (!/^\d+$/.test(input.trim()) || !Number.isSafeInteger(code) || code < 0) throw new Error('أدخل كود إصدار صحيحًا غير سالب.');
+                body = { app_id: existing?.app_id || app, signature, note: note.trim(), fixed_version_code: code, resolved_at: new Date().toISOString() };
+                method = existing ? 'PATCH' : 'POST'; path = existing ? 'crash_resolutions?id=eq.' + encodeURIComponent(existing.id) : 'crash_resolutions';
+            }
+            const response = await restWrite(method, path, body, 'return=minimal');
+            if (!response.ok) throw await parseErr(response);
+            await refreshResolutions(); refreshCrashViews(); toast('success', 'تم تحديث حالة العطل');
+        } catch (err) { alertDialog('تعذّر تحديث حالة العطل', errMsg(err)); }
+        finally { b.disabled = false; }
+    });
+    function renderCrashes() {
+        setErr('crashes-err', state.errors.crashes || '');
+        const reports = allCrashReports();
+        renderCrashView('crashes-list', reports.filter(c => !fleetCrashApp || c.app === fleetCrashApp), controllerCrashNotice());
+        $('leo-crashes').hidden = true;
+        updateCrashCounts();
+    }
     function renderStore() {
         renderStoreContent();
         ['ev-body', 'store-top-apps', 'store-top-failures', 'store-top-devices', 'store-versions'].forEach(id => pageRendered(id)); const daily = $('store-daily').querySelector('.daily'); if (daily) pageRendered(daily, 'store-daily');
@@ -2102,10 +2236,26 @@
     const VOICE_LABELS = {
         'voice.openrouter_key': 'مفتاح OpenRouter',
         'voice.model': 'الموديل',
+        'voice.models_fallback': 'النماذج الاحتياطية (حتى ٣)',
         'voice.daily_quota_per_car': 'الحد اليومي لكل سيارة',
         'voice.minute_quota_per_car': 'الحد في الدقيقة لكل سيارة',
     };
     const isSecretKey = (k) => /key|secret|token/i.test(String(k));
+    function voiceFallbackModels(value) {
+        if (Array.isArray(value)) return value;
+        const text = String(value || '').trim();
+        if (text.startsWith('[')) {
+            try { const models = JSON.parse(text); if (Array.isArray(models) && models.every(m => typeof m === 'string')) return models; } catch (e) {}
+            throw new Error('اكتب قائمة أسماء نماذج صحيحة.');
+        }
+        return text.split(/[\s,،]+/).filter(Boolean);
+    }
+    function updateFallbackCounter(input) {
+        if (input.dataset.key !== 'voice.models_fallback') return;
+        const counter = input.parentElement.querySelector('[data-fallback-count]'); if (!counter) return;
+        try { const n = voiceFallbackModels(input.value).length; counter.textContent = `${n}/3`; counter.className = 'badge num ' + (n > 3 ? 'bad' : ''); }
+        catch (e) { counter.textContent = 'صيغة غير صالحة'; counter.className = 'badge bad'; }
+    }
     function maskSecret(value) {
         const text = String(value == null ? '' : value);
         return text ? `<span class="num">…${esc(text.slice(-4))}</span><span class="sub">(${text.length} محرف)</span>` : '<span class="sub">(فارغ)</span>';
@@ -2128,12 +2278,12 @@
             return `<tr data-key="${esc(r.key)}">
                 <td><span class="name" style="font-size:.9rem">${esc(VOICE_LABELS[r.key] || r.key)}</span><span class="hw">${esc(r.key)}</span></td>
                 <td>${cur}</td>
-                <td><input type="${secret ? 'password' : 'text'}" class="voice-input" data-key="${esc(r.key)}" autocomplete="off" spellcheck="false" placeholder="${secret ? 'الصق المفتاح الجديد كاملًا' : esc(r.value == null ? '' : r.value)}" style="direction:ltr;min-width:220px"></td>
+                <td><input type="${secret ? 'password' : 'text'}" class="voice-input" data-key="${esc(r.key)}" autocomplete="off" spellcheck="false" placeholder="${secret ? 'الصق المفتاح الجديد كاملًا' : esc(r.value == null ? '' : r.value)}" style="direction:ltr;min-width:220px">${r.key === 'voice.models_fallback' ? '<span class="badge num" data-fallback-count>0/3</span>' : ''}</td>
                 <td>${timeCell(r.updated_at)}</td>
                 <td><button class="btn sm voice-save" type="button" data-key="${esc(r.key)}"><i class="fa-solid fa-floppy-disk"></i> حفظ</button></td>
             </tr>`;
         }).join('');
-        document.querySelectorAll('.voice-input').forEach(el => { if (drafts.has(el.dataset.key)) el.value = drafts.get(el.dataset.key); });
+        document.querySelectorAll('.voice-input').forEach(el => { if (drafts.has(el.dataset.key)) el.value = drafts.get(el.dataset.key); updateFallbackCounter(el); });
     }
     async function saveVoice(key) {
         if (!String(key).startsWith('voice.')) return;
@@ -2141,6 +2291,10 @@
         if (!inp) return;
         const value = String(inp.value);
         if (!value.trim()) { alertDialog('قيمة فارغة', 'اكتب القيمة الجديدة أولًا.'); return; }
+        if (key === 'voice.models_fallback') {
+            try { if (voiceFallbackModels(value).length > 3) throw new Error('الحد الأقصى ٣ نماذج احتياطية.'); }
+            catch (err) { alertDialog('قيمة غير صالحة', errMsg(err)); return; }
+        }
         if (/quota/.test(key) && !/^\d+$/.test(value.trim())) { alertDialog('قيمة غير صالحة', 'الحدود أرقام صحيحة فقط.'); return; }
         const secret = isSecretKey(key);
         const shown = secret ? maskSecret(value) : esc(value);
@@ -2165,6 +2319,7 @@
         const inp = e.target.closest('.voice-input'); if (!inp) return;
         e.preventDefault(); saveVoice(inp.dataset.key);
     });
+    $('voice-body').addEventListener('input', e => { if (e.target.matches('.voice-input')) updateFallbackCounter(e.target); });
 
     // =====================================================================
     //  Read-only windows into the per-app admin backends (via serve.mjs)
@@ -2236,7 +2391,7 @@
             const page = listPage(rows, search ? saved : { page: saved.page, query: '' }, searchText, pageSize);
             saved.page = Math.min(saved.page, page.pages);
             strip.querySelector('[data-page]').textContent = `صفحة ${saved.page} من ${page.pages}`;
-            strip.querySelector('[data-count]').textContent = `${page.count} ??`;
+            strip.querySelector('[data-count]').textContent = `${page.count} صف`;
             strip.querySelector('[data-prev]').disabled = saved.page <= 1;
             strip.querySelector('[data-next]').disabled = saved.page >= page.pages;
             render(page.rows);
@@ -2312,6 +2467,7 @@
         if (!root) return;
         // Deepest tables first so a parent page keeps each detail and its controls together.
         [...root.querySelectorAll('tbody')].reverse().forEach(body => {
+            if (body.closest('[data-crash-view]')) return;
             const table = body.closest('table'), detail = table.closest('tr.detail-row');
             const owner = detail && detail.previousElementSibling;
             const section = table.closest('.car-section');
@@ -2418,42 +2574,12 @@
         catch (e) { setErr('leo-crash-err', errMsg(e)); state.leoCrashes = []; }
         renderLeoCrashes();
     }
-    const leoOpen = new Set();
-    function firstStackLine(report) {
-        const t = String(report || ''); const i = t.indexOf('--- stack ---');
-        const after = (i >= 0 ? t.slice(i + 13) : t).split('\n').map(x => x.trim()).filter(Boolean);
-        return after[0] || '';
-    }
-    function renderLeoCrashes() {
-        renderLeoCrashesContent();
-        pageRendered('leo-crash-body');
-    }
-    function renderLeoCrashesContent() {
-        const list = [...state.leoCrashes].sort((a, b) => ts(b.receivedAt) - ts(a.receivedAt));
-        $('leo-crash-body').innerHTML = list.length ? list.map((c, i) => {
-            const open = leoOpen.has(c.key || i);
-            return `<tr>
-                <td><button class="expander" data-leo="${esc(c.key || i)}" aria-expanded="${open}" aria-label="التقرير"><i class="fa-solid ${open ? 'fa-chevron-up' : 'fa-chevron-down'}"></i></button></td>
-                <td>${hwLink(c.hwId)}</td><td><span class="num">${esc(c.version || '—')} (${esc(c.versionCode ?? '—')})</span></td>
-                <td>${timeCell(c.receivedAt)}</td><td><span class="num" style="font-size:.76rem">${esc(firstStackLine(c.report).slice(0, 160))}</span></td>
-            </tr>${open ? `<tr class="detail-row"><td colspan="5"><button class="btn sm" type="button" data-copy-leo="${esc(c.key || i)}"><i class="fa-solid fa-copy"></i> نسخ التقرير</button><pre class="report">${esc(c.report || '')}</pre></td></tr>` : ''}`;
-        }).join('') : '<tr><td colspan="5"><div class="empty">لا أعطال مسجّلة على الـ Worker</div></td></tr>';
-        const cutoff = Date.now() - 7 * DAY;
-        const wp = state.crashes.filter(x => ts(x.received_at || x.crash_at) >= cutoff).length, leo = list.filter(x => ts(x.receivedAt) >= cutoff).length;
-        $('cnt-crashes').textContent = wp + leo; $('cnt-crashes').title = `الخلفيات ${wp} + Leo ${leo} (7 أيام)`;
-        if (typeof renderAppViews === 'function' && $('appcrash-leo')) renderAppViews();
-    }
-    document.addEventListener('click', e => {
-        if (!e.target.closest('#leo-crash-body, #appcrash-leo')) return;
-        const cp = e.target.closest('[data-copy-leo]');
-        if (cp) { const c = state.leoCrashes.find((x, i) => String(x.key || i) === cp.dataset.copyLeo); if (c) copyText(c.report || ''); return; }
-        const b = e.target.closest('[data-leo]'); if (!b) return;
-        const k = b.dataset.leo; if (leoOpen.has(k)) leoOpen.delete(k); else leoOpen.add(k); renderLeoCrashes();
-    });
+    function renderLeoCrashes() { refreshCrashViews(); }
     $('leo-crash-refresh').addEventListener('click', () => loadLeoCrashes());
 
     // ---------- Controller telemetry ----------
     async function loadController() {
+        const epoch = sessionEpoch;
         $('ctl-missing').hidden = !!(LOCAL_PROXY && LOCAL_FLAGS.controller);
         $('ctl-content').hidden = !(LOCAL_PROXY && LOCAL_FLAGS.controller);
         if (!LOCAL_PROXY || !LOCAL_FLAGS.controller) { state.ctlLoaded = true; return; }
@@ -2464,14 +2590,124 @@
             events: () => localPost('/local/controller/thab_admin_events', { p_limit: 200, p_vin: null, p_kind: null, p_since_id: null }),
             gaps: () => localPost('/local/controller/thab_admin_gaps', { p_days: 30, p_limit: 100 }),
             fuel: () => localPost('/local/controller/thab_admin_fuel_price_history', { p_limit: 50 }),
-            overlay: () => localPost('/local/controller/thab_admin_voice_overlay_history', { p_limit: 20 }),
+            overlay: () => localPost('/local/controller/thab_admin_voice_overlay_history', { p_limit: 50 }),
+            crashes: () => localPost('/local/controller/thab_admin_crashes', { p_vin: null, p_limit: 50 }),
+            crashGroups: () => localPost('/local/controller/thab_admin_crash_groups', { p_days: 30, p_limit: 50 }),
         };
         const keys = Object.keys(calls); const r = await Promise.allSettled(keys.map(k => calls[k]()));
+        if (epoch !== sessionEpoch) return;
         const ctl = {}; const errs = [];
-        r.forEach((x, i) => { if (x.status === 'fulfilled') ctl[keys[i]] = x.value; else errs.push(keys[i] + ': ' + errMsg(x.reason)); });
+        r.forEach((x, i) => { if (x.status === 'fulfilled' && !x.value?.error) ctl[keys[i]] = x.value; else if (/^crash/.test(keys[i])) ctl.crashUnavailable = true; else { ctl[keys[i] + 'Error'] = true; errs.push(keys[i] + ': ' + errMsg(x.reason || x.value.error)); } });
         state.ctl = ctl; setErr('ctl-err', errs.join(' · ')); renderController();
+        refreshCrashViews();
     }
-    let ctlKind = '';
+    let ctlKind = '', fleetCrashApp = '';
+    let glossaryDraft = null, glossaryDirty = false, glossaryMode = 'table', glossaryText = '';
+    function validateGlossary(entries) {
+        if (!Array.isArray(entries) || entries.length > 80) throw new Error('القاموس يقبل ٨٠ زوجًا كحد أقصى.');
+        const allowed = /^[\u0600-\u06ff\u0750-\u077f\u08a0-\u08ff\ufb50-\ufdff\ufe70-\ufefcA-Za-z0-9 _-]+$/;
+        const strip = s => s.replace(/[\u0640\u0610-\u061a\u064b-\u065f\u0670\u06d6-\u06ed\u08d3-\u08ff]/g, '');
+        const seen = new Set(); let total = 0;
+        const clean = entries.map((entry, i) => {
+            const phrase = String(entry.phrase || '').trim(), canonical = String(entry.canonical || '').trim();
+            const label = 'الصف ' + (i + 1) + ': ';
+            if (!phrase || !canonical) throw new Error(label + 'الكلمة والمعنى مطلوبان.');
+            if (phrase.length > 32 || canonical.length > 32) throw new Error(label + 'الحد الأقصى ٣٢ حرفًا لكل كلمة أو معنى.');
+            if (!allowed.test(phrase) || !allowed.test(canonical)) throw new Error(label + 'استخدم الحروف العربية أو اللاتينية والأرقام والمسافة والشرطة والشرطة السفلية فقط.');
+            const p = strip(phrase), c = strip(canonical);
+            if (p === c) throw new Error(label + 'الكلمة يجب أن تختلف عن معناها بعد إزالة التشكيل والتطويل.');
+            const key = p + '|' + c;
+            if (seen.has(key)) throw new Error(label + 'هذا الزوج مكرر بعد إزالة التشكيل والتطويل.');
+            seen.add(key); total += phrase.length + canonical.length;
+            return { phrase, canonical };
+        });
+        if (total > 2000) throw new Error('مجموع حروف القاموس يجب ألا يتجاوز ٢٠٠٠ حرف.');
+        return clean;
+    }
+    function parseGlossaryText(text) {
+        return String(text).split(/\r?\n/).filter(s => s.trim()).map((s, i) => {
+            const parts = s.split(':');
+            if (parts.length !== 2) throw new Error('السطر ' + (i + 1) + ': اكتب الكلمة : المعنى، بفاصل واحد.');
+            return { phrase: parts[0].trim(), canonical: parts[1].trim() };
+        });
+    }
+    function renderGlossaryRows() {
+        listControls({ hostId: 'glossary-body', rows: (glossaryDraft || []).map((row, i) => ({ row, i })), key: 'glossary-editor', searchText: r => r.row.phrase + ' ' + r.row.canonical, render: rows => {
+            $('glossary-body').innerHTML = rows.map(r => `<tr><td><input aria-label="الكلمة كما يقولها السائق" data-glossary-field="phrase" data-row="${r.i}" value="${esc(r.row.phrase)}" maxlength="32"></td><td><input aria-label="المعنى أو الأمر الفصيح" data-glossary-field="canonical" data-row="${r.i}" value="${esc(r.row.canonical)}" maxlength="32"></td><td><button type="button" class="btn sm danger" data-glossary-delete="${r.i}">حذف</button></td></tr>`).join('') || '<tr><td colspan="3" class="empty">القاموس فارغ</td></tr>';
+        } });
+    }
+    function renderControllerSettings() {
+        const parent = $('sub-controller-voice'); if (!parent) return;
+        let host = $('controller-settings');
+        if (!host) { host = document.createElement('div'); host.id = 'controller-settings'; parent.appendChild(host); }
+        if (!LOCAL_PROXY || !LOCAL_FLAGS.controller) { host.innerHTML = '<p class="note">إعدادات الأسطول تحتاج اتصال الكونترولر المحلي.</p>'; return; }
+        if (!state.ctl || !state.ctlLoaded || (!('overlay' in state.ctl) && !state.ctl.overlayError) || (!('fuel' in state.ctl) && !state.ctl.fuelError)) { host.innerHTML = '<div class="empty">جارٍ تحميل إعدادات الأسطول…</div>'; return; }
+        const c = state.ctl, live = crashRows(c.overlay).find(r => r.active === true), fuel = crashRows(c.fuel).find(r => r.active === true);
+        // Preserve the draft and form inputs across background refreshes.
+        const saved = {}; host.querySelectorAll('[data-preserve]').forEach(el => { saved[el.id] = el.value; });
+        if (!glossaryDirty) { glossaryDraft = (live?.entries || []).map(e => ({ phrase: e.phrase, canonical: e.canonical })); glossaryText = glossaryDraft.map(e => e.phrase + ' : ' + e.canonical).join('\n'); }
+        host.innerHTML = `<section class="car-section"><h3>قاموس اللهجة (المصطلحات الخارجية ومعناها)</h3><p class="note">النسخة الحية: <span class="num">${esc(live?.rev ?? '—')}</span> · ٨٠ زوجًا، ٣٢ حرفًا للحقل، ٢٠٠٠ حرف إجمالًا.</p>${c.overlayError ? '<p class="note">تعذّر تحميل القاموس؛ حدّث البيانات قبل النشر.</p>' : ''}<fieldset ${c.overlayError ? 'disabled' : ''} style="border:0;padding:0"><div class="toolbar"><button type="button" class="chip ${glossaryMode === 'table' ? 'active' : ''}" data-glossary-mode="table">جدول</button><button type="button" class="chip ${glossaryMode === 'text' ? 'active' : ''}" data-glossary-mode="text">الكلمة : المعنى</button></div><div id="glossary-table" ${glossaryMode === 'text' ? 'hidden' : ''}><div class="table-wrap"><table><thead><tr><th>الكلمة كما يقولها السائق</th><th>المعنى / الأمر الفصيح</th><th></th></tr></thead><tbody id="glossary-body"></tbody></table></div><button type="button" class="btn sm" data-glossary-add>إضافة صف</button></div><label id="glossary-text-label" ${glossaryMode === 'table' ? 'hidden' : ''}>الكلمة : المعنى — زوج واحد في كل سطر<textarea id="glossary-text" rows="8" style="width:100%">${esc(glossaryText)}</textarea></label><label>ملاحظة النشر<input id="glossary-note" maxlength="200" data-preserve></label><button type="button" class="btn" data-controller-write="overlay">انشر إلى الأسطول</button></fieldset><h4>سجل القاموس</h4><div id="glossary-history"></div></section>
+        <section class="car-section"><h3>سعر الوقود للأسطول</h3><p class="note">السعر الفعّال: <span class="num">${esc(fuel?.price ?? '—')} ${esc(fuel?.currency || '')}</span> · ${esc(fuel?.grade || '')}</p>${c.fuelError ? '<p class="note">تعذّر تحميل سجل الوقود؛ حدّث البيانات قبل النشر.</p>' : ''}<fieldset ${c.fuelError ? 'disabled' : ''} style="border:0;padding:0"><label>السعر<input id="fleet-fuel-price" type="number" min="0.001" max="100" step="0.001" value="${esc(fuel?.price ?? '')}" data-preserve></label><label>العملة<input id="fleet-fuel-currency" maxlength="8" value="${esc(fuel?.currency || 'QAR')}" data-preserve></label><label>الدرجة<input id="fleet-fuel-grade" maxlength="24" value="${esc(fuel?.grade || 'super95')}" data-preserve></label><label>ملاحظة<input id="fleet-fuel-note" maxlength="200" data-preserve></label><button type="button" class="btn" data-controller-write="fuel">نشر سعر الوقود</button></fieldset><h4>سجل سعر الوقود</h4><div id="fleet-fuel-history"></div></section>
+        <section class="car-section"><h3>أوامر كل نوع سيارة</h3><p class="note">أوامر أنواع السيارات مضمّنة في ملفات التطبيق ولا يمكن تعديلها عن بُعد حاليًا.</p><div id="controller-car-types"></div></section>`;
+        Object.entries(saved).forEach(([id, value]) => { if ($(id)) $(id).value = value; });
+        renderGlossaryRows();
+        listControls({ hostId: 'glossary-history', rows: crashRows(c.overlay), searchText: r => [r.rev, r.note, JSON.stringify(r.entries)].join(' '), render: rows => {
+            $('glossary-history').innerHTML = `<div class="table-wrap"><table><thead><tr><th>النسخة</th><th>الأزواج</th><th>الملاحظة</th><th>النشر</th><th>عنوان الناشر</th><th>الحالة</th><th></th></tr></thead><tbody>${rows.map(r => `<tr><td class="num">${esc(r.rev)}</td><td class="num">${esc(r.n)}</td><td>${esc(r.note || '')}</td><td>${timeCell(r.published_at)}</td><td class="num">${esc(r.published_ip || '')}</td><td>${r.active ? '<span class="badge ok">حيّة</span>' : 'سابقة'}</td><td><button type="button" class="btn sm" data-overlay-restore="${esc(r.rev)}">استرجاع نسخة — إعادة نشر هذه النسخة</button></td></tr>`).join('') || '<tr><td colspan="7" class="empty">لا نسخ</td></tr>'}</tbody></table></div>`;
+        } });
+        listControls({ hostId: 'fleet-fuel-history', rows: crashRows(c.fuel), searchText: r => [r.price, r.currency, r.grade, r.note].join(' '), render: rows => {
+            $('fleet-fuel-history').innerHTML = `<div class="table-wrap"><table><thead><tr><th>السعر</th><th>العملة</th><th>الدرجة</th><th>الملاحظة</th><th>النشر</th><th>الحالة</th></tr></thead><tbody>${rows.map(r => `<tr><td class="num">${esc(r.price)}</td><td class="num">${esc(r.currency)}</td><td>${esc(r.grade)}</td><td>${esc(r.note || '')}</td><td>${timeCell(r.published_at)}</td><td>${r.active ? '<span class="badge ok">فعّال</span>' : 'سابق'}</td></tr>`).join('') || '<tr><td colspan="6" class="empty">لا سجل</td></tr>'}</tbody></table></div>`;
+        } });
+        const types = new Map(); crashRows(c.cars).forEach(r => { const type = r.car || 'غير محدد'; types.set(type, (types.get(type) || 0) + 1); });
+        listControls({ hostId: 'controller-car-types', rows: [...types].map(([car, count]) => ({ car, count })), searchText: r => r.car, render: rows => { $('controller-car-types').innerHTML = rows.map(r => `<span class="chip">${esc(r.car)} <span class="num">${r.count}</span></span>`).join('') || '<div class="empty">لا أنواع مسجّلة</div>'; } });
+    }
+    document.addEventListener('input', e => {
+        const el = e.target;
+        if (el.matches('[data-glossary-field]')) { glossaryDraft[Number(el.dataset.row)][el.dataset.glossaryField] = el.value; glossaryDirty = true; }
+        if (el.id === 'glossary-text') { glossaryText = el.value; glossaryDirty = true; }
+    });
+    document.addEventListener('click', async e => {
+        const b = e.target.closest('[data-glossary-mode], [data-glossary-add], [data-glossary-delete], [data-controller-write], [data-overlay-restore], [data-owner-note]');
+        if (!b || b.disabled) return;
+        try {
+            if (b.hasAttribute('data-glossary-mode')) {
+                if (glossaryMode === 'text') glossaryDraft = parseGlossaryText(glossaryText);
+                else glossaryText = glossaryDraft.map(r => r.phrase + ' : ' + r.canonical).join('\n');
+                glossaryMode = b.dataset.glossaryMode; renderControllerSettings(); return;
+            }
+            if (b.hasAttribute('data-glossary-add')) { if (glossaryDraft.length >= 80) throw new Error('الحد الأقصى ٨٠ زوجًا.'); glossaryDraft.push({ phrase: '', canonical: '' }); glossaryDirty = true; renderGlossaryRows(); return; }
+            if (b.hasAttribute('data-glossary-delete')) { glossaryDraft.splice(Number(b.dataset.glossaryDelete), 1); glossaryDirty = true; renderGlossaryRows(); return; }
+            if (!LOCAL_PROXY || !LOCAL_FLAGS.controller) throw new Error('اتصال الكونترولر غير متاح.');
+            b.disabled = true;
+            let rpc, args, title, html;
+            if (b.hasAttribute('data-owner-note')) {
+                const vin = b.dataset.ownerNote;
+                const car = crashRows(state.ctl?.cars).find(r => vinOf(r).toLowerCase() === vin.toLowerCase());
+                const note = await promptDialog({ title: 'ملاحظة المالك', value: car?.note || '', placeholder: 'اكتب الملاحظة أو اتركها فارغة لمسحها' });
+                if (note === null) return;
+                await localPost('/local/controller/thab_admin_set_note', { p_vin: vin, p_note: note.trim() });
+                await loadController(); return;
+            } else if (b.hasAttribute('data-overlay-restore')) {
+                rpc = 'thab_admin_voice_overlay_restore'; args = { p_rev: Number(b.dataset.overlayRestore) };
+                title = 'إعادة نشر نسخة القاموس؟'; html = `سيُعاد نشر محتوى النسخة ${esc(args.p_rev)} برقم نسخة جديد أعلى. ستلتقط السيارات التغيير خلال ٦ ساعات. أي مسودة غير منشورة ستُستبدل.`;
+            } else if (b.dataset.controllerWrite === 'overlay') {
+                const entries = validateGlossary(glossaryMode === 'text' ? parseGlossaryText(glossaryText) : glossaryDraft);
+                const note = $('glossary-note').value.trim(); if (note.length > 200) throw new Error('الملاحظة لا تتجاوز ٢٠٠ حرف.');
+                rpc = 'thab_admin_voice_overlay_publish'; args = { p_entries: entries, p_note: note };
+                title = 'نشر القاموس إلى الأسطول؟'; html = `${entries.length ? `سيُنشر ${entries.length} زوجًا.` : 'سيتم إيقاف القاموس في كل السيارات'} ستلتقط السيارات التغيير خلال ٦ ساعات.`;
+            } else {
+                const priceInput = $('fleet-fuel-price'), price = Number(priceInput.value), currency = $('fleet-fuel-currency').value.trim(), grade = $('fleet-fuel-grade').value.trim(), note = $('fleet-fuel-note').value.trim();
+                if (!priceInput.checkValidity() || !Number.isFinite(price) || price < 0.001 || price > 100) throw new Error('أدخل سعرًا من 0.001 إلى 100 بخطوة 0.001.');
+                if (!currency || currency.length > 8 || !grade || grade.length > 24 || note.length > 200) throw new Error('العملة مطلوبة حتى ٨ أحرف، والدرجة حتى ٢٤ حرفًا، والملاحظة حتى ٢٠٠ حرف.');
+                rpc = 'thab_admin_fuel_price_publish'; args = { p_price: price, p_currency: currency, p_grade: grade, p_note: note };
+                title = 'نشر سعر الوقود للأسطول؟'; html = `${esc(price)} ${esc(currency)} · ${esc(grade)}<br>${esc(note)}`;
+            }
+            if (!await confirmDialog({ title, html, confirmText: 'تأكيد النشر' })) return;
+            await localPost('/local/controller/' + rpc, args);
+            if (rpc.includes('voice_overlay')) { glossaryDirty = false; glossaryDraft = null; }
+            await loadController(); toast('success', 'تم حفظ التغيير');
+        } catch (err) { alertDialog('تعذّر حفظ الإعدادات', errMsg(err)); }
+        finally { b.disabled = false; }
+    });
     const vinOf = r => String((r && (r.vin || r.VIN || r.p_vin || r.hardware_id)) || '');
     // canonicalHw() lowercases, but merged rows keep the id as stored ("VIN-byd12EDCD…"), so the
     // match must be case-insensitive and must hand back the stored id (that is what hw-link expects).
@@ -2489,6 +2725,7 @@
     function renderController() {
         renderControllerContent();
         pageRendered('ctl-voice-body');
+        renderControllerSettings();
     }
     function renderControllerContent() {
         const c = state.ctl || {}; const asRows = v => Array.isArray(v) ? v : (v && typeof v === 'object' && Array.isArray(v.rows)) ? v.rows : (v && typeof v === 'object' ? [v] : []);
@@ -2509,8 +2746,6 @@
         const vrows = [...voice.entries()].sort((a, b) => b[0].split('|')[1].localeCompare(a[0].split('|')[1]));
         $('ctl-voice-body').innerHTML = vrows.length ? vrows.map(([k, n]) => { const [vin, day] = k.split('|'); return `<tr><td>${vinCell(vin)}</td><td><span class="num">${esc(day)}</span></td><td>${num(n)}</td></tr>`; }).join('') : '<tr><td colspan="3"><div class="empty">لا أوامر صوتية في السجل المحمّل</div></td></tr>';
         genericTable('ctl-gaps-head', 'ctl-gaps-body', asRows(c.gaps), { empty: 'لا فجوات', cell: (k, v) => /^vin$/i.test(k) ? vinCell(String(v || '')) : cellValue(k, v) });
-        genericTable('ctl-fuel-head', 'ctl-fuel-body', asRows(c.fuel), { empty: 'لا سجل' });
-        genericTable('ctl-overlay-head', 'ctl-overlay-body', asRows(c.overlay), { empty: 'لا نسخ', cell: (k, v) => typeof v === 'string' && v.length > 160 ? `<details><summary class="sub">${esc(v.slice(0, 80))}…</summary><pre class="report">${esc(v)}</pre></details>` : cellValue(k, v) });
     }
     $('ctl-kinds').addEventListener('click', e => { const b = e.target.closest('[data-ctlkind]'); if (!b) return; ctlKind = b.dataset.ctlkind; renderController(); });
     $('ctl-refresh').addEventListener('click', () => loadController());
@@ -2613,7 +2848,7 @@
         { const bar = $('tabs'), at = bar.querySelector('.tab.active'); if (at && bar.scrollWidth > bar.clientWidth + 1) { const br = bar.getBoundingClientRect(), ar = at.getBoundingClientRect(); if (ar.left < br.left) bar.scrollLeft += ar.left - br.left - 8; else if (ar.right > br.right) bar.scrollLeft += ar.right - br.right + 8; } }
         // The per-app backends are heavier and behind the local runner: fetched the first time only.
         if (name === 'tslink' && !state.tslinkLoaded) loadTslink();
-        if (name === 'controller' && !state.ctlLoaded) loadController();
+        if ((name === 'controller' || name === 'crashes') && !state.ctlLoaded) loadController();
         if ((name === 'crashes' || name === 'leo') && !state.leoCrashesLoaded) loadLeoCrashes();
         if (name === 'generator') { $('gen-unavailable').hidden = genAvailable(); if (genAvailable()) genRecent(); }
         if (name === 'wallpapers' && subState.wallpapers === 'library') { loadWallpapers(); refreshTargetScopeUi(); renderVersionSummary(); }
@@ -3133,7 +3368,7 @@
         { key: 'wallpapers', label: 'الخلفيات', icon: 'fa-images', own: [{ key: 'library', label: 'المكتبة والرفع' }] },
         { key: 'store', label: 'ذبذبة ستور', icon: 'fa-store', own: [{ key: 'catalog', label: 'الكتالوج وحظر الستور' }] },
         { key: 'tslink', label: 'TS Link', icon: 'fa-link', own: [{ key: 'cars', label: 'السيارات والمرسِلون' }] },
-        { key: 'controller', label: 'الكونترولر', icon: 'fa-gauge-high', own: [{ key: 'voice', label: 'الأوامر الصوتية' }, { key: 'telemetry', label: 'التليمتري' }] },
+        { key: 'controller', label: 'الكونترولر', icon: 'fa-gauge-high', own: [{ key: 'voice', label: 'الإعدادات الصوتية' }, { key: 'telemetry', label: 'التليمتري' }] },
         { key: 'leo', label: 'TS Leo Dash', icon: 'fa-car', own: [] },
     ];
     const APP_ICONS = {"wallpapers": "data:image/png;base64,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", "store": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACgAAAAoCAYAAACM/rhtAAAFn0lEQVR42tWZWWxc1RnHf+fcbeaOx+OxTWKcpEAWW0TBITaQ0hQKFCGrhE1ILAKpCgUhwVuREHmqQPBGn/pQpSqqeKvaVEkFUkUDCmkSpKQOURJl3/ES7DgZL7Pd5ZzTh+skJI2TOI7d6ZGuNBrdmfvT/zvf//+dGdG1ooNJlmF2l7jam3YNgF353MtAZY3ATcogawzuv1hkDcJdBimp8SVrVL2LKtqz5iFi4gKMAX2DstizBVcJDFGsAbCkwE9JhEhg/6eAxkA11HS1+XQs9rElHBsI2La3mABY4pqQciZVSwANa7qb6F5ZT7GsOD+uuK/N592XW8ikLWJ16d5ZU1CbpPWUMrQv8Og9G/LJP86htUEgiJTh511ZXngkzx8/P4ttydkDNAZ8T+C5gsKY5sSZkF1HKvgpSV3aAgxSCDbvHqel0eHOFo/TgyGuc/VS39ISW1IQxZrXVzfz0a/m0bEojTHwzEM57m/3UUqjNWhtcG1B72BAQ1YSK4OYKQUFIOSlZggiw5c94zRmbe5r83m8M0tXu4/rCNb+YYCD31XJpCRKw5y8w2AhvqYR29PzNUEcG6qBxrUFC1s9Vi3L0NnmMzdv0z8c0tnus2HrCFGsOV+McR1BFBt8T/BoZx2/3zicdPKtApQTtQiixNeachYP31vPQx0Z2ualyPqSgXMRv/3LIM05h+4HBCMlxfqvCzQ3OESxIVaGta+0EASGY/0BaU9OajX2lBQDyoFBYLir1eNny+t4cFmGet/CGBgYjvhq0zhDIzFDBcWcBifZWyZROwg1C1tc3ni6mQW3uaxd148lxfSNWsrky7U2LF+cpvuBHCuWpMmkJKe+DxnTCgO8/+kZHBvW/fpHbN5d4sDpMiDwPcmqe3yeXZVn2aIUR3sD3lvXT9/ZiJQrrhl79o2UtFhRLLzd5aXHGrn/7jSWFBzpC/lixxh7jpf58LVWIm0oVRRd7Rk8V1INFc0NDuVAs/on9eSzefqGI373tyG27CkhBNeFuy6gEFAONE/+OMcvuxtxHcG+41W+2DnGt0fLFCuaxmySqVKCMck+KFU1K5dmyPqSsVLMYCHm038W2L6vSDXQZNLykqHf7LAgBRSrmhcfybPmySZ6DpXZsHWEfScqRHFixnW+REzkVBhq5uZtnn84R6wMShk29RSxLcGmnjEO91bJ+RZ1vkTrG29KezLlgsiwuNXjqVU5Pv7zIF/vLqKBtCtwHTCaiw+SFgQRvPpEI/ObXSwp2Hmwwjf7i3z81jy+Gwo4eSZESKYEN2mSCAHVyLByqc/GbSN8tn2UtCfw3SSOjL7cqbUCPyU52hewcdso6ZREY1jUmsBaUqC1uemJ+uqxNaHivuNVclkbPTFkSgHK/GBimXhtWbB+S4Hh0fiidYSxufiZ6Yz8k55YlIbmBptiWSGFwJKJD2bTkl88mCOOzaWxCvBciWMnsScEuI7ElnB+XCHkLQQ0BjxH8u9DJZ79aY7ONp9iRVGsKObkLd55cS4D50LC2CAn5LmQBEqBJaEwpmiqt9h/KmDX4TIpV055/03aJMaAayfJ8NfNI7z9XDPnRhWRMtze5PD3raPsPFAm60scS2A7MD6uqQaaurSkVNHsOFgk7Vl89s0YShlsW1x3vJ+SzWgDvifpOVLmcF+Vu+9IYVuCE/0BJ78P+OC1Viqh4ZPPz9JQZ7PrUBmloXco4jd/GmCwoLCkwpLipuGua9R6YvgMI8OOAyUMkHKTwVNraJ/v8eYzt9E7GLH+XyNkMxZ7T1QwJkmJC5vzZuEARNeKDjOVKcaQeJkUsGSBh2tL9p+qEMUGxxaXbZNbsewpnTN+4JMG2Hu8ijGGtCdxplHGGTt2+p4AksCfCbhpA+oZgrrSBwW1u8T/xa9b1KiK4sqoE7UGd7UsFrUEN1kXi1r6G+I/0oZmzvJpeHkAAAAASUVORK5CYII=", "leo": "data:image/png;base64,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", "controller": "data:image/png;base64,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", "backbutton": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACgAAAAoCAYAAACM/rhtAAAFVklEQVR42tWZeWxUVRSHv3vfm5p0KKNlscimAu1UaJvSFqEolhQRATfEKIIEQgBxIdEIgRgTEwQx+LdLDErYkWCAIspOKfsiFAyhBYolQbayTJnSdt579/rHMBMGutFOyXiTyST3vTnvu+fc8zv3vBFaa+oZ9V5opSHqmjRjAOze50aAyhiBq5dBxhjcfSwyBuEiICUxPmSMei/sRfNhPUkpFUxRIQhJm5SNB1DoBoQwam7QGiFEk+cb08HoK7AQHDp4mMLCIqr8fjweD4Pz88jISG8UslU8qLUOh1EIwcaNf3K69DT9ns0hMTGRSxcvsf/AAdLT0xk+fFjDkLqVh8/n0wcOHKzz2qJfFuvSklKttdaO49R5T3QBVfCrsrJSnzl9Rtu2ff8tSoXnr1y5ogsKfm8QMKo6aDs2Sim2bN7K3Dlfs35tARrN9u07Wb+2AP8tP0IIpDQAaNvWQ6C2tsGMNqO134QQmGbQ3MDncrlw4SInT57CV1lJwboN3Lzp4/qNG0yYOB7HsZFSUlVVRUVFRYMZbbYUTEoZNlxefp69e/axu2gPJadKGfveGLZs2kpWViZ5+YNp1y4x4ndbt2xDqWAyaaURRhQAlVIIIcKf6urqoITsKOLYseNUVFyjc+ckZn8+k+5PdmP1qjUI0yA3t3/Yhsvl4vChI6xauZoF385v4DT4AID3qn95+XkKdxRSuHMXly9fRWtNt+7dGD9hLKnPeEGDZdloreAuJfP7/fy2Zh0rlq9k8pRJPN3jqbBHmw2olAobOHHibzZu+IN9e/fj81WSmppC+/btCFgBvpzzBY937Mj7Uz7CHR/P9E8+RAiBUpqysjI2b9rKju07MaTBrNkzeCFvUITtZgGGVlf+TznLlq5gV+FulKPIyExjxMgR5PTLYuZns7FuWLRNSOD69etcvnSJ9Ix0KiquERf3CMVHj7OnaA9ut5tXX3uFUaNfx+12NwrXKGDIwPp1Bfz040Is2yZ3YH+Gj3iZvtmZSCGx7WAYg4cBgXIcTJfJmdNnmTdnPtKQdOqUxMDn3+ClYUPxeDz3RaVZgCHP/bxwEUuXrCB/SB5vjh6F15sSvq6UCmYfQW2zLYsli5dTU12LFJK8wYNIeiKJnj17kJmZGZFkTYGrFzC0uuLi42zbtoNvFswlJyf7Pt2TUqKkwlEKd5s2rF27jt1FezFNk569ejJ12hQmT5pGWnpvMjIy0FpjGMYDH1jrHUVFRXw8/QNycrJxHCdi9XefMaQUWFYtnkc9TJ46Ecu2iIuLo6zsHP9euIBjO0gpm+y1Rj0YEt7ExxLp06c3ylERgnxvaZJCUn27mpEjR3CurIzamgAAhmHgcsXh3DmsNvfIX6/mCaCmpgZpSBzHwXGc8BYoLNwVDre+s6hAIEAgYCGFBA1SCGw7mN13241aiHslJ7Ni2Sps28Y0TQzDQCnF99/9gGVZAOHQhyqBNAwc5eBOiOd29W3i4+N5ceiQZnuwzhCH9lh2ThZnz5Yxc8YsUr1eDMPgVEkJaWlpDBmSH94OAnCZJi6Xi0AggGVb5OYOoEOHDsz75itSvMkNVotmyUyouXn7nbfIzMzgryNH0cCkSRNJ8aawcuWvOLbD2HFjuHWrii5du9zZcy5mzPyU3IEDAEhKSmpS79EsoQ5BJqckk5ySHLFHi4+d4OqVyyS0TaA2UMu48e8C4PWmRGhlcz33QD2JUjpY9O9ASynx3fRx6PBh/P4qsrP60qVrl7CnmlologbYktaypcOMVufWGnAPrXFv6bsZEcN84n/xdosY9aK4t9SJWIOrqxaLWIKrT2ZELP0N8R/IVKXJcLpAYAAAAABJRU5ErkJggg==", "tslink": "data:image/png;base64,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"};
@@ -3197,9 +3432,9 @@
         // crashes tab: app filter chips over the two blocks
         const cp = $('panel-crashes');
         const chips = document.createElement('div'); chips.id = 'crash-app-chips'; chips.style.cssText = 'display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px;';
-        chips.innerHTML = `<button type="button" class="chip active" data-crashapp="">كل التطبيقات</button><button type="button" class="chip" data-crashapp="wallpapers">الخلفيات</button><button type="button" class="chip" data-crashapp="leo">TS Leo Dash</button>`;
+        chips.innerHTML = `<button type="button" class="chip active" data-crashapp="">كل التطبيقات</button>${['wallpapers', 'store', 'leo', 'controller'].map(k => `<button type="button" class="chip" data-crashapp="${k}">${esc(crashAppLabel(k))}</button>`).join('')}`;
         cp.insertBefore(chips, cp.firstChild);
-        chips.addEventListener('click', e => { const b = e.target.closest('[data-crashapp]'); if (!b) return; chips.querySelectorAll('.chip').forEach(c => c.classList.toggle('active', c === b)); const k = b.dataset.crashapp; cp.querySelectorAll(':scope > :not(#crash-app-chips):not(#crashes-err):not(#leo-crashes)').forEach(el => el.hidden = k === 'leo'); $('leo-crashes').hidden = k === 'wallpapers'; });
+        chips.addEventListener('click', e => { const b = e.target.closest('[data-crashapp]'); if (!b) return; chips.querySelectorAll('.chip').forEach(c => c.classList.toggle('active', c === b)); fleetCrashApp = b.dataset.crashapp; renderCrashes(); });
         document.addEventListener('click', e => { const b = e.target.closest('.subtab'); if (!b) return; switchSub(b.closest('.subtabs').dataset.app, b.dataset.sub); });
     }
     function switchSub(app, sub) {
@@ -3209,6 +3444,8 @@
         subState[app] = sub;
         if (app === 'wallpapers' && sub === 'library') { loadWallpapers(); refreshTargetScopeUi(); renderVersionSummary(); }
         if (app === 'leo' && sub === 'crashes' && !state.leoCrashesLoaded) loadLeoCrashes();
+        if (app === 'controller' && !state.ctlLoaded) loadController();
+        if (app === 'controller' && sub === 'voice') renderControllerSettings();
     }
     function versionRows(key) {
         const rows = [];
@@ -3224,7 +3461,8 @@
     }
     function renderAppViews() {
         renderAppViewsContent();
-        ['wallpapers', 'store', 'tslink', 'controller', 'leo', 'backbutton'].forEach(k => { ['usage-body-', 'adopt-body-', 'tok-body-'].forEach(prefix => { const body = $(prefix + k); pageNested(body, prefix + k); pageRendered(body, prefix + k); }); pageNested($('appver-' + k), 'appver-' + k); const crashes = $('appcrash-' + k); pageNested(crashes, 'appcrash-' + k); if (k === 'wallpapers') pageCrashGroups(crashes, 'appcrash-' + k); }); pageRendered('releases-list');
+        ['wallpapers', 'store', 'tslink', 'controller', 'leo', 'backbutton'].forEach(k => { ['usage-body-', 'adopt-body-', 'tok-body-'].forEach(prefix => { const body = $(prefix + k); pageNested(body, prefix + k); pageRendered(body, prefix + k); }); pageNested($('appver-' + k), 'appver-' + k); }); pageRendered('releases-list');
+        updateCrashCounts();
     }
     function renderAppViewsContent() {
         // usage rows → each app's overview (rows carry no key, so walk them in APPS order)
@@ -3262,9 +3500,10 @@
         // crashes → per app
         order.forEach(k => {
             const el = $('appcrash-' + k); if (!el) return;
-            if (k === 'wallpapers') { const src = $('crashes-list'); el.innerHTML = src && fullListHtml(src).trim() ? fullListHtml(src) : '<div class="empty">لا أعطال</div>'; }
-            else if (k === 'leo') { const src = $('leo-crash-body'); el.innerHTML = `<div class="table-wrap"><table style="min-width:800px;"><thead><tr><th></th><th>الجهاز</th><th>الإصدار</th><th>استُلم</th><th>أول سطر في المكدّس</th></tr></thead><tbody>${src ? fullListHtml(src) : ''}</tbody></table></div>`; }
-            else el.innerHTML = '<div class="empty">هذا التطبيق لا يرفع تقارير أعطال إلى الخادم بعد</div>';
+            if (['wallpapers', 'store', 'leo', 'controller'].includes(k)) {
+                if (k === 'controller') renderControllerCrashGroups(el);
+                else renderCrashView(el, allCrashReports().filter(c => c.app === k), k === 'store' && state.errors.storeCrashes ? 'تعذّر تحميل أعطال الستور؛ أعد التحديث بعد التحقق من الاتصال.' : '');
+            } else el.innerHTML = '<div class="empty">هذا التطبيق لا يرفع تقارير أعطال إلى الخادم بعد</div>';
         });
     }
     // ---------- wide tables: drag-to-scroll anywhere + a sticky scrollbar on top ----------
@@ -3328,7 +3567,23 @@
     // =====================================================================
     //  Per-car page: everything we know about one car, keyed by its hardware id / VIN
     // =====================================================================
-    let carOpen = null; const carCache = { voice: new Map(), tslink: new Map() };
+    let carOpen = null; const carCache = { voice: new Map(), tslink: new Map(), crashes: new Map() };
+    function carVin(hw) { const r = carRow(hw); return vinOfHw(hw) || (r?.aliases || []).map(vinOfHw).find(Boolean) || ''; }
+    function carCrashReports(hw) {
+        const r = carRow(hw), ids = [hw, ...(r?.aliases || [])].map(id => canonicalHw(id) || String(id).toLowerCase());
+        return allCrashReports().filter(c => ids.includes(canonicalHw(c.hw) || String(c.hw).toLowerCase()));
+    }
+    async function loadCarCrashes(hw) {
+        const vin = carVin(hw); if (!vin || !LOCAL_PROXY || !LOCAL_FLAGS.controller || carCache.crashes.has(hw)) return;
+        const epoch = sessionEpoch;
+        carCache.crashes.set(hw, { loading: true });
+        try {
+            const rows = await localPost('/local/controller/thab_admin_crashes', { p_vin: vin, p_limit: 50 });
+            if (epoch !== sessionEpoch) return;
+            carCache.crashes.set(hw, rows?.error ? { unavailable: true } : { rows: crashRows(rows) });
+        } catch (err) { if (epoch !== sessionEpoch) return; carCache.crashes.set(hw, { unavailable: true }); }
+        refreshCrashViews();
+    }
     function carRow(hw) { return wallpaperCar(hw) || state.merged.find(x => x.hw === hw) || null; }
     function vinOfHw(hw) { const m = /^VIN-(.+)$/i.exec(String(hw || '')); return m ? m[1] : ''; }
     function openCar(hw) {
@@ -3342,7 +3597,7 @@
         if (LOCAL_PROXY && !state.tslinkLoaded) loadTslink().then(() => { if (carOpen) { renderCarPage(carOpen); loadCarTslink(carOpen); } });
         if (!state.leoCrashesLoaded) loadLeoCrashes().then(() => carOpen && renderCarPage(carOpen));
         if (!state.wallpapers.length) loadWallpapers().then(() => carOpen && renderCarPage(carOpen)).catch(() => {});
-        loadCarVoice(carOpen); loadCarTslink(carOpen);
+        loadCarVoice(carOpen); loadCarTslink(carOpen); loadCarCrashes(carOpen);
     }
     function closeCar() {
         carOpen = null; document.body.classList.remove('car-open');
@@ -3350,7 +3605,7 @@
     }
     $('car-back').addEventListener('click', closeCar);
     $('car-copy').addEventListener('click', () => copyText(location.origin + location.pathname + '#car=' + encodeURIComponent(carOpen || '')));
-    $('car-refresh').addEventListener('click', () => { if (!carOpen) return; carCache.voice.delete(carOpen); carCache.tslink.delete(carOpen); loadCarVoice(carOpen); loadCarTslink(carOpen); if (SESSION_TOKEN) loadAll(); });
+    $('car-refresh').addEventListener('click', () => { if (!carOpen) return; carCache.voice.delete(carOpen); carCache.tslink.delete(carOpen); carCache.crashes.delete(carOpen); loadCarVoice(carOpen); loadCarTslink(carOpen); loadCarCrashes(carOpen); if (SESSION_TOKEN) loadAll(); });
     window.addEventListener('popstate', () => { const m = /^#car=(.+)$/.exec(location.hash); if (m) openCar(decodeURIComponent(m[1])); else if (carOpen) closeCar(); });
 
     async function loadCarVoice(hw) {
@@ -3390,6 +3645,8 @@
     function renderCarPage(hw) {
         renderCarPageContent(hw);
         pageNested($('car-sections'), 'car:' + hw);
+        const cached = carCache.crashes.get(hw);
+        renderCrashView('car-crash-groups', carCrashReports(hw), carVin(hw) ? cached?.loading ? 'جارٍ تحميل أعطال ذبذبة داشبورد…' : cached?.unavailable ? 'تبليغ الأعطال لم يصل بعد للسيارات (ينتظر تشغيل الهجرة ونشر إصدار)' : controllerCrashNotice() : '');
     }
     function renderCarPageContent(hw) {
         const r = carRow(hw); const d = r && r.dev; const vin = vinOfHw(hw) || (r ? r.aliases.map(vinOfHw).find(Boolean) : '') || '';
@@ -3442,6 +3699,8 @@
                     <details style="margin-top:8px"><summary class="sub">جدول الأيام (${days.length})</summary><div class="table-wrap"><table style="min-width:420px"><thead><tr><th>اليوم</th><th>أوامر</th><th>نُفّذ</th><th>لم يُفهم</th><th>التكلفة</th></tr></thead><tbody>${days.slice().reverse().map(x => `<tr><td>${num(x.day)}</td><td>${num(x.n)}</td><td>${num(x.ok)}</td><td>${num(x.bad)}</td><td>${moneyHtml(x.cost)}</td></tr>`).join('')}</tbody></table></div></details>
                     <details style="margin-top:8px"><summary class="sub">آخر 50 أمرًا</summary><div class="table-wrap"><table style="min-width:520px"><thead><tr><th>الوقت</th><th>النتيجة</th><th>ما سُمع</th><th>أوامر نُفّذت</th><th>التكلفة</th></tr></thead><tbody>${rows.slice().sort((a, b) => String(b.at).localeCompare(String(a.at))).map(e => `<tr><td>${timeCell(e.at)}</td><td><span class="badge ${e.outcome === 'ok' ? 'ok' : 'warn'}">${esc(OUT[e.outcome] || e.outcome || '?')}</span></td><td>${esc(e.heard || '—')}</td><td>${num(e.actions_done != null ? `${e.actions_done}/${e.actions_requested != null ? e.actions_requested : '?'}` : '—')}</td><td>${moneyHtml(e.cost_usd)}</td></tr>`).join('')}</tbody></table></div></details>`;
             }
+            const owner = crashRows(state.ctl?.cars).find(c => vinOf(c).toLowerCase() === vin.toLowerCase());
+            if (vin) body += `<h4>ملاحظة المالك</h4><p>${esc(owner?.note || 'لا توجد ملاحظة')}</p><button type="button" class="btn sm" data-owner-note="${esc(vin)}" ${LOCAL_PROXY && LOCAL_FLAGS.controller ? '' : 'disabled'}>تعديل ملاحظة المالك</button>`;
             S.push(carSection('الأوامر الصوتية (ذبذبة داشبورد)', 'fa-microphone', body, true));
         }
         if (r) {
@@ -3468,11 +3727,7 @@
             const t = carCache.tslink.get(hw); const c = tslinkCarFor(hw);
             if (c || t) S.push(carSection('TS Link', 'fa-link', !t || t.loading ? '<div class="empty">جارٍ التحميل…</div>' : t.error ? `<div class="note" style="color:#fca5a5">${esc(t.error)}</div>` : tslDetailHtml(t.detail), true));
         }
-        if (r) {
-            const leo = (state.leoCrashes || []).filter(c => { const id = String(c.hwId || c.hw_id || c.hardwareId || c.hardware_id || '').toLowerCase(); return id && [r.hw, ...r.aliases].some(x => String(x).toLowerCase() === id); });
-            const list = [...r.crashes.map(c => ({ at: c.received_at || c.crash_at, app: 'ذبذبة خلفيات', ver: c.app_version, text: c.crash_text || c.report || '' })), ...leo.map(c => ({ at: c.receivedAt, app: 'TS Leo Dash', ver: c.version || c.versionName, text: c.report || '' }))].sort((a, b) => ts(b.at) - ts(a.at));
-            S.push(carSection(`الأعطال (${list.length})`, 'fa-bug', list.length ? list.map(c => `<details style="margin-bottom:6px"><summary><span class="badge bad">${esc(c.app)}</span> ${esc(c.ver || '')} ${timeCell(c.at)} <span class="sub">${esc(String(c.text).split('\n').find(l => /Exception|Error/.test(l)) || String(c.text).slice(0, 80))}</span></summary><pre class="report">${esc(c.text)}</pre></details>`).join('') : '<div class="empty">لا أعطال مسجّلة</div>', true));
-        }
+        S.push(carSection('الأعطال', 'fa-bug', '<div id="car-crash-groups"></div>', true));
         $('car-sections').innerHTML = S.join('');
         $('car-sections').querySelectorAll('[data-act]').forEach(el => el.addEventListener('click', onRowAction));
     }
