@@ -374,6 +374,34 @@
         .hw-link { color: var(--accent); text-decoration: none; }
         .hw-link:hover { text-decoration: underline; }
         .spark { width: 100%; height: 48px; display: block; }
+        /* ---- per-car page ---- */
+        body.car-open #tabs, body.car-open .tab-panel, body.car-open .subtabs { display: none !important; }
+        #page-car { display: none; }
+        body.car-open #page-car { display: block; }
+        .car-head { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-bottom: 14px; }
+        .car-head h2 { font-size: 1.25rem; margin: 0; }
+        .car-head .hw { font-family: var(--mono); direction: ltr; unicode-bidi: isolate; color: var(--text-muted); font-size: .85rem; }
+        .car-sections { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 14px; }
+        .car-section { background: var(--panel-bg); border: 1px solid var(--panel-border); border-radius: 18px; padding: 14px 16px; min-width: 0; }
+        .car-section.wide { grid-column: 1 / -1; }
+        .car-section h3 { font-size: .95rem; margin: 0 0 10px; display: flex; align-items: center; gap: 8px; }
+        .car-section h3 i { color: var(--primary); }
+        .car-section .kv { font-size: .86rem; }
+        .car-apps { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 8px; }
+        .car-app { background: rgba(255,255,255,.04); border: 1px solid var(--panel-border); border-radius: 12px; padding: 8px 10px; }
+        .car-app b { display: block; font-size: .8rem; color: var(--text-muted); margin-bottom: 4px; }
+        .car-app .ver { font-family: var(--mono); direction: ltr; unicode-bidi: isolate; font-size: .9rem; }
+        .bars { display: block; width: 100%; height: 170px; direction: ltr; }
+        .bars rect:hover { filter: brightness(1.3); }
+        .car-thumbs { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 8px; }
+        .car-thumbs a { display: block; aspect-ratio: 1; border-radius: 10px; overflow: hidden; background: rgba(0,0,0,.3); border: 1px solid var(--panel-border); position: relative; }
+        .car-thumbs img, .car-thumbs video { width: 100%; height: 100%; object-fit: cover; }
+        .car-thumbs .vid { position: absolute; inset: auto 6px 6px auto; color: #fff; font-size: .8rem; text-shadow: 0 1px 3px #000; }
+        .stat-card[title] { cursor: help; }
+        .money span { display: block; font-family: var(--mono); direction: ltr; unicode-bidi: isolate; }
+        .money span + span { color: var(--text-muted); font-size: .85em; }
+        .car-type { display: block; font-weight: 600; }
+        .car-type + .sub { display: block; }
         pre.report { direction: ltr; text-align: left; white-space: pre-wrap; font-family: var(--mono); font-size: .74rem; background: rgba(0,0,0,.25); padding: 10px; border-radius: 10px; max-height: 360px; overflow: auto; }
         #global-err { overflow-wrap: anywhere; }
         @media (max-width: 700px) { .card { padding: 12px; } .logo-text h1 { font-size: 1.2rem; } .logo-area { width: 100%; } .tab { padding: 8px 10px; } }
@@ -546,6 +574,19 @@
 
         <!-- ============ Tabs ============ -->
         <div class="card">
+            <section id="page-car" aria-live="polite">
+                <div class="car-head">
+                    <button class="btn" type="button" id="car-back"><i class="fa-solid fa-arrow-right"></i> رجوع</button>
+                    <h2 id="car-title">سيارة</h2>
+                    <span class="hw" id="car-hw"></span>
+                    <span id="car-badges"></span>
+                    <span style="flex:1"></span>
+                    <button class="btn sm" type="button" id="car-copy" title="نسخ رابط الصفحة"><i class="fa-solid fa-link"></i> نسخ الرابط</button>
+                    <button class="btn sm" type="button" id="car-refresh"><i class="fa-solid fa-rotate"></i> تحديث</button>
+                </div>
+                <div id="car-err"></div>
+                <div class="car-sections" id="car-sections"></div>
+            </section>
             <div class="tabs" role="tablist" id="tabs">
                 <button class="tab active" role="tab" data-tab="devices"><i class="fa-solid fa-microchip"></i> الأجهزة <span class="count" id="cnt-devices">0</span></button>
                 <button class="tab" role="tab" data-tab="wallpapers"><i class="fa-solid fa-images"></i> الخلفيات</button>
@@ -616,7 +657,7 @@
                                 <th>الجهاز</th>
                                 <th>الحالة</th>
                                 <th>المحاولات</th>
-                                <th>الوضع</th>
+                                <th>نوع السيارة</th>
                                 <th>الخلفيات</th>
                                 <th>الستور</th>
                                 <th>Back Button</th>
@@ -877,7 +918,7 @@
         'tslink': 'TS Link', 'controller': 'الكونترولر', 'leo': 'Leo',
     };
     const MODE_LABELS = {
-        normal: 'عادي', others: 'عادي', fse: 'FSE', leopard: 'Leopard', gwm: 'GWM', lynkco: 'Lynk & Co', jetour: 'Jetour', denza: 'Denza', icar03t: 'ICAR 03T',
+        normal: 'عادي', others: 'عادي', fse: 'Leopard', leopard: 'Leopard', gwm: 'GWM', lynkco: 'Lynk & Co', jetour: 'Jetour', denza: 'Denza', icar03t: 'ICAR 03T',
     };
     const KIND_LABELS = {
         install: 'تثبيت', install_ok: 'تثبيت ناجح', install_fail: 'فشل تثبيت', open: 'فتح المتجر', check_in: 'تسجيل حضور',
@@ -1015,6 +1056,21 @@
     }
     function num(n) { return `<span class="num">${esc(n == null ? '—' : n)}</span>`; }
     function modeLabel(m) { return m ? (MODE_LABELS[String(m).toLowerCase()] || m) : '—'; }
+    // The car's type, best source first: what the controller / TS Leo Dash read from the head unit
+    // (e.g. "Leopard 5 2025 UI5"), then the store's car name, then the wallpapers mode (the roughest:
+    // "fse" is only the passenger screen inside a Leopard, so it reads "Leopard").
+    function carType(r) {
+        const vin = vinOfHw(r.hw) || r.aliases.map(vinOfHw).find(Boolean);
+        const ctl = vin && state.ctl && Array.isArray(state.ctl.cars) ? state.ctl.cars.find(c => String(vinOf(c)).toLowerCase() === vin.toLowerCase()) : null;
+        if (ctl && ctl.car) return { label: String(ctl.car), src: 'الكونترولر' };
+        const leo = (state.leoCrashes || []).find(c => c && (c.car || c.model) && [r.hw, ...r.aliases].some(x => String(x).toLowerCase() === String(c.hwId || c.hw_id || c.hardwareId || c.hardware_id || '').toLowerCase()));
+        if (leo) return { label: String(leo.car || leo.model), src: 'TS Leo Dash' };
+        const sc = r.storeRows.map(x => x.car).find(Boolean) || (r.store && r.store.car);
+        if (sc) return { label: String(sc), src: 'ذبذبة ستور' };
+        if (r.dev && r.dev.mode) return { label: modeLabel(r.dev.mode), src: 'ذبذبة خلفيات' };
+        return null;
+    }
+    function carTypeCell(r) { const t = carType(r); return t ? `<span class="car-type">${esc(t.label)}</span><span class="sub" title="المصدر">${esc(t.src)}</span>` : '<span class="sub">—</span>'; }
     function appLabel(id) { return APP_ID_LABELS[id] || id || '?'; }
     function errMsg(e) { return (e && e.message) ? e.message : String(e); }
     function setErr(id, e) {
@@ -1485,6 +1541,8 @@
         return state.merged.filter(r => f.fn(r) && (!q || r.searchBlob.includes(q)));
     }
     function renderDevices() {
+        if (carOpen) renderCarPage(carOpen);
+        if (LOCAL_PROXY && LOCAL_FLAGS.controller && !state.ctlLoaded) loadController().then(renderDevices);   // car types come from the controller first
         const errs = [];
         if (state.errors.devices) errs.push(`devices: ${state.errors.devices}`);
         if (state.errors.tokens) errs.push(`device_tokens: ${state.errors.tokens}`);
@@ -1562,7 +1620,7 @@
                 </td>
                 <td>${statusBadges}</td>
                 <td><span class="badge ${attCls}"><span class="num">${attempts}/${FAILED_LIMIT}</span></span>${d && d.last_failed_at ? timeCell(d.last_failed_at) : ''}</td>
-                <td>${esc(modeLabel(d && d.mode))}</td>
+                <td>${carTypeCell(r)}</td>
                 <td>${wpCell}</td>
                 <td>${storeCell(r)}</td>
                 <td>${appCell(r, 'backbutton')}</td>
@@ -1578,6 +1636,7 @@
                             ? `<button class="btn sm success" data-act="unblock" data-hw="${esc(r.hw)}" title="فك الحظر عن كل التطبيقات">✅ فك</button>`
                             : `<button class="btn sm danger" data-act="block" data-hw="${esc(r.hw)}" title="حظر كل التطبيقات">🚫 حظر</button>`}
                         <button class="btn sm icon-only" data-act="rename" data-hw="${esc(r.hw)}" title="تسمية">✏️</button>
+                        <button class="btn sm icon-only" data-act="page" data-hw="${esc(r.hw)}" title="صفحة السيارة">📄</button>
                         <button class="btn sm icon-only" data-act="copy" data-hw="${esc(r.hw)}" title="نسخ المعرّف">📋</button>
                     </div>
                 </td>
@@ -1588,6 +1647,7 @@
         const el = e.currentTarget; const act = el.dataset.act; const hw = el.dataset.hw;
         const r = state.merged.find(x => x.hw === hw); if (!r) return;
         if (act === 'copy') return copyText(hw);
+        if (act === 'page') return openCar(hw);
         if (act === 'expand') {
             if (state.expanded.has(hw)) state.expanded.delete(hw); else state.expanded.add(hw);
             renderDevices(); return;
@@ -2099,7 +2159,7 @@
     }
     document.addEventListener('click', e => {
         const a = e.target.closest('a.hw-link'); if (!a) return;
-        e.preventDefault(); showDevice(a.dataset.hw || '');
+        e.preventDefault(); openCar(a.dataset.hw || '');
     });
     // Generic table renderer for shapes verified on one bench car only: every scalar key becomes a column.
     function genericTable(headId, bodyId, rows, opts = {}) {
@@ -2118,8 +2178,8 @@
         const dots = v.map((y, i) => `<circle cx="${(i * step).toFixed(1)}" cy="${(h - 4 - (y / max) * (h - 8)).toFixed(1)}" r="3" fill="var(--accent)"><title>${esc(labels[i] || '')}: ${y}</title></circle>`).join('');
         return `<svg class="spark" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" role="img" aria-label="رسم"><polyline fill="none" stroke="var(--accent)" stroke-width="2" points="${pts}"/>${dots}</svg>`;
     }
-    function tile(h, v, ic, c) {
-        return `<div class="stat-card"><div class="stat-info"><h3>${esc(h)}</h3><p>${typeof v === 'number' ? esc(v) : v}</p></div><div class="stat-icon ${c || 'blue'}"><i class="fa-solid ${ic || 'fa-circle-info'}"></i></div></div>`;
+    function tile(h, v, ic, c, help) {
+        return `<div class="stat-card"${help ? ` title="${esc(help)}"` : ''}><div class="stat-info"><h3>${esc(h)}</h3><p>${typeof v === 'number' ? esc(v) : v}</p></div><div class="stat-icon ${c || 'blue'}"><i class="fa-solid ${ic || 'fa-circle-info'}"></i></div></div>`;
     }
 
     // ---------- TS Link ----------
@@ -2254,7 +2314,7 @@
     function renderController() {
         const c = state.ctl || {}; const asRows = v => Array.isArray(v) ? v : (v && typeof v === 'object' && Array.isArray(v.rows)) ? v.rows : (v && typeof v === 'object' ? [v] : []);
         const stats = Array.isArray(c.stats) ? (c.stats[0] || {}) : (c.stats || {});
-        $('ctl-stats').innerHTML = Object.entries(stats).filter(([, v]) => typeof v !== 'object').map(([k, v]) => tile(k, cellValue(k, v), 'fa-gauge-high', 'blue')).join('') || '<div class="empty">لا إحصاءات</div>';
+        $('ctl-stats').innerHTML = Object.entries(stats).filter(([, v]) => typeof v !== 'object').map(([k, v]) => { const m = CTL_STAT_META[k] || {}; return tile(m.label || k, /cost/i.test(k) ? moneyHtml(v) : cellValue(k, v), m.icon || 'fa-gauge-high', m.color || 'blue', m.help || k); }).join('') || '<div class="empty">لا إحصاءات</div>';
         const cars = asRows(c.cars);
         const joined = cars.filter(r => vinToHw(vinOf(r))).length;
         const vinTotal = state.devices.filter(d => /^VIN-/i.test(d.hardware_id || '')).length;
@@ -3050,12 +3110,181 @@
             }
             top.hidden = !wide; top.firstChild.style.width = wrap.scrollWidth + 'px'; top.scrollLeft = wrap.scrollLeft;
         }
-        document.addEventListener('pointerover', e => { const wrap = e.target.closest('.table-wrap'); if (wrap) ensureTopScroll(wrap); });
-        window.addEventListener('resize', () => document.querySelectorAll('.table-wrap').forEach(ensureTopScroll));
+        // Owner's call (2026-09-08): one scrollbar only, the table's own at the bottom. ensureTopScroll stays unused.
+        void ensureTopScroll;
     })();
     restructureTabs();
     updateNotificationToggle();
     // Direct entry for the car: https://<site>/gen (or #gen) lands on the generator immediately.
+    // =====================================================================
+    //  Controller stat tiles: what each number is (hover for the explanation), money in USD + QAR
+    // =====================================================================
+    const USD_QAR = 3.64;
+    function moneyHtml(v) { const usd = Number(v) || 0; return `<span class="money"><span>$${usd.toFixed(2)}</span><span>${(usd * USD_QAR).toFixed(2)} ر.ق</span></span>`; }
+    const CTL_STAT_META = {
+        cars_total:       { label: 'السيارات المسجّلة',        help: 'كل سيارة فتحت الكونترولر مرة واحدة على الأقل وأرسلت تليمتري.', icon: 'fa-car', color: 'blue' },
+        cars_active_7d:   { label: 'نشطة آخر 7 أيام',          help: 'سيارات فتحت الكونترولر خلال آخر 7 أيام.', icon: 'fa-bolt', color: 'green' },
+        cars_active_30d:  { label: 'نشطة آخر 30 يوم',          help: 'سيارات فتحت الكونترولر خلال آخر 30 يوم.', icon: 'fa-bolt', color: 'green' },
+        cars_dormant_30d: { label: 'خاملة (30+ يوم)',           help: 'سيارات لم تفتح الكونترولر منذ أكثر من 30 يوم.', icon: 'fa-moon', color: 'yellow' },
+        cars_new_30d:     { label: 'جديدة آخر 30 يوم',          help: 'سيارات ظهرت لأول مرة خلال آخر 30 يوم.', icon: 'fa-plus', color: 'cyan' },
+        voice_total:      { label: 'أوامر صوتية (الإجمالي)',     help: 'كل مرة ضغط فيها سائق زر الصوت وتكلّم، منذ البداية.', icon: 'fa-microphone', color: 'purple' },
+        voice_ok_total:   { label: 'أوامر نُفّذت',               help: 'الأوامر الصوتية التي فُهمت ونُفّذ فيها أمر من القائمة.', icon: 'fa-check', color: 'green' },
+        voice_gaps_total: { label: 'أوامر لم تُفهم (فجوات)',     help: 'السائق طلب شيئًا غير موجود في قائمة الأوامر أو لم يُفهم؛ تبويب «الفجوات» يعرض ماذا قال بالضبط.', icon: 'fa-question', color: 'red' },
+        cost_total:       { label: 'تكلفة الصوت (الإجمالي)',     help: 'ما دفعناه لنموذج الذكاء الاصطناعي (OpenRouter) عن كل الأوامر الصوتية منذ البداية. بالدولار وتحته بالريال القطري.', icon: 'fa-dollar-sign', color: 'orange' },
+        voice_24h:        { label: 'أوامر صوتية آخر 24 ساعة',   help: 'الأوامر الصوتية خلال آخر 24 ساعة.', icon: 'fa-microphone', color: 'purple' },
+        voice_30d:        { label: 'أوامر صوتية آخر 30 يوم',    help: 'الأوامر الصوتية خلال آخر 30 يوم.', icon: 'fa-microphone', color: 'purple' },
+        cost_30d:         { label: 'تكلفة الصوت آخر 30 يوم',     help: 'تكلفة نموذج الذكاء الاصطناعي عن أوامر آخر 30 يوم. بالدولار وتحته بالريال القطري.', icon: 'fa-dollar-sign', color: 'orange' },
+    };
+
+    // =====================================================================
+    //  Per-car page: everything we know about one car, keyed by its hardware id / VIN
+    // =====================================================================
+    let carOpen = null; const carCache = { voice: new Map(), tslink: new Map() };
+    function carRow(hw) { return wallpaperCar(hw) || state.merged.find(x => x.hw === hw) || null; }
+    function vinOfHw(hw) { const m = /^VIN-(.+)$/i.exec(String(hw || '')); return m ? m[1] : ''; }
+    function openCar(hw) {
+        if (!hw) return;
+        const r = carRow(hw); carOpen = r ? r.hw : hw;
+        document.body.classList.add('car-open');
+        if (location.hash !== '#car=' + encodeURIComponent(carOpen)) history.pushState(null, '', '#car=' + encodeURIComponent(carOpen));
+        window.scrollTo({ top: 0 });
+        renderCarPage(carOpen);
+        if (LOCAL_PROXY && LOCAL_FLAGS.controller && !state.ctlLoaded) loadController().then(() => carOpen && renderCarPage(carOpen));
+        if (LOCAL_PROXY && !state.tslinkLoaded) loadTslink().then(() => { if (carOpen) { renderCarPage(carOpen); loadCarTslink(carOpen); } });
+        if (!state.leoCrashesLoaded) loadLeoCrashes().then(() => carOpen && renderCarPage(carOpen));
+        if (!state.wallpapers.length) loadWallpapers().then(() => carOpen && renderCarPage(carOpen)).catch(() => {});
+        loadCarVoice(carOpen); loadCarTslink(carOpen);
+    }
+    function closeCar() {
+        carOpen = null; document.body.classList.remove('car-open');
+        if (/^#car=/.test(location.hash)) history.pushState(null, '', location.pathname + location.search);
+    }
+    $('car-back').addEventListener('click', closeCar);
+    $('car-copy').addEventListener('click', () => copyText(location.origin + location.pathname + '#car=' + encodeURIComponent(carOpen || '')));
+    $('car-refresh').addEventListener('click', () => { if (!carOpen) return; carCache.voice.delete(carOpen); carCache.tslink.delete(carOpen); loadCarVoice(carOpen); loadCarTslink(carOpen); if (SESSION_TOKEN) loadAll(); });
+    window.addEventListener('popstate', () => { const m = /^#car=(.+)$/.exec(location.hash); if (m) openCar(decodeURIComponent(m[1])); else if (carOpen) closeCar(); });
+
+    async function loadCarVoice(hw) {
+        const vin = vinOfHw(hw); if (!vin || !LOCAL_PROXY || !LOCAL_FLAGS.controller) return;
+        if (carCache.voice.has(hw)) return;
+        carCache.voice.set(hw, { loading: true });
+        try {
+            const rows = await localPost('/local/controller/thab_admin_events', { p_limit: 5000, p_vin: vin, p_kind: 'voice', p_since_id: null });
+            carCache.voice.set(hw, { rows: Array.isArray(rows) ? rows : (rows && rows.rows) || [] });
+        } catch (e) { carCache.voice.set(hw, { error: errMsg(e) }); }
+        if (carOpen === hw) renderCarPage(hw);
+    }
+    function tslinkCarFor(hw) {
+        const r = carRow(hw); const ids = new Set([String(hw), ...(r ? [r.hw, ...r.aliases] : [])].map(x => String(x).toLowerCase()));
+        return (state.tslinkCars || []).find(c => ids.has(String(c.hwId || c.hw_id || c.hardware_id || '').toLowerCase())) || null;
+    }
+    async function loadCarTslink(hw) {
+        if (!LOCAL_PROXY || carCache.tslink.has(hw)) return;
+        const c = tslinkCarFor(hw); if (!c) return;
+        const id = c.id || c.deviceId; if (!id) return;
+        carCache.tslink.set(hw, { loading: true });
+        try { carCache.tslink.set(hw, { detail: await localGet(`/local/tslink/cars/${encodeURIComponent(id)}`) }); }
+        catch (e) { carCache.tslink.set(hw, { error: errMsg(e) }); }
+        if (carOpen === hw) renderCarPage(hw);
+    }
+    function dayBars(days, valueKey, label, fmt) {
+        if (!days.length) return '<div class="empty">لا بيانات</div>';
+        const w = Math.max(320, days.length * 14), h = 170, pad = 22, bw = Math.max(4, (w - 10) / days.length - 3);
+        const max = Math.max(1e-9, ...days.map(d => Number(d[valueKey]) || 0));
+        const bars = days.map((d, i) => { const v = Number(d[valueKey]) || 0; const bh = v ? Math.max(2, v / max * (h - pad - 14)) : 0; const x = 5 + i * ((w - 10) / days.length);
+            return `<rect x="${x.toFixed(1)}" y="${(h - pad - bh).toFixed(1)}" width="${bw.toFixed(1)}" height="${bh.toFixed(1)}" rx="2" fill="${v ? 'var(--primary)' : 'rgba(255,255,255,.08)'}"><title>${esc(d.day)}: ${esc(fmt ? fmt(v) : v)} ${esc(label)}${d.n != null && valueKey !== 'n' ? ` · ${esc(d.n)} أمر` : ''}${d.bad ? ` · ${esc(d.bad)} لم يُفهم` : ''}</title></rect>`; }).join('');
+        const step = Math.max(1, Math.ceil(days.length / 6));
+        const ticks = days.map((d, i) => (i === 0 || i === days.length - 1 || i % step === 0) ? `<text x="${(5 + i * ((w - 10) / days.length)).toFixed(1)}" y="${h - 6}" font-size="10" fill="var(--text-muted)">${esc(d.day.slice(5))}</text>` : '').join('');
+        return `<div class="table-wrap"><svg class="bars" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" role="img" aria-label="${esc(label)} بالأيام"><text x="5" y="12" font-size="10" fill="var(--text-muted)">الأعلى: ${esc(fmt ? fmt(max) : max)}</text>${bars}${ticks}</svg></div>`;
+    }
+    function carSection(title, icon, body, wide) { return `<div class="car-section${wide ? ' wide' : ''}"><h3><i class="fa-solid ${icon}"></i>${esc(title)}</h3>${body}</div>`; }
+    function renderCarPage(hw) {
+        const r = carRow(hw); const d = r && r.dev; const vin = vinOfHw(hw) || (r ? r.aliases.map(vinOfHw).find(Boolean) : '') || '';
+        const type = r ? carType(r) : null;
+        $('car-title').textContent = r ? (r.name || r.serial || 'سيارة بدون اسم') + (type ? ' · ' + type.label : '') : 'سيارة غير مسجّلة';
+        $('car-hw').textContent = hw;
+        $('car-badges').innerHTML = r ? `<span class="badge ${r.status.cls}">${esc(r.status.label)}</span>${r.aliases.length ? ` <span class="badge" title="${esc(r.aliases.join(' · '))}">${r.aliases.length} معرّف قديم</span>` : ''}` : '<span class="badge bad">لا صف في devices</span>';
+        const S = [];
+        S.push(carSection('البطاقة والتفعيل', 'fa-id-card', (d ? kv([
+            ['الاسم', esc(d.client_name || '—'), true],
+            ['نوع السيارة', type ? `${esc(type.label)} <span class="sub">(${esc(type.src)})</span>` : '—', true],
+            ['كود التفعيل', esc(d.serial_number || '—')],
+            ['وقت التفعيل', esc(fmtDate(d.activated_at))],
+            ['أول تسجيل', esc(fmtDate(d.created_at))],
+            ['آخر ظهور', esc(fmtDate(r.lastSeen)) + ' <span class="sub">(' + esc(relTime(r.lastSeen)) + ')</span>'],
+            ['وضع الخلفيات', esc(modeLabel(d.mode)), true],
+            ['مفعّل', d.is_active ? 'نعم' : 'لا', true],
+            ['محظور', d.is_blocked ? `نعم${d.block_reason ? ` (${esc(d.block_reason)})` : ''} · ${esc(fmtDate(d.blocked_at))}` : 'لا', true],
+            ['محاولات خاطئة', `${esc(d.failed_attempts || 0)}/${FAILED_LIMIT}${d.last_failed_at ? ' · آخر: ' + esc(fmtDate(d.last_failed_at)) : ''}`],
+            ['VIN', vin ? esc(vin) : '<span class="sub">هذه السيارة مسجّلة بمعرّف غير VIN</span>'],
+            ['المعرّفات القديمة', r.aliases.length ? r.aliases.map(esc).join('<br>') : '—'],
+        ]) : '<div class="note">لا صف في devices (قد تكون في الستور فقط)</div>') + (r ? `<div class="toolbar" style="margin-top:10px">${r.status.blockedAny ? `<button class="btn sm success" data-act="unblock" data-hw="${esc(r.hw)}">✅ فك الحظر</button>` : `<button class="btn sm danger" data-act="block" data-hw="${esc(r.hw)}">🚫 حظر في كل التطبيقات</button>`}<button class="btn sm" data-act="rename" data-hw="${esc(r.hw)}">✏️ تسمية</button><button class="btn sm" data-act="copy" data-hw="${esc(r.hw)}">نسخ المعرّف</button></div>` : '')));
+        if (r) {
+            const ctlCar = vin && state.ctl && Array.isArray(state.ctl.cars) ? state.ctl.cars.find(c => String(vinOf(c)).toLowerCase() === vin.toLowerCase()) : null;
+            const tsl = tslinkCarFor(hw);
+            const app = (label, key, extra) => { const sn = r.seen[key]; const v = sn ? `${esc(sn.app_version || '—')}${sn.app_version_code != null ? ` (${esc(sn.app_version_code)})` : ''}` : (key === 'wallpapers' && d && d.app_version ? `${esc(d.app_version)} (${esc(d.app_version_code)})` : (key === 'store' && r.store ? esc(r.store.version || '—') : null)); const seen = sn ? sn.last_seen : (key === 'wallpapers' && d ? d.last_seen_at : key === 'store' && r.store ? r.store.last_seen : null);
+                return `<div class="car-app"><b>${esc(label)}</b><span class="ver">${v || '<span class="sub">لم يظهر</span>'}</span>${seen ? timeCell(seen) : ''}${extra || ''}</div>`; };
+            S.push(carSection('البرامج وإصداراتها', 'fa-layer-group', `<div class="car-apps">${app('ذبذبة خلفيات', 'wallpapers')}${app('ذبذبة ستور', 'store')}${app('TS Back Button', 'backbutton')}${app('TS Link', 'tslink', tsl ? `<span class="sub">${esc(tsl.carLabel || tsl.label || '')}</span>` : '')}${app('ذبذبة داشبورد', 'controller', ctlCar ? `<span class="sub">تليمتري: ${esc(ctlCar.version_name || '—')} (${esc(ctlCar.version_code != null ? ctlCar.version_code : '—')}) · تشغيلات ${esc(ctlCar.runs != null ? ctlCar.runs : '—')}</span>` : '')}${app('TS Leo Dash', 'leo')}</div>`));
+        }
+        {
+            const v = carCache.voice.get(hw);
+            let body;
+            if (!vin) body = '<div class="note">الأوامر الصوتية مربوطة بالـ VIN، وهذه السيارة مسجّلة بمعرّف آخر.</div>';
+            else if (!LOCAL_PROXY || !LOCAL_FLAGS.controller) body = '<div class="note">تليمتري الكونترولر غير متاح في هذه الجلسة.</div>';
+            else if (!v || v.loading) body = '<div class="empty">جارٍ التحميل…</div>';
+            else if (v.error) body = `<div class="note" style="color:#fca5a5">${esc(v.error)}</div>`;
+            else {
+                const rows = v.rows; const byDay = new Map();
+                for (const e of rows) { const day = String(e.at || e.received_at || '').slice(0, 10); if (!day) continue; if (!byDay.has(day)) byDay.set(day, { day, n: 0, ok: 0, bad: 0, cost: 0 }); const x = byDay.get(day); x.n++; if (e.outcome === 'ok') x.ok++; else x.bad++; x.cost += Number(e.cost_usd) || 0; }
+                const days = [...byDay.values()].sort((a, b) => a.day.localeCompare(b.day));
+                const filled = []; if (days.length) { let cur = new Date(days[0].day + 'T00:00:00Z'); const last = new Date(days[days.length - 1].day + 'T00:00:00Z'); while (cur <= last) { const k = cur.toISOString().slice(0, 10); filled.push(byDay.get(k) || { day: k, n: 0, ok: 0, bad: 0, cost: 0 }); cur = new Date(cur.getTime() + 86400000); } }
+                const tot = rows.length, ok = rows.filter(e => e.outcome === 'ok').length, cost = rows.reduce((a, e) => a + (Number(e.cost_usd) || 0), 0);
+                const last = rows.map(e => e.at || e.received_at).filter(Boolean).sort().at(-1);
+                const outcomes = {}; rows.forEach(e => { const k = e.outcome || '?'; outcomes[k] = (outcomes[k] || 0) + 1; });
+                const OUT = { ok: 'نُفّذ', unmatched: 'لم يُفهم', lowconf: 'ثقة منخفضة', unsupported: 'غير مدعوم', range: 'خارج النطاق', locked: 'مقفول' };
+                body = `<div class="car-apps" style="margin-bottom:10px"><div class="car-app"><b>إجمالي الأوامر</b><span class="ver">${esc(tot)}</span></div><div class="car-app"><b>نُفّذت</b><span class="ver">${esc(ok)}</span></div><div class="car-app"><b>لم تُفهم</b><span class="ver">${esc(tot - ok)}</span></div><div class="car-app"><b>التكلفة</b>${moneyHtml(cost)}</div><div class="car-app"><b>آخر أمر</b>${last ? timeCell(last) : '<span class="sub">—</span>'}</div></div>
+                    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">${Object.entries(outcomes).sort((a, b) => b[1] - a[1]).map(([k, n]) => `<span class="badge ${k === 'ok' ? 'ok' : 'warn'}">${esc(OUT[k] || k)}: ${esc(n)}</span>`).join('')}</div>
+                    <h4 style="margin:8px 0 4px;font-size:.85rem;color:var(--text-muted)">عدد الأوامر في اليوم</h4>${dayBars(filled.slice(-120), 'n', 'أمر')}
+                    <h4 style="margin:8px 0 4px;font-size:.85rem;color:var(--text-muted)">التكلفة في اليوم (دولار)</h4>${dayBars(filled.slice(-120), 'cost', 'دولار', x => '$' + Number(x).toFixed(3))}
+                    <details style="margin-top:8px"><summary class="sub">جدول الأيام (${days.length})</summary><div class="table-wrap"><table style="min-width:420px"><thead><tr><th>اليوم</th><th>أوامر</th><th>نُفّذ</th><th>لم يُفهم</th><th>التكلفة</th></tr></thead><tbody>${days.slice().reverse().map(x => `<tr><td>${num(x.day)}</td><td>${num(x.n)}</td><td>${num(x.ok)}</td><td>${num(x.bad)}</td><td>${moneyHtml(x.cost)}</td></tr>`).join('')}</tbody></table></div></details>
+                    <details style="margin-top:8px"><summary class="sub">آخر 50 أمرًا</summary><div class="table-wrap"><table style="min-width:520px"><thead><tr><th>الوقت</th><th>النتيجة</th><th>ما سُمع</th><th>أوامر نُفّذت</th><th>التكلفة</th></tr></thead><tbody>${rows.slice().sort((a, b) => String(b.at).localeCompare(String(a.at))).slice(0, 50).map(e => `<tr><td>${timeCell(e.at)}</td><td><span class="badge ${e.outcome === 'ok' ? 'ok' : 'warn'}">${esc(OUT[e.outcome] || e.outcome || '?')}</span></td><td>${esc(e.heard || '—')}</td><td>${num(e.actions_done != null ? `${e.actions_done}/${e.actions_requested != null ? e.actions_requested : '?'}` : '—')}</td><td>${moneyHtml(e.cost_usd)}</td></tr>`).join('')}</tbody></table></div></details>`;
+            }
+            S.push(carSection('الأوامر الصوتية (ذبذبة داشبورد)', 'fa-microphone', body, true));
+        }
+        if (r) {
+            const ids = new Set([r.hw, ...r.aliases].map(x => canonicalHw(x)));
+            const rows = state.appDaily.filter(x => x && ids.has(canonicalHw(x.hardware_id)) && /^\d{4}-\d{2}-\d{2}$/.test(x.day));
+            const byDay = new Map(); rows.forEach(x => { if (!byDay.has(x.day)) byDay.set(x.day, { day: x.day, n: 0, apps: {} }); const y = byDay.get(x.day); y.n += Number(x.opens) || 0; const k = appKey(x.app_id); y.apps[k] = (y.apps[k] || 0) + (Number(x.opens) || 0); });
+            const days = [...byDay.values()].sort((a, b) => a.day.localeCompare(b.day));
+            S.push(carSection('فتحات البرامج بالأيام (آخر 30 يوم)', 'fa-chart-column', days.length ? dayBars(days, 'n', 'فتحة') + `<div class="table-wrap"><table style="min-width:360px"><thead><tr><th>اليوم</th><th>الفتحات</th><th>حسب البرنامج</th></tr></thead><tbody>${days.slice().reverse().slice(0, 30).map(x => `<tr><td>${num(x.day)}</td><td>${num(x.n)}</td><td>${Object.entries(x.apps).map(([k, n]) => `<span class="badge">${esc(usageLabels[k] || k)}: ${esc(n)}</span>`).join(' ')}</td></tr>`).join('')}</tbody></table></div>` : '<div class="empty">لا فتحات مسجّلة (البرامج القديمة لا ترسل العدّاد اليومي)</div>'));
+        }
+        if (r) {
+            const ids = new Set([r.hw, ...r.aliases].map(x => canonicalHw(x)));
+            const mine = state.wallpapers.filter(w => w.hardware_id && ids.has(canonicalHw(w.hardware_id)));
+            const hidden = (state.wallpaperHides || []).filter(h => h.hardware_id && ids.has(canonicalHw(h.hardware_id)));
+            const byId = new Map(state.wallpapers.map(w => [String(w.id), w]));
+            const thumbs = mine.map(w => { const video = wallpaperIsVideo(w); const url = wallpaperUrl(w.url); return `<a href="${esc(url || '#')}" target="_blank" rel="noopener noreferrer" title="${esc(wallpaperFilename(w.url))}">${video && url ? `<video src="${esc(url)}#t=0.5" preload="metadata" muted playsinline></video><i class="fa-solid fa-play vid"></i>` : url ? `<img src="${esc(url)}" loading="lazy" decoding="async" referrerpolicy="no-referrer">` : '<i class="fa-solid fa-image"></i>'}</a>`; }).join('');
+            S.push(carSection(`الصور المخصّصة لهذه السيارة (${mine.length})`, 'fa-images', (mine.length ? `<div class="car-thumbs">${thumbs}</div>` : `<div class="empty">${state.wallpapers.length ? 'لا صور خاصة؛ تصلها المكتبة العامة فقط' : 'المكتبة لم تُحمَّل بعد'}</div>`) + (hidden.length ? `<p class="note" style="margin-top:8px">مخفي عنها ${hidden.length} صورة عامة: ${hidden.map(h => esc(wallpaperFilename(((byId.get(String(h.wallpaper_id)) || {}).url || String(h.wallpaper_id))))).join('، ')}</p>` : ''), true));
+        }
+        if (r) {
+            S.push(carSection('التوكنات', 'fa-key', r.tokens.length ? `<div class="table-wrap"><table style="min-width:360px"><thead><tr><th>البرنامج</th><th>أُصدر</th><th>آخر تحقق</th><th>الحالة</th></tr></thead><tbody>${r.tokens.map(t => `<tr><td>${esc(usageLabels[appKey(t.app_id)] || t.app_id || '—')}</td><td>${timeCell(t.issued_at || t.created_at)}</td><td>${timeCell(t.last_verified_at)}</td><td>${t.revoked_at ? '<span class="badge bad">ملغى</span>' : '<span class="badge ok">ساري</span>'}</td></tr>`).join('')}</tbody></table></div>` : '<div class="empty">لا توكنات (تصدر مع التفعيل في البرامج الحديثة)</div>'));
+            S.push(carSection('سجل الحظر وفك الحظر', 'fa-clock-rotate-left', r.blockEvents.length ? `<div class="table-wrap"><table style="min-width:360px"><thead><tr><th>الوقت</th><th>الحدث</th><th>السبب</th><th>عبر</th></tr></thead><tbody>${r.blockEvents.slice(0, 50).map(ev => `<tr><td>${timeCell(ev.at)}</td><td><span class="badge ${ev.blocked ? 'bad' : 'ok'}">${ev.blocked ? 'حظر' : 'فك حظر'}</span></td><td>${esc(ev.reason || '—')}</td><td>${esc(ev.via || '—')}</td></tr>`).join('')}</tbody></table></div>` : '<div class="empty">لم يُحظر قط</div>'));
+            if (r.storeRows.length) S.push(carSection('ذبذبة ستور', 'fa-store', r.storeRows.map(x => kv([['hw_id', esc(x.hw_id)], ['السيارة', esc(x.car || '—'), true], ['الإصدار', esc(x.version || '—')], ['محظور', x.blocked ? 'نعم' : 'لا', true], ['تثبيتات', esc(x.installs || 0)], ['أول ظهور', esc(fmtDate(x.first_seen))], ['آخر ظهور', esc(fmtDate(x.last_seen))]])).join('<hr style="border-color:var(--panel-border);margin:8px 0">')));
+        }
+        {
+            const t = carCache.tslink.get(hw); const c = tslinkCarFor(hw);
+            if (c || t) S.push(carSection('TS Link', 'fa-link', !t || t.loading ? '<div class="empty">جارٍ التحميل…</div>' : t.error ? `<div class="note" style="color:#fca5a5">${esc(t.error)}</div>` : tslDetailHtml(t.detail), true));
+        }
+        if (r) {
+            const leo = (state.leoCrashes || []).filter(c => { const id = String(c.hwId || c.hw_id || c.hardwareId || c.hardware_id || '').toLowerCase(); return id && [r.hw, ...r.aliases].some(x => String(x).toLowerCase() === id); });
+            const list = [...r.crashes.map(c => ({ at: c.received_at || c.crash_at, app: 'ذبذبة خلفيات', ver: c.app_version, text: c.crash_text || c.report || '' })), ...leo.map(c => ({ at: c.receivedAt, app: 'TS Leo Dash', ver: c.version || c.versionName, text: c.report || '' }))].sort((a, b) => ts(b.at) - ts(a.at));
+            S.push(carSection(`الأعطال (${list.length})`, 'fa-bug', list.length ? list.slice(0, 30).map(c => `<details style="margin-bottom:6px"><summary><span class="badge bad">${esc(c.app)}</span> ${esc(c.ver || '')} ${timeCell(c.at)} <span class="sub">${esc(String(c.text).split('\n').find(l => /Exception|Error/.test(l)) || String(c.text).slice(0, 80))}</span></summary><pre class="report">${esc(c.text)}</pre></details>`).join('') : '<div class="empty">لا أعطال مسجّلة</div>', true));
+        }
+        $('car-sections').innerHTML = S.join('');
+        $('car-sections').querySelectorAll('[data-act]').forEach(el => el.addEventListener('click', onRowAction));
+    }
+    { const m = /^#car=(.+)$/.exec(location.hash); if (m) openCar(decodeURIComponent(m[1])); }
+
     const wantsGen = location.pathname.replace(/\/+$/, '') === '/gen' || location.hash === '#gen' || new URLSearchParams(location.search).has('gen');
     switchTab(wantsGen ? 'generator' : 'devices');
     if (wantsGen) window.scrollTo(0, 0);
