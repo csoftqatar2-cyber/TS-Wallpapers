@@ -1072,7 +1072,7 @@
         if (leo) return { label: String(leo.car || leo.model), src: 'TS Leo Dash' };
         const sc = r.storeRows.map(x => x.car).find(Boolean) || (r.store && r.store.car);
         if (sc) return { label: String(sc), src: 'ذبذبة ستور' };
-        if (r.dev && r.dev.mode) return { label: modeLabel(r.dev.mode), src: 'ذبذبة خلفيات' };
+        if (r.dev && r.dev.mode) return { label: modeLabel(r.dev.mode) + (r.dev.mode_secondary ? ' + شاشة الراكب: ' + modeLabel(r.dev.mode_secondary) : ''), src: 'ذبذبة خلفيات' };
         return null;
     }
     function carTypeCell(r) { const t = carType(r); return t ? `<span class="car-type">${esc(t.label)}</span><span class="sub" title="المصدر">${esc(t.src)}</span>` : '<span class="sub">—</span>'; }
@@ -3674,7 +3674,7 @@
             ['وقت التفعيل', esc(fmtDate(d.activated_at))],
             ['أول تسجيل', esc(fmtDate(d.created_at))],
             ['آخر ظهور', esc(fmtDate(r.lastSeen)) + ' <span class="sub">(' + esc(relTime(r.lastSeen)) + ')</span>'],
-            ['وضع الخلفيات', esc(modeLabel(d.mode)), true],
+            ['وضع الخلفيات', esc(modeLabel(d.mode)) + (d.mode_secondary ? ` <span class="sub">· شاشة الراكب: ${esc(modeLabel(d.mode_secondary))}</span>` : ''), true],
             ['مفعّل', d.is_active ? 'نعم' : 'لا', true],
             ['محظور', d.is_blocked ? `نعم${d.block_reason ? ` (${esc(d.block_reason)})` : ''} · ${esc(fmtDate(d.blocked_at))}` : 'لا', true],
             ['محاولات خاطئة', `${esc(d.failed_attempts || 0)}/${FAILED_LIMIT}${d.last_failed_at ? ' · آخر: ' + esc(fmtDate(d.last_failed_at)) : ''}`],

@@ -50,6 +50,8 @@ create table if not exists public.devices (
     -- (normal | fse | leopard | gwm | lynkco | jetour).
     -- null = an older APK that does not report yet. Set via report_device_mode RPC.
     mode          text check (mode is null or mode in ('normal','fse','leopard','gwm','lynkco','jetour','denza')),
+    mode_secondary text check (mode_secondary is null or mode_secondary in ('normal','fse','leopard','gwm','lynkco','jetour','denza','icar03t')),  -- passenger/second screen (2026-09-08)
+    secondary_seen_at timestamptz,
     -- Fleet telemetry, all written by report_device_mode (added 2026-07-29).
     app_version      text,
     app_version_code int,
