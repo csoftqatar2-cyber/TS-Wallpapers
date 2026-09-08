@@ -491,6 +491,14 @@ public class WallpaperRepo {
      * without the manager ever learning its mode. Call this on every app launch so the mode
      * is reported regardless of whether a sync runs.
      */
+    /**
+     * True when this process runs as a non-system Android user — on BYD DiLink units that is
+     * user 999 ("doubleinstance"), the passenger FSE strip. The main screen is user 0.
+     */
+    public static boolean isSecondaryInstance() {
+        try { return (android.os.Process.myUid() / 100000) != 0; } catch (Throwable t) { return false; }
+    }
+
     public void reportModeAsync() {
         new Thread(new Runnable() {
             @Override public void run() { reportOperatingMode(); }
@@ -504,6 +512,13 @@ public class WallpaperRepo {
             JSONObject body = new JSONObject();
             body.put("device_hw_id", getDeviceId());
             body.put("device_mode", OperatingMode.wire(mPref));
+            // Two screens, one car, one hardware id (BYD DiLink: the passenger "FSE" strip runs as
+            // a second Android user, 999). Both instances used to write the same single mode
+            // column, last writer wins, so the owner had to keep both screens in one mode just to
+            // make the site read the car right. The secondary instance now says so, and the
+            // server keeps its mode in a column of its own (mode_secondary) — the main screen's
+            // mode is the car's mode. Old APKs omit the field and the server treats them as primary.
+            body.put("display_role", isSecondaryInstance() ? "secondary" : "primary");
             String legacy = getLegacyDeviceId();
             if (legacy != null && !legacy.isEmpty()) body.put("legacy_hw_id", legacy);
             // Which build this car is actually running. Publishing a version only ever said an
