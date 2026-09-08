@@ -9,6 +9,13 @@ import android.text.Spanned;
 import android.text.style.ForegroundColorSpan;
 import android.text.style.RelativeSizeSpan;
 import android.text.style.StyleSpan;
+import android.util.TypedValue;
+import android.view.Gravity;
+import android.view.View;
+import android.widget.ImageView;
+import android.widget.LinearLayout;
+import android.widget.ScrollView;
+import android.widget.TextView;
 
 import androidx.core.content.ContextCompat;
 
@@ -36,9 +43,75 @@ final class HelpDialog {
                 BaseSettingsActivity.SHARED_PREF_DOMAIN, Context.MODE_PRIVATE);
         new AuroraDialog.Builder(activity)
                 .setTitle(R.string.help_title)
-                .setMessage(build(activity, OperatingMode.get(prefs)))
+                .setView(body(activity, build(activity, OperatingMode.get(prefs))))
                 .setPositiveButton(R.string.ok, null)
                 .show();
+    }
+
+    /**
+     * The manual text followed by the «contact us» block: a WhatsApp QR code (the same wa.me link the
+     * activation screen and the Store use) and the number, so the reader never has to leave the help
+     * to find how to reach the store. One scroll for both, so the QR sits at the very end.
+     */
+    private static View body(Context c, CharSequence text) {
+        final boolean rtl = LocaleHelper.LANG_ARABIC.equals(LocaleHelper.resolved(c));
+        final int dir = rtl ? View.LAYOUT_DIRECTION_RTL : View.LAYOUT_DIRECTION_LTR;
+        final float d = c.getResources().getDisplayMetrics().density;
+
+        TextView message = new TextView(c);
+        message.setText(text);
+        message.setTextSize(TypedValue.COMPLEX_UNIT_SP, 15);
+        message.setLineSpacing(0, 1.25f);
+        message.setTextColor(ContextCompat.getColor(c, R.color.aurora_text));
+        message.setLayoutDirection(dir);
+        message.setTextDirection(rtl ? View.TEXT_DIRECTION_RTL : View.TEXT_DIRECTION_LTR);
+        message.setTextAlignment(View.TEXT_ALIGNMENT_VIEW_START);
+        message.setGravity(Gravity.START);
+
+        TextView heading = new TextView(c);
+        heading.setText(c.getString(R.string.help_contact_title));
+        heading.setTextSize(TypedValue.COMPLEX_UNIT_SP, 17);
+        heading.setTypeface(null, Typeface.BOLD);
+        heading.setTextColor(ContextCompat.getColor(c, R.color.gold));
+        heading.setLayoutDirection(dir);
+        heading.setTextAlignment(View.TEXT_ALIGNMENT_VIEW_START);
+        heading.setGravity(Gravity.START);
+        heading.setPadding(0, (int) (18 * d), 0, (int) (6 * d));
+
+        ImageView qr = new ImageView(c);
+        int size = (int) (200 * d);
+        qr.setImageBitmap(QrCode.generate(Support.WHATSAPP_URL, size));
+        qr.setContentDescription(c.getString(R.string.help_contact_hint));
+        LinearLayout.LayoutParams qp = new LinearLayout.LayoutParams(size, size);
+        qp.gravity = Gravity.CENTER_HORIZONTAL;
+        qp.topMargin = (int) (6 * d);
+
+        TextView hint = new TextView(c);
+        hint.setText(c.getString(R.string.help_contact_hint, Support.PHONE_DISPLAY));
+        hint.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
+        hint.setTextColor(ContextCompat.getColor(c, R.color.aurora_text));
+        hint.setLayoutDirection(dir);
+        hint.setTextDirection(rtl ? View.TEXT_DIRECTION_RTL : View.TEXT_DIRECTION_LTR);
+        hint.setGravity(Gravity.CENTER_HORIZONTAL);
+        hint.setPadding(0, (int) (8 * d), 0, (int) (4 * d));
+
+        LinearLayout column = new LinearLayout(c);
+        column.setOrientation(LinearLayout.VERTICAL);
+        column.setLayoutDirection(dir);
+        column.addView(message, new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+        column.addView(heading, new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+        column.addView(qr, qp);
+        column.addView(hint, new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+
+        ScrollView scroll = new ScrollView(c);
+        scroll.setLayoutDirection(dir);
+        scroll.setFillViewport(false);
+        scroll.addView(column, new ScrollView.LayoutParams(
+                ScrollView.LayoutParams.MATCH_PARENT, ScrollView.LayoutParams.WRAP_CONTENT));
+        return scroll;
     }
 
     /** The whole text, headings styled, for one mode value. */
@@ -50,9 +123,8 @@ final class HelpDialog {
         section(c, out, c.getString(R.string.help_sec_mode_title, c.getString(modeName(mode))),
                 c.getString(modeBody(mode)));
 
-        // 2. Activation is the same screen on every car.
-        section(c, out, c.getString(R.string.help_sec_activation_title),
-                c.getString(R.string.help_sec_activation_body));
+        // (Owner's rule, 2026-09-08: the help never talks about activation — the program is already
+        // activated by the time anyone reads it.)
 
         // 3. The screen this car actually shows, and how a wallpaper is set on it.
         if(handoff) {
