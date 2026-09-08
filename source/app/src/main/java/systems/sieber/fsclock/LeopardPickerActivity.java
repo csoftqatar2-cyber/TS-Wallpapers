@@ -262,10 +262,14 @@ public class LeopardPickerActivity extends AppCompatActivity {
         // on leopardRoot rather than the window, so the full-screen preview overlay that is its
         // sibling still covers the whole glass.
         final View root = findViewById(R.id.leopardRoot);
+        final View versionCorner = BuildStamp.bind(this);
         ViewCompat.setOnApplyWindowInsetsListener(root, (v, windowInsets) -> {
             Insets in = windowInsets.getInsets(
                     WindowInsetsCompat.Type.systemBars() | WindowInsetsCompat.Type.displayCutout());
             v.setPadding(in.left, in.top, in.right, in.bottom);
+            // The build stamp is a sibling drawn after this view; CONSUMED below means it would
+            // never see the insets, so it is moved out from under the bar here.
+            BuildStamp.inset(versionCorner, in);
             return WindowInsetsCompat.CONSUMED;
         });
 
@@ -335,6 +339,10 @@ public class LeopardPickerActivity extends AppCompatActivity {
         findViewById(R.id.buttonPreviewChange).setOnClickListener(v -> hidePreview());
         findViewById(R.id.buttonLeopardSettings).setOnClickListener(v ->
                 LeopardApplier.startOnSameDisplay(this, new Intent(this, SettingsActivity.class)));
+        // The manual for whichever hand-off mode this car is in (Leopard, Denza, ICAR 03T,
+        // Lynk & Co) — a dialog, so it never leaves the display the picker is hosted on.
+        View help = findViewById(R.id.buttonLeopardHelp);
+        if(help != null) help.setOnClickListener(v -> HelpDialog.show(this));
 
         // Scrolling changes which clips are on screen, and the pool of decoders has to follow.
         // A tree-wide scroll listener rather than View.setOnScrollChangeListener: this runs on

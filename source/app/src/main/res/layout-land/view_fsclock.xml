@@ -570,4 +570,24 @@
         </LinearLayout>
     </LinearLayout>
 
+    <!-- Build stamp in the PHYSICAL bottom-right corner, like THABTHABA STORE. right|bottom on
+         purpose, not end: end flips to the left in Arabic and the corner must be the same one
+         on every car. Text set from BuildConfig in FsClockView.commonInit(); never touchable. -->
+    <TextView
+        android:id="@+id/textViewVersionCorner"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="right|bottom"
+        android:layout_margin="8dp"
+        android:textSize="11sp"
+        android:textColor="#99FFFFFF"
+        android:layoutDirection="ltr"
+        android:textDirection="ltr"
+        android:includeFontPadding="false"
+        android:clickable="false"
+        android:focusable="false"
+        android:importantForAccessibility="no"
+        tools:ignore="RtlHardcoded"
+        tools:text="v7.16 (192)" />
+
 </FrameLayout>

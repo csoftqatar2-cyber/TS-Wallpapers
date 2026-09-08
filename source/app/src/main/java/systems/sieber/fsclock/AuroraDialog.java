@@ -72,6 +72,18 @@ public final class AuroraDialog implements DialogInterface {
 
         titleView = root.findViewById(R.id.aurora_dialog_title);
         messageView = root.findViewById(android.R.id.message);
+        // Direction comes from the APP's language (LocaleHelper), not from the head unit's locale
+        // and not from TEXT_DIRECTION_LOCALE. The app prints Arabic on a ROM stuck in English, and
+        // a dialog that resolved its direction from the system would lay that Arabic out LTR and
+        // ragged-left. Fixed on the root and on the two text views, so a paragraph that happens
+        // to open with a Latin word (a mode name, "GIF") still runs right-to-left.
+        boolean rtl = LocaleHelper.LANG_ARABIC.equals(LocaleHelper.resolved(context));
+        root.setLayoutDirection(rtl ? View.LAYOUT_DIRECTION_RTL : View.LAYOUT_DIRECTION_LTR);
+        for(TextView text : new TextView[] { titleView, messageView }) {
+            text.setTextDirection(rtl ? View.TEXT_DIRECTION_RTL : View.TEXT_DIRECTION_LTR);
+            text.setTextAlignment(View.TEXT_ALIGNMENT_VIEW_START);
+            text.setGravity(Gravity.START);
+        }
         messageScroll = root.findViewById(R.id.aurora_dialog_message_scroll);
         content = root.findViewById(R.id.aurora_dialog_content);
         FrameLayout buttonHost = root.findViewById(R.id.aurora_dialog_buttons);

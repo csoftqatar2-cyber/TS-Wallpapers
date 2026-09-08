@@ -360,6 +360,7 @@ public class FsClockView extends FrameLayout {
         }
         mRadioGroupActivationMode = findViewById(R.id.radioGroupActivationMode);
         mTextViewActivationDeviceId = findViewById(R.id.textViewActivationDeviceId);
+        BuildStamp.bind(this);   // "v7.16 (192)" in the bottom-right corner, both orientations
         mEditTextActivationSerial = findViewById(R.id.editTextActivationSerial);
         mButtonActivate = findViewById(R.id.buttonActivate);
         mButtonRecheck = findViewById(R.id.buttonRecheck);

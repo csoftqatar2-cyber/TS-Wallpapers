@@ -99,12 +99,26 @@
                     android:id="@+id/chipLanguage"
                     style="@style/HeaderChip"
                     android:layout_marginStart="10dp"
-                    android:layout_marginEnd="6dp"
                     android:background="@drawable/chip_neutral_bg"
                     android:textColor="@color/aurora_text"
                     android:drawablePadding="7dp"
                     android:focusable="true"
                     android:clickable="true" />
+
+                <!-- Help: the manual for this car's mode (HelpDialog). A control like chipMode, in
+                     the fit editor's green so it is findable among the status chips. The icon is
+                     set in refreshHeaderChips(), the way the other chips get theirs. -->
+                <TextView
+                    android:id="@+id/chipHelp"
+                    style="@style/HeaderChip"
+                    android:layout_marginStart="10dp"
+                    android:layout_marginEnd="6dp"
+                    android:background="@drawable/fit_help_btn"
+                    android:textColor="#ffffff"
+                    android:drawablePadding="7dp"
+                    android:focusable="true"
+                    android:clickable="true"
+                    android:text="@string/help_button" />
 
             </LinearLayout>
 
@@ -2167,5 +2181,25 @@
         </ScrollView>
 
     </LinearLayout>
+
+    <!-- Build stamp in the PHYSICAL bottom-right corner, like THABTHABA STORE. right|bottom on
+         purpose, not end: end flips to the left in Arabic and the corner must be the same one
+         on every car. Text set from BuildConfig in BaseSettingsActivity.onCreate(); never touchable. -->
+    <TextView
+        android:id="@+id/textViewVersionCorner"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="right|bottom"
+        android:layout_margin="8dp"
+        android:textSize="11sp"
+        android:textColor="#99FFFFFF"
+        android:layoutDirection="ltr"
+        android:textDirection="ltr"
+        android:includeFontPadding="false"
+        android:clickable="false"
+        android:focusable="false"
+        android:importantForAccessibility="no"
+        tools:ignore="RtlHardcoded"
+        tools:text="v7.16 (192)" />
 
 </androidx.coordinatorlayout.widget.CoordinatorLayout>

@@ -199,9 +199,13 @@ public class BaseSettingsActivity extends AppCompatActivity {
         // handled the bottom, which was enough while everything was one centred scrolling column.
         // The rail now runs to the screen edge, so on a device with side system bars (any car head
         // unit in landscape) it would sit underneath them without the horizontal insets.
+        final View versionCorner = BuildStamp.bind(this);
         ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.linearLayoutSettingsRoot), (v, windowInsets) -> {
             Insets insets = windowInsets.getInsets(WindowInsetsCompat.Type.systemBars());
             v.setPadding(insets.left, 0, insets.right, insets.bottom);
+            // The build stamp in the corner is a later sibling of this pane; CONSUMED below would
+            // leave it under the navigation bar, so it takes the same bottom/right insets here.
+            BuildStamp.inset(versionCorner, insets);
             // Return CONSUMED if you don't want the window insets to keep passing down to descendant views.
             return WindowInsetsCompat.CONSUMED;
         });
@@ -466,6 +470,15 @@ public class BaseSettingsActivity extends AppCompatActivity {
             language.setCompoundDrawablesRelativeWithIntrinsicBounds(
                     R.drawable.ic_chip_language_16dp, 0, 0, 0);
             language.setOnClickListener(v -> toggleLanguage());
+        }
+
+        // The manual, for every mode: in the clock modes this header is where Help lives (the
+        // wallpaper screen has no room for a button), in the hand-off modes it doubles the one
+        // in the picker's top bar.
+        TextView help = findViewById(R.id.chipHelp);
+        if(help != null) {
+            help.setCompoundDrawablesRelativeWithIntrinsicBounds(R.drawable.ic_chip_help_16dp, 0, 0, 0);
+            help.setOnClickListener(v -> HelpDialog.show(this));
         }
 
         TextView activation = findViewById(R.id.chipActivation);
