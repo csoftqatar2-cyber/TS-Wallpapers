@@ -2717,6 +2717,15 @@
         if (hwIndexFor !== state.merged) { hwIndexFor = state.merged; hwIndex = new Map(); for (const x of state.merged) { hwIndex.set(String(x.hw).toLowerCase(), x.hw); for (const al of (x.aliases || [])) hwIndex.set(String(al).toLowerCase(), x.hw); } }
         return hwIndex.get(c) || null;
     };
+    // thab_cars.overlay_rev / overlay_at / overlay_state (controller team, 2026-09-08): the glossary revision the
+    // car had at its LAST BOOT. 0 = the list baked into the build. The state must always sit next to the number:
+    // 0 alone hides three different situations.
+    const OVERLAY_STATE = { fresh: ['ok', 'حديث'], expired: ['warn', 'منتهي الصلاحية'], never: ['bad', 'لم تصل نسخة قط'], unconfigured: ['bad', 'الخادم غير مضبوط'] };
+    function overlayCell(r) {
+        if (!r || r.overlay_rev == null) return '<span class="sub">—</span>';
+        const st = OVERLAY_STATE[String(r.overlay_state || '')] || ['muted', esc(r.overlay_state || '?')];
+        return `<span class="num">${Number(r.overlay_rev) === 0 ? 'المدمجة' : 'v' + esc(r.overlay_rev)}</span> <span class="badge ${st[0]}">${st[1]}</span>${r.overlay_at ? ` <span class="sub">${esc(relTime(r.overlay_at))}</span>` : ''}`;
+    }
     function vinCell(vin) {
         if (!vin) return '<span class="sub">—</span>';
         const hw = vinToHw(vin);
@@ -2737,7 +2746,7 @@
         $('ctl-coverage').textContent = `تليمتري الكونترولر مفتاحه VIN؛ ${cars.length} سيارة في التليمتري، ${joined} منها مطابقة في devices؛ السيارات ذات VIN في الأسطول ${vinTotal} من ${state.devices.length} (الباقي بلا VIN ولا يمكن أن يظهر هنا).`;
         // car = null means the installer never confirmed the car profile: the unit reads gauges but moves
         // nothing (windows/seats) — by design, but the customer must not be left like that. Flag it loudly.
-        genericTable('ctl-cars-head', 'ctl-cars-body', cars, { empty: 'لا سيارات', cell: (k, v, r) => /^vin$/i.test(k) ? vinCell(String(v || '')) : (/^car$/i.test(k) && !v) ? '<span class="badge bad" title="لم يُختر نوع السيارة على الشاشة: البرنامج يقرأ العدّادات فقط ولا يحرّك زجاجاً ولا مقعداً">⚠ بلا نوع مؤكَّد</span>' : cellValue(k, v) });
+        genericTable('ctl-cars-head', 'ctl-cars-body', cars, { empty: 'لا سيارات', cell: (k, v, r) => /^vin$/i.test(k) ? vinCell(String(v || '')) : (/^car$/i.test(k) && !v) ? '<span class="badge bad" title="لم يُختر نوع السيارة على الشاشة: البرنامج يقرأ العدّادات فقط ولا يحرّك زجاجاً ولا مقعداً">⚠ بلا نوع مؤكَّد</span>' : k === 'overlay_rev' ? overlayCell(r) : (k === 'overlay_at' || k === 'overlay_state') ? '' : cellValue(k, v), labels: { overlay_rev: 'القاموس عند آخر تشغيل', overlay_at: '', overlay_state: '' }, hide: ['overlay_at', 'overlay_state'] });
         const events = asRows(c.events);
         const kinds = [...new Set(events.map(e => String(e.kind || e.type || '')).filter(Boolean))];
         $('ctl-kinds').innerHTML = [`<button class="chip ${ctlKind ? '' : 'active'}" data-ctlkind="">الكل</button>`, ...kinds.map(k => `<button class="chip ${ctlKind === k ? 'active' : ''}" data-ctlkind="${esc(k)}">${esc(k)}</button>`)].join('');
@@ -3678,7 +3687,7 @@
             const tsl = tslinkCarFor(hw);
             const app = (label, key, extra) => { const sn = r.seen[key]; const v = sn ? `${esc(sn.app_version || '—')}${sn.app_version_code != null ? ` (${esc(sn.app_version_code)})` : ''}` : (key === 'wallpapers' && d && d.app_version ? `${esc(d.app_version)} (${esc(d.app_version_code)})` : (key === 'store' && r.store ? esc(r.store.version || '—') : null)); const seen = sn ? sn.last_seen : (key === 'wallpapers' && d ? d.last_seen_at : key === 'store' && r.store ? r.store.last_seen : null);
                 return `<div class="car-app"><b>${esc(label)}</b><span class="ver">${v || '<span class="sub">لم يظهر</span>'}</span>${seen ? timeCell(seen) : ''}${extra || ''}</div>`; };
-            S.push(carSection('البرامج وإصداراتها', 'fa-layer-group', `<div class="car-apps">${app('ذبذبة خلفيات', 'wallpapers')}${app('ذبذبة ستور', 'store')}${app('TS Back Button', 'backbutton')}${app('TS Link', 'tslink', tsl ? `<span class="sub">${esc(tsl.carLabel || tsl.label || '')}</span>` : '')}${app('ذبذبة داشبورد', 'controller', ctlCar ? `<span class="sub">تليمتري: ${esc(ctlCar.version_name || '—')} (${esc(ctlCar.version_code != null ? ctlCar.version_code : '—')}) · تشغيلات ${esc(ctlCar.runs != null ? ctlCar.runs : '—')}</span>` : '')}${app('TS Leo Dash', 'leo')}</div>`));
+            S.push(carSection('البرامج وإصداراتها', 'fa-layer-group', `<div class="car-apps">${app('ذبذبة خلفيات', 'wallpapers')}${app('ذبذبة ستور', 'store')}${app('TS Back Button', 'backbutton')}${app('TS Link', 'tslink', tsl ? `<span class="sub">${esc(tsl.carLabel || tsl.label || '')}</span>` : '')}${app('ذبذبة داشبورد', 'controller', ctlCar ? `<span class="sub">تليمتري: ${esc(ctlCar.version_name || '—')} (${esc(ctlCar.version_code != null ? ctlCar.version_code : '—')}) · تشغيلات ${esc(ctlCar.runs != null ? ctlCar.runs : '—')}</span><span class="sub" title="نسخة قاموس اللهجة التي كانت على السيارة عند آخر تشغيل (تُجلب كل 6 ساعات وتُبلَّغ عند الإقلاع فقط)">القاموس عند آخر تشغيل: ${overlayCell(ctlCar)}</span>` : '')}${app('TS Leo Dash', 'leo')}</div>`));
         }
         {
             const v = carCache.voice.get(hw);
