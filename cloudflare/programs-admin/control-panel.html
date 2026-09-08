@@ -1416,13 +1416,22 @@
         state.merged = [...rows.values()].sort((a, b) => b.lastSeen - a.lastSeen);
     }
     // status: {blockedAny, mismatch, label, cls, autoBlocked, sources}
+    function blockKindHtml(r) {
+        if (!r.status.blockedAny) return '';
+        const d = r.dev || {}, store = r.store || {};
+        const label = r.status.wpB
+            ? (d.block_reason === 'failed_attempts' ? `تلقائي: ${FAILED_LIMIT} محاولات خاطئة`
+                : 'يدوي من اللوحة' + (d.block_reason && d.block_reason !== 'admin' ? ` (${d.block_reason})` : ''))
+            : 'من الستور/الكتالوج' + (store.blocked_reason ? ` (${store.blocked_reason})` : '');
+        return ` <span class="badge bad">${esc(label)}</span>${r.status.wpB && d.blocked_at ? timeCell(d.blocked_at) : ''}`;
+    }
+
     function computeStatus(r) {
         const src = [];
         if (r.dev) src.push({ k: 'wp', b: !!r.dev.is_blocked });
         if (r.store) src.push({ k: 'store', b: !!r.store.blocked });
         if (state.catalog) src.push({ k: 'cat', b: r.catalogBlocked });
         const anyB = src.some(s => s.b);
-        const allB = src.length > 0 && src.every(s => s.b);
         const wpB = !!(r.dev && r.dev.is_blocked);
         const storeB = !!(r.store && r.store.blocked) || r.catalogBlocked;
         const autoBlocked = wpB && r.dev.block_reason === 'failed_attempts';
@@ -1430,13 +1439,9 @@
         if (!anyB) {
             const active = !!((r.dev && r.dev.is_active) || (r.store && r.store.is_active));
             label = active ? 'نشط' : 'غير مفعّل'; cls = active ? 'ok' : 'muted';
-        } else if (allB) { label = 'محظور موحّد'; cls = 'bad'; }
-        else {
-            mismatch = true; cls = 'bad';
-            if (wpB && !storeB) label = 'محظور عند الخلفيات فقط';
-            else if (!wpB && storeB) label = 'محظور عند الستور فقط';
-            else label = 'حظر غير متطابق';
-        }
+        } else if (wpB && storeB) { label = 'محظور موحّد'; cls = 'bad'; }
+        else if (wpB) { label = 'محظور (كل البرامج)'; cls = 'bad'; }
+        else { label = 'محظور عند الستور فقط'; cls = 'bad'; mismatch = true; }
         return { blockedAny: anyB, mismatch, label, cls, autoBlocked, wpB, storeB, sources: src };
     }
 
@@ -1527,13 +1532,10 @@
         { k: 'active', l: 'نشط', fn: r => r.active && !r.status.blockedAny },
         { k: 'inactive', l: 'غير مفعّل', fn: r => !r.active && !r.status.blockedAny },
         { k: 'blocked', l: 'محظور', red: true, fn: r => r.status.blockedAny },
-        { k: 'mismatch', l: 'حظر غير متطابق', red: true, fn: r => r.status.mismatch },
-        { k: 'auto', l: 'حظر تلقائي', fn: r => r.status.autoBlocked },
         { k: 'attempts', l: 'محاولات', fn: r => r.attempts > 0 },
         { k: 'notoken', l: 'بلا توكن', fn: r => r.tokens.length === 0 },
         { k: 'conflict', l: 'تعارض توكن', red: true, fn: r => r.conflicts > 0 },
-        { k: 'stale', l: 'لم يُشاهد 30 يوم', fn: r => !r.lastSeenLegacy || r.lastSeenLegacy < Date.now() - 30 * DAY },
-        { k: 'noseen30', l: 'بلا ظهور لأي تطبيق 30 يوم', fn: r => !r.lastSeen || r.lastSeen < Date.now() - 30 * DAY },
+        { k: 'noseen30', l: 'لم يُشاهد 30 يوم', fn: r => !r.lastSeen || r.lastSeen < Date.now() - 30 * DAY },
     ];
     function filteredDevices() {
         const f = FILTERS.find(x => x.k === state.filter) || FILTERS[0];
@@ -1541,6 +1543,10 @@
         return state.merged.filter(r => f.fn(r) && (!q || r.searchBlob.includes(q)));
     }
     function renderDevices() {
+        renderDevicesContent();
+        pageRendered('dev-body', 'dev-body', false);
+    }
+    function renderDevicesContent() {
         if (carOpen) renderCarPage(carOpen);
         if (LOCAL_PROXY && LOCAL_FLAGS.controller && !state.ctlLoaded) loadController().then(renderDevices);   // car types come from the controller first
         const errs = [];
@@ -1698,6 +1704,10 @@
         return `<dl class="kv">${pairs.map(([k, v, ar]) => `<dt>${esc(k)}</dt><dd class="${ar ? 'ar' : ''}">${v}</dd>`).join('')}</dl>`;
     }
     function fillDetail(r) {
+        fillDetailContent(r);
+        pageNested(document.querySelector(`tr[data-detail="${CSS.escape(r.hw)}"]`), 'device:' + r.hw);
+    }
+    function fillDetailContent(r) {
         const tr = document.querySelector(`tr[data-detail="${CSS.escape(r.hw)}"]`); if (!tr) return;
         const box = tr.querySelector('.detail-body');
         const d = r.dev, s = r.store;
@@ -1734,7 +1744,7 @@
         const seenKeys = Object.keys(r.seen).sort((a, b) => ts(r.seen[b].last_seen) - ts(r.seen[a].last_seen));
         const seenBox = seenKeys.length ? kv(seenKeys.map(k => { const x = r.seen[k]; return [APP_ID_LABELS[k] || k, `${esc(x.app_version || '—')}${x.app_version_code != null ? ` (${esc(x.app_version_code)})` : ''} · ${esc(fmtDate(x.last_seen))} · <span class="sub" style="display:inline">${esc(relTime(x.last_seen))}</span>`]; })) : '<div class="note">لا صفوف في device_app_seen</div>';
         const blockBox = r.blockEvents.length
-            ? `<ul class="ev-list">${r.blockEvents.slice(0, 30).map(ev => `<li>
+            ? `<ul class="ev-list">${r.blockEvents.map(ev => `<li>
                 <span class="t num" title="${esc(fmtDate(ev.at))}">${esc(relTime(ev.at))}</span>
                 <span class="badge ${ev.blocked ? 'bad' : 'ok'}">${ev.blocked ? 'حظر' : 'رفع الحظر'}</span>
                 <span>${esc(ev.reason || '—')}</span>
@@ -1743,7 +1753,7 @@
             </li>`).join('')}</ul>`
             : '<div class="note">لا أحداث حظر مسجّلة</div>';
         const aliasBox = r.aliases.length ? `<ul class="ev-list">${r.aliases.map(a => `<li><span class="num">${esc(a)}</span></li>`).join('')}</ul>` : '<div class="note">لا معرّفات قديمة</div>';
-        const crashBox = r.crashes.length ? r.crashes.slice(0, 20).map(crashItemHtml).join('') : '<div class="note">لا أعطال في آخر 300 تقرير</div>';
+        const crashBox = r.crashes.length ? r.crashes.map(crashItemHtml).join('') : '<div class="note">لا أعطال في آخر 300 تقرير</div>';
         box.innerHTML = `
             <div class="detail-grid">
                 <div class="detail-box"><h4><i class="fa-solid fa-image"></i> الخلفيات (devices)</h4>${devBox}</div>
@@ -1758,6 +1768,10 @@
         loadRowEvents(r, box.querySelector('.ev-box'));
     }
     async function loadRowEvents(r, el) {
+        await loadRowEventsContent(r, el);
+        pageNested(el, 'device-events:' + r.hw);
+    }
+    async function loadRowEventsContent(r, el) {
         if (!el) return;
         const epoch = sessionEpoch;
         if (!STORE_SECRET) { el.innerHTML = '<span class="note">أدخل سر الستور لعرض الأحداث</span>'; return; }
@@ -1771,7 +1785,7 @@
             }
             if (epoch !== sessionEpoch || !el.isConnected) return;
             all.sort((a, b) => ts(b.created_at) - ts(a.created_at));
-            const list = all.slice(0, 20);
+            const list = all;
             el.innerHTML = list.length ? `<ul class="ev-list">${list.map(evLiHtml).join('')}</ul>` : '<span class="note">لا أحداث</span>';
         } catch (e) {
             if (epoch !== sessionEpoch || !el.isConnected) return;
@@ -1795,6 +1809,10 @@
         return c.apps.find(a => a && (a.package === pkg || a.packageName === pkg || a.pkg === pkg || a.id === pkg)) || null;
     }
     function renderVersions() {
+        renderVersionsContent();
+        ['ver-body', 'ver-fleet-wp', 'ver-fleet-store'].forEach(id => pageRendered(id)); pageNested($('ver-history'), 'ver-history');
+    }
+    function renderVersionsContent() {
         const errs = [];
         if (state.errors.versions) errs.push(`app_versions: ${state.errors.versions}`);
         if (state.errors.catalog) errs.push(`catalog/apps.json: ${state.errors.catalog}`);
@@ -1874,6 +1892,10 @@
         </details>`;
     }
     function renderCrashes() {
+        renderCrashesContent();
+        pageCrashGroups('crashes-list', 'crashes-list');
+    }
+    function renderCrashesContent() {
         setErr('crashes-err', state.errors.crashes ? `device_crashes: ${state.errors.crashes}` : '');
         const groups = new Map();
         for (const c of state.crashes) {
@@ -1902,6 +1924,10 @@
 
     // ---------- الستور ----------
     function renderStore() {
+        renderStoreContent();
+        ['ev-body', 'store-top-apps', 'store-top-failures', 'store-top-devices', 'store-versions'].forEach(id => pageRendered(id)); const daily = $('store-daily').querySelector('.daily'); if (daily) pageRendered(daily, 'store-daily');
+    }
+    function renderStoreContent() {
         const panelErr = [];
         if (!STORE_SECRET) {
             $('store-stats').innerHTML = `<div class="empty" style="grid-column:1/-1"><i class="fa-solid fa-key"></i>أدخل سر أدمن الستور من زر المفتاح في الرأس لتفعيل هذا التبويب.</div>`;
@@ -2001,6 +2027,10 @@
 
     // ---------- سجل الحظر ----------
     function renderBlockLog() {
+        renderBlockLogContent();
+        pageRendered('blocklog-body');
+    }
+    function renderBlockLogContent() {
         setErr('blocklog-err', state.errors.blockEvents ? `device_block_events: ${state.errors.blockEvents}` : '');
         const q = (state.blockSearch || '').trim().toLowerCase();
         const list = state.blockEvents.filter(ev => !q || String(ev.hardware_id || '').toLowerCase().includes(q));
@@ -2021,6 +2051,10 @@
 
     // ---------- التوكنات ----------
     function renderTokenAdoption() {
+        renderTokenAdoptionContent();
+        pageRendered('adopt-body');
+    }
+    function renderTokenAdoptionContent() {
         const rows = [...state.tokenAdoption].sort((a, b) => String(appLabel(a.app_id)).localeCompare(String(appLabel(b.app_id)), 'ar'));
         if (!rows.length) { $('adopt-body').innerHTML = `<tr><td colspan="8"><div class="empty"><i class="fa-solid fa-chart-simple"></i>${esc(state.errors.tokenAdoption ? 'token_adoption: ' + state.errors.tokenAdoption : 'لا بيانات')}</div></td></tr>`; return; }
         const gate = (g) => String(g) === '999999' ? '<span class="badge warn">مقفولة</span>' : `<span class="badge info"><span class="num">≥ ${esc(g)}</span></span>`;
@@ -2040,6 +2074,10 @@
         }).join('');
     }
     function renderTokens() {
+        renderTokensContent();
+        pageRendered('tok-body');
+    }
+    function renderTokensContent() {
         renderTokenAdoption();
         setErr('tokens-err', state.errors.tokens ? `device_tokens: ${state.errors.tokens}` : '');
         const list = [...state.tokens].sort((a, b) => (Number(b.enroll_conflicts) || 0) - (Number(a.enroll_conflicts) || 0) || ts(b.token_issued_at) - ts(a.token_issued_at));
@@ -2073,8 +2111,12 @@
         return text ? `<span class="num">…${esc(text.slice(-4))}</span><span class="sub">(${text.length} محرف)</span>` : '<span class="sub">(فارغ)</span>';
     }
     function renderVoice() {
+        renderVoiceContent();
+        pageRendered('voice-body');
+    }
+    function renderVoiceContent() {
         setErr('voice-err', state.errors.voice ? `admin_settings: ${state.errors.voice}` : '');
-        const drafts = new Map([...document.querySelectorAll('.voice-input')].map(el => [el.dataset.key, el.value]));
+        const drafts = new Map(fullListNodes($('voice-body')).flatMap(row => [...row.querySelectorAll('.voice-input')]).map(el => [el.dataset.key, el.value]));
         const hintRow = state.voice.find(r => r.key === 'voice.openrouter_key_hint');
         let list = state.voice.filter(r => r.key !== 'voice.openrouter_key_hint');
         if (!list.some(r => r.key === 'voice.openrouter_key') && state.voice.length) list.push({ key: 'voice.openrouter_key', value: null, hint: hintRow ? hintRow.value : '', updated_at: hintRow ? hintRow.updated_at : null });
@@ -2162,14 +2204,138 @@
         e.preventDefault(); openCar(a.dataset.hw || '');
     });
     // Generic table renderer for shapes verified on one bench car only: every scalar key becomes a column.
+    // Shared pagination state survives refreshes; DOM adapters preserve existing listeners.
+    const listStates = new Map();
+    const renderedLists = new WeakMap();
+    function listPage(rows, saved, searchText = row => Object.values(row || {}).filter(v => v != null && typeof v !== 'object').join(' '), pageSize = 50) {
+        const size = Math.max(1, Math.min(50, Math.floor(Number(pageSize) || 50)));
+        const query = String(saved.query || '').trim().toLowerCase();
+        const filtered = query ? rows.filter(row => String(searchText(row)).toLowerCase().includes(query)) : rows;
+        const pages = Math.max(1, Math.ceil(filtered.length / size));
+        saved.page = Math.max(1, Math.min(pages, Number(saved.page) || 1));
+        return { rows: filtered.slice((saved.page - 1) * size, saved.page * size), pages, count: filtered.length };
+    }
+    function listControls({ hostId, rows, render, searchText, pageSize = 50, key = hostId, search = true, inside = false }) {
+        const host = typeof hostId === 'string' ? document.getElementById(hostId) : hostId;
+        if (!host) return;
+        if (!listStates.has(key)) listStates.set(key, { page: 1, query: '' });
+        const saved = listStates.get(key);
+        // A nested table needs its own strip, inside the parent detail cell.
+        const table = host.tagName === 'TBODY' ? host.closest('table') : null;
+        const anchor = table ? (table.parentElement.classList.contains('table-wrap') ? table.parentElement : table) : host;
+        let strip = inside ? [...host.children].find(n => n.dataset.listKey === key) : anchor.previousElementSibling;
+        if (!strip || strip.dataset.listKey !== key) {
+            strip = document.createElement('div'); strip.className = 'toolbar'; strip.dir = 'rtl'; strip.dataset.listKey = key;
+            strip.style.cssText = 'display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:10px 0';
+            strip.innerHTML = `${search ? '<input type="search" placeholder="بحث…" aria-label="بحث في القائمة" style="min-width:180px;flex:1">' : ''}<button type="button" class="btn sm" data-prev>‹ السابق</button><span class="sub" data-page aria-live="polite"></span><button type="button" class="btn sm" data-next>التالي ›</button><span class="num sub" data-count></span>`;
+            if (inside) host.prepend(strip); else anchor.before(strip);
+        }
+        const input = strip.querySelector('input');
+        if (input) input.value = saved.query;
+        const draw = () => {
+            const page = listPage(rows, search ? saved : { page: saved.page, query: '' }, searchText, pageSize);
+            saved.page = Math.min(saved.page, page.pages);
+            strip.querySelector('[data-page]').textContent = `صفحة ${saved.page} من ${page.pages}`;
+            strip.querySelector('[data-count]').textContent = `${page.count} ??`;
+            strip.querySelector('[data-prev]').disabled = saved.page <= 1;
+            strip.querySelector('[data-next]').disabled = saved.page >= page.pages;
+            render(page.rows);
+        };
+        if (input) input.oninput = () => { saved.query = input.value; saved.page = 1; draw(); };
+        strip.querySelector('[data-prev]').onclick = () => { saved.page--; draw(); };
+        strip.querySelector('[data-next]').onclick = () => { saved.page++; draw(); };
+        draw();
+    }
+    // Read the complete rendered source when app views clone an already paged list.
+    function fullListNodes(host) {
+        if (!host) return [];
+        const cached = renderedLists.get(host), current = [...host.children];
+        return cached && current.length === cached.visible.length && current.every((n, i) => n === cached.visible[i]) ? cached.nodes : current;
+    }
+    function fullListClone(node) {
+        const clone = node.cloneNode(false);
+        if (node.nodeType !== 1) return clone;
+        const cached = renderedLists.get(node);
+        const children = cached ? fullListNodes(node) : [...node.childNodes];
+        children.forEach(child => { if (!(child.nodeType === 1 && child.hasAttribute('data-list-key'))) clone.appendChild(fullListClone(child)); });
+        return clone;
+    }
+    function fullListHtml(host) { return fullListNodes(host).map(n => fullListClone(n).outerHTML).join(''); }
+    // Count crash reports, while retaining one car heading per group on each page.
+    function pageCrashGroups(host, key) {
+        if (typeof host === 'string') host = $(host);
+        if (!host) return;
+        const nodes = fullListNodes(host), rows = [];
+        nodes.filter(n => n.matches('.group')).forEach(group => {
+            group.querySelectorAll(':scope > .crash-item').forEach(crash => rows.push({ group, crash }));
+        });
+        listControls({ hostId: host, key, rows, searchText: r => r.group.querySelector('.group-head').textContent + ' ' + r.crash.textContent,
+            render: page => {
+                host.replaceChildren(); const groups = new Map();
+                page.forEach(({ group, crash }) => {
+                    if (!groups.has(group)) { const box = group.cloneNode(false); box.appendChild(group.querySelector('.group-head').cloneNode(true)); groups.set(group, box); host.appendChild(box); }
+                    groups.get(group).appendChild(crash.cloneNode(true));
+                });
+                if (!page.length) host.innerHTML = '<div class="empty">لا نتائج مطابقة</div>';
+                host.querySelectorAll('[data-copy]').forEach(b => b.onclick = () => copyText(b.dataset.copy));
+                renderedLists.set(host, { nodes, visible: [...host.children] });
+            }
+        });
+    }
+    function pageRendered(host, key, search = true, selector) {
+        if (typeof host === 'string') host = $(host);
+        if (!host) return;
+        const nodes = fullListNodes(host).filter(n => !n.hasAttribute('data-list-key'));
+        const selected = selector ? nodes.filter(n => n.matches(selector)) : nodes;
+        const rows = [];
+        selected.forEach(node => {
+            if (node.classList.contains('detail-row') && rows.length) rows[rows.length - 1].push(node);
+            else if (!node.matches('.empty, .note') && !(node.tagName === 'TR' && node.querySelector('.empty'))) rows.push([node]);
+        });
+        const fixed = selector ? nodes.filter(n => !selected.includes(n)) : [];
+        const empty = selected.filter(n => n.matches('.empty, .note') || (n.tagName === 'TR' && n.querySelector('.empty')));
+        const texts = new Map(rows.map(group => [group, group.map(n => fullListClone(n).textContent + ' ' + (n.getAttribute('title') || '')).join(' ')]));
+        listControls({ hostId: host, key: key || host.id, rows, search, inside: !!selector,
+            searchText: group => texts.get(group),
+            render: page => {
+                const strip = selector ? [...host.children].find(n => n.dataset.listKey === (key || host.id)) : null;
+                host.replaceChildren(...fixed, ...(strip ? [strip] : []), ...page.flat());
+                if (!page.length) {
+                    if (!rows.length && empty.length) host.append(...empty);
+                    else { const el = document.createElement(host.tagName === 'TBODY' ? 'tr' : 'div'); el.innerHTML = host.tagName === 'TBODY' ? '<td colspan="20"><div class="empty">لا نتائج مطابقة</div></td>' : '<div class="empty">لا نتائج مطابقة</div>'; host.append(el); }
+                }
+                renderedLists.set(host, { nodes, visible: [...host.children] });
+            }
+        });
+    }
+    function pageNested(root, key) {
+        if (!root) return;
+        // Deepest tables first so a parent page keeps each detail and its controls together.
+        [...root.querySelectorAll('tbody')].reverse().forEach(body => {
+            const table = body.closest('table'), detail = table.closest('tr.detail-row');
+            const owner = detail && detail.previousElementSibling;
+            const section = table.closest('.car-section');
+            const title = section ? section.querySelector('h3').textContent : '';
+            const identity = owner ? owner.dataset.hw || owner.querySelector('[data-tsl]')?.dataset.tsl || owner.querySelector('[data-usage]')?.dataset.usage || '' : '';
+            const heading = body.dataset.listName || (table.tHead ? table.tHead.textContent : '');
+            pageRendered(body, key + ':table:' + title + ':' + identity + ':' + heading);
+        });
+        root.querySelectorAll('.car-thumbs').forEach((grid, i) => pageRendered(grid, key + ':images:' + i));
+        root.querySelectorAll('ul.ev-list').forEach((ul, i) => pageRendered(ul, key + ':events:' + i));
+        root.querySelectorAll('.car-section, .detail-box').forEach((box, i) => {
+            if (box.querySelector(':scope > details.crash-item, :scope > details > summary .badge.bad')) pageRendered(box, key + ':crashes:' + (box.querySelector('h3, h4')?.textContent || i), true, 'details');
+        });
+    }
+
     function genericTable(headId, bodyId, rows, opts = {}) {
         const head = $(headId), body = $(bodyId); if (!head || !body) return;
         const list = Array.isArray(rows) ? rows : [];
-        if (!list.length) { head.innerHTML = ''; body.innerHTML = `<tr><td><div class="empty">${esc(opts.empty || 'لا بيانات')}</div></td></tr>`; return; }
-        const keys = []; list.slice(0, 50).forEach(r => Object.keys(r || {}).forEach(k => { if (!keys.includes(k)) keys.push(k); }));
+        const keys = []; list.forEach(r => Object.keys(r || {}).forEach(k => { if (!keys.includes(k)) keys.push(k); }));
         const shown = keys.filter(k => !(opts.hide || []).includes(k)).slice(0, 14);
         head.innerHTML = `<tr>${shown.map(k => `<th>${esc((opts.labels || {})[k] || k)}</th>`).join('')}</tr>`;
-        body.innerHTML = list.slice(0, opts.limit || 200).map(r => `<tr>${shown.map(k => `<td>${opts.cell ? opts.cell(k, r[k], r) : cellValue(k, r[k])}</td>`).join('')}</tr>`).join('');
+        listControls({ hostId: bodyId, key: bodyId, rows: list, pageSize: opts.limit || 50, searchText: opts.searchText,
+            render: page => { body.innerHTML = page.length ? page.map(r => `<tr>${shown.map(k => `<td>${opts.cell ? opts.cell(k, r[k], r) : cellValue(k, r[k])}</td>`).join('')}</tr>`).join('') : `<tr><td colspan="${shown.length || 1}"><div class="empty">${esc(opts.empty || 'لا بيانات')}</div></td></tr>`; }
+        });
     }
     function sparkline(values, labels) {
         const v = values.map(x => Number(x) || 0); if (!v.length) return '<span class="sub">لا بيانات</span>';
@@ -2195,6 +2361,10 @@
     }
     const tslExpanded = new Map();
     function renderTslink() {
+        renderTslinkContent();
+        pageNested($('tsl-cars-body'), 'tsl-detail'); pageRendered('tsl-cars-body');
+    }
+    function renderTslinkContent() {
         const o = state.tslink || {}; const nav = o.navigatorCounts || {};
         $('tsl-stats').innerHTML = [
             tile('سيارات', Number(o.cars) || 0, 'fa-car', 'blue'), tile('مرسِلون مقترنون', Number(o.pairedSenders) || 0, 'fa-mobile-screen', 'cyan'),
@@ -2222,7 +2392,7 @@
         Object.entries(d).forEach(([k, v]) => {
             if (Array.isArray(v)) {
                 const keys = []; v.slice(0, 30).forEach(r => Object.keys(r || {}).forEach(x => { if (!keys.includes(x)) keys.push(x); }));
-                parts.push(`<h4 style="margin:10px 0 4px;font-size:.85rem;color:var(--text-muted)">${esc(k)} (${v.length})</h4>` + (v.length ? `<div class="table-wrap"><table style="min-width:400px"><thead><tr>${keys.slice(0, 10).map(x => `<th>${esc(x)}</th>`).join('')}</tr></thead><tbody>${v.slice(0, 50).map(r => `<tr>${keys.slice(0, 10).map(x => `<td>${cellValue(x, (r || {})[x])}</td>`).join('')}</tr>`).join('')}</tbody></table></div>` : '<span class="sub">فارغ</span>'));
+                parts.push(`<h4 style="margin:10px 0 4px;font-size:.85rem;color:var(--text-muted)">${esc(k)} (${v.length})</h4>` + (v.length ? `<div class="table-wrap"><table style="min-width:400px"><thead><tr>${keys.slice(0, 10).map(x => `<th>${esc(x)}</th>`).join('')}</tr></thead><tbody data-list-name="${esc(k)}">${v.map(r => `<tr>${keys.slice(0, 10).map(x => `<td>${cellValue(x, (r || {})[x])}</td>`).join('')}</tr>`).join('')}</tbody></table></div>` : '<span class="sub">فارغ</span>'));
             } else if (v && typeof v === 'object') {
                 parts.push(`<h4 style="margin:10px 0 4px;font-size:.85rem;color:var(--text-muted)">${esc(k)}</h4><div style="display:flex;gap:10px;flex-wrap:wrap">${Object.entries(v).map(([a, b]) => `<span class="badge">${esc(a)}: ${cellValue(a, b)}</span>`).join('')}</div>`);
             } else parts.push(`<span class="badge" style="margin:2px">${esc(k)}: ${cellValue(k, v)}</span>`);
@@ -2255,6 +2425,10 @@
         return after[0] || '';
     }
     function renderLeoCrashes() {
+        renderLeoCrashesContent();
+        pageRendered('leo-crash-body');
+    }
+    function renderLeoCrashesContent() {
         const list = [...state.leoCrashes].sort((a, b) => ts(b.receivedAt) - ts(a.receivedAt));
         $('leo-crash-body').innerHTML = list.length ? list.map((c, i) => {
             const open = leoOpen.has(c.key || i);
@@ -2269,7 +2443,8 @@
         $('cnt-crashes').textContent = wp + leo; $('cnt-crashes').title = `الخلفيات ${wp} + Leo ${leo} (7 أيام)`;
         if (typeof renderAppViews === 'function' && $('appcrash-leo')) renderAppViews();
     }
-    $('leo-crash-body').addEventListener('click', e => {
+    document.addEventListener('click', e => {
+        if (!e.target.closest('#leo-crash-body, #appcrash-leo')) return;
         const cp = e.target.closest('[data-copy-leo]');
         if (cp) { const c = state.leoCrashes.find((x, i) => String(x.key || i) === cp.dataset.copyLeo); if (c) copyText(c.report || ''); return; }
         const b = e.target.closest('[data-leo]'); if (!b) return;
@@ -2312,6 +2487,10 @@
         return hw ? `<a href="#" class="hw-link num" data-hw="${esc(hw)}">${esc(vin)}</a>` : `<span class="num">${esc(vin)}</span><span class="sub">غير مسجّلة في devices (لم تُفعّل بهذا الـ VIN)</span>`;
     }
     function renderController() {
+        renderControllerContent();
+        pageRendered('ctl-voice-body');
+    }
+    function renderControllerContent() {
         const c = state.ctl || {}; const asRows = v => Array.isArray(v) ? v : (v && typeof v === 'object' && Array.isArray(v.rows)) ? v.rows : (v && typeof v === 'object' ? [v] : []);
         const stats = Array.isArray(c.stats) ? (c.stats[0] || {}) : (c.stats || {});
         $('ctl-stats').innerHTML = Object.entries(stats).filter(([, v]) => typeof v !== 'object').map(([k, v]) => { const m = CTL_STAT_META[k] || {}; return tile(m.label || k, /cost/i.test(k) ? moneyHtml(v) : cellValue(k, v), m.icon || 'fa-gauge-high', m.color || 'blue', m.help || k); }).join('') || '<div class="empty">لا إحصاءات</div>';
@@ -2328,7 +2507,7 @@
         const voice = new Map();
         events.forEach(e => { const k = String(e.kind || e.type || ''); if (!/voice|assist|speech|command/i.test(k)) return; const at = e.created_at || e.at || e.ts || e.time; const day = at ? String(at).slice(0, 10) : '?'; const key = vinOf(e) + '|' + day; voice.set(key, (voice.get(key) || 0) + 1); });
         const vrows = [...voice.entries()].sort((a, b) => b[0].split('|')[1].localeCompare(a[0].split('|')[1]));
-        $('ctl-voice-body').innerHTML = vrows.length ? vrows.slice(0, 100).map(([k, n]) => { const [vin, day] = k.split('|'); return `<tr><td>${vinCell(vin)}</td><td><span class="num">${esc(day)}</span></td><td>${num(n)}</td></tr>`; }).join('') : '<tr><td colspan="3"><div class="empty">لا أوامر صوتية في السجل المحمّل</div></td></tr>';
+        $('ctl-voice-body').innerHTML = vrows.length ? vrows.map(([k, n]) => { const [vin, day] = k.split('|'); return `<tr><td>${vinCell(vin)}</td><td><span class="num">${esc(day)}</span></td><td>${num(n)}</td></tr>`; }).join('') : '<tr><td colspan="3"><div class="empty">لا أوامر صوتية في السجل المحمّل</div></td></tr>';
         genericTable('ctl-gaps-head', 'ctl-gaps-body', asRows(c.gaps), { empty: 'لا فجوات', cell: (k, v) => /^vin$/i.test(k) ? vinCell(String(v || '')) : cellValue(k, v) });
         genericTable('ctl-fuel-head', 'ctl-fuel-body', asRows(c.fuel), { empty: 'لا سجل' });
         genericTable('ctl-overlay-head', 'ctl-overlay-body', asRows(c.overlay), { empty: 'لا نسخ', cell: (k, v) => typeof v === 'string' && v.length > 160 ? `<details><summary class="sub">${esc(v.slice(0, 80))}…</summary><pre class="report">${esc(v)}</pre></details>` : cellValue(k, v) });
@@ -2377,6 +2556,10 @@
         finally { btn.disabled = false; }
     }
     async function genRecent() {
+        await genRecentContent();
+        pageRendered('gen-recent');
+    }
+    async function genRecentContent() {
         if (!genAvailable()) return;
         try {
             const r = await localGet('/local/codes/recent'); const rows = (r && r.codes) || [];
@@ -2389,6 +2572,10 @@
         } catch (e) { setErr('gen-recent', ''); }
     }
     async function renderSessions() {
+        await renderSessionsContent();
+        pageRendered('sess-list', 'sess-list', true, 'div');
+    }
+    async function renderSessionsContent() {
         const box = $('sess-list'); box.hidden = false; box.innerHTML = '<span class="sub">جارٍ التحميل…</span>';
         if (!(LOCAL_PROXY && LOCAL_FLAGS.sessions)) { box.innerHTML = '<span class="sub">متاح على الموقع فقط</span>'; return; }
         try {
@@ -2600,6 +2787,10 @@
         return `<p class="note">سيارات نشطة لكل يوم وإصدار (app_version_code)، آخر 14 يومًا؛ قد تظهر السيارة في إصدارين عند التحديث في اليوم نفسه.</p><table style="min-width:600px"><thead><tr><th>اليوم (قطر)</th><th>كود الإصدار</th><th>سيارات نشطة</th><th>من سيارات اليوم</th></tr></thead><tbody>${[...daily.days].filter(([day]) => day >= qatarDay(-13)).sort(([a],[b]) => b.localeCompare(a)).flatMap(([date, day]) => [...day.versions].map(([code, cars]) => `<tr><td class="num">${esc(date)}</td><td class="num">${esc(code)}</td><td>${num(cars.size)}</td><td>${day.cars.size ? num((cars.size / day.cars.size * 100).toFixed(1)) + '%' : '—'}</td></tr>`)).join('') || '<tr><td colspan="4" class="empty">لا صفوف خلال 14 يومًا</td></tr>'}</tbody></table>`;
     }
     function renderUsage() {
+        renderUsageContent();
+        pageNested($('usage-body'), 'usage-details'); pageRendered('usage-body');
+    }
+    function renderUsageContent() {
         const missing = '<span class="sub">لا يبلّغ بعد</span>';
         const unavailable = '<span class="sub">تعذّر تحميل المصدر</span>';
         const now = Date.now(); let reporting = 0;
@@ -2691,6 +2882,10 @@
     }
     $('brand-home').addEventListener('click', e => { e.preventDefault(); showDevice(); });
     function renderNotificationHistory() {
+        renderNotificationHistoryContent();
+        pageRendered('notif-list', 'notif-list', true, 'button');
+    }
+    function renderNotificationHistoryContent() {
         $('notif-list').innerHTML = notifications.length ? notifications.map((n, i) => `<button type="button" class="btn notif-item" data-notice="${i}"><strong>${esc(n.title)}</strong><span class="hw">${esc(n.body)}</span>${timeCell(n.at)}</button>`).join('') : '<p class="note">لا تنبيهات بعد</p>';
     }
     function recordNotice(title, body, hw, at, tag, desktop = true) {
@@ -2832,17 +3027,7 @@
         recordNotice(row.blocked ? 'حظر' : 'رفع حظر', `${hw} · ${row.reason || 'بدون سبب'} · ${row.via || ''}`, hw, at, `block:${id}:${row.blocked}:${at}`);
     }
     function renderLiveDevice(hw) {
-        buildMerged(); renderUsage();
-        const row = state.merged.find(r => canonicalHw(r.hw) === canonicalHw(hw));
-        const old = [...$('dev-body').querySelectorAll('tr[data-hw]')].find(el => canonicalHw(el.dataset.hw) === canonicalHw(hw));
-        // Filters can change membership after an event; rebuild only when necessary.
-        if (!old || !row || !filteredDevices().includes(row)) { renderDevices(); return; }
-        const detail = old.nextElementSibling;
-        if (detail?.matches('tr.detail-row')) detail.remove();
-        old.insertAdjacentHTML('beforebegin', deviceRowHtml(row)); old.remove();
-        const current = [...$('dev-body').querySelectorAll('tr[data-hw]')].find(el => el.dataset.hw === row.hw);
-        current?.querySelectorAll('[data-act]').forEach(el => el.addEventListener('click', onRowAction));
-        if (state.expanded.has(row.hw)) fillDetail(row);
+        buildMerged(); renderUsage(); renderDevices();
     }
     function handleRealtime(payload) {
         const row = payload.new || {}, kind = payload.eventType, table = payload.table;
@@ -3038,17 +3223,21 @@
         return rows;
     }
     function renderAppViews() {
+        renderAppViewsContent();
+        ['wallpapers', 'store', 'tslink', 'controller', 'leo', 'backbutton'].forEach(k => { ['usage-body-', 'adopt-body-', 'tok-body-'].forEach(prefix => { const body = $(prefix + k); pageNested(body, prefix + k); pageRendered(body, prefix + k); }); pageNested($('appver-' + k), 'appver-' + k); const crashes = $('appcrash-' + k); pageNested(crashes, 'appcrash-' + k); if (k === 'wallpapers') pageCrashGroups(crashes, 'appcrash-' + k); }); pageRendered('releases-list');
+    }
+    function renderAppViewsContent() {
         // usage rows → each app's overview (rows carry no key, so walk them in APPS order)
         const order = ['wallpapers', 'store', 'tslink', 'controller', 'leo', 'backbutton'];
         const groups = {}; let i = -1;
-        [...$('usage-body').children].forEach(tr => { if (!tr.classList.contains('detail-row')) i++; const k = order[i]; if (!k) return; (groups[k] = groups[k] || []).push(tr); });
-        order.forEach(k => { const body = $('usage-body-' + k); if (!body) return; body.innerHTML = ''; (groups[k] || []).forEach(tr => body.appendChild(tr.cloneNode(true))); if (!body.children.length) body.innerHTML = '<tr><td colspan="14"><div class="empty">لا بيانات</div></td></tr>'; });
+        fullListNodes($('usage-body')).forEach(tr => { if (!tr.classList.contains('detail-row')) i++; const k = order[i]; if (!k) return; (groups[k] = groups[k] || []).push(tr); });
+        order.forEach(k => { const body = $('usage-body-' + k); if (!body) return; body.innerHTML = ''; (groups[k] || []).forEach(tr => body.appendChild(fullListClone(tr))); if (!body.children.length) body.innerHTML = '<tr><td colspan="14"><div class="empty">لا بيانات</div></td></tr>'; });
         // tokens → per app
         order.forEach(k => {
             const ab = $('adopt-body-' + k), tb = $('tok-body-' + k); if (!ab || !tb) return;
-            ab.innerHTML = [...$('adopt-body').querySelectorAll(`tr[data-app="${k}"]`)].map(tr => tr.outerHTML).join('') || '<tr><td colspan="8"><div class="empty">لا بيانات تبنّي</div></td></tr>';
-            const toks = [...$('tok-body').querySelectorAll(`tr[data-app="${k}"]`)];
-            tb.innerHTML = toks.slice(0, 200).map(tr => tr.outerHTML).join('') || '<tr><td colspan="6"><div class="empty">لا توكنات لهذا التطبيق</div></td></tr>';
+            ab.innerHTML = fullListNodes($('adopt-body')).filter(tr => tr.dataset.app === k).map(tr => tr.outerHTML).join('') || '<tr><td colspan="8"><div class="empty">لا بيانات تبنّي</div></td></tr>';
+            const toks = fullListNodes($('tok-body')).filter(tr => tr.dataset.app === k);
+            tb.innerHTML = toks.map(tr => tr.outerHTML).join('') || '<tr><td colspan="6"><div class="empty">لا توكنات لهذا التطبيق</div></td></tr>';
         });
         // versions → per app
         order.forEach(k => {
@@ -3073,8 +3262,8 @@
         // crashes → per app
         order.forEach(k => {
             const el = $('appcrash-' + k); if (!el) return;
-            if (k === 'wallpapers') { const src = $('crashes-list'); el.innerHTML = src && src.innerHTML.trim() ? src.innerHTML : '<div class="empty">لا أعطال</div>'; }
-            else if (k === 'leo') { const src = $('leo-crash-body'); el.innerHTML = `<div class="table-wrap"><table style="min-width:800px;"><thead><tr><th></th><th>الجهاز</th><th>الإصدار</th><th>استُلم</th><th>أول سطر في المكدّس</th></tr></thead><tbody>${src ? src.innerHTML : ''}</tbody></table></div>`; }
+            if (k === 'wallpapers') { const src = $('crashes-list'); el.innerHTML = src && fullListHtml(src).trim() ? fullListHtml(src) : '<div class="empty">لا أعطال</div>'; }
+            else if (k === 'leo') { const src = $('leo-crash-body'); el.innerHTML = `<div class="table-wrap"><table style="min-width:800px;"><thead><tr><th></th><th>الجهاز</th><th>الإصدار</th><th>استُلم</th><th>أول سطر في المكدّس</th></tr></thead><tbody>${src ? fullListHtml(src) : ''}</tbody></table></div>`; }
             else el.innerHTML = '<div class="empty">هذا التطبيق لا يرفع تقارير أعطال إلى الخادم بعد</div>';
         });
     }
@@ -3199,11 +3388,15 @@
     }
     function carSection(title, icon, body, wide) { return `<div class="car-section${wide ? ' wide' : ''}"><h3><i class="fa-solid ${icon}"></i>${esc(title)}</h3>${body}</div>`; }
     function renderCarPage(hw) {
+        renderCarPageContent(hw);
+        pageNested($('car-sections'), 'car:' + hw);
+    }
+    function renderCarPageContent(hw) {
         const r = carRow(hw); const d = r && r.dev; const vin = vinOfHw(hw) || (r ? r.aliases.map(vinOfHw).find(Boolean) : '') || '';
         const type = r ? carType(r) : null;
         $('car-title').textContent = r ? (r.name || r.serial || 'سيارة بدون اسم') + (type ? ' · ' + type.label : '') : 'سيارة غير مسجّلة';
         $('car-hw').textContent = hw;
-        $('car-badges').innerHTML = r ? `<span class="badge ${r.status.cls}">${esc(r.status.label)}</span>${r.aliases.length ? ` <span class="badge" title="${esc(r.aliases.join(' · '))}">${r.aliases.length} معرّف قديم</span>` : ''}` : '<span class="badge bad">لا صف في devices</span>';
+        $('car-badges').innerHTML = r ? `<span class="badge ${r.status.cls}">${esc(r.status.label)}</span>${blockKindHtml(r)}${r.aliases.length ? ` <span class="badge" title="${esc(r.aliases.join(' · '))}">${r.aliases.length} معرّف قديم</span>` : ''}` : '<span class="badge bad">لا صف في devices</span>';
         const S = [];
         S.push(carSection('البطاقة والتفعيل', 'fa-id-card', (d ? kv([
             ['الاسم', esc(d.client_name || '—'), true],
@@ -3247,7 +3440,7 @@
                     <h4 style="margin:8px 0 4px;font-size:.85rem;color:var(--text-muted)">عدد الأوامر في اليوم</h4>${dayBars(filled.slice(-120), 'n', 'أمر')}
                     <h4 style="margin:8px 0 4px;font-size:.85rem;color:var(--text-muted)">التكلفة في اليوم (دولار)</h4>${dayBars(filled.slice(-120), 'cost', 'دولار', x => '$' + Number(x).toFixed(3))}
                     <details style="margin-top:8px"><summary class="sub">جدول الأيام (${days.length})</summary><div class="table-wrap"><table style="min-width:420px"><thead><tr><th>اليوم</th><th>أوامر</th><th>نُفّذ</th><th>لم يُفهم</th><th>التكلفة</th></tr></thead><tbody>${days.slice().reverse().map(x => `<tr><td>${num(x.day)}</td><td>${num(x.n)}</td><td>${num(x.ok)}</td><td>${num(x.bad)}</td><td>${moneyHtml(x.cost)}</td></tr>`).join('')}</tbody></table></div></details>
-                    <details style="margin-top:8px"><summary class="sub">آخر 50 أمرًا</summary><div class="table-wrap"><table style="min-width:520px"><thead><tr><th>الوقت</th><th>النتيجة</th><th>ما سُمع</th><th>أوامر نُفّذت</th><th>التكلفة</th></tr></thead><tbody>${rows.slice().sort((a, b) => String(b.at).localeCompare(String(a.at))).slice(0, 50).map(e => `<tr><td>${timeCell(e.at)}</td><td><span class="badge ${e.outcome === 'ok' ? 'ok' : 'warn'}">${esc(OUT[e.outcome] || e.outcome || '?')}</span></td><td>${esc(e.heard || '—')}</td><td>${num(e.actions_done != null ? `${e.actions_done}/${e.actions_requested != null ? e.actions_requested : '?'}` : '—')}</td><td>${moneyHtml(e.cost_usd)}</td></tr>`).join('')}</tbody></table></div></details>`;
+                    <details style="margin-top:8px"><summary class="sub">آخر 50 أمرًا</summary><div class="table-wrap"><table style="min-width:520px"><thead><tr><th>الوقت</th><th>النتيجة</th><th>ما سُمع</th><th>أوامر نُفّذت</th><th>التكلفة</th></tr></thead><tbody>${rows.slice().sort((a, b) => String(b.at).localeCompare(String(a.at))).map(e => `<tr><td>${timeCell(e.at)}</td><td><span class="badge ${e.outcome === 'ok' ? 'ok' : 'warn'}">${esc(OUT[e.outcome] || e.outcome || '?')}</span></td><td>${esc(e.heard || '—')}</td><td>${num(e.actions_done != null ? `${e.actions_done}/${e.actions_requested != null ? e.actions_requested : '?'}` : '—')}</td><td>${moneyHtml(e.cost_usd)}</td></tr>`).join('')}</tbody></table></div></details>`;
             }
             S.push(carSection('الأوامر الصوتية (ذبذبة داشبورد)', 'fa-microphone', body, true));
         }
@@ -3256,7 +3449,7 @@
             const rows = state.appDaily.filter(x => x && ids.has(canonicalHw(x.hardware_id)) && /^\d{4}-\d{2}-\d{2}$/.test(x.day));
             const byDay = new Map(); rows.forEach(x => { if (!byDay.has(x.day)) byDay.set(x.day, { day: x.day, n: 0, apps: {} }); const y = byDay.get(x.day); y.n += Number(x.opens) || 0; const k = appKey(x.app_id); y.apps[k] = (y.apps[k] || 0) + (Number(x.opens) || 0); });
             const days = [...byDay.values()].sort((a, b) => a.day.localeCompare(b.day));
-            S.push(carSection('فتحات البرامج بالأيام (آخر 30 يوم)', 'fa-chart-column', days.length ? dayBars(days, 'n', 'فتحة') + `<div class="table-wrap"><table style="min-width:360px"><thead><tr><th>اليوم</th><th>الفتحات</th><th>حسب البرنامج</th></tr></thead><tbody>${days.slice().reverse().slice(0, 30).map(x => `<tr><td>${num(x.day)}</td><td>${num(x.n)}</td><td>${Object.entries(x.apps).map(([k, n]) => `<span class="badge">${esc(usageLabels[k] || k)}: ${esc(n)}</span>`).join(' ')}</td></tr>`).join('')}</tbody></table></div>` : '<div class="empty">لا فتحات مسجّلة (البرامج القديمة لا ترسل العدّاد اليومي)</div>'));
+            S.push(carSection('فتحات البرامج بالأيام (آخر 30 يوم)', 'fa-chart-column', days.length ? dayBars(days, 'n', 'فتحة') + `<div class="table-wrap"><table style="min-width:360px"><thead><tr><th>اليوم</th><th>الفتحات</th><th>حسب البرنامج</th></tr></thead><tbody>${days.slice().reverse().map(x => `<tr><td>${num(x.day)}</td><td>${num(x.n)}</td><td>${Object.entries(x.apps).map(([k, n]) => `<span class="badge">${esc(usageLabels[k] || k)}: ${esc(n)}</span>`).join(' ')}</td></tr>`).join('')}</tbody></table></div>` : '<div class="empty">لا فتحات مسجّلة (البرامج القديمة لا ترسل العدّاد اليومي)</div>'));
         }
         if (r) {
             const ids = new Set([r.hw, ...r.aliases].map(x => canonicalHw(x)));
@@ -3268,7 +3461,7 @@
         }
         if (r) {
             S.push(carSection('التوكنات', 'fa-key', r.tokens.length ? `<div class="table-wrap"><table style="min-width:360px"><thead><tr><th>البرنامج</th><th>أُصدر</th><th>آخر تحقق</th><th>الحالة</th></tr></thead><tbody>${r.tokens.map(t => `<tr><td>${esc(usageLabels[appKey(t.app_id)] || t.app_id || '—')}</td><td>${timeCell(t.issued_at || t.created_at)}</td><td>${timeCell(t.last_verified_at)}</td><td>${t.revoked_at ? '<span class="badge bad">ملغى</span>' : '<span class="badge ok">ساري</span>'}</td></tr>`).join('')}</tbody></table></div>` : '<div class="empty">لا توكنات (تصدر مع التفعيل في البرامج الحديثة)</div>'));
-            S.push(carSection('سجل الحظر وفك الحظر', 'fa-clock-rotate-left', r.blockEvents.length ? `<div class="table-wrap"><table style="min-width:360px"><thead><tr><th>الوقت</th><th>الحدث</th><th>السبب</th><th>عبر</th></tr></thead><tbody>${r.blockEvents.slice(0, 50).map(ev => `<tr><td>${timeCell(ev.at)}</td><td><span class="badge ${ev.blocked ? 'bad' : 'ok'}">${ev.blocked ? 'حظر' : 'فك حظر'}</span></td><td>${esc(ev.reason || '—')}</td><td>${esc(ev.via || '—')}</td></tr>`).join('')}</tbody></table></div>` : '<div class="empty">لم يُحظر قط</div>'));
+            S.push(carSection('سجل الحظر وفك الحظر', 'fa-clock-rotate-left', r.blockEvents.length ? `<div class="table-wrap"><table style="min-width:360px"><thead><tr><th>الوقت</th><th>الحدث</th><th>السبب</th><th>عبر</th></tr></thead><tbody>${r.blockEvents.map(ev => `<tr><td>${timeCell(ev.at)}</td><td><span class="badge ${ev.blocked ? 'bad' : 'ok'}">${ev.blocked ? 'حظر' : 'فك حظر'}</span></td><td>${esc(ev.reason || '—')}</td><td>${esc(ev.via || '—')}</td></tr>`).join('')}</tbody></table></div>` : '<div class="empty">لم يُحظر قط</div>'));
             if (r.storeRows.length) S.push(carSection('ذبذبة ستور', 'fa-store', r.storeRows.map(x => kv([['hw_id', esc(x.hw_id)], ['السيارة', esc(x.car || '—'), true], ['الإصدار', esc(x.version || '—')], ['محظور', x.blocked ? 'نعم' : 'لا', true], ['تثبيتات', esc(x.installs || 0)], ['أول ظهور', esc(fmtDate(x.first_seen))], ['آخر ظهور', esc(fmtDate(x.last_seen))]])).join('<hr style="border-color:var(--panel-border);margin:8px 0">')));
         }
         {
@@ -3278,7 +3471,7 @@
         if (r) {
             const leo = (state.leoCrashes || []).filter(c => { const id = String(c.hwId || c.hw_id || c.hardwareId || c.hardware_id || '').toLowerCase(); return id && [r.hw, ...r.aliases].some(x => String(x).toLowerCase() === id); });
             const list = [...r.crashes.map(c => ({ at: c.received_at || c.crash_at, app: 'ذبذبة خلفيات', ver: c.app_version, text: c.crash_text || c.report || '' })), ...leo.map(c => ({ at: c.receivedAt, app: 'TS Leo Dash', ver: c.version || c.versionName, text: c.report || '' }))].sort((a, b) => ts(b.at) - ts(a.at));
-            S.push(carSection(`الأعطال (${list.length})`, 'fa-bug', list.length ? list.slice(0, 30).map(c => `<details style="margin-bottom:6px"><summary><span class="badge bad">${esc(c.app)}</span> ${esc(c.ver || '')} ${timeCell(c.at)} <span class="sub">${esc(String(c.text).split('\n').find(l => /Exception|Error/.test(l)) || String(c.text).slice(0, 80))}</span></summary><pre class="report">${esc(c.text)}</pre></details>`).join('') : '<div class="empty">لا أعطال مسجّلة</div>', true));
+            S.push(carSection(`الأعطال (${list.length})`, 'fa-bug', list.length ? list.map(c => `<details style="margin-bottom:6px"><summary><span class="badge bad">${esc(c.app)}</span> ${esc(c.ver || '')} ${timeCell(c.at)} <span class="sub">${esc(String(c.text).split('\n').find(l => /Exception|Error/.test(l)) || String(c.text).slice(0, 80))}</span></summary><pre class="report">${esc(c.text)}</pre></details>`).join('') : '<div class="empty">لا أعطال مسجّلة</div>', true));
         }
         $('car-sections').innerHTML = S.join('');
         $('car-sections').querySelectorAll('[data-act]').forEach(el => el.addEventListener('click', onRowAction));
@@ -3473,11 +3666,15 @@
         renderWallpaperQueue();
     }
     function renderWallpaperQueue() {
+        renderWallpaperQueueContent();
+        pageRendered('wp-upload-queue');
+    }
+    function renderWallpaperQueueContent() {
         $('wp-upload-queue').innerHTML=wpManager.files.map((item,i)=>`<div class="wp-queue-row"><strong>${esc(item.file.name)}</strong> <span class="num">${esc((item.file.size/1048576).toFixed(2))} MB</span><span class="sub">${esc(item.status)}</span><progress max="100" value="${item.progress}"></progress><button type="button" class="btn sm" data-wp-remove="${i}" ${wpManager.busy?'disabled':''}>إزالة من القائمة</button></div>`).join('');
     }
     function setWallpaperBusy(busy) {
         wpManager.busy=busy; $('wp-upload-fields').disabled=busy; $('wp-publish-fields').disabled=busy; $('wp-target-save').disabled=busy; $('wp-refresh').disabled=busy;
-        $('wp-dialog-cars').querySelectorAll('input').forEach(el=>el.disabled=busy);
+        fullListNodes($('wp-dialog-cars')).flatMap(row => [...row.querySelectorAll('input')]).forEach(el=>el.disabled=busy);
         renderWallpaperQueue(); renderWallpapersGrid();
     }
     function ensureWallpaperSession(epoch) { if(epoch!==sessionEpoch||!SESSION_TOKEN) throw new Error('انتهت جلسة الدخول؛ توقفت العملية'); }
@@ -3560,6 +3757,10 @@
         return [...groups].sort((a, b) => wallpaperCarLabel(a[0]).localeCompare(wallpaperCarLabel(b[0]), 'ar'));
     }
     function renderPrivateModal() {
+        renderPrivateModalContent();
+        $('wp-private-body').querySelectorAll('.group').forEach(group => pageRendered(group, 'wp-private-files:' + group.dataset.listCar, true, '.toolbar')); pageRendered('wp-private-body', 'wp-private-body', false, '.group');
+    }
+    function renderPrivateModalContent() {
         const q = $('wp-private-search').value.trim().toLowerCase();
         const groups = privateWallpaperGroups().filter(([hw, rows]) =>
             !q || [wallpaperCarLabel(hw), ...rows.map(w => wallpaperFilename(w.url))].join(' ').toLowerCase().includes(q));
@@ -3581,7 +3782,7 @@
                 const where = folder ? `<span class="badge info" title="${esc(folder.folder)}">${esc(folder.label)}</span>` : '<span class="badge">تطبيق ذبذبة</span>';
                 return `<div class="toolbar"><span class="sub">${esc(wallpaperFilename(w.url))}</span>${where}<span class="badge">${esc(wallpaperIsVideo(w) ? 'فيديو' : 'صورة')}</span><button class="btn sm danger" type="button" data-wp-act="delete" data-wp-id="${esc(w.id)}">حذف نهائيًا</button></div>`;
             }).join('');
-            return `<div class="group">${head}${body}</div>`;
+            return `<div class="group" data-list-car="${esc(hw)}">${head}${body}</div>`;
         }).join('') || '<p class="empty">لا صور مخصصة تطابق البحث</p>';
     }
     function addWallpaperForDevice(hw) {
@@ -3600,6 +3801,10 @@
         renderHideModal();$('wp-target-dialog').showModal();
     }
     function renderHideModal() {
+        renderHideModalContent();
+        if (wpManager.dialog) pageRendered('wp-dialog-cars', 'wp-dialog-cars:' + wpManager.dialog.kind + ':' + wpManager.dialog.row.id, false);
+    }
+    function renderHideModalContent() {
         const ctx=wpManager.dialog;if(!ctx)return;
         const q=$('wp-dialog-search').value.trim().toLowerCase(), cars=new Map(state.merged.filter(r=>r.dev).map(r=>[r.dev.hardware_id,wallpaperCarLabel(r.hw)]));
         for(const hw of wpManager.original)if(!cars.has(hw))cars.set(hw,hw);

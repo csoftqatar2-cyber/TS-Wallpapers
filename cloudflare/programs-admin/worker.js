@@ -23,7 +23,9 @@ const TSLINK_ADMIN_BASE = "https://tslink-bot.tsdash-qatar.workers.dev/admin/api
 const TSLINK_GET_ALLOW = /^\/(overview|cars|versions|cars\/[A-Za-z0-9_.:@+-]{1,120})$/u;
 const LEO_ADMIN_BASE = "https://tsleo-checkin.tsdash-qatar.workers.dev";
 const LEO_GET_ALLOW = /^\/(crashes|cars)$/u;
-const CTRL_RPC_ALLOW = /^thab_admin_(stats|cars|events|gaps|fuel_price_history|voice_overlay_history)$/u;
+// Controller telemetry RPCs the site may call (p_secret injected here). Reads + the owner's voice/fuel
+// settings writes (2026-09-08) + crash reports (thab_admin_crashes / crash_groups, added by the controller chat).
+const CTRL_RPC_ALLOW = /^thab_admin_(stats|cars|events|gaps|fuel_price_history|voice_overlay_history|voice_overlay_publish|voice_overlay_restore|fuel_price_publish|set_note|crashes|crash_groups)$/u;
 const CATALOG_URL = "https://pub-3d6cc5a5671c4be3829a384a375f7b11.r2.dev/catalog/apps.json";
 const LEO_LATEST_URL = "https://pub-fbb386b3923a44879e64296817936d84.r2.dev/latest.json";
 const MAX_BODY = 64 * 1024;
