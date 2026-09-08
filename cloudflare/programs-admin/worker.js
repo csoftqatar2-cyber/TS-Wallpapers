@@ -314,7 +314,10 @@ export default {
           (method === "PATCH" && /^admin_settings\?key=eq\.voice\.[a-z_]+$/.test(path) && keys.every(k => ["value", "updated_at"].includes(k))) ||
           (method === "POST" && /^(wallpapers|wallpaper_hides)(\?.*)?$/.test(path)) ||
           (method === "DELETE" && /^(wallpapers|wallpaper_hides)\?(id|url|wallpaper_id)=eq\.[^&]+(&hardware_id=eq\.[^&]+)?$/.test(path)) ||
-          (method === "POST" && /^app_versions(\?.*)?$/.test(path));
+          (method === "POST" && /^app_versions(\?.*)?$/.test(path)) ||
+          // resolved-crash marks (crash_resolutions): insert/upsert, edit or remove one signature
+          (method === "POST" && /^crash_resolutions(\?.*)?$/.test(path)) ||
+          (["PATCH", "DELETE"].includes(method) && /^crash_resolutions\?id=eq\.\d+$/.test(path));
         if (!ok) return json(404, { message: "write not allowed" });
         if (!/^return=(minimal|representation)$/.test(prefer)) return json(400, { message: "bad prefer" });
         const init = { method, headers: { "Content-Type": "application/json", apikey: env.SUPABASE_ANON, Authorization: req.headers.get("Authorization"), "x-write-key": env.PANEL_WRITE_KEY, Prefer: prefer } };
