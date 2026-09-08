@@ -68,6 +68,8 @@ final class HelpDialog {
         message.setTextAlignment(View.TEXT_ALIGNMENT_VIEW_START);
         message.setGravity(Gravity.START);
 
+        // «لأي مساعدة» card, same shape as the controller's: text beside a QR on an explicit white
+        // panel (a QR on the dark theme cannot be scanned), number written LTR so it never flips.
         TextView heading = new TextView(c);
         heading.setText(c.getString(R.string.help_contact_title));
         heading.setTextSize(TypedValue.COMPLEX_UNIT_SP, 17);
@@ -78,22 +80,56 @@ final class HelpDialog {
         heading.setGravity(Gravity.START);
         heading.setPadding(0, (int) (18 * d), 0, (int) (6 * d));
 
-        ImageView qr = new ImageView(c);
-        int size = (int) (200 * d);
-        qr.setImageBitmap(QrCode.generate(Support.WHATSAPP_URL, size));
-        qr.setContentDescription(c.getString(R.string.help_contact_hint));
-        LinearLayout.LayoutParams qp = new LinearLayout.LayoutParams(size, size);
-        qp.gravity = Gravity.CENTER_HORIZONTAL;
-        qp.topMargin = (int) (6 * d);
-
         TextView hint = new TextView(c);
-        hint.setText(c.getString(R.string.help_contact_hint, Support.PHONE_DISPLAY));
+        hint.setText(c.getString(R.string.help_contact_hint));
         hint.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
         hint.setTextColor(ContextCompat.getColor(c, R.color.aurora_text));
         hint.setLayoutDirection(dir);
         hint.setTextDirection(rtl ? View.TEXT_DIRECTION_RTL : View.TEXT_DIRECTION_LTR);
-        hint.setGravity(Gravity.CENTER_HORIZONTAL);
-        hint.setPadding(0, (int) (8 * d), 0, (int) (4 * d));
+        hint.setTextAlignment(View.TEXT_ALIGNMENT_VIEW_START);
+        hint.setGravity(Gravity.START);
+
+        TextView number = new TextView(c);
+        number.setText(Support.PHONE_DISPLAY);
+        number.setTextSize(TypedValue.COMPLEX_UNIT_SP, 20);
+        number.setTypeface(null, Typeface.BOLD);
+        number.setTextColor(ContextCompat.getColor(c, R.color.aurora_text));
+        number.setTextDirection(View.TEXT_DIRECTION_LTR);
+        number.setTextAlignment(View.TEXT_ALIGNMENT_VIEW_START);
+        number.setGravity(Gravity.START);
+        number.setPadding(0, (int) (6 * d), 0, 0);
+
+        LinearLayout textCol = new LinearLayout(c);
+        textCol.setOrientation(LinearLayout.VERTICAL);
+        textCol.setLayoutDirection(dir);
+        textCol.addView(hint, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+        textCol.addView(number, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+
+        LinearLayout card = new LinearLayout(c);
+        card.setOrientation(LinearLayout.HORIZONTAL);
+        card.setLayoutDirection(dir);
+        card.setGravity(Gravity.CENTER_VERTICAL);
+        LinearLayout.LayoutParams tp = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
+        tp.setMarginEnd((int) (14 * d));
+        card.addView(textCol, tp);
+
+        // The QR: bitmap generation may fail on an exotic unit — then the number alone remains.
+        int narrow = c.getResources().getDisplayMetrics().widthPixels < 1100 * d ? 180 : 208;
+        int box = (int) (narrow * d), pad = (int) (10 * d);
+        android.graphics.Bitmap bmp = null;
+        try { bmp = QrCode.generate(Support.WHATSAPP_URL, box - 2 * pad); } catch (Throwable ignored) { bmp = null; }
+        if (bmp != null) {
+            ImageView qr = new ImageView(c);
+            qr.setImageBitmap(bmp);
+            qr.setContentDescription(c.getString(R.string.help_contact_title));
+            android.graphics.drawable.GradientDrawable white = new android.graphics.drawable.GradientDrawable();
+            white.setColor(0xFFFFFFFF);
+            white.setCornerRadius(14 * d);
+            qr.setBackground(white);
+            qr.setPadding(pad, pad, pad, pad);
+            LinearLayout.LayoutParams qp = new LinearLayout.LayoutParams(box, box);
+            card.addView(qr, qp);
+        }
 
         LinearLayout column = new LinearLayout(c);
         column.setOrientation(LinearLayout.VERTICAL);
@@ -102,8 +138,7 @@ final class HelpDialog {
                 LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
         column.addView(heading, new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
-        column.addView(qr, qp);
-        column.addView(hint, new LinearLayout.LayoutParams(
+        column.addView(card, new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
 
         ScrollView scroll = new ScrollView(c);

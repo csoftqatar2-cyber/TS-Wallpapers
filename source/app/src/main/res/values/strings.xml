@@ -623,7 +623,7 @@ Roboto Font Copyright (c) Christian Robertson. Licensed under the Apache License
     <string name="help_updates_dot_handoff">In this mode there is no clock screen, so the check happens when you open Settings from the gear in the picker.</string>
 
     <string name="help_sec_support_title">Support</string>
-    <string name="help_contact_title">Contact us</string>
-    <string name="help_contact_hint">Scan the code to open the WhatsApp chat with the store — %1$s</string>
+    <string name="help_contact_title">For any help</string>
+    <string name="help_contact_hint">Scan the code with your phone camera to open a WhatsApp chat with us directly, or contact us on the number.</string>
     <string name="help_sec_support_body">For any question, or if the car is blocked, contact the store on %1$s — the QR code below opens the WhatsApp chat on your phone.</string>
 </resources>

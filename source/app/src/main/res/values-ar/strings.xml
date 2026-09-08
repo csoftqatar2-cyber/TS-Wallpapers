@@ -576,8 +576,8 @@
     <string name="help_updates_dot_handoff">لا شاشة ساعة في هذا الوضع، لذلك يجري التحقق عندما تفتح الإعدادات من الترس في المنتقي.</string>
 
     <string name="help_sec_support_title">الدعم</string>
-    <string name="help_contact_title">تواصل معنا</string>
-    <string name="help_contact_hint">امسح الرمز لفتح محادثة واتساب مع المتجر — ⁨%1$s⁩</string>
+    <string name="help_contact_title">لأي مساعدة</string>
+    <string name="help_contact_hint">امسح الرمز بكاميرا هاتفك لفتح محادثة واتساب معنا مباشرة، أو تواصل على الرقم.</string>
     <string name="help_sec_support_body">لأي سؤال، أو إن كانت السيارة محظورة، تواصل مع المتجر على الرقم ⁨%1$s⁩ — ورمز ⁨QR⁩ أدناه يفتح محادثة واتساب على هاتفك.</string>
 
     <string name="download_progress_skipped">التنزيل مستمر في الخلفية — ستظهر الخلفيات أولاً بأول</string>
