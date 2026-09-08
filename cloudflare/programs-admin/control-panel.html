@@ -2735,7 +2735,9 @@
         const joined = cars.filter(r => vinToHw(vinOf(r))).length;
         const vinTotal = state.devices.filter(d => /^VIN-/i.test(d.hardware_id || '')).length;
         $('ctl-coverage').textContent = `تليمتري الكونترولر مفتاحه VIN؛ ${cars.length} سيارة في التليمتري، ${joined} منها مطابقة في devices؛ السيارات ذات VIN في الأسطول ${vinTotal} من ${state.devices.length} (الباقي بلا VIN ولا يمكن أن يظهر هنا).`;
-        genericTable('ctl-cars-head', 'ctl-cars-body', cars, { empty: 'لا سيارات', cell: (k, v, r) => /^vin$/i.test(k) ? vinCell(String(v || '')) : cellValue(k, v) });
+        // car = null means the installer never confirmed the car profile: the unit reads gauges but moves
+        // nothing (windows/seats) — by design, but the customer must not be left like that. Flag it loudly.
+        genericTable('ctl-cars-head', 'ctl-cars-body', cars, { empty: 'لا سيارات', cell: (k, v, r) => /^vin$/i.test(k) ? vinCell(String(v || '')) : (/^car$/i.test(k) && !v) ? '<span class="badge bad" title="لم يُختر نوع السيارة على الشاشة: البرنامج يقرأ العدّادات فقط ولا يحرّك زجاجاً ولا مقعداً">⚠ بلا نوع مؤكَّد</span>' : cellValue(k, v) });
         const events = asRows(c.events);
         const kinds = [...new Set(events.map(e => String(e.kind || e.type || '')).filter(Boolean))];
         $('ctl-kinds').innerHTML = [`<button class="chip ${ctlKind ? '' : 'active'}" data-ctlkind="">الكل</button>`, ...kinds.map(k => `<button class="chip ${ctlKind === k ? 'active' : ''}" data-ctlkind="${esc(k)}">${esc(k)}</button>`)].join('');
@@ -2745,7 +2747,9 @@
         events.forEach(e => { const k = String(e.kind || e.type || ''); if (!/voice|assist|speech|command/i.test(k)) return; const at = e.created_at || e.at || e.ts || e.time; const day = at ? String(at).slice(0, 10) : '?'; const key = vinOf(e) + '|' + day; voice.set(key, (voice.get(key) || 0) + 1); });
         const vrows = [...voice.entries()].sort((a, b) => b[0].split('|')[1].localeCompare(a[0].split('|')[1]));
         $('ctl-voice-body').innerHTML = vrows.length ? vrows.map(([k, n]) => { const [vin, day] = k.split('|'); return `<tr><td>${vinCell(vin)}</td><td><span class="num">${esc(day)}</span></td><td>${num(n)}</td></tr>`; }).join('') : '<tr><td colspan="3"><div class="empty">لا أوامر صوتية في السجل المحمّل</div></td></tr>';
-        genericTable('ctl-gaps-head', 'ctl-gaps-body', asRows(c.gaps), { empty: 'لا فجوات', cell: (k, v) => /^vin$/i.test(k) ? vinCell(String(v || '')) : cellValue(k, v) });
+        // The model echoes our own instruction text back on a silent clip; it is not a driver's request (controller team, 2026-09-08).
+        const GAP_NOISE = /نفّذ ما يقوله المستخدم في هذا المقطع/u;
+        genericTable('ctl-gaps-head', 'ctl-gaps-body', asRows(c.gaps).filter(g => !GAP_NOISE.test(String(g.heard || ''))), { empty: 'لا فجوات', cell: (k, v) => /^vin$/i.test(k) ? vinCell(String(v || '')) : cellValue(k, v) });
     }
     $('ctl-kinds').addEventListener('click', e => { const b = e.target.closest('[data-ctlkind]'); if (!b) return; ctlKind = b.dataset.ctlkind; renderController(); });
     $('ctl-refresh').addEventListener('click', () => loadController());
