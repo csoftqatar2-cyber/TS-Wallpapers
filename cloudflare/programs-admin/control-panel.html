@@ -1512,9 +1512,8 @@
         const stats = [
             { h: 'إجمالي الأجهزة', v: m.length, ic: 'fa-microchip', c: 'blue', f: 'all' },
             { h: 'نشط', v: m.filter(r => r.active && !r.status.blockedAny).length, ic: 'fa-circle-check', c: 'green', f: 'active' },
-            { h: 'محظور (في أي مكان)', v: m.filter(r => r.status.blockedAny).length, ic: 'fa-ban', c: 'red', f: 'blocked' },
-            { h: 'حظر غير متطابق', v: m.filter(r => r.status.mismatch).length, ic: 'fa-code-compare', c: 'red', f: 'mismatch' },
-            { h: 'حظر تلقائي (10 محاولات)', v: m.filter(r => r.status.autoBlocked).length, ic: 'fa-robot', c: 'orange', f: 'auto' },
+            // One tile for every kind of block (owner, 2026-09-08); clicking it opens the devices list filtered to «محظور».
+            { h: 'محظور', v: m.filter(r => r.status.blockedAny).length, ic: 'fa-ban', c: 'red', f: 'blocked' },
             { h: 'محاولات فاشلة > 0', v: m.filter(r => r.attempts > 0).length, ic: 'fa-hand', c: 'yellow', f: 'attempts' },
             { h: 'توكنات صادرة', v: state.tokens.length, ic: 'fa-ticket', c: 'cyan', f: 'notoken' },
             { h: 'تعارضات تسجيل', v: m.filter(r => r.conflicts > 0).length, ic: 'fa-triangle-exclamation', c: 'red', f: 'conflict' },

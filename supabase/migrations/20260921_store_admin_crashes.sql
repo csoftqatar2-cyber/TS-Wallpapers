@@ -1,0 +1,5 @@
+-- store_admin_crashes(p_secret, p_limit, p_hw_id): admin read of store_crashes for the programs-admin
+-- site, same store_admin_* secret pattern (the secret literal lives only in the live function — see
+-- schema.sql placeholder convention). store_crashes has RLS with no policies on purpose; this SECURITY
+-- DEFINER function is its only reader besides service_role. Applied live 2026-09-08.
+-- (Body in the live project; the p_secret literal is deliberately not committed.)
