@@ -2238,11 +2238,18 @@
     }
     let ctlKind = '';
     const vinOf = r => String((r && (r.vin || r.VIN || r.p_vin || r.hardware_id)) || '');
-    const vinToHw = vin => { const c = canonicalHw('VIN-' + vin); return c && state.merged.some(x => x.hw === c || (x.aliases || []).includes(c)) ? c : null; };
+    // canonicalHw() lowercases, but merged rows keep the id as stored ("VIN-byd12EDCD…"), so the
+    // match must be case-insensitive and must hand back the stored id (that is what hw-link expects).
+    let hwIndexFor = null, hwIndex = null;
+    const vinToHw = vin => {
+        const c = canonicalHw('VIN-' + vin); if (!c) return null;
+        if (hwIndexFor !== state.merged) { hwIndexFor = state.merged; hwIndex = new Map(); for (const x of state.merged) { hwIndex.set(String(x.hw).toLowerCase(), x.hw); for (const al of (x.aliases || [])) hwIndex.set(String(al).toLowerCase(), x.hw); } }
+        return hwIndex.get(c) || null;
+    };
     function vinCell(vin) {
         if (!vin) return '<span class="sub">—</span>';
         const hw = vinToHw(vin);
-        return hw ? `<a href="#" class="hw-link num" data-hw="${esc(hw)}">${esc(vin)}</a>` : `<span class="num">${esc(vin)}</span><span class="sub">لا يوجد VIN لهذه السيارة في devices</span>`;
+        return hw ? `<a href="#" class="hw-link num" data-hw="${esc(hw)}">${esc(vin)}</a>` : `<span class="num">${esc(vin)}</span><span class="sub">غير مسجّلة في devices (لم تُفعّل بهذا الـ VIN)</span>`;
     }
     function renderController() {
         const c = state.ctl || {}; const asRows = v => Array.isArray(v) ? v : (v && typeof v === 'object' && Array.isArray(v.rows)) ? v.rows : (v && typeof v === 'object' ? [v] : []);
