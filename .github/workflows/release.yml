@@ -176,6 +176,10 @@ jobs:
         env:
           PROGRAMS_ADMIN_URL: https://thabthaba-programs-admin.tsdash-qatar.workers.dev
           CATALOG_PUBLISH_SECRET: ${{ secrets.CATALOG_PUBLISH_SECRET }}
+          # The workers.dev hostname sits behind Cloudflare Access; a machine caller must present the
+          # Access SERVICE TOKEN (two headers) or it only ever sees a 302 to the login page.
+          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
           VC: ${{ steps.gate.outputs.version_code }}
           VN: ${{ steps.gate.outputs.version_name }}
           APK_URL: ${{ steps.upload.outputs.apk_url }}
@@ -188,7 +192,7 @@ jobs:
           # -f is deliberately NOT used: the Worker's 4xx body says WHY (not_newer / no_row / …)
           # and that reason must land in the log.
           HTTP=$(curl -sS -o /tmp/catalog.json -w "%{http_code}" -X POST "${PROGRAMS_ADMIN_URL}/catalog/publish" \
-            -H "Authorization: Bearer ${CATALOG_PUBLISH_SECRET}" \
+            -H "CF-Access-Client-Id: ${CF_ACCESS_CLIENT_ID}"             -H "CF-Access-Client-Secret: ${CF_ACCESS_CLIENT_SECRET}"             -H "Authorization: Bearer ${CATALOG_PUBLISH_SECRET}" \
             -H "Content-Type: application/json" \
             --data "$BODY")
           echo "catalog/publish HTTP $HTTP"; cat /tmp/catalog.json; echo

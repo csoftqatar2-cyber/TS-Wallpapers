@@ -54,3 +54,6 @@ if it ever has to be retried.
 
 `node tools/catalog-publish-dryrun.mjs [packageName versionCode versionName sizeBytes]` downloads
 the live catalog, applies the row surgery in memory and prints the diff — nothing is uploaded.
+
+
+> **Cloudflare Access:** the workers.dev hostname is behind Access, so every machine call to `/catalog/publish` must also send the Access service token headers `CF-Access-Client-Id` / `CF-Access-Client-Secret` (file `~/.ts-secrets/cloudflare/access-service-token.txt`; GitHub secrets `CF_ACCESS_CLIENT_ID` / `CF_ACCESS_CLIENT_SECRET`). Without them the answer is a 302 to the login page, never the Worker.
