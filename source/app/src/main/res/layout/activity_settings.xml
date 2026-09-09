@@ -112,31 +112,29 @@
                     android:focusable="true"
                     android:clickable="true" />
 
-                <!-- Help: the manual for this car's mode (HelpDialog). The Store's helpBtn — a
-                     gold text button, ? icon before the word, no fill. The click is wired in
+                <!-- Help: the manual for this car's mode (HelpDialog). TS Link's help pill
+                     (owner's call 2026-09-09): the bar's own 44dp glass pill, a FILLED info disc
+                     before the word, both in the accent orange. The click is wired in
                      refreshHeaderChips(). -->
-                <com.google.android.material.button.MaterialButton
+                <TextView
                     android:id="@+id/chipHelp"
-                    style="@style/Widget.MaterialComponents.Button.TextButton"
                     android:layout_width="wrap_content"
-                    android:layout_height="40dp"
-                    android:layout_marginStart="8dp"
-                    android:contentDescription="@string/help_button"
+                    android:layout_height="44dp"
+                    android:layout_marginStart="12dp"
+                    android:background="@drawable/bar_pill"
+                    android:paddingStart="14dp"
+                    android:paddingEnd="14dp"
+                    android:gravity="center_vertical"
+                    android:drawablePadding="8dp"
+                    app:drawableStartCompat="@drawable/ic_info_filled_20dp"
                     android:fontFamily="@font/cairo_semibold"
-                    android:insetTop="0dp"
-                    android:insetBottom="0dp"
-                    android:minWidth="0dp"
-                    android:paddingStart="10dp"
-                    android:paddingEnd="10dp"
-                    android:text="@string/help_button"
-                    android:textAllCaps="false"
-                    android:textColor="@color/gold"
+                    android:textColor="@color/gold_dark"
                     android:textSize="15sp"
-                    app:icon="@drawable/ic_help"
-                    app:iconGravity="textStart"
-                    app:iconPadding="5dp"
-                    app:iconSize="18dp"
-                    app:iconTint="@color/gold" />
+                    android:maxLines="1"
+                    android:focusable="true"
+                    android:clickable="true"
+                    android:contentDescription="@string/help_button"
+                    android:text="@string/help_button" />
 
             </LinearLayout>
 

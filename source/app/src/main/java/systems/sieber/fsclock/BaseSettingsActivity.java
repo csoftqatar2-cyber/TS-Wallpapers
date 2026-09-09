@@ -475,8 +475,8 @@ public class BaseSettingsActivity extends AppCompatActivity {
         // The manual, for every mode: in the clock modes this header is where Help lives (the
         // wallpaper screen has no room for a button), in the hand-off modes it doubles the one
         // in the picker's top bar.
-        // A MaterialButton since the Store restyle (2026-09-09): its icon comes from the layout
-        // (app:icon), so no compound drawable here — that would draw a second one.
+        // The pill's icon comes from the layout (app:drawableStartCompat), so no compound
+        // drawable here — that would draw a second one.
         TextView help = findViewById(R.id.chipHelp);
         if(help != null) {
             help.setOnClickListener(v -> HelpDialog.show(this));
