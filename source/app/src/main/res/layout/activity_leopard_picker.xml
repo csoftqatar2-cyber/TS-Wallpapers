@@ -58,6 +58,25 @@
             android:textColor="@color/gold"
             android:text="@string/leopard_chip" />
 
+        <!-- ICAR 03T only (hidden everywhere else): on that car the app does not own the
+             wallpaper, it adds one to the launcher's own carousel — so there has to be a way
+             back out of it, and a pointer at the screen that owns the car's own pictures. -->
+        <ImageView
+            android:id="@+id/buttonIcarManage"
+            android:layout_width="44dp"
+            android:layout_height="44dp"
+            android:layout_marginStart="12dp"
+            android:padding="12dp"
+            android:background="@drawable/bar_pill"
+            android:src="@drawable/ic_delete_24dp"
+            app:tint="@color/aurora_muted"
+            android:focusable="true"
+            android:clickable="true"
+            android:visibility="gone"
+            android:contentDescription="@string/icar03t_manage" />
+
+        <!-- Bar order is fixed fleet-wide (owner, 2026-09-09): settings is the LAST child (so it
+             draws at the far left in Arabic), help sits right before it, everything else earlier. -->
         <!-- Help: the manual for this mode (HelpDialog). TS Link's help pill (owner's call
              2026-09-09, spec «زر وحوار المساعدة»): the same 44dp glass pill as the other bar
              controls, a FILLED info disc before the word, both in the accent orange. Icon AND
@@ -97,23 +116,6 @@
             android:focusable="true"
             android:clickable="true"
             android:contentDescription="@string/settings_header_title" />
-
-        <!-- ICAR 03T only (hidden everywhere else): on that car the app does not own the
-             wallpaper, it adds one to the launcher's own carousel — so there has to be a way
-             back out of it, and a pointer at the screen that owns the car's own pictures. -->
-        <ImageView
-            android:id="@+id/buttonIcarManage"
-            android:layout_width="44dp"
-            android:layout_height="44dp"
-            android:layout_marginStart="12dp"
-            android:padding="12dp"
-            android:background="@drawable/bar_pill"
-            android:src="@drawable/ic_delete_24dp"
-            app:tint="@color/aurora_muted"
-            android:focusable="true"
-            android:clickable="true"
-            android:visibility="gone"
-            android:contentDescription="@string/icar03t_manage" />
 
     </LinearLayout>
 
