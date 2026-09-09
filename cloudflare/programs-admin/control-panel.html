@@ -640,11 +640,11 @@
                 <div id="usage-err"></div>
 <p class="note">السيارات المبلّغة فقط؛ النشاط من آخر ظهور ولا يعني التفعيل. الخلفيات تسجّل فتح الشاشة والإقلاع. أرقام Leo عند غياب الرصد إشارات مشتركة وليست استخدامًا للتطبيق؛ Back Button يعرض الإصدار فقط.</p>
                 <div class="table-wrap"><table id="usage-table">
-<thead><tr><th></th><th>التطبيق / مصدر القياس</th><th>سيارات معروفة</th><th>نشط 24 ساعة</th><th>نشط 7 أيام</th><th>نشط 30 يومًا</th><th>الإصدارات</th><th>آخر مرة فُتح / ظهر</th><th>فتح / سيارة / يوم</th><th>فتح الأسطول / يوم</th><th>فتحات اليوم</th><th>فتحات 7 أيام</th><th>آخر 14 يومًا</th><th>المصدر</th></tr></thead>
+<thead><tr><th></th><th>التطبيق / مصدر القياس</th><th>سيارات معروفة</th><th>نشط 24 ساعة</th><th>نشط 7 أيام</th><th>نشط 30 يومًا</th><th>الإصدارات</th><th>آخر مرة فُتح / ظهر</th><th>فتح / سيارة / يوم</th><th>فتح كل السيارات / يوم</th><th>فتحات اليوم</th><th>فتحات 7 أيام</th><th>آخر 14 يومًا</th><th>المصدر</th></tr></thead>
 <tbody id="usage-body"><tr><td colspan="14" class="empty">بانتظار تحميل البيانات…</td></tr></tbody>
                 </table></div>
 <p class="note" style="margin-top:12px">Leo يظهر حين يبلّغ device_ping أو العدّاد اليومي. Back Button: يُعرض الإصدار فقط بقرار المالك.</p>
-<p class="note" id="usage-daily-note">المصدر مبيّن لكل تطبيق. اليوم حسب Asia/Qatar؛ آخر 7 أيام تشمل اليوم و6 أيام سابقة. متوسط السيارة = الفتحات ÷ مجموع السيارات المميزة لكل يوم؛ متوسط الأسطول = فتحات 7 أيام ÷ 7. الأيام الخالية تعني لا فتحات مسجّلة ضمن البيانات المتاحة، وليست إثبات توقف التطبيق. التقدير من pings/أيام يُستخدم فقط قبل وصول الصفوف اليومية. حد القراءة اليومية 20000 صف؛ النتائج جزئية عند بلوغه.</p>
+<p class="note" id="usage-daily-note">المصدر مبيّن لكل تطبيق. اليوم حسب Asia/Qatar؛ آخر 7 أيام تشمل اليوم و6 أيام سابقة. متوسط السيارة = الفتحات ÷ مجموع السيارات المميزة لكل يوم؛ متوسط كل السيارات = فتحات 7 أيام ÷ 7. الأيام الخالية تعني لا فتحات مسجّلة ضمن البيانات المتاحة، وليست إثبات توقف التطبيق. التقدير من pings/أيام يُستخدم فقط قبل وصول الصفوف اليومية. حد القراءة اليومية 20000 صف؛ النتائج جزئية عند بلوغه.</p>
             </section>
 
             <!-- ---- Devices ---- -->
@@ -692,11 +692,11 @@
                 </div>
                 <div class="detail-grid">
                     <div class="detail-box">
-                        <h4><i class="fa-solid fa-image"></i> الأسطول حسب بناء الخلفيات (app_version_code)</h4>
+                        <h4><i class="fa-solid fa-image"></i> كل السيارات حسب بناء الخلفيات (app_version_code)</h4>
                         <div id="ver-fleet-wp"></div>
                     </div>
                     <div class="detail-box">
-                        <h4><i class="fa-solid fa-store"></i> الأسطول حسب إصدار الستور (store_installs.version)</h4>
+                        <h4><i class="fa-solid fa-store"></i> كل السيارات حسب إصدار الستور (store_installs.version)</h4>
                         <div id="ver-fleet-store"></div>
                     </div>
                     <div class="detail-box">
@@ -1998,7 +1998,7 @@
     function controllerCrashNotice() { return !LOCAL_PROXY || !LOCAL_FLAGS.controller || !state.ctl || state.ctl.crashUnavailable || (!crashRows(state.ctl.crashes).length && !crashRows(state.ctl.crashGroups).length) ? 'تبليغ الأعطال لم يصل بعد للسيارات (ينتظر تشغيل الهجرة ونشر إصدار)' : ''; }
     function renderControllerCrashGroups(host) {
         if (!host) return;
-        host.innerHTML = `<p class="note">حدود التبليغ: ٢٠ تقريرًا لكل سيارة يوميًا، و٥ ملفات معلّقة على السيارة.</p><h4>مجموعات الأسطول خلال ٣٠ يومًا</h4><div id="${host.id}-server-groups"></div><details><summary>أحدث التقارير المحمّلة</summary><div id="${host.id}-latest"></div></details>`;
+        host.innerHTML = `<p class="note">حدود التبليغ: ٢٠ تقريرًا لكل سيارة يوميًا، و٥ ملفات معلّقة على السيارة.</p><h4>مجموعات كل السيارات خلال ٣٠ يومًا</h4><div id="${host.id}-server-groups"></div><details><summary>أحدث التقارير المحمّلة</summary><div id="${host.id}-latest"></div></details>`;
         const latestReports = allCrashReports().filter(c => c.app === 'controller');
         const reports = crashRows(state.ctl?.crashGroups).map(r => {
             const latest = latestReports.filter(c => c.signature === r.fingerprint).map(c => c.raw);
@@ -2639,14 +2639,14 @@
         const parent = $('sub-controller-voice'); if (!parent) return;
         let host = $('controller-settings');
         if (!host) { host = document.createElement('div'); host.id = 'controller-settings'; parent.appendChild(host); }
-        if (!LOCAL_PROXY || !LOCAL_FLAGS.controller) { host.innerHTML = '<p class="note">إعدادات الأسطول تحتاج اتصال الكونترولر المحلي.</p>'; return; }
-        if (!state.ctl || !state.ctlLoaded || (!('overlay' in state.ctl) && !state.ctl.overlayError) || (!('fuel' in state.ctl) && !state.ctl.fuelError)) { host.innerHTML = '<div class="empty">جارٍ تحميل إعدادات الأسطول…</div>'; return; }
+        if (!LOCAL_PROXY || !LOCAL_FLAGS.controller) { host.innerHTML = '<p class="note">إعدادات كل السيارات تحتاج اتصال الكونترولر المحلي.</p>'; return; }
+        if (!state.ctl || !state.ctlLoaded || (!('overlay' in state.ctl) && !state.ctl.overlayError) || (!('fuel' in state.ctl) && !state.ctl.fuelError)) { host.innerHTML = '<div class="empty">جارٍ تحميل إعدادات كل السيارات…</div>'; return; }
         const c = state.ctl, live = crashRows(c.overlay).find(r => r.active === true), fuel = crashRows(c.fuel).find(r => r.active === true);
         // Preserve the draft and form inputs across background refreshes.
         const saved = {}; host.querySelectorAll('[data-preserve]').forEach(el => { saved[el.id] = el.value; });
         if (!glossaryDirty) { glossaryDraft = (live?.entries || []).map(e => ({ phrase: e.phrase, canonical: e.canonical })); glossaryText = glossaryDraft.map(e => e.phrase + ' : ' + e.canonical).join('\n'); }
-        host.innerHTML = `<section class="car-section"><h3>قاموس اللهجة (المصطلحات الخارجية ومعناها)</h3><p class="note">النسخة الحية: <span class="num">${esc(live?.rev ?? '—')}</span> · ٨٠ زوجًا، ٣٢ حرفًا للحقل، ٢٠٠٠ حرف إجمالًا.</p>${c.overlayError ? '<p class="note">تعذّر تحميل القاموس؛ حدّث البيانات قبل النشر.</p>' : ''}<fieldset ${c.overlayError ? 'disabled' : ''} style="border:0;padding:0"><div class="toolbar"><button type="button" class="chip ${glossaryMode === 'table' ? 'active' : ''}" data-glossary-mode="table">جدول</button><button type="button" class="chip ${glossaryMode === 'text' ? 'active' : ''}" data-glossary-mode="text">الكلمة : المعنى</button></div><div id="glossary-table" ${glossaryMode === 'text' ? 'hidden' : ''}><div class="table-wrap"><table><thead><tr><th>الكلمة كما يقولها السائق</th><th>المعنى / الأمر الفصيح</th><th></th></tr></thead><tbody id="glossary-body"></tbody></table></div><button type="button" class="btn sm" data-glossary-add>إضافة صف</button></div><label id="glossary-text-label" ${glossaryMode === 'table' ? 'hidden' : ''}>الكلمة : المعنى — زوج واحد في كل سطر<textarea id="glossary-text" rows="8" style="width:100%">${esc(glossaryText)}</textarea></label><label>ملاحظة النشر<input id="glossary-note" maxlength="200" data-preserve></label><button type="button" class="btn" data-controller-write="overlay">انشر إلى الأسطول</button></fieldset><h4>سجل القاموس</h4><div id="glossary-history"></div></section>
-        <section class="car-section"><h3>سعر الوقود للأسطول</h3><p class="note">السعر الفعّال: <span class="num">${esc(fuel?.price ?? '—')} ${esc(fuel?.currency || '')}</span> · ${esc(fuel?.grade || '')}</p>${c.fuelError ? '<p class="note">تعذّر تحميل سجل الوقود؛ حدّث البيانات قبل النشر.</p>' : ''}<fieldset ${c.fuelError ? 'disabled' : ''} style="border:0;padding:0"><label>السعر<input id="fleet-fuel-price" type="number" min="0.001" max="100" step="0.001" value="${esc(fuel?.price ?? '')}" data-preserve></label><label>العملة<input id="fleet-fuel-currency" maxlength="8" value="${esc(fuel?.currency || 'QAR')}" data-preserve></label><label>الدرجة<input id="fleet-fuel-grade" maxlength="24" value="${esc(fuel?.grade || 'super95')}" data-preserve></label><label>ملاحظة<input id="fleet-fuel-note" maxlength="200" data-preserve></label><button type="button" class="btn" data-controller-write="fuel">نشر سعر الوقود</button></fieldset><h4>سجل سعر الوقود</h4><div id="fleet-fuel-history"></div></section>
+        host.innerHTML = `<section class="car-section"><h3>قاموس اللهجة (المصطلحات الخارجية ومعناها)</h3><p class="note">النسخة الحية: <span class="num">${esc(live?.rev ?? '—')}</span> · ٨٠ زوجًا، ٣٢ حرفًا للحقل، ٢٠٠٠ حرف إجمالًا.</p>${c.overlayError ? '<p class="note">تعذّر تحميل القاموس؛ حدّث البيانات قبل النشر.</p>' : ''}<fieldset ${c.overlayError ? 'disabled' : ''} style="border:0;padding:0"><div class="toolbar"><button type="button" class="chip ${glossaryMode === 'table' ? 'active' : ''}" data-glossary-mode="table">جدول</button><button type="button" class="chip ${glossaryMode === 'text' ? 'active' : ''}" data-glossary-mode="text">الكلمة : المعنى</button></div><div id="glossary-table" ${glossaryMode === 'text' ? 'hidden' : ''}><div class="table-wrap"><table><thead><tr><th>الكلمة كما يقولها السائق</th><th>المعنى / الأمر الفصيح</th><th></th></tr></thead><tbody id="glossary-body"></tbody></table></div><button type="button" class="btn sm" data-glossary-add>إضافة صف</button></div><label id="glossary-text-label" ${glossaryMode === 'table' ? 'hidden' : ''}>الكلمة : المعنى — زوج واحد في كل سطر<textarea id="glossary-text" rows="8" style="width:100%">${esc(glossaryText)}</textarea></label><label>ملاحظة النشر<input id="glossary-note" maxlength="200" data-preserve></label><button type="button" class="btn" data-controller-write="overlay">انشر إلى كل السيارات</button></fieldset><h4>سجل القاموس</h4><div id="glossary-history"></div></section>
+        <section class="car-section"><h3>سعر الوقود لكل السيارات</h3><p class="note">السعر الفعّال: <span class="num">${esc(fuel?.price ?? '—')} ${esc(fuel?.currency || '')}</span> · ${esc(fuel?.grade || '')}</p>${c.fuelError ? '<p class="note">تعذّر تحميل سجل الوقود؛ حدّث البيانات قبل النشر.</p>' : ''}<fieldset ${c.fuelError ? 'disabled' : ''} style="border:0;padding:0"><label>السعر<input id="fleet-fuel-price" type="number" min="0.001" max="100" step="0.001" value="${esc(fuel?.price ?? '')}" data-preserve></label><label>العملة<input id="fleet-fuel-currency" maxlength="8" value="${esc(fuel?.currency || 'QAR')}" data-preserve></label><label>الدرجة<input id="fleet-fuel-grade" maxlength="24" value="${esc(fuel?.grade || 'super95')}" data-preserve></label><label>ملاحظة<input id="fleet-fuel-note" maxlength="200" data-preserve></label><button type="button" class="btn" data-controller-write="fuel">نشر سعر الوقود</button></fieldset><h4>سجل سعر الوقود</h4><div id="fleet-fuel-history"></div></section>
         <section class="car-section"><h3>أوامر كل نوع سيارة</h3><p class="note">أوامر أنواع السيارات مضمّنة في ملفات التطبيق ولا يمكن تعديلها عن بُعد حاليًا.</p><div id="controller-car-types"></div></section>`;
         Object.entries(saved).forEach(([id, value]) => { if ($(id)) $(id).value = value; });
         renderGlossaryRows();
@@ -2692,13 +2692,13 @@
                 const entries = validateGlossary(glossaryMode === 'text' ? parseGlossaryText(glossaryText) : glossaryDraft);
                 const note = $('glossary-note').value.trim(); if (note.length > 200) throw new Error('الملاحظة لا تتجاوز ٢٠٠ حرف.');
                 rpc = 'thab_admin_voice_overlay_publish'; args = { p_entries: entries, p_note: note };
-                title = 'نشر القاموس إلى الأسطول؟'; html = `${entries.length ? `سيُنشر ${entries.length} زوجًا.` : 'سيتم إيقاف القاموس في كل السيارات'} ستلتقط السيارات التغيير خلال ٦ ساعات.`;
+                title = 'نشر القاموس إلى كل السيارات؟'; html = `${entries.length ? `سيُنشر ${entries.length} زوجًا.` : 'سيتم إيقاف القاموس في كل السيارات'} ستلتقط السيارات التغيير خلال ٦ ساعات.`;
             } else {
                 const priceInput = $('fleet-fuel-price'), price = Number(priceInput.value), currency = $('fleet-fuel-currency').value.trim(), grade = $('fleet-fuel-grade').value.trim(), note = $('fleet-fuel-note').value.trim();
                 if (!priceInput.checkValidity() || !Number.isFinite(price) || price < 0.001 || price > 100) throw new Error('أدخل سعرًا من 0.001 إلى 100 بخطوة 0.001.');
                 if (!currency || currency.length > 8 || !grade || grade.length > 24 || note.length > 200) throw new Error('العملة مطلوبة حتى ٨ أحرف، والدرجة حتى ٢٤ حرفًا، والملاحظة حتى ٢٠٠ حرف.');
                 rpc = 'thab_admin_fuel_price_publish'; args = { p_price: price, p_currency: currency, p_grade: grade, p_note: note };
-                title = 'نشر سعر الوقود للأسطول؟'; html = `${esc(price)} ${esc(currency)} · ${esc(grade)}<br>${esc(note)}`;
+                title = 'نشر سعر الوقود لكل السيارات؟'; html = `${esc(price)} ${esc(currency)} · ${esc(grade)}<br>${esc(note)}`;
             }
             if (!await confirmDialog({ title, html, confirmText: 'تأكيد النشر' })) return;
             await localPost('/local/controller/' + rpc, args);
@@ -2742,7 +2742,7 @@
         const cars = asRows(c.cars);
         const joined = cars.filter(r => vinToHw(vinOf(r))).length;
         const vinTotal = state.devices.filter(d => /^VIN-/i.test(d.hardware_id || '')).length;
-        $('ctl-coverage').textContent = `تليمتري الكونترولر مفتاحه VIN؛ ${cars.length} سيارة في التليمتري، ${joined} منها مطابقة في devices؛ السيارات ذات VIN في الأسطول ${vinTotal} من ${state.devices.length} (الباقي بلا VIN ولا يمكن أن يظهر هنا).`;
+        $('ctl-coverage').textContent = `تليمتري الكونترولر مفتاحه VIN؛ ${cars.length} سيارة في التليمتري، ${joined} منها مطابقة في devices؛ السيارات ذات VIN من كل السيارات ${vinTotal} من ${state.devices.length} (الباقي بلا VIN ولا يمكن أن يظهر هنا).`;
         // car = null means the installer never confirmed the car profile: the unit reads gauges but moves
         // nothing (windows/seats) — by design, but the customer must not be left like that. Flag it loudly.
         genericTable('ctl-cars-head', 'ctl-cars-body', cars, { empty: 'لا سيارات', cell: (k, v, r) => /^vin$/i.test(k) ? vinCell(String(v || '')) : (/^car$/i.test(k) && !v) ? '<span class="badge bad" title="لم يُختر نوع السيارة على الشاشة: البرنامج يقرأ العدّادات فقط ولا يحرّك زجاجاً ولا مقعداً">⚠ بلا نوع مؤكَّد</span>' : k === 'overlay_rev' ? overlayCell(r) : (k === 'overlay_at' || k === 'overlay_state') ? '' : cellValue(k, v), labels: { overlay_rev: 'القاموس عند آخر تشغيل', overlay_at: '', overlay_state: '' }, hide: ['overlay_at', 'overlay_state'] });
