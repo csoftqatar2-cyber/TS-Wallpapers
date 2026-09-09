@@ -40,6 +40,8 @@ v6.1/167: الفيديو بقى يشتغل من أول مرة في وضع الل
 
 Describe **what the driver will notice**, not what changed in the code. No file names,
 no class names, no English.
+**Modern Standard Arabic only (فصحى) — the owner banned dialect in anything a customer reads
+(2026-09-09).** «يبقى/أصبح/لم يعد» not «بقى/مابقاش»; «التي» not «اللي»; no «بتاع، دلوقتي، مفيش، عايز، كده».
 
 ### 3. ⚠️ The bump must be the LAST commit in the push
 
