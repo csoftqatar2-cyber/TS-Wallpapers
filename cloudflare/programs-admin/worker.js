@@ -40,13 +40,19 @@ const MAX_BODY = 64 * 1024;
 // THABTHABA STORE catalog must show the new build as an update by itself. The apps that may be
 // mirrored are fixed here; the Worker only BUMPS a row that already exists in catalog/apps.json
 // (never creates one — which apps are on the store stays the owner's decision).
-const CATALOG_PUBLISH_PACKAGES = ["store.thabthaba.clock", "com.thabthaba.tslink"];
+// Owner's list (2026-09-09): the three apps that publish on their own channel AND are sold through the
+// store. Closed by name on purpose — `com.thabthaba.controller` and `com.codex.clusterlauncher` must
+// never appear in the catalog at all (own channels only), so they are not merely absent here, they
+// are forbidden: adding them is a product decision, not a config change.
+const CATALOG_PUBLISH_PACKAGES = ["store.thabthaba.clock", "com.thabthaba.tslink", "com.tsdash.jetourg700"];
+const CATALOG_PUBLISH_FORBIDDEN = ["com.thabthaba.controller", "com.codex.clusterlauncher"];
 // Where a mirrored APK may be fetched from (https only). Add TS Link's own channel host here when
 // its CI starts calling this route; the store bucket's public host is listed so a manual re-mirror
 // of an APK already on the store works too.
 const CATALOG_PUBLISH_APK_HOSTS = [
   "pub-3108628f0bc04bb4a97214eb7732e284.r2.dev",   // ts-wallpapers channel (release.yml R2_PUBLIC_BASE)
   "pub-3d6cc5a5671c4be3829a384a375f7b11.r2.dev",   // thabthaba store bucket itself
+  "pub-b7e6e084a54e46acb74f3dfe7c6533b1.r2.dev",   // TS Dash Jetour G700 channel (TS Dash/Jetour G700/publish.ps1)
 ];
 const CATALOG_KEY = "catalog/apps.json";
 const CATALOG_APK_PREFIX = "apks/";                 // stable key the store installs from: apks/<packageName>.apk
@@ -288,7 +294,8 @@ async function handleCatalogPublish(req, env) {
   const packageName = String(body.packageName || "");
   const versionName = String(body.versionName || "");
   const versionCode = Number(body.versionCode);
-  if (!CATALOG_PUBLISH_PACKAGES.includes(packageName)) return json(400, { error: "package_not_allowed", packageName });
+  if (CATALOG_PUBLISH_FORBIDDEN.includes(packageName)) return json(403, { error: "package_forbidden", packageName });
+  if (!CATALOG_PUBLISH_PACKAGES.includes(packageName)) return json(403, { error: "package_not_allowed", packageName });
   if (!Number.isSafeInteger(versionCode) || versionCode <= 0) return json(400, { error: "bad_version_code" });
   if (!VERSION_NAME_RE.test(versionName)) return json(400, { error: "bad_version_name" });
   let apkUrl;
@@ -323,8 +330,8 @@ async function handleCatalogPublish(req, env) {
   catch (e) { return json(500, { error: e instanceof CatalogRowError ? e.code : "surgery_failed", detail: e.message }); }
 
   // (c) the APK at its stable key, then (e) the catalog
-  await env.CATALOG_R2.put(`${CATALOG_APK_PREFIX}${packageName}.apk`, bytes, { httpMetadata: { contentType: "application/vnd.android.package-archive" }, customMetadata: { sha256: sha256hex, versionCode: String(versionCode), versionName, source: apkUrl.toString() } });
-  await env.CATALOG_R2.put(CATALOG_KEY, edit.text, { httpMetadata: { contentType: "application/json" } });
+  await env.CATALOG_R2.put(`${CATALOG_APK_PREFIX}${packageName}.apk`, bytes, { httpMetadata: { contentType: "application/vnd.android.package-archive", cacheControl: "no-cache, max-age=0" }, customMetadata: { sha256: sha256hex, versionCode: String(versionCode), versionName, source: apkUrl.toString() } });
+  await env.CATALOG_R2.put(CATALOG_KEY, edit.text, { httpMetadata: { contentType: "application/json", cacheControl: "no-cache, max-age=0" } });
   console.log(`catalog/publish ${packageName} ${edit.previous.versionCode}->${versionCode} (${versionName}) ${sizeBytes} bytes sha256=${sha256hex.slice(0, 16)} from ${apkUrl.hostname}`);
   return json(200, { ok: true, packageName, versionCode, versionName, sizeBytes, sha256: sha256hex, previousVersionCode: edit.previous.versionCode });
 }
