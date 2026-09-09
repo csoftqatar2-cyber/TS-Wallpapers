@@ -142,6 +142,9 @@ jobs:
             --endpoint-url "$R2_ENDPOINT" \
             --content-type application/vnd.android.package-archive
           echo "apk_url=${R2_PUBLIC_BASE}/apk/${NAME}" >> "$GITHUB_OUTPUT"
+          # Hash of the exact bytes uploaded: the store mirror step sends it so the Worker
+          # refuses to mirror anything but this file (a truncated or cached download).
+          echo "apk_sha256=$(sha256sum "$SRC" | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
 
       - name: Publish version row to app_versions
         if: steps.gate.outputs.publish == 'true'
@@ -183,12 +186,13 @@ jobs:
           VC: ${{ steps.gate.outputs.version_code }}
           VN: ${{ steps.gate.outputs.version_name }}
           APK_URL: ${{ steps.upload.outputs.apk_url }}
+          APK_SHA256: ${{ steps.upload.outputs.apk_sha256 }}
         run: |
           if [ -z "$CATALOG_PUBLISH_SECRET" ]; then
             echo "::error::CATALOG_PUBLISH_SECRET is not set — store catalog NOT updated (app publish itself succeeded)."
             exit 1
           fi
-          BODY=$(printf '{"packageName":"store.thabthaba.clock","versionCode":%s,"versionName":"%s","apkUrl":"%s"}' "$VC" "$VN" "$APK_URL")
+          BODY=$(printf '{"packageName":"store.thabthaba.clock","versionCode":%s,"versionName":"%s","apkUrl":"%s","sha256":"%s"}' "$VC" "$VN" "$APK_URL" "$APK_SHA256")
           # -f is deliberately NOT used: the Worker's 4xx body says WHY (not_newer / no_row / …)
           # and that reason must land in the log.
           HTTP=$(curl -sS -o /tmp/catalog.json -w "%{http_code}" -X POST "${PROGRAMS_ADMIN_URL}/catalog/publish" \
