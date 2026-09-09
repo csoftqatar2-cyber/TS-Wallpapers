@@ -29,4 +29,9 @@
     <color name="aurora_border">#24ffd6a0</color>   <!-- 14% gold: card + control outlines -->
     <color name="aurora_ok">#34d399</color>         <!-- success status lines -->
     <color name="aurora_danger">#ff6b5b</color>     <!-- errors + destructive actions -->
+
+    <!-- Top-bar pill fill, THABTHABA STORE's "glass" (spec «البار العلوي - ذبذبة ستور», 2026-09-09).
+         The other bar tokens already exist under their Aurora names: bar text = aurora_text,
+         muted icons = aurora_muted, 1dp hairline = aurora_border, highlight = gold. -->
+    <color name="bar_glass">#802E2417</color>
 </resources>

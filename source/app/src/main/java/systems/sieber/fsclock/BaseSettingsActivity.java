@@ -475,9 +475,10 @@ public class BaseSettingsActivity extends AppCompatActivity {
         // The manual, for every mode: in the clock modes this header is where Help lives (the
         // wallpaper screen has no room for a button), in the hand-off modes it doubles the one
         // in the picker's top bar.
+        // A MaterialButton since the Store restyle (2026-09-09): its icon comes from the layout
+        // (app:icon), so no compound drawable here — that would draw a second one.
         TextView help = findViewById(R.id.chipHelp);
         if(help != null) {
-            help.setCompoundDrawablesRelativeWithIntrinsicBounds(R.drawable.ic_chip_help_16dp, 0, 0, 0);
             help.setOnClickListener(v -> HelpDialog.show(this));
         }
 
@@ -485,8 +486,9 @@ public class BaseSettingsActivity extends AppCompatActivity {
         if(activation != null) {
             boolean active = mWallpaperRepo != null && mWallpaperRepo.isActive();
             activation.setText(active ? R.string.chip_activated : R.string.chip_not_activated);
-            activation.setBackgroundResource(active ? R.drawable.chip_ok_bg : R.drawable.chip_danger_bg);
-            activation.setTextColor(ContextCompat.getColor(this, active ? R.color.aurora_ok : R.color.aurora_danger));
+            // The pill is the bar's own (Store restyle); the state lives in the dot and — when
+            // NOT activated, the one thing a technician must not miss — in the text colour.
+            activation.setTextColor(ContextCompat.getColor(this, active ? R.color.aurora_text : R.color.aurora_danger));
             activation.setCompoundDrawablesRelativeWithIntrinsicBounds(
                     active ? R.drawable.chip_dot_ok : R.drawable.chip_dot_danger, 0, 0, 0);
         }

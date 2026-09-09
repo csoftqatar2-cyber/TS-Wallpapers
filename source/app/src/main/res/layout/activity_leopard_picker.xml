@@ -6,6 +6,7 @@
      disappears — on a screen this wide there is room for both, and staying put means a wrong
      turn costs one tap instead of a restart. -->
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent">
@@ -17,19 +18,22 @@
     android:orientation="vertical"
     android:background="@color/colorBackground">
 
-    <!-- ===== top strip ===== -->
+    <!-- ===== top bar =====
+         THABTHABA STORE's top bar to the number (owner's call 2026-09-09, spec «البار العلوي -
+         ذبذبة ستور»): 66dp, no fill / divider / shadow of its own, 20dp side padding, 38dp logo,
+         Cairo ExtraBold 18sp name, and every control a 44dp glass pill 12dp from the next. -->
     <LinearLayout
         android:layout_width="match_parent"
-        android:layout_height="64dp"
+        android:layout_height="66dp"
         android:orientation="horizontal"
         android:gravity="center_vertical"
-        android:paddingStart="30dp"
-        android:paddingEnd="30dp"
+        android:paddingStart="20dp"
+        android:paddingEnd="20dp"
         android:baselineAligned="false">
 
         <ImageView
-            android:layout_width="34dp"
-            android:layout_height="34dp"
+            android:layout_width="38dp"
+            android:layout_height="38dp"
             android:src="@drawable/logo_mark_light"
             android:importantForAccessibility="no" />
 
@@ -38,51 +42,46 @@
             android:layout_weight="1"
             android:layout_height="wrap_content"
             android:layout_marginStart="12dp"
+            android:fontFamily="@font/cairo_extrabold"
             android:textColor="@color/aurora_text"
-            android:textSize="17sp"
-            android:textStyle="bold"
+            android:textSize="18sp"
+            android:maxLines="1"
+            android:ellipsize="end"
             android:text="@string/leopard_title" />
 
+        <!-- The mode name is the bar's highlighted value, so it wears the Store's gold. Cairo
+             rather than Rajdhani: the label is Arabic ("وضع Leopard") and Rajdhani has no
+             Arabic glyphs — it would fall back to the system font mid-word. -->
         <TextView
             android:id="@+id/leopardChip"
             style="@style/HeaderChip"
-            android:background="@drawable/chip_accent_bg"
             android:textColor="@color/gold"
             android:text="@string/leopard_chip" />
 
-        <!-- Help: the manual for this mode (HelpDialog). Green like the fit editor's Help and the
-             only green thing in the bar, so someone meeting the screen for the first time can find
-             it among the gold furniture. Icon AND word: an icon alone reads as one more badge. -->
-        <LinearLayout
+        <!-- Help: the manual for this mode (HelpDialog). The Store's helpBtn — gold text button
+             with the ? icon before the word. Icon AND word: an icon alone reads as one more badge. -->
+        <com.google.android.material.button.MaterialButton
             android:id="@+id/buttonLeopardHelp"
+            style="@style/Widget.MaterialComponents.Button.TextButton"
             android:layout_width="wrap_content"
-            android:layout_height="44dp"
-            android:layout_marginStart="12dp"
-            android:orientation="horizontal"
-            android:gravity="center"
-            android:paddingStart="12dp"
-            android:paddingEnd="14dp"
-            android:background="@drawable/fit_help_btn"
-            android:focusable="true"
-            android:clickable="true"
-            android:contentDescription="@string/help_button">
-
-            <ImageView
-                android:layout_width="20dp"
-                android:layout_height="20dp"
-                android:src="@drawable/ic_help_outline_white_24dp"
-                android:importantForAccessibility="no" />
-
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginStart="6dp"
-                android:textColor="#ffffff"
-                android:textSize="13sp"
-                android:textStyle="bold"
-                android:text="@string/help_button" />
-
-        </LinearLayout>
+            android:layout_height="40dp"
+            android:layout_marginStart="8dp"
+            android:contentDescription="@string/help_button"
+            android:fontFamily="@font/cairo_semibold"
+            android:insetTop="0dp"
+            android:insetBottom="0dp"
+            android:minWidth="0dp"
+            android:paddingStart="10dp"
+            android:paddingEnd="10dp"
+            android:text="@string/help_button"
+            android:textAllCaps="false"
+            android:textColor="@color/gold"
+            android:textSize="15sp"
+            app:icon="@drawable/ic_help"
+            app:iconGravity="textStart"
+            app:iconPadding="5dp"
+            app:iconSize="18dp"
+            app:iconTint="@color/gold" />
 
         <!-- The only route to Settings. In Leopard the clock screen never runs, and the gear
              that normally opens Settings lives on it — without this button the mode is a
@@ -92,10 +91,10 @@
             android:layout_width="44dp"
             android:layout_height="44dp"
             android:layout_marginStart="12dp"
-            android:padding="10dp"
-            android:background="@drawable/fit_secondary_btn"
+            android:padding="12dp"
+            android:background="@drawable/bar_pill"
             android:src="@drawable/ic_settings_white_24dp"
-            android:tint="@color/aurora_text"
+            app:tint="@color/aurora_muted"
             android:focusable="true"
             android:clickable="true"
             android:contentDescription="@string/settings_header_title" />
@@ -107,22 +106,17 @@
             android:id="@+id/buttonIcarManage"
             android:layout_width="44dp"
             android:layout_height="44dp"
-            android:layout_marginStart="8dp"
-            android:padding="10dp"
-            android:background="@drawable/fit_secondary_btn"
+            android:layout_marginStart="12dp"
+            android:padding="12dp"
+            android:background="@drawable/bar_pill"
             android:src="@drawable/ic_delete_24dp"
-            android:tint="@color/aurora_text"
+            app:tint="@color/aurora_muted"
             android:focusable="true"
             android:clickable="true"
             android:visibility="gone"
             android:contentDescription="@string/icar03t_manage" />
 
     </LinearLayout>
-
-    <View
-        android:layout_width="match_parent"
-        android:layout_height="1dp"
-        android:background="@color/aurora_border" />
 
     <!-- ===== body =====
          layoutDirection is pinned to LTR on purpose. "Cloud on the left, device on the right"

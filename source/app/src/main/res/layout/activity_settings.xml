@@ -9,19 +9,27 @@
     android:background="@color/colorSettingsBg"
     tools:context=".SettingsActivity">
 
+    <!-- THABTHABA STORE's top bar to the number (owner's call 2026-09-09, spec «البار العلوي -
+         ذبذبة ستور»): 66dp, the screen's own background with no shadow or divider under it,
+         38dp logo + Cairo ExtraBold 18sp title, and every chip a 44dp glass pill 12dp apart. -->
     <com.google.android.material.appbar.AppBarLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:fitsSystemWindows="true">
+        android:fitsSystemWindows="true"
+        app:elevation="0dp"
+        app:liftOnScroll="false">
 
-        <!-- 74dp, and the title/subtitle/chips live in a custom child rather than in the
-             Toolbar's own title, which cannot carry a second line or trailing views. -->
+        <!-- The title/subtitle/chips live in a custom child rather than in the Toolbar's own
+             title, which cannot carry a second line or trailing views. The Up arrow stays and
+             supplies the bar's start gap; the child carries the 20dp end padding. -->
         <androidx.appcompat.widget.Toolbar
             android:id="@+id/toolbar"
             android:layout_width="match_parent"
-            android:layout_height="74dp"
+            android:layout_height="66dp"
             android:background="@color/colorBackground"
-            android:contentInsetStartWithNavigation="0dp"
+            app:contentInsetStart="0dp"
+            app:contentInsetStartWithNavigation="0dp"
+            app:contentInsetEnd="0dp"
             android:theme="@style/ThemeOverlay.AppCompat.Dark.ActionBar">
 
             <LinearLayout
@@ -29,12 +37,12 @@
                 android:layout_height="match_parent"
                 android:orientation="horizontal"
                 android:gravity="center_vertical"
+                android:paddingEnd="20dp"
                 android:baselineAligned="false">
 
                 <ImageView
-                    android:layout_width="34dp"
-                    android:layout_height="34dp"
-                    android:layout_marginStart="6dp"
+                    android:layout_width="38dp"
+                    android:layout_height="38dp"
                     android:src="@drawable/logo_mark_light"
                     android:importantForAccessibility="no" />
 
@@ -42,54 +50,55 @@
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
-                    android:layout_marginStart="13dp"
+                    android:layout_marginStart="12dp"
                     android:orientation="vertical">
 
                     <TextView
                         android:id="@+id/textViewHeaderTitle"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
+                        android:fontFamily="@font/cairo_extrabold"
                         android:textColor="@color/aurora_text"
-                        android:textSize="19sp"
-                        android:textStyle="bold"
+                        android:textSize="18sp"
                         android:maxLines="1"
                         android:ellipsize="end" />
 
+                    <!-- "Thabthaba Wallpaper · v7.17": a product token, so the Store's technical
+                         face (Rajdhani) in its muted colour. Set and pinned LTR in Java. -->
                     <TextView
                         android:id="@+id/textViewHeaderSubtitle"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:layout_marginTop="3dp"
+                        android:fontFamily="@font/rajdhani_semibold"
                         android:textColor="@color/aurora_muted"
-                        android:textSize="11sp"
-                        android:textStyle="bold"
+                        android:textSize="13sp"
                         android:maxLines="1" />
 
                 </LinearLayout>
 
                 <!-- The mode chip is the one chip that is also a control: tapping it opens the
-                     mode picker. The others are status and stay inert. -->
+                     mode picker. Its value is the bar's highlighted one, hence gold. Cairo, not
+                     Rajdhani: the label is Arabic ("الوضع: Leopard") and Rajdhani has no Arabic
+                     glyphs. The others are status and stay inert. -->
                 <TextView
                     android:id="@+id/chipMode"
                     style="@style/HeaderChip"
-                    android:background="@drawable/chip_accent_bg"
+                    android:layout_marginStart="12dp"
                     android:textColor="@color/gold"
                     android:focusable="true"
                     android:clickable="true"
-                    android:drawablePadding="7dp" />
+                    android:drawablePadding="6dp" />
 
                 <TextView
                     android:id="@+id/chipActivation"
                     style="@style/HeaderChip"
-                    android:layout_marginStart="10dp"
-                    android:drawablePadding="7dp" />
+                    android:layout_marginStart="12dp"
+                    android:drawablePadding="6dp" />
 
                 <TextView
                     android:id="@+id/chipAutoSave"
                     style="@style/HeaderChip"
-                    android:layout_marginStart="10dp"
-                    android:background="@drawable/chip_neutral_bg"
-                    android:textColor="@color/aurora_muted"
+                    android:layout_marginStart="12dp"
                     android:text="@string/chip_auto_save" />
 
                 <!-- The language switch was an overflow-menu item, so it rendered in the system's
@@ -98,27 +107,36 @@
                 <TextView
                     android:id="@+id/chipLanguage"
                     style="@style/HeaderChip"
-                    android:layout_marginStart="10dp"
-                    android:background="@drawable/chip_neutral_bg"
-                    android:textColor="@color/aurora_text"
-                    android:drawablePadding="7dp"
+                    android:layout_marginStart="12dp"
+                    android:drawablePadding="6dp"
                     android:focusable="true"
                     android:clickable="true" />
 
-                <!-- Help: the manual for this car's mode (HelpDialog). A control like chipMode, in
-                     the fit editor's green so it is findable among the status chips. The icon is
-                     set in refreshHeaderChips(), the way the other chips get theirs. -->
-                <TextView
+                <!-- Help: the manual for this car's mode (HelpDialog). The Store's helpBtn — a
+                     gold text button, ? icon before the word, no fill. The click is wired in
+                     refreshHeaderChips(). -->
+                <com.google.android.material.button.MaterialButton
                     android:id="@+id/chipHelp"
-                    style="@style/HeaderChip"
-                    android:layout_marginStart="10dp"
-                    android:layout_marginEnd="6dp"
-                    android:background="@drawable/fit_help_btn"
-                    android:textColor="#ffffff"
-                    android:drawablePadding="7dp"
-                    android:focusable="true"
-                    android:clickable="true"
-                    android:text="@string/help_button" />
+                    style="@style/Widget.MaterialComponents.Button.TextButton"
+                    android:layout_width="wrap_content"
+                    android:layout_height="40dp"
+                    android:layout_marginStart="8dp"
+                    android:contentDescription="@string/help_button"
+                    android:fontFamily="@font/cairo_semibold"
+                    android:insetTop="0dp"
+                    android:insetBottom="0dp"
+                    android:minWidth="0dp"
+                    android:paddingStart="10dp"
+                    android:paddingEnd="10dp"
+                    android:text="@string/help_button"
+                    android:textAllCaps="false"
+                    android:textColor="@color/gold"
+                    android:textSize="15sp"
+                    app:icon="@drawable/ic_help"
+                    app:iconGravity="textStart"
+                    app:iconPadding="5dp"
+                    app:iconSize="18dp"
+                    app:iconTint="@color/gold" />
 
             </LinearLayout>
 

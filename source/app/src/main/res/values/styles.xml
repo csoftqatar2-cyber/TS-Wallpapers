@@ -289,16 +289,18 @@
         <item name="android:textColor">@color/fit_mode_label_tint</item>
     </style>
 
-    <!-- Status chip in the settings header. -->
+    <!-- Chip in the Settings toolbar and the picker's top strip: THABTHABA STORE's text pill
+         (spec «البار العلوي - ذبذبة ستور», 2026-09-09) — 44dp tall, glass fill + gold hairline,
+         Cairo SemiBold 13sp. A highlighted value overrides textColor to @color/gold. -->
     <style name="HeaderChip">
         <item name="android:layout_width">wrap_content</item>
-        <item name="android:layout_height">wrap_content</item>
-        <item name="android:paddingStart">14dp</item>
-        <item name="android:paddingEnd">14dp</item>
-        <item name="android:paddingTop">8dp</item>
-        <item name="android:paddingBottom">8dp</item>
-        <item name="android:textSize">12sp</item>
-        <item name="android:textStyle">bold</item>
+        <item name="android:layout_height">44dp</item>
+        <item name="android:background">@drawable/bar_pill</item>
+        <item name="android:paddingStart">12dp</item>
+        <item name="android:paddingEnd">12dp</item>
+        <item name="android:fontFamily">@font/cairo_semibold</item>
+        <item name="android:textSize">13sp</item>
+        <item name="android:textColor">@color/aurora_text</item>
         <item name="android:gravity">center_vertical</item>
         <item name="android:maxLines">1</item>
     </style>
