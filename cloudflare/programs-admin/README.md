@@ -60,3 +60,5 @@ the live catalog, applies the row surgery in memory and prints the diff — noth
 
 
 Allowlisted packages: `store.thabthaba.clock`, `com.thabthaba.tslink`, `com.tsdash.jetourg700`. Forbidden by name: the controller and Leo (own channels).
+
+- Optional body field `sha256` (64 hex): when present the Worker refuses the mirror with 422 `sha256_mismatch` if the downloaded APK hashes differently. Send it whenever the publisher knows the hash (TS Link/G700 manifests, CI).

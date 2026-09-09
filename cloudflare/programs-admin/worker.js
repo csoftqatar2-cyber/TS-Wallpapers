@@ -314,6 +314,14 @@ async function handleCatalogPublish(req, env) {
   if (!(head[0] === 0x50 && head[1] === 0x4b && head[2] === 0x03 && head[3] === 0x04)) return json(502, { error: "apk_not_zip" });   // an error page, not an APK
   const sizeBytes = bytes.byteLength;
   const sha256hex = hex(await crypto.subtle.digest("SHA-256", bytes));
+  // Optional integrity check: a caller that knows the hash of what it published (its own
+  // latest.json / CI output) sends `sha256`; a truncated or wrong download is then refused
+  // instead of being mirrored with a wrong size. Callers without it are still accepted.
+  if (body.sha256 != null) {
+    const want = String(body.sha256).trim().toLowerCase();
+    if (!/^[0-9a-f]{64}$/.test(want)) return json(400, { error: "bad_sha256" });
+    if (want !== sha256hex) return json(422, { error: "sha256_mismatch", expected: want, actual: sha256hex });
+  }
 
   // (b) the catalog row as it stands
   const obj = await env.CATALOG_R2.get(CATALOG_KEY);
