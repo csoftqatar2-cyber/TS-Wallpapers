@@ -9,14 +9,19 @@
  * not the admin uid gets 401 and nothing else — no secret ever leaves this Worker.
  *
  * Secrets (wrangler secret put): STORE_ADMIN_SECRET, TSLINK_ADMIN_TOKEN, LEO_ADMIN_TOKEN,
- * CONTROLLER_ADMIN_SECRET. Vars (wrangler.toml): SUPABASE_URL, SUPABASE_ANON, ADMIN_UID,
- * CTRL_TELEMETRY_URL, CTRL_TELEMETRY_ANON.
+ * CONTROLLER_ADMIN_SECRET, CATALOG_PUBLISH_SECRET. Vars (wrangler.toml): SUPABASE_URL,
+ * SUPABASE_ANON, ADMIN_UID, CTRL_TELEMETRY_URL, CTRL_TELEMETRY_ANON.
+ *
+ * One machine-to-machine route lives outside the Access/admin-session gate: POST /catalog/publish
+ * (bearer CATALOG_PUBLISH_SECRET). The release CI of ذبذبة خلفيات / TS Link calls it after its own
+ * publish so the THABTHABA STORE catalog shows the new build as an update — see handleCatalogPublish.
  */
 import PAGE from "./control-panel.html";
 import GEN from "./gen.html";
 import ICON180 from "./icons/icon-180.png";
 import ICON192 from "./icons/icon-192.png";
 import ICON512 from "./icons/icon-512.png";
+import { bumpCatalogRow, readCatalogRow, CatalogRowError } from "./catalog-row.mjs";
 
 const RPC_ALLOW = /^store_admin_[a-z0-9_]{1,40}$/u;
 const TSLINK_ADMIN_BASE = "https://tslink-bot.tsdash-qatar.workers.dev/admin/api";
@@ -29,6 +34,24 @@ const CTRL_RPC_ALLOW = /^thab_admin_(stats|cars|events|gaps|fuel_price_history|v
 const CATALOG_URL = "https://pub-3d6cc5a5671c4be3829a384a375f7b11.r2.dev/catalog/apps.json";
 const LEO_LATEST_URL = "https://pub-fbb386b3923a44879e64296817936d84.r2.dev/latest.json";
 const MAX_BODY = 64 * 1024;
+
+// ---------- store-catalog mirror (POST /catalog/publish) ----------
+// Owner's order 2026-09-09: when ذبذبة خلفيات or TS Link publishes on its own channel, the
+// THABTHABA STORE catalog must show the new build as an update by itself. The apps that may be
+// mirrored are fixed here; the Worker only BUMPS a row that already exists in catalog/apps.json
+// (never creates one — which apps are on the store stays the owner's decision).
+const CATALOG_PUBLISH_PACKAGES = ["store.thabthaba.clock", "com.thabthaba.tslink"];
+// Where a mirrored APK may be fetched from (https only). Add TS Link's own channel host here when
+// its CI starts calling this route; the store bucket's public host is listed so a manual re-mirror
+// of an APK already on the store works too.
+const CATALOG_PUBLISH_APK_HOSTS = [
+  "pub-3108628f0bc04bb4a97214eb7732e284.r2.dev",   // ts-wallpapers channel (release.yml R2_PUBLIC_BASE)
+  "pub-3d6cc5a5671c4be3829a384a375f7b11.r2.dev",   // thabthaba store bucket itself
+];
+const CATALOG_KEY = "catalog/apps.json";
+const CATALOG_APK_PREFIX = "apks/";                 // stable key the store installs from: apks/<packageName>.apk
+const CATALOG_MAX_APK = 100 * 1024 * 1024;         // both apps are 5–10 MB; anything near this is not one of them
+const VERSION_NAME_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,31}$/u;
 
 const SEC_HEADERS = {
   "Cache-Control": "no-store",
@@ -237,6 +260,75 @@ async function passthrough(upstream) {
   return new Response(text, { status: upstream.status, headers: { "Content-Type": upstream.headers.get("content-type") || "application/json; charset=utf-8", ...SEC_HEADERS } });
 }
 
+// ---------- POST /catalog/publish: mirror a release into the store catalog ----------
+// Constant-time bearer check: both sides are hashed first so the comparison runs over equal-length
+// buffers and the loop never exits early — the token's length and prefix stay unobservable.
+async function bearerMatches(req, secret) {
+  const m = /^Bearer\s+(\S{16,256})$/u.exec(req.headers.get("Authorization") || "");
+  if (!m || !secret) return false;
+  const [a, b] = await Promise.all([crypto.subtle.digest("SHA-256", new TextEncoder().encode(m[1])), crypto.subtle.digest("SHA-256", new TextEncoder().encode(secret))]);
+  const x = new Uint8Array(a), y = new Uint8Array(b);
+  let diff = 0;
+  for (let i = 0; i < x.length; i++) diff |= x[i] ^ y[i];
+  return diff === 0;
+}
+const hex = buf => [...new Uint8Array(buf)].map(x => x.toString(16).padStart(2, "0")).join("");
+// Body: { packageName, versionName, versionCode, apkUrl }. Steps: validate → fetch the APK from the
+// app's own channel → read the catalog row (404 no_row / 409 not_newer) → compute the row edit in
+// memory (500 if the surgery would touch anything else — nothing written in that case) → put the
+// APK at its stable key → put the catalog. A partial failure between the two puts leaves a newer
+// APK under an older row, which the store treats as "no update" — harmless, and the next call heals it.
+async function handleCatalogPublish(req, env) {
+  if (req.method !== "POST") return new Response(JSON.stringify({ error: "method_not_allowed" }), { status: 405, headers: { Allow: "POST", "Content-Type": "application/json; charset=utf-8", ...SEC_HEADERS } });
+  if (!env.CATALOG_PUBLISH_SECRET) return json(503, { error: "not_configured", detail: "CATALOG_PUBLISH_SECRET missing" });
+  if (!(await bearerMatches(req, env.CATALOG_PUBLISH_SECRET))) return json(401, { error: "unauthorized" });
+  if (!env.CATALOG_R2) return json(503, { error: "not_configured", detail: "CATALOG_R2 binding missing" });
+  let body;
+  try { body = await readJsonBody(req); } catch (e) { return json(400, { error: "bad_body" }); }
+  const packageName = String(body.packageName || "");
+  const versionName = String(body.versionName || "");
+  const versionCode = Number(body.versionCode);
+  if (!CATALOG_PUBLISH_PACKAGES.includes(packageName)) return json(400, { error: "package_not_allowed", packageName });
+  if (!Number.isSafeInteger(versionCode) || versionCode <= 0) return json(400, { error: "bad_version_code" });
+  if (!VERSION_NAME_RE.test(versionName)) return json(400, { error: "bad_version_name" });
+  let apkUrl;
+  try { apkUrl = new URL(String(body.apkUrl || "")); } catch (e) { return json(400, { error: "bad_apk_url" }); }
+  if (apkUrl.protocol !== "https:" || !CATALOG_PUBLISH_APK_HOSTS.includes(apkUrl.hostname)) return json(400, { error: "apk_host_not_allowed", host: apkUrl.hostname });
+
+  // (a) the APK bytes, from the app's own channel
+  const src = await fetch(apkUrl.toString(), { cache: "no-store" });
+  if (src.status !== 200) return json(502, { error: "apk_fetch_failed", status: src.status });
+  const declared = Number(src.headers.get("content-length"));
+  if (!Number.isSafeInteger(declared) || declared <= 0) return json(502, { error: "apk_no_content_length" });
+  if (declared > CATALOG_MAX_APK) return json(502, { error: "apk_too_large", sizeBytes: declared });
+  const bytes = await src.arrayBuffer();
+  if (bytes.byteLength !== declared) return json(502, { error: "apk_truncated", expected: declared, got: bytes.byteLength });
+  const head = new Uint8Array(bytes, 0, 4);
+  if (!(head[0] === 0x50 && head[1] === 0x4b && head[2] === 0x03 && head[3] === 0x04)) return json(502, { error: "apk_not_zip" });   // an error page, not an APK
+  const sizeBytes = bytes.byteLength;
+  const sha256hex = hex(await crypto.subtle.digest("SHA-256", bytes));
+
+  // (b) the catalog row as it stands
+  const obj = await env.CATALOG_R2.get(CATALOG_KEY);
+  if (!obj) return json(500, { error: "catalog_missing" });
+  const text = await obj.text();
+  let current;
+  try { current = readCatalogRow(text, packageName); } catch (e) { return json(500, { error: e instanceof CatalogRowError ? e.code : "catalog_unreadable", detail: e.message }); }
+  if (!current) return json(404, { error: "no_row", packageName });
+  if (!(versionCode > current.versionCode)) return json(409, { error: "not_newer", current: current.versionCode, requested: versionCode });
+
+  // (d, computed first) the row edit — refused outright if anything but the three fields would move
+  let edit;
+  try { edit = bumpCatalogRow(text, packageName, { versionCode, versionName, sizeBytes }); }
+  catch (e) { return json(500, { error: e instanceof CatalogRowError ? e.code : "surgery_failed", detail: e.message }); }
+
+  // (c) the APK at its stable key, then (e) the catalog
+  await env.CATALOG_R2.put(`${CATALOG_APK_PREFIX}${packageName}.apk`, bytes, { httpMetadata: { contentType: "application/vnd.android.package-archive" }, customMetadata: { sha256: sha256hex, versionCode: String(versionCode), versionName, source: apkUrl.toString() } });
+  await env.CATALOG_R2.put(CATALOG_KEY, edit.text, { httpMetadata: { contentType: "application/json" } });
+  console.log(`catalog/publish ${packageName} ${edit.previous.versionCode}->${versionCode} (${versionName}) ${sizeBytes} bytes sha256=${sha256hex.slice(0, 16)} from ${apkUrl.hostname}`);
+  return json(200, { ok: true, packageName, versionCode, versionName, sizeBytes, sha256: sha256hex, previousVersionCode: edit.previous.versionCode });
+}
+
 export default {
   async fetch(req, env) {
     const url = new URL(req.url);
@@ -257,6 +349,14 @@ export default {
       return new Response(JSON.stringify({ name: "Thabthaba Programs Admin", short_name: "Thabthaba", start_url: "/gen", display: "standalone", background_color: "#211a12", theme_color: "#211a12", dir: "rtl", lang: "ar",
         icons: [{ src: "/icon-192.png?v=3", sizes: "192x192", type: "image/png" }, { src: "/icon-512.png?v=3", sizes: "512x512", type: "image/png" }] }),
         { status: 200, headers: { "Content-Type": "application/manifest+json", "Cache-Control": "public, max-age=3600" } });
+    }
+    // Machine route for the release CIs: its own bearer secret is the whole gate, so it sits before
+    // Access (GitHub runners carry no Access JWT) and before the admin-session check. Everything it
+    // can do is fixed by the allow-lists above; a wrong or missing token gets 401 and nothing else.
+    if (p === "/catalog/publish") {
+      if (limited(clientOf(req).ip)) return json(429, { error: "slow down" });
+      try { return await handleCatalogPublish(req, env); }
+      catch (e) { console.log(`catalog/publish failed: ${e && e.message}`); return json(500, { error: "internal", detail: e && e.message ? e.message : String(e) }); }
     }
     if (!(await accessOk(req, env))) return new Response("Access required", { status: 403, headers: { "Content-Type": "text/plain; charset=utf-8", ...SEC_HEADERS } });
     // A client that brute-forced the password is refused everything, page included, for 24 h.
@@ -285,7 +385,7 @@ export default {
       return new Response(html, { status: 200, headers: { "Content-Type": "text/html; charset=utf-8", "Content-Security-Policy": csp(n), ...SEC_HEADERS } });
     }
     if (req.method === "GET" && p === "/local/ping") {
-      return json(200, { local: true, remote: true, store: !!env.STORE_ADMIN_SECRET, tslink: !!env.TSLINK_ADMIN_TOKEN, leo: !!env.LEO_ADMIN_TOKEN, controller: !!env.CONTROLLER_ADMIN_SECRET, codes: !!env.DB, guard: !!env.DB, sessions: !!env.DB, writes: !!env.PANEL_WRITE_KEY });
+      return json(200, { local: true, remote: true, store: !!env.STORE_ADMIN_SECRET, tslink: !!env.TSLINK_ADMIN_TOKEN, leo: !!env.LEO_ADMIN_TOKEN, controller: !!env.CONTROLLER_ADMIN_SECRET, codes: !!env.DB, guard: !!env.DB, sessions: !!env.DB, writes: !!env.PANEL_WRITE_KEY, catalog: !!(env.CATALOG_PUBLISH_SECRET && env.CATALOG_R2) });
     }
     if (!p.startsWith("/local/")) return json(404, { message: "not found" });
 

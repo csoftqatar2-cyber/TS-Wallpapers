@@ -162,6 +162,44 @@ jobs:
           echo "app_versions insert HTTP $HTTP"; cat /tmp/ins.json; echo
           if [ "$HTTP" -lt 200 ] || [ "$HTTP" -ge 300 ]; then exit 1; fi
 
+      # Store-catalog mirror (owner's order 2026-09-09): the THABTHABA STORE reads its own
+      # catalog (catalog/apps.json in the `thabthaba` R2 bucket) and shows an app as "update
+      # available" when the row's versionCode is above the installed one. This step asks the
+      # programs-admin Worker to copy the APK just published above to the store's stable key
+      # apks/store.thabthaba.clock.apk and bump that row's versionCode/versionName/sizeBytes —
+      # the Worker only edits an existing row, never adds one. It runs AFTER the app's own
+      # publish (R2 upload + app_versions row) has already succeeded, so a failure here cannot
+      # hold back the in-app update; it still fails the job so the mismatch is noticed and the
+      # call can be repeated by hand (see cloudflare/programs-admin/README.md).
+      - name: Mirror release into the THABTHABA STORE catalog
+        if: steps.gate.outputs.publish == 'true'
+        env:
+          PROGRAMS_ADMIN_URL: https://thabthaba-programs-admin.tsdash-qatar.workers.dev
+          CATALOG_PUBLISH_SECRET: ${{ secrets.CATALOG_PUBLISH_SECRET }}
+          VC: ${{ steps.gate.outputs.version_code }}
+          VN: ${{ steps.gate.outputs.version_name }}
+          APK_URL: ${{ steps.upload.outputs.apk_url }}
+        run: |
+          if [ -z "$CATALOG_PUBLISH_SECRET" ]; then
+            echo "::error::CATALOG_PUBLISH_SECRET is not set — store catalog NOT updated (app publish itself succeeded)."
+            exit 1
+          fi
+          BODY=$(printf '{"packageName":"store.thabthaba.clock","versionCode":%s,"versionName":"%s","apkUrl":"%s"}' "$VC" "$VN" "$APK_URL")
+          # -f is deliberately NOT used: the Worker's 4xx body says WHY (not_newer / no_row / …)
+          # and that reason must land in the log.
+          HTTP=$(curl -sS -o /tmp/catalog.json -w "%{http_code}" -X POST "${PROGRAMS_ADMIN_URL}/catalog/publish" \
+            -H "Authorization: Bearer ${CATALOG_PUBLISH_SECRET}" \
+            -H "Content-Type: application/json" \
+            --data "$BODY")
+          echo "catalog/publish HTTP $HTTP"; cat /tmp/catalog.json; echo
+          if [ "$HTTP" -ge 200 ] && [ "$HTTP" -lt 300 ]; then
+            echo "Store catalog: ذبذبة خلفيات row bumped to v${VN} (code ${VC}) — $(cat /tmp/catalog.json)" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "### ⚠️ Store catalog NOT updated (HTTP $HTTP): $(cat /tmp/catalog.json)" >> "$GITHUB_STEP_SUMMARY"
+            echo "The app's own publish above already succeeded; only the store mirror failed." >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+
       - name: Summary
         if: steps.gate.outputs.publish == 'true'
         run: |

@@ -32,7 +32,15 @@ ACCESS_AUD = "92e539ee78567d88d9e5b09c8fad24dad46deb7d3a9d3200f97c1e3044728caf"
 ACCESS_ALLOWED_EMAILS = "csoftqatar4@gmail.com,csoftqatar2@gmail.com"
 CTRL_TELEMETRY_ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFnaHllbGhndXNwaGthdGhna29tIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODMzMzU5MDUsImV4cCI6MjA5ODkxMTkwNX0.1FT6mF7apILQE1IEn3HVvnDOkKixomvlGLI5zud0pD8"
 
-# Secrets (never in this file): STORE_ADMIN_SECRET, TSLINK_ADMIN_TOKEN, LEO_ADMIN_TOKEN, CONTROLLER_ADMIN_SECRET
+# Secrets (never in this file): STORE_ADMIN_SECRET, TSLINK_ADMIN_TOKEN, LEO_ADMIN_TOKEN, CONTROLLER_ADMIN_SECRET,
+# CATALOG_PUBLISH_SECRET (bearer for POST /catalog/publish; the same value is a GitHub Actions secret
+# in the TS-Wallpapers repo so release.yml can call the route).
+
+# The store bucket itself: POST /catalog/publish reads/writes catalog/apps.json and puts the mirrored
+# APK at apks/<packageName>.apk. Same bucket the store's public host pub-3d6cc5a5…r2.dev serves.
+[[r2_buckets]]
+binding = "CATALOG_R2"
+bucket_name = "thabthaba"
 
 # Same D1 as the activation Worker: the generator writes minted codes here and reads their state.
 [[d1_databases]]

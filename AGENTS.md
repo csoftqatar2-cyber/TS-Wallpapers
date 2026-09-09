@@ -104,6 +104,18 @@ the single most important thing to know before touching backend behavior).
    (changelog = last commit subject line — **commit messages on version bumps are user-visible**).
 4. Devices poll `app_versions` (`UpdateManager`); newer `version_code` → in-app
    update badge → DownloadManager + package installer.
+5. **Store-catalog mirror** (2026-09-09): the last CI step POSTs
+   `{packageName, versionName, versionCode, apkUrl}` to
+   `https://thabthaba-programs-admin.tsdash-qatar.workers.dev/catalog/publish`
+   (`cloudflare/programs-admin/worker.js`, bearer `CATALOG_PUBLISH_SECRET` — set with
+   `npx wrangler secret put CATALOG_PUBLISH_SECRET` and as a GitHub Actions secret of the same
+   name). The Worker copies the APK to the store bucket's stable key
+   `apks/store.thabthaba.clock.apk` and bumps `versionCode/versionName/sizeBytes` of that row in
+   `catalog/apps.json`, so THABTHABA STORE shows the build as an update by itself. Only
+   `store.thabthaba.clock` and `com.thabthaba.tslink` are allow-listed, and the Worker only edits
+   a row that already exists (404 `no_row` otherwise; 409 `not_newer` if the code is not higher).
+   The step runs after the app's own publish succeeded: its failure fails the job but never the
+   in-app update. Details: `cloudflare/programs-admin/README.md`.
 
 ## 3. Repository map
 
