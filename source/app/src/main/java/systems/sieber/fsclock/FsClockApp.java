@@ -27,7 +27,7 @@ public class FsClockApp extends Application {
         CrashReporter.uploadPendingAsync(getApplicationContext());
         // One read of the controller's car.txt per process start, purely for the Log.e line it
         // leaves: on a customer's car it is how we tell "no file" from "SELinux refused us".
-        CarTypeFile.readKey();
+        CarTypeFile.read();   // logs car_family.txt first, then car.txt
         // There was a LeopardApplier.reassert() here, meant to put a dropped wallpaper back. It
         // was the opposite of harmless: this method runs in every process of the app, the wallpaper
         // service's included, so it fired the instant Android restored our live wallpaper at boot
