@@ -103,6 +103,23 @@ class OperatingMode {
         prefs.edit().putBoolean(PREF_CONFIRMED, true).apply();
     }
 
+    /**
+     * True only while NO mode has ever been written on this install: nobody confirmed one,
+     * {@link #set} never ran (it always writes {@link #PREF_LEOPARD}, so that key's presence is
+     * its footprint — a human's pick and {@code migrateOperatingMode}'s pin alike), and the
+     * pre-picker FSE flag is not on either.
+     *
+     * This is the gate for answering the mode from the controller's car file
+     * ({@link CarTypeFile}): a car that has anything saved — even a migration's guess — keeps
+     * being asked exactly as before, because the rule is "never override a saved mode", and the
+     * cheapest way to be sure of that is to touch only installs with no history at all.
+     */
+    static boolean isUnset(SharedPreferences prefs) {
+        return !isConfirmed(prefs)
+                && !prefs.contains(PREF_LEOPARD)
+                && !prefs.getBoolean(FullscreenActivity.PREF_FSE_SCREEN, false);
+    }
+
     /** The head unit's own theme app; the only supported way to set the wallpaper in Lynkco. */
     static final String LYNKCO_CUSTOMIZE_PACKAGE = "com.flyme.auto.customize";
 

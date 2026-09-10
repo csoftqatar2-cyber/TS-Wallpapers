@@ -209,7 +209,11 @@ public class FsClockView extends FrameLayout {
         if(blocked) postDelayed(mBlockedRetryRunnable, BLOCKED_RETRY_INTERVAL_MS);
         int form = blocked ? View.GONE : View.VISIBLE;
         if(mLayoutActivationEntry != null) mLayoutActivationEntry.setVisibility(form);
-        if(mLayoutActivationMode != null) mLayoutActivationMode.setVisibility(form);
+        // The mode column stays hidden when the controller's car file answered it (see
+        // applyControllerMode); un-blocking must not bring the question back.
+        if(mLayoutActivationMode != null) {
+            mLayoutActivationMode.setVisibility(mModeAnsweredByController ? View.GONE : form);
+        }
         if(mViewActivationDivider != null) mViewActivationDivider.setVisibility(form);
         if(mViewSupportDivider != null) mViewSupportDivider.setVisibility(form);
         if(mTextViewBlockedBanner != null) {
@@ -1349,6 +1353,14 @@ public class FsClockView extends FrameLayout {
             icar03t.setAlpha(0.4f);
         }
 
+        // Unless the controller (لوحة تحكم ذبذبة) has already said which car this is. Then the
+        // question is not asked: the mode is applied through the same writes the radios make
+        // (ModeConfirmActivity.answerFromController), the matching radio is checked so the
+        // activation buttons and applyActivationSuccess see a chosen mode, and the whole mode
+        // column is hidden — in both orientations, since it is the same id in both layouts. The
+        // status line says what was chosen and that Settings can still change it.
+        if(applyControllerMode(desc, supported)) return;
+
         // Nothing is preselected, on purpose — the same rule ModeConfirmActivity follows.
         // The list used to open on Others, so "already registered? re-check" was answerable
         // without reading it: a car that nobody had actually looked at went in as Others, and
@@ -1365,6 +1377,50 @@ public class FsClockView extends FrameLayout {
 
     /** No mode picked yet. Not a mode — the absence of one. */
     private static final int MODE_NONE = -1;
+
+    /** The mode column was answered by the controller's car file; keep it hidden on this screen. */
+    private boolean mModeAnsweredByController = false;
+
+    /**
+     * Skip the "choose your car" step when the controller's car file has answered it.
+     *
+     * Two launches look the same to the technician: on the first, {@code answerFromController}
+     * applies the mode now; on any later one it is already saved and confirmed, and the file still
+     * names it. Either way the radio is checked (hidden, but {@link #selectedActivationMode} reads
+     * it) and the column goes. If the driver later picks something else in Settings the file no
+     * longer matches the saved mode, and the column comes back exactly as before.
+     *
+     * @return true when the column was hidden and the mode is standing.
+     */
+    private boolean applyControllerMode(android.widget.TextView desc, boolean supported) {
+        if(mRadioGroupActivationMode == null || mSharedPref == null) return false;
+        try {
+            ModeConfirmActivity.answerFromController(getContext(), mSharedPref);
+            if(!OperatingMode.isConfirmed(mSharedPref)) return false;
+            int auto = ModeConfirmActivity.controllerMode(getContext(), CarTypeFile.readKey());
+            if(auto == ModeConfirmActivity.MODE_NONE || auto != OperatingMode.get(mSharedPref)) return false;
+            int radio = auto == OperatingMode.DENZA ? R.id.radioActivationDenza : R.id.radioActivationLeopard;
+            if(findViewById(radio) == null) return false;
+
+            mModeAnsweredByController = true;
+            mRadioGroupActivationMode.check(radio);
+            updateActivationModeDesc(desc, auto, supported);
+            View column = findViewById(R.id.layoutActivationMode);
+            if(column != null) column.setVisibility(View.GONE);
+            if(mTextViewActivationStatus != null) {
+                String label = getContext().getString(auto == OperatingMode.DENZA
+                        ? R.string.mode_denza : R.string.mode_leopard);
+                mTextViewActivationStatus.setText(getContext().getString(
+                        R.string.mode_auto_from_controller, label));
+                mTextViewActivationStatus.setTextColor(Color.LTGRAY);
+                mTextViewActivationStatus.setVisibility(View.VISIBLE);
+            }
+            syncActivationButtons();
+            return true;
+        } catch(Throwable t) {
+            return false;
+        }
+    }
 
     /**
      * Both activation buttons stay dimmed until the car's mode is chosen.

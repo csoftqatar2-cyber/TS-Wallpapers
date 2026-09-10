@@ -4,6 +4,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.os.Bundle;
+import android.util.Log;
 import android.widget.Button;
 import android.widget.RadioButton;
 import android.widget.RadioGroup;
@@ -44,7 +45,80 @@ public class ModeConfirmActivity extends AppCompatActivity {
         if(OperatingMode.isConfirmed(prefs)) return false;
         // Only an ACTIVATED car is asked. An unactivated one goes to the activation overlay,
         // which carries its own mode picker and confirms through the same path.
-        return new WallpaperRepo(ctx).isActive();
+        if(!new WallpaperRepo(ctx).isActive()) return false;
+        // Before asking: the controller may already have said which car this is.
+        return !answerFromController(ctx, prefs);
+    }
+
+    private static final String TAG = "CarTypeFile";
+
+    /** No mode chosen yet. Distinct from every real OperatingMode value, which start at 0. */
+    static final int MODE_NONE = -1;
+
+    /** The negative outcome is noted once per process; the gate is consulted many times. */
+    private static boolean sControllerOutcomeNoted = false;
+
+    /**
+     * The operating mode the controller's car key stands for on THIS unit, or {@link #MODE_NONE}.
+     *
+     * Only the two families {@link CarTypeFile} knows are mapped, and each still has to pass the
+     * same support gate its radio button does: a Leopard key on a unit without live-wallpaper
+     * support must not silently put the car into a mode that cannot work there — that car keeps
+     * being asked, with the option dimmed, exactly as today.
+     */
+    static int controllerMode(Context ctx, String key) {
+        switch(CarTypeFile.familyOf(key)) {
+            case LEOPARD:
+                return OperatingMode.isSupported(ctx) ? OperatingMode.LEOPARD : MODE_NONE;
+            case DENZA:
+                return OperatingMode.isDenzaSupported(ctx) ? OperatingMode.DENZA : MODE_NONE;
+            default:
+                return MODE_NONE;
+        }
+    }
+
+    /**
+     * Answer the mode question from the controller's car file instead of asking the driver.
+     *
+     * The owner's rule (2026-09-10): لوحة تحكم ذبذبة has already chosen the car on every head
+     * unit it runs on, and an app must not ask again. So, on an install where no mode was EVER
+     * saved ({@link OperatingMode#isUnset}) and the file names a family this app knows, the mode
+     * is applied here through the same three writes the radio buttons make — {@code set},
+     * {@code setConfirmed}, {@code reportModeAsync} — so prefs, the manager's mode column, the
+     * hand-off routing and the folder mirror all see exactly what a human's pick would have
+     * produced. Settings can still change it afterwards, as always.
+     *
+     * A saved mode of any kind is never touched: a driver's choice, a migration's pin, or an
+     * earlier run of this very method. An unknown key, an empty or missing file, an unsupported
+     * unit or any error leaves the question to the driver, as before.
+     *
+     * @return true only when the mode was applied by THIS call.
+     */
+    static boolean answerFromController(Context ctx, SharedPreferences prefs) {
+        try {
+            if(!OperatingMode.isUnset(prefs)) return false;
+            String key = CarTypeFile.readKey();
+            int mode = controllerMode(ctx, key);
+            if(mode == MODE_NONE) {
+                if(!sControllerOutcomeNoted) {
+                    sControllerOutcomeNoted = true;
+                    CrashReporter.breadcrumb("car.txt=" + (key.isEmpty() ? "<none>" : key)
+                            + " -> no auto mode, asking the driver");
+                }
+                return false;
+            }
+            OperatingMode.set(prefs, mode);
+            OperatingMode.setConfirmed(prefs);
+            new WallpaperRepo(ctx).reportModeAsync();
+            String wire = OperatingMode.wire(prefs);
+            // Log.e survives the release build's log stripping; this is the one line a technician
+            // reading logcat on the bench needs to see.
+            Log.e(TAG, "car.txt=" + key + " → mode=" + wire);
+            CrashReporter.breadcrumb("car.txt=" + key + " -> mode=" + wire + " (auto-applied, driver not asked)");
+            return true;
+        } catch(Throwable t) {
+            return false;
+        }
     }
 
     @Override
@@ -57,8 +131,9 @@ public class ModeConfirmActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         mPrefs = getSharedPreferences(BaseSettingsActivity.SHARED_PREF_DOMAIN, Context.MODE_PRIVATE);
 
-        // Someone else may have answered in the meantime (the settings picker, a second launch).
-        if(OperatingMode.isConfirmed(mPrefs)) { openApp(); return; }
+        // Someone else may have answered in the meantime (the settings picker, a second launch)
+        // — or the controller's car file answers it now, when this screen was reached directly.
+        if(OperatingMode.isConfirmed(mPrefs) || answerFromController(this, mPrefs)) { openApp(); return; }
 
         setContentView(R.layout.activity_mode_confirm);
 
@@ -193,9 +268,6 @@ public class ModeConfirmActivity extends AppCompatActivity {
         note.setText(getString(reasonRes));
         note.setVisibility(TextView.VISIBLE);
     }
-
-    /** No mode chosen yet. Distinct from every real OperatingMode value, which start at 0. */
-    private static final int MODE_NONE = -1;
 
     /**
      * A locked button still has to read as the way forward, not as decoration — dimming it says

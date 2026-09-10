@@ -438,6 +438,7 @@
     <string name="mode_exclusive_note">لا تجتمع أوضاع Leopard (FSE) و Leopard و Denza — الاختيار واحد.</string>
     <string name="mode_normal">Others</string>
     <string name="mode_confirm_pick_first">اختر نوع السيارة للمتابعة.</string>
+    <string name="mode_auto_from_controller">حُدِّد نوع السيارة تلقائياً من لوحة تحكم ذبذبة: %1$s، ويمكن تغييره من الإعدادات.</string>
     <string name="mode_normal_desc">يعرض التطبيق الخلفيات والساعة على شاشته الخاصة.</string>
     <string name="mode_fse">Leopard (FSE)</string>
     <string name="mode_fse_desc">يفرض نافذة ثابتة 1920×720 للشاشات العريضة جداً.</string>
