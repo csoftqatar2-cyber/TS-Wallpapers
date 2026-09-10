@@ -37,6 +37,13 @@ final class CarTypeFile {
 
     /** Written by the controller; read by everyone; written by nobody else. */
     static final String PATH = "/data/local/tmp/thabd/records/car.txt";
+    /**
+     * Written by the controller since its build 101 (2.12.6) next to the key: one lower-case word
+     * naming the FAMILY ({@code leopard} / {@code denza} / {@code ti7}). It is the controller's own
+     * interpretation of its key, so when it exists it wins over our prefix mapping below — that
+     * mapping only remains for cars whose controller predates the family file.
+     */
+    static final String FAMILY_PATH = "/data/local/tmp/thabd/records/car_family.txt";
 
     /** A real key is a short token. Anything longer is not a key and is not interpreted. */
     static final int MAX_KEY_CHARS = 64;
@@ -46,7 +53,18 @@ final class CarTypeFile {
 
     /** The family the controller's file names for this unit. Never throws. */
     static Family read() {
+        Family fromFamilyFile = familyOfWord(readFirstLine(FAMILY_PATH, "car_family.txt"));
+        if(fromFamilyFile != Family.UNKNOWN) return fromFamilyFile;
         return familyOf(readKey());
+    }
+
+    /** The controller's family word → our family. {@code ti7} and anything else stay UNKNOWN (asked). */
+    static Family familyOfWord(String word) {
+        if(word == null) return Family.UNKNOWN;
+        word = word.trim();
+        if(word.equals("leopard")) return Family.LEOPARD;
+        if(word.equals("denza")) return Family.DENZA;
+        return Family.UNKNOWN;
     }
 
     /**
@@ -54,20 +72,24 @@ final class CarTypeFile {
      * unreadable, empty, longer than {@link #MAX_KEY_CHARS}, or any exception. Never throws.
      */
     static String readKey() {
+        return readFirstLine(PATH, "car.txt");
+    }
+
+    private static String readFirstLine(String path, String label) {
         BufferedReader in = null;
         try {
             in = new BufferedReader(new InputStreamReader(
-                    new FileInputStream(PATH), StandardCharsets.UTF_8), 256);
+                    new FileInputStream(path), StandardCharsets.UTF_8), 256);
             String line = in.readLine();
-            if(line == null) { android.util.Log.e(TAG, "car.txt: empty"); return ""; }
+            if(line == null) { android.util.Log.e(TAG, label + ": empty"); return ""; }
             line = line.trim();
-            if(line.isEmpty() || line.length() > MAX_KEY_CHARS) { android.util.Log.e(TAG, "car.txt: unusable key"); return ""; }
+            if(line.isEmpty() || line.length() > MAX_KEY_CHARS) { android.util.Log.e(TAG, label + ": unusable"); return ""; }
             // Log.e on purpose: it survives the release build's log stripping, and this one line is
             // the only way to tell "file absent" from "SELinux refused us" on a customer's car.
-            android.util.Log.e(TAG, "car.txt: key=" + line);
+            android.util.Log.e(TAG, label + ": " + line);
             return line;
         } catch(Throwable t) {
-            android.util.Log.e(TAG, "car.txt: unreadable: " + t);
+            android.util.Log.e(TAG, label + ": unreadable: " + t);
             return "";
         } finally {
             if(in != null) {
