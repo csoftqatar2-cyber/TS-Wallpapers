@@ -213,6 +213,12 @@ shared secret (lives only in the live functions — never commit it).
 - RPC `activate_device(...)` → `"success"|"serial_already_used"|"invalid_format"|"blocked"`.
 - RPC `is_device_activated(device_hw_id)` — used by the companion programs; activation
   in ANY program activates all of them on that device (shared hardware id).
+- RPC `get_enroll_state(device_hw_id, app_id)` → `unknown|blocked|inactive|enrolled|not_enrolled`
+  (2026-09-10, read-only). Because activation is device-wide, an app that wiped its data stays
+  "activated" but holds no token; `enrolled` + no local token means "show the activation code
+  prompt" (activate_device rotates the token by serial). `enroll_device` itself stays NULL on
+  every refusal on purpose, and its anonymous reissue only fires when Postgres holds NO token
+  row — that `have_row` guard is what stops a stranger with the VIN from taking a car's token.
 - `app_versions` columns `version_code, version_name, apk_url, changelog` (anon-readable);
   hardware-id prefix format; activation codes since 2026-09-07: **6 random digits minted by
   the admin-site generator** (D1 `issued_codes`, 10 min, one car), the owner's reserve `572`+3
