@@ -81,15 +81,15 @@ final class CarTypeFile {
             in = new BufferedReader(new InputStreamReader(
                     new FileInputStream(path), StandardCharsets.UTF_8), 256);
             String line = in.readLine();
-            if(line == null) { android.util.Log.e(TAG, label + ": empty"); return ""; }
+            if(line == null) { log(label + ": empty"); return ""; }
             line = line.trim();
-            if(line.isEmpty() || line.length() > MAX_KEY_CHARS) { android.util.Log.e(TAG, label + ": unusable"); return ""; }
+            if(line.isEmpty() || line.length() > MAX_KEY_CHARS) { log(label + ": unusable"); return ""; }
             // Log.e on purpose: it survives the release build's log stripping, and this one line is
             // the only way to tell "file absent" from "SELinux refused us" on a customer's car.
-            android.util.Log.e(TAG, label + ": " + line);
+            log(label + ": " + line);
             return line;
         } catch(Throwable t) {
-            android.util.Log.e(TAG, label + ": unreadable: " + t);
+            log(label + ": unreadable: " + t);
             return "";
         } finally {
             if(in != null) {
@@ -119,6 +119,11 @@ final class CarTypeFile {
         }
         if(key.startsWith("denza")) return Family.DENZA;
         return Family.UNKNOWN;
+    }
+
+    /** Log.e survives release stripping; the try/catch is for the plain-JVM check tool, where android.jar is stubs that throw. */
+    private static void log(String msg) {
+        try { android.util.Log.e(TAG, msg); } catch(Throwable ignored) { }
     }
 
     private static boolean isAsciiDigit(char c) {

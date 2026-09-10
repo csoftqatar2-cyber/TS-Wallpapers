@@ -7,8 +7,9 @@ import java.io.File;
  * the operating-mode family. No Android, no Gradle:
  *
  * <pre>
- *   javac -d /tmp/ctf source/app/src/main/java/systems/sieber/fsclock/CarTypeFile.java tools/CarTypeFileCheck.java
- *   java -cp /tmp/ctf systems.sieber.fsclock.CarTypeFileCheck
+ *   AJ=$ANDROID_HOME/platforms/android-36/android.jar   # CarTypeFile logs through android.util.Log
+ *   javac -cp "$AJ" -d /tmp/ctf source/app/src/main/java/systems/sieber/fsclock/CarTypeFile.java tools/CarTypeFileCheck.java
+ *   (cd /tmp/ctf && java -cp ".;$AJ" systems.sieber.fsclock.CarTypeFileCheck)   # use the JDK's own java, ';' on Windows
  * </pre>
  *
  * Exits non-zero on the first mismatch. Lives in the app's package because the class under test
@@ -50,6 +51,15 @@ public class CarTypeFileCheck {
         while(tooLong.length() <= CarTypeFile.MAX_KEY_CHARS) tooLong.append('x');
         expect(tooLong.toString(), CarTypeFile.Family.UNKNOWN);   // longer than a key can be
 
+        // The controller's car_family.txt word (build 101+): the family is its interpretation, ours only maps it.
+        expectWord("leopard", CarTypeFile.Family.LEOPARD);
+        expectWord(" leopard ", CarTypeFile.Family.LEOPARD);   // trimmed
+        expectWord("denza", CarTypeFile.Family.DENZA);
+        expectWord("ti7", CarTypeFile.Family.UNKNOWN);        // no wallpapers mode for it yet: ask
+        expectWord("Leopard", CarTypeFile.Family.UNKNOWN);    // case-sensitive like the key
+        expectWord("", CarTypeFile.Family.UNKNOWN);
+        expectWord(null, CarTypeFile.Family.UNKNOWN);
+
         // The file path never exists on a build machine: missing file must be UNKNOWN, no throw.
         if(!new File(CarTypeFile.PATH).exists()) {
             String key = CarTypeFile.readKey();
@@ -68,6 +78,11 @@ public class CarTypeFileCheck {
     private static void expect(String key, CarTypeFile.Family want) {
         CarTypeFile.Family got = CarTypeFile.familyOf(key);
         if(got != want) fail("familyOf(" + (key == null ? "null" : "\"" + key + "\"") + ")", want.name(), got.name());
+    }
+
+    private static void expectWord(String word, CarTypeFile.Family want) {
+        CarTypeFile.Family got = CarTypeFile.familyOfWord(word);
+        if(got != want) fail("familyOfWord(" + (word == null ? "null" : "\"" + word + "\"") + ")", want.name(), got.name());
     }
 
     private static void fail(String what, String want, String got) {
