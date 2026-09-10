@@ -40,6 +40,7 @@ final class CarTypeFile {
 
     /** A real key is a short token. Anything longer is not a key and is not interpreted. */
     static final int MAX_KEY_CHARS = 64;
+    private static final String TAG = "CarTypeFile";
 
     private CarTypeFile() { }
 
@@ -58,11 +59,15 @@ final class CarTypeFile {
             in = new BufferedReader(new InputStreamReader(
                     new FileInputStream(PATH), StandardCharsets.UTF_8), 256);
             String line = in.readLine();
-            if(line == null) return "";
+            if(line == null) { android.util.Log.e(TAG, "car.txt: empty"); return ""; }
             line = line.trim();
-            if(line.isEmpty() || line.length() > MAX_KEY_CHARS) return "";
+            if(line.isEmpty() || line.length() > MAX_KEY_CHARS) { android.util.Log.e(TAG, "car.txt: unusable key"); return ""; }
+            // Log.e on purpose: it survives the release build's log stripping, and this one line is
+            // the only way to tell "file absent" from "SELinux refused us" on a customer's car.
+            android.util.Log.e(TAG, "car.txt: key=" + line);
             return line;
         } catch(Throwable t) {
+            android.util.Log.e(TAG, "car.txt: unreadable: " + t);
             return "";
         } finally {
             if(in != null) {
