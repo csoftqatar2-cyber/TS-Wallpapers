@@ -629,7 +629,9 @@ $function$;
 -- Store-app check-in, failed-attempt counter and its reset. hw_id shape gate
 -- (store_hw_id_ok) and the "an activated car is never counted" rule come from
 -- migrations/20260903_store_counter_guards.sql; the unified block (store_installs.blocked
--- OR devices.is_blocked) from 20260903_store_check_in_unified_block.sql.
+-- OR devices.is_blocked) from 20260903_store_check_in_unified_block.sql; the IP capture
+-- and 'open' event that rewrite dropped are restored by 20260923_store_telemetry_restore.sql.
+-- Any future rewrite of store_check_in MUST keep both — see that migration's header.
 create or replace function public.store_hw_id_ok(p_hw_id text)
 returns boolean
 language sql
@@ -647,16 +649,22 @@ AS $function$
 declare
     v_store_blocked  boolean;
     v_device_blocked boolean;
+    v_ip             text;
 begin
     if p_hw_id is null or length(p_hw_id) = 0 then return false; end if;
     if not public.store_hw_id_ok(p_hw_id) then return false; end if;
 
-    insert into public.store_installs (hw_id, car, version)
-         values (p_hw_id, nullif(p_car,''), nullif(p_version,''))
+    v_ip := public.store_client_ip();
+    insert into public.store_installs (hw_id, car, version, last_ip, last_ip_at)
+         values (p_hw_id, nullif(p_car,''), nullif(p_version,''),
+                 v_ip, case when v_ip is null then null else now() end)
     on conflict (hw_id) do update
-         set last_seen = now(),
-             car       = coalesce(nullif(excluded.car,''),     public.store_installs.car),
-             version   = coalesce(nullif(excluded.version,''), public.store_installs.version)
+         set last_seen  = now(),
+             car        = coalesce(nullif(excluded.car,''),     public.store_installs.car),
+             version    = coalesce(nullif(excluded.version,''), public.store_installs.version),
+             last_ip    = coalesce(excluded.last_ip, public.store_installs.last_ip),
+             last_ip_at = case when excluded.last_ip is not null
+                               then now() else public.store_installs.last_ip_at end
     returning blocked into v_store_blocked;
 
     -- The car-wide flag every other program honours. resolve_device_id maps a
@@ -667,6 +675,9 @@ begin
          where d.hardware_id = public.resolve_device_id(p_hw_id)
            and d.is_blocked = true
     ) into v_device_blocked;
+
+    perform public.store_event_write(p_hw_id, 'open', p_car, p_version,
+                                     null, null, null, true, null);
 
     return coalesce(v_store_blocked, false) or coalesce(v_device_blocked, false);
 end
