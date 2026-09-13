@@ -541,6 +541,7 @@
                 <div class="hint">بدونه تبقى بيانات الستور (التبويب + أعمدة الجدول) معطّلة، ويمكن إدخاله لاحقًا من الرأس.</div>
             </div>
             <div class="login-err" id="login-err" role="alert"></div>
+            <div class="note" id="login-note" role="status" hidden style="margin-bottom:8px;"></div>
             <button type="submit" class="btn primary" id="login-btn" style="width:100%; justify-content:center;"><i class="fa-solid fa-right-to-bracket"></i> دخول</button>
         </form>
     </div>
@@ -945,9 +946,14 @@
     const LOCAL_SENTINEL = '(local-proxy)';
     let storeAuthState = 'none';  // none | ok | bad | error
 
+    // When the access token was minted and for how long: the wake-up handlers below use it to
+    // decide whether a phone that slept through its timer must refresh before the next call.
+    let SESSION_ISSUED = 0, SESSION_TTL_MS = 3600 * 1000, refreshRetryMs = 0;
+    function sessionStale() { return !SESSION_TOKEN || (Date.now() - SESSION_ISSUED) > (SESSION_TTL_MS - 60 * 1000); }
     function applySession(data) {
         SESSION_TOKEN = data.access_token;
         SESSION_REFRESH = data.refresh_token || null;
+        SESSION_ISSUED = Date.now(); SESSION_TTL_MS = (data.expires_in || 3600) * 1000; refreshRetryMs = 0;
         // On the site the Worker keeps the refresh token behind an HttpOnly device cookie and the
         // browser stores nothing durable; the local runner keeps the old in-browser persistence.
         try { if (SESSION_REFRESH) localStorage.setItem(SESSION_KEY, SESSION_REFRESH); else localStorage.removeItem(SESSION_KEY); } catch (e) { /* Memory session still works. */ }
@@ -956,8 +962,11 @@
         if (refreshTimer) clearTimeout(refreshTimer);
         refreshTimer = setTimeout(refreshSession, ms);
     }
+    // One line under the login form for "we are retrying" / "Access expired" — distinct from a
+    // wrong-password error, which the form itself shows.
+    function loginNote(text) { const n = $('login-note'); if (n) { n.textContent = text || ''; n.hidden = !text; } }
     function clearSession() {
-        SESSION_TOKEN = null;
+        SESSION_TOKEN = null; SESSION_ISSUED = 0; refreshRetryMs = 0;
         if (refreshTimer) { clearTimeout(refreshTimer); refreshTimer = null; }
         SESSION_REFRESH = null; sessionEpoch++;
         state.crashResolutions = []; state.storeCrashes = []; state.leoCrashes = []; state.leoCrashesLoaded = false;
@@ -987,16 +996,28 @@
     async function refreshSession() {
         const epoch = sessionEpoch;
         if (LOCAL_PROXY && LOCAL_FLAGS.sessions) {
-            try {
-                const res = await fetch('/local/auth/session', { method: 'POST', cache: 'no-store' });
-                if (!res.ok) throw new Error('no-session');
-                const data = await res.json();
-                if (epoch !== sessionEpoch) return false;
-                applySession(data); return true;
-            } catch (e) {
-                if (epoch === sessionEpoch) { clearSession(); $('login-overlay').hidden = false; setStatus('off'); }
+            // Owner's rule (2026-09-13): a phone must never find itself logged out because the
+            // network blinked. Only the Worker saying 401 (device session revoked/expired) ends the
+            // session. Everything else — offline, a 5xx, a timeout, a Cloudflare Access page in
+            // place of JSON — keeps whatever token we hold and retries with backoff.
+            let res = null;
+            try { res = await fetch('/local/auth/session', { method: 'POST', cache: 'no-store' }); } catch (e) { res = null; }
+            if (epoch !== sessionEpoch) return false;
+            if (res && res.status === 401) {
+                clearSession(); $('login-overlay').hidden = false; setStatus('off'); loginNote('');
                 return false;
             }
+            let data = null;
+            if (res && res.ok) { try { data = await res.json(); } catch (e) { data = null; } }
+            if (data && data.access_token) { loginNote(''); applySession(data); return true; }
+            // Transient: keep the session, try again later (30 s → 60 s → 2 min → 5 min max).
+            const accessPage = !!(res && (res.redirected || /cloudflareaccess\.com/.test(res.url || '')));
+            refreshRetryMs = Math.min(refreshRetryMs ? refreshRetryMs * 2 : 30000, 300000);
+            if (refreshTimer) clearTimeout(refreshTimer);
+            refreshTimer = setTimeout(refreshSession, refreshRetryMs);
+            setStatus(SESSION_TOKEN ? 'busy' : 'off');
+            if (!SESSION_TOKEN) loginNote(accessPage ? 'انتهت جلسة Cloudflare Access — أعد فتح الصفحة وأدخل رمز البريد.' : 'تعذّر الاتصال بالخادم، ستُعاد المحاولة تلقائياً…');
+            return !!SESSION_TOKEN;
         }
         let token = SESSION_REFRESH;
         try { token = token || localStorage.getItem(SESSION_KEY); } catch (e) {}
@@ -2913,7 +2934,8 @@
             if (j && j.local === true) {
                 LOCAL_PROXY = true;
                 LOCAL_FLAGS = j;
-                if (!SESSION_TOKEN && j.sessions) { refreshSession().then(ok => { if (ok) { $('login-overlay').hidden = true; loadAll(); } }); }
+                // boot() below is the one place that restores the session; doing it here too
+                // raced it (two refreshes, one of which could lose and log the phone out).
                 if (j.store === true) { STORE_SECRET = LOCAL_SENTINEL; storeAuthState = 'none'; }
                 $('secret-pop').hidden = true;
                 $('login-secret').closest('.form-group').hidden = true;
@@ -2922,7 +2944,8 @@
             }
         } catch (e) { /* opened as a plain file or served by something else: manual secret path stays */ }
     }
-    detectLocalProxy();
+    // Not called here any more: boot() awaits it (and retries it) before restoring the session,
+    // otherwise the site's cookie-held session was looked for in localStorage and never found.
 
     $('secret-btn').addEventListener('click', () => {
         const pop = $('secret-pop'); pop.hidden = !pop.hidden;
@@ -4199,14 +4222,30 @@
     (async function boot() {
         setStatus('off');
         updateSecretLabel();
+        // The site keeps the session behind the Worker's device cookie, so the proxy check must
+        // finish BEFORE the first refresh — and a cold PWA start on a phone can miss the first
+        // ping, so it is retried instead of falling straight to the password form.
+        loginNote('جارٍ الاتصال…');
+        for (const wait of [0, 2000, 5000, 10000]) {
+            if (wait) await new Promise(r => setTimeout(r, wait));
+            await detectLocalProxy();
+            if (LOCAL_PROXY || !(location.protocol === 'https:')) break;
+        }
         if (await refreshSession()) {
-            $('login-overlay').hidden = true;
+            $('login-overlay').hidden = true; loginNote('');
             await loadAll();
         } else {
             $('login-overlay').hidden = false;
             setTimeout(() => $('login-password').focus(), 50);
         }
     })();
+    // A phone that slept through the refresh timer wakes up with an expired token: refresh the
+    // moment the page is visible / online again, before any request goes out with a dead token.
+    function wakeRefresh() { if (document.hidden) return; if (sessionStale() || refreshRetryMs) { refreshSession().then(ok => { if (ok) { $('login-overlay').hidden = true; loginNote(''); } }); } }
+    document.addEventListener('visibilitychange', wakeRefresh);
+    window.addEventListener('pageshow', wakeRefresh);
+    window.addEventListener('online', wakeRefresh);
+    window.addEventListener('focus', wakeRefresh);
     </script>
 </body>
 </html>
