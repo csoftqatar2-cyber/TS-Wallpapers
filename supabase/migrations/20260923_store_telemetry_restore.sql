@@ -1,6 +1,7 @@
 -- ============================================================================
 -- Store telemetry: three silent faults in the Supabase channel.
--- Applied live 2026-09-13 as `store_telemetry_restore_open_ip_and_kinds`.
+-- Applied live 2026-09-13 as `store_telemetry_restore_open_ip_and_kinds`, then
+-- `store_check_in_telemetry_never_fails_checkin` (the open event in its own exception block).
 --
 -- Found by the weekly crash review (THABTHABA STORE, reports/crash-reviews/
 -- «مراجعة اعطال 2026-09-05 إلى 2026-09-12», §3 and §7). None of them raised an
@@ -101,8 +102,16 @@ begin
            and d.is_blocked = true
     ) into v_device_blocked;
 
-    perform public.store_event_write(p_hw_id, 'open', p_car, p_version,
-                                     null, null, null, true, null);
+    -- Isolated (2026-09-13, migration store_check_in_telemetry_never_fails_checkin): this
+    -- RPC is the licence/block check every launch depends on. If the telemetry insert ever
+    -- raised, the whole call would fail and the app would skip token enrolment and licence
+    -- verification for that launch. Telemetry may be lost; the check-in may not.
+    begin
+        perform public.store_event_write(p_hw_id, 'open', p_car, p_version,
+                                         null, null, null, true, null);
+    exception when others then
+        null;
+    end;
 
     return coalesce(v_store_blocked, false) or coalesce(v_device_blocked, false);
 end

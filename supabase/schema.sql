@@ -676,8 +676,16 @@ begin
            and d.is_blocked = true
     ) into v_device_blocked;
 
-    perform public.store_event_write(p_hw_id, 'open', p_car, p_version,
-                                     null, null, null, true, null);
+    -- Isolated (2026-09-13, migration store_check_in_telemetry_never_fails_checkin): this
+    -- RPC is the licence/block check every launch depends on. If the telemetry insert ever
+    -- raised, the whole call would fail and the app would skip token enrolment and licence
+    -- verification for that launch. Telemetry may be lost; the check-in may not.
+    begin
+        perform public.store_event_write(p_hw_id, 'open', p_car, p_version,
+                                         null, null, null, true, null);
+    exception when others then
+        null;
+    end;
 
     return coalesce(v_store_blocked, false) or coalesce(v_device_blocked, false);
 end
