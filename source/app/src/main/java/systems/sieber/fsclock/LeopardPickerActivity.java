@@ -351,6 +351,19 @@ public class LeopardPickerActivity extends AppCompatActivity {
 
         mSource = mPrefs.getString(PREF_DEFAULT_SOURCE, SOURCE_CLOUD);
         selectSource(mSource);
+
+        // A hand-off car never opens the clock screen, so this picker is its first screen after
+        // activation — and on a Leopard's passenger instance nobody ever opens Settings. Ask for
+        // location and the overlay grant here; a no-op when both are already held, and skipped
+        // outright when LeopardEntryActivity finished this instance before drawing it.
+        StartupPermissions.requestIfMissing(this);
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        // The startup location ask was answered: the overlay ask follows it, never beside it.
+        StartupPermissions.onRequestPermissionsResult(this, requestCode);
     }
 
     /** When this screen last asked the server (elapsed-realtime ms); 0 = never. */

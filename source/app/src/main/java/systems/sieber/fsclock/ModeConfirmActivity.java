@@ -326,6 +326,17 @@ public class ModeConfirmActivity extends AppCompatActivity {
         }
         Button update = findViewById(R.id.buttonModeConfirmUpdate);
         if(update != null) update.setOnClickListener(v -> checkForUpdate(update));
+
+        // A car the Store activated lands here first, so this is where its location and overlay
+        // grants are asked for — the technician is standing at the car right now.
+        StartupPermissions.requestIfMissing(this);
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        // The startup location ask was answered: the overlay ask follows it, never beside it.
+        StartupPermissions.onRequestPermissionsResult(this, requestCode);
     }
 
     /**
