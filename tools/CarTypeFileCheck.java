@@ -58,7 +58,9 @@ public class CarTypeFileCheck {
         expectWord(" leopard ", CarTypeFile.Family.LEOPARD);   // trimmed
         expectWord("denza", CarTypeFile.Family.DENZA);
         expectWord("ti7", CarTypeFile.Family.LEOPARD);        // owner 2026-09-14: Ti7 is the Leopard family
-        expectWord("tank500", CarTypeFile.Family.UNKNOWN);    // the controller's word list stays narrow
+        expectWord("tank500", CarTypeFile.Family.GWM);        // the store writes its own ids into the family file
+        expectWord("jetour_t2", CarTypeFile.Family.JETOUR);
+        expectWord("haval_v7", CarTypeFile.Family.OTHERS);
         expectWord("Leopard", CarTypeFile.Family.UNKNOWN);    // case-sensitive like the key
         expectWord("", CarTypeFile.Family.UNKNOWN);
         expectWord(null, CarTypeFile.Family.UNKNOWN);
