@@ -27,13 +27,27 @@ import java.nio.charset.StandardCharsets;
  * file, a missing file, a file too long to be a key, or any error at all is {@link Family#UNKNOWN},
  * which the callers treat exactly as today — they ask the driver.
  *
+ * <p><b>The store is the second publisher of the same choice</b> (2026-09-14). Most cars carry
+ * ذبذبة ستور and no controller, so neither file exists there — but the store reports its own car
+ * picker's answer on every check-in, and the backend hands it back through the read-only RPC
+ * {@code get_car_type(device_hw_id)} ({@link WallpaperRepo#fetchStoreCarType}). Its car ids are a
+ * different vocabulary from the controller's keys ({@code leopard}, {@code tank500},
+ * {@code lynk_and_co}, …), so they get their own table, {@link #familyOfStoreCar}. The network
+ * call itself lives in {@code WallpaperRepo}; this class only maps and parses, so the whole
+ * mapping stays checkable on a plain JVM.
+ *
  * <p>No Android imports, so the mapping can be checked on a plain JVM
  * ({@code tools/CarTypeFileCheck.java}).
  */
 final class CarTypeFile {
 
-    /** The operating-mode family a key names. Only what this app needs; never the car itself. */
-    enum Family { LEOPARD, DENZA, UNKNOWN }
+    /**
+     * The operating-mode family a key names. Only what this app needs; never the car itself.
+     * LEOPARD is the BYD Leopard family, which on a two-screen unit means Leopard on the driver
+     * screen and FSE on the passenger instance — that split is the caller's
+     * ({@code ModeConfirmActivity.controllerMode}), not this table's.
+     */
+    enum Family { LEOPARD, DENZA, ICAR03T, GWM, LYNKCO, JETOUR, OTHERS, UNKNOWN }
 
     /** Written by the controller; read by everyone; written by nobody else. */
     static final String PATH = "/data/local/tmp/thabd/records/car.txt";
@@ -51,18 +65,27 @@ final class CarTypeFile {
 
     private CarTypeFile() { }
 
-    /** The family the controller's file names for this unit. Never throws. */
+    /**
+     * The family the controller's files name for this unit ({@code car_family.txt} first, then
+     * {@code car.txt}), or UNKNOWN. Never throws, never touches the network — the store's answer
+     * is a separate, asynchronous source ({@code ModeConfirmActivity.askStoreAsync}).
+     */
     static Family read() {
         Family fromFamilyFile = familyOfWord(readFirstLine(FAMILY_PATH, "car_family.txt"));
         if(fromFamilyFile != Family.UNKNOWN) return fromFamilyFile;
         return familyOf(readKey());
     }
 
-    /** The controller's family word → our family. {@code ti7} and anything else stay UNKNOWN (asked). */
+    /**
+     * The controller's family word → our family. {@code ti7} is the Leopard family (owner's
+     * decision 2026-09-14: same product, FSE on the passenger instance included); anything else
+     * stays UNKNOWN (asked).
+     */
     static Family familyOfWord(String word) {
         if(word == null) return Family.UNKNOWN;
         word = word.trim();
         if(word.equals("leopard")) return Family.LEOPARD;
+        if(word.equals("ti7")) return Family.LEOPARD;
         if(word.equals("denza")) return Family.DENZA;
         return Family.UNKNOWN;
     }
@@ -119,6 +142,65 @@ final class CarTypeFile {
         }
         if(key.startsWith("denza")) return Family.DENZA;
         return Family.UNKNOWN;
+    }
+
+    /**
+     * The store's car id → our family. The vocabulary is ذبذبة ستور's car picker
+     * ({@code store_installs.car}), as served by RPC {@code get_car_type}:
+     *
+     * The complete table is the owner's (2026-09-14):
+     * <ul>
+     *   <li>{@code leopard}, {@code ti7} → {@link Family#LEOPARD} (one family: hand-off on the
+     *       driver screen, FSE on the passenger instance)</li>
+     *   <li>{@code denza} → {@link Family#DENZA}</li>
+     *   <li>{@code icar_03t} → {@link Family#ICAR03T}</li>
+     *   <li>{@code tank500} → {@link Family#GWM}</li>
+     *   <li>{@code lynk_and_co} → {@link Family#LYNKCO}</li>
+     *   <li>any id starting with {@code jetour} ({@code jetour_g700}, {@code jetour_t1},
+     *       {@code jetour_t2}, {@code jetour_idm_03}, …) → {@link Family#JETOUR}</li>
+     *   <li>{@code dong_feng}, {@code iacaur}, {@code china_212}, {@code haval_v7} →
+     *       {@link Family#OTHERS}: the plain drawn screen ("Others"), applied without a
+     *       question</li>
+     *   <li>anything else — null, empty, an id the store does not write → {@link Family#UNKNOWN}:
+     *       ask the driver</li>
+     * </ul>
+     * Exact, case-sensitive matches, like {@link #familyOf}: an id the store does not write is
+     * not the store's.
+     */
+    static Family familyOfStoreCar(String carId) {
+        if(carId == null) return Family.UNKNOWN;
+        carId = carId.trim();
+        if(carId.isEmpty() || carId.length() > MAX_KEY_CHARS) return Family.UNKNOWN;
+        if(carId.startsWith("jetour")) return Family.JETOUR;
+        switch(carId) {
+            case "leopard":
+            case "ti7":         return Family.LEOPARD;
+            case "denza":       return Family.DENZA;
+            case "icar_03t":    return Family.ICAR03T;
+            case "tank500":     return Family.GWM;
+            case "lynk_and_co": return Family.LYNKCO;
+            case "dong_feng":
+            case "iacaur":
+            case "china_212":
+            case "haval_v7":    return Family.OTHERS;
+            default:            return Family.UNKNOWN;
+        }
+    }
+
+    /**
+     * The car id inside {@code get_car_type}'s answer body, or null. PostgREST returns a scalar
+     * text function as one JSON string — {@code "leopard"} — and SQL NULL as the bare word
+     * {@code null}. Hand-parsed rather than through org.json so the plain-JVM check can run it:
+     * a quoted token is unquoted (the store's ids carry no escapes, and an escape makes the answer
+     * not-a-car-id, which is the safe reading), and anything else is null.
+     */
+    static String storeCarOfRpcBody(String body) {
+        if(body == null) return null;
+        body = body.trim();
+        if(body.length() < 2 || body.charAt(0) != '"' || body.charAt(body.length() - 1) != '"') return null;
+        String car = body.substring(1, body.length() - 1).trim();
+        if(car.isEmpty() || car.indexOf('\\') >= 0 || car.indexOf('"') >= 0) return null;
+        return car;
     }
 
     /** Log.e survives release stripping; the try/catch is for the plain-JVM check tool, where android.jar is stubs that throw. */

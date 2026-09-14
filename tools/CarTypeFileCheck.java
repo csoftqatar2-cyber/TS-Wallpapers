@@ -3,8 +3,10 @@ package systems.sieber.fsclock;
 import java.io.File;
 
 /**
- * Plain-JVM check of {@link CarTypeFile#familyOf} — the mapping from the controller's car key to
- * the operating-mode family. No Android, no Gradle:
+ * Plain-JVM check of {@link CarTypeFile}'s pure mappings — the controller's car key
+ * ({@code familyOf}), its family word ({@code familyOfWord}), the store's car id
+ * ({@code familyOfStoreCar}) and the {@code get_car_type} answer body ({@code storeCarOfRpcBody}).
+ * No Android, no Gradle:
  *
  * <pre>
  *   AJ=$ANDROID_HOME/platforms/android-36/android.jar   # CarTypeFile logs through android.util.Log
@@ -55,10 +57,52 @@ public class CarTypeFileCheck {
         expectWord("leopard", CarTypeFile.Family.LEOPARD);
         expectWord(" leopard ", CarTypeFile.Family.LEOPARD);   // trimmed
         expectWord("denza", CarTypeFile.Family.DENZA);
-        expectWord("ti7", CarTypeFile.Family.UNKNOWN);        // no wallpapers mode for it yet: ask
+        expectWord("ti7", CarTypeFile.Family.LEOPARD);        // owner 2026-09-14: Ti7 is the Leopard family
+        expectWord("tank500", CarTypeFile.Family.UNKNOWN);    // the controller's word list stays narrow
         expectWord("Leopard", CarTypeFile.Family.UNKNOWN);    // case-sensitive like the key
         expectWord("", CarTypeFile.Family.UNKNOWN);
         expectWord(null, CarTypeFile.Family.UNKNOWN);
+
+        // The store's car ids (ذبذبة ستور's picker, served by RPC get_car_type) — a different vocabulary.
+        // The owner's complete table, 2026-09-14.
+        expectStore("leopard", CarTypeFile.Family.LEOPARD);
+        expectStore(" leopard ", CarTypeFile.Family.LEOPARD);   // trimmed
+        expectStore("ti7", CarTypeFile.Family.LEOPARD);         // same family as Leopard
+        expectStore("denza", CarTypeFile.Family.DENZA);
+        expectStore("icar_03t", CarTypeFile.Family.ICAR03T);
+        expectStore("tank500", CarTypeFile.Family.GWM);
+        expectStore("lynk_and_co", CarTypeFile.Family.LYNKCO);
+        expectStore("jetour_g700", CarTypeFile.Family.JETOUR);
+        expectStore("jetour_t1", CarTypeFile.Family.JETOUR);    // every jetour* id is the Jetour mode
+        expectStore("jetour_t2", CarTypeFile.Family.JETOUR);
+        expectStore("jetour_idm_03", CarTypeFile.Family.JETOUR);
+        expectStore("jetour_x_future", CarTypeFile.Family.JETOUR);
+        expectStore("dong_feng", CarTypeFile.Family.OTHERS);    // the plain drawn screen, no question
+        expectStore("iacaur", CarTypeFile.Family.OTHERS);
+        expectStore("china_212", CarTypeFile.Family.OTHERS);
+        expectStore("haval_v7", CarTypeFile.Family.OTHERS);
+        // Anything the store does not write keeps asking the driver.
+        expectStore("Leopard", CarTypeFile.Family.UNKNOWN);      // case-sensitive like the others
+        expectStore("TI7", CarTypeFile.Family.UNKNOWN);
+        expectStore("Jetour_G700", CarTypeFile.Family.UNKNOWN);
+        expectStore("l8_2026_ui6", CarTypeFile.Family.UNKNOWN);  // a controller key is not a store id
+        expectStore("lynkco", CarTypeFile.Family.UNKNOWN);
+        expectStore("tank", CarTypeFile.Family.UNKNOWN);
+        expectStore("", CarTypeFile.Family.UNKNOWN);
+        expectStore("   ", CarTypeFile.Family.UNKNOWN);
+        expectStore(null, CarTypeFile.Family.UNKNOWN);
+
+        // The RPC body as PostgREST writes a scalar text answer: one JSON string, or bare null.
+        expectBody("\"leopard\"", "leopard");
+        expectBody(" \"tank500\"\n", "tank500");
+        expectBody("null", null);
+        expectBody("", null);
+        expectBody(null, null);
+        expectBody("leopard", null);            // unquoted is not the RPC's shape
+        expectBody("\"\"", null);
+        expectBody("\"a\\\"b\"", null);         // an escape is not a car id
+        expectBody("[\"leopard\"]", null);      // an array is some other RPC
+        expectBody("{\"car\":\"leopard\"}", null);
 
         // The file path never exists on a build machine: missing file must be UNKNOWN, no throw.
         if(!new File(CarTypeFile.PATH).exists()) {
@@ -72,7 +116,7 @@ public class CarTypeFileCheck {
             System.out.println("FAILED: " + failures + " mismatch(es)");
             System.exit(1);
         }
-        System.out.println("OK: CarTypeFile.familyOf mapping matches the spec");
+        System.out.println("OK: CarTypeFile mappings (controller key, family word, store car id, RPC body) match the spec");
     }
 
     private static void expect(String key, CarTypeFile.Family want) {
@@ -83,6 +127,18 @@ public class CarTypeFileCheck {
     private static void expectWord(String word, CarTypeFile.Family want) {
         CarTypeFile.Family got = CarTypeFile.familyOfWord(word);
         if(got != want) fail("familyOfWord(" + (word == null ? "null" : "\"" + word + "\"") + ")", want.name(), got.name());
+    }
+
+    private static void expectStore(String carId, CarTypeFile.Family want) {
+        CarTypeFile.Family got = CarTypeFile.familyOfStoreCar(carId);
+        if(got != want) fail("familyOfStoreCar(" + (carId == null ? "null" : "\"" + carId + "\"") + ")", want.name(), got.name());
+    }
+
+    private static void expectBody(String body, String want) {
+        String got = CarTypeFile.storeCarOfRpcBody(body);
+        boolean ok = want == null ? got == null : want.equals(got);
+        if(!ok) fail("storeCarOfRpcBody(" + (body == null ? "null" : "\"" + body + "\"") + ")",
+                String.valueOf(want), String.valueOf(got));
     }
 
     private static void fail(String what, String want, String got) {

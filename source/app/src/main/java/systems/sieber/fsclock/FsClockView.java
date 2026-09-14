@@ -1392,15 +1392,22 @@ public class FsClockView extends FrameLayout {
      *
      * @return true when the column was hidden and the mode is standing.
      */
-    private boolean applyControllerMode(android.widget.TextView desc, boolean supported) {
+    private boolean applyControllerMode(final android.widget.TextView desc, final boolean supported) {
         if(mRadioGroupActivationMode == null || mSharedPref == null) return false;
         try {
             ModeConfirmActivity.answerFromController(getContext(), mSharedPref);
-            if(!OperatingMode.isConfirmed(mSharedPref)) return false;
-            int auto = ModeConfirmActivity.controllerMode(getContext(), CarTypeFile.readKey());
+            if(!OperatingMode.isConfirmed(mSharedPref)) {
+                // Neither file answered. The store may know this car (ذبذبة ستور's own picker,
+                // served by get_car_type): ask it in the background and, if it names a family,
+                // come back through this very method to apply and hide the column — unless the
+                // driver has picked a radio in the meantime; a chosen car is never overwritten.
+                askStoreForMode(desc, supported);
+                return false;
+            }
+            int auto = ModeConfirmActivity.autoMode(getContext());
             if(auto == ModeConfirmActivity.MODE_NONE || auto != OperatingMode.get(mSharedPref)) return false;
-            int radio = auto == OperatingMode.DENZA ? R.id.radioActivationDenza : R.id.radioActivationLeopard;
-            if(findViewById(radio) == null) return false;
+            int radio = activationRadioFor(auto);
+            if(radio == 0 || findViewById(radio) == null) return false;
 
             mModeAnsweredByController = true;
             mRadioGroupActivationMode.check(radio);
@@ -1408,17 +1415,68 @@ public class FsClockView extends FrameLayout {
             View column = findViewById(R.id.layoutActivationMode);
             if(column != null) column.setVisibility(View.GONE);
             if(mTextViewActivationStatus != null) {
-                String label = getContext().getString(auto == OperatingMode.DENZA
-                        ? R.string.mode_denza : R.string.mode_leopard);
+                String label = getContext().getString(modeLabelFor(auto));
+                boolean fromStore = ModeConfirmActivity.autoModeIsFromStore(getContext());
                 mTextViewActivationStatus.setText(getContext().getString(
-                        R.string.mode_auto_from_controller, label));
+                        fromStore ? R.string.mode_auto_from_store : R.string.mode_auto_from_controller, label));
                 mTextViewActivationStatus.setTextColor(Color.LTGRAY);
                 mTextViewActivationStatus.setVisibility(View.VISIBLE);
+            }
+            // The passenger instance of a Leopard car answers itself as FSE: pin the window now,
+            // the way a human FSE pick does in applyActivationSuccess, rather than at the next start.
+            if(auto == OperatingMode.FSE && mActivity instanceof FullscreenActivity) {
+                ((FullscreenActivity) mActivity).applyFseScreenSize();
             }
             syncActivationButtons();
             return true;
         } catch(Throwable t) {
             return false;
+        }
+    }
+
+    /** The store was asked from this view already; its answer re-enters applyControllerMode once, never in a loop. */
+    private boolean mStoreAskedForMode = false;
+
+    /** One store question per view; the answer re-enters {@link #applyControllerMode}. */
+    private void askStoreForMode(final android.widget.TextView desc, final boolean supported) {
+        if(mSharedPref == null || mStoreAskedForMode || !OperatingMode.isUnset(mSharedPref)) return;
+        mStoreAskedForMode = true;
+        ModeConfirmActivity.askStoreAsync(getContext(), mSharedPref, new Runnable() {
+            @Override public void run() {
+                if(!isAttachedToWindow() || mRadioGroupActivationMode == null) return;
+                if(selectedActivationMode() != MODE_NONE) return;   // the driver got there first
+                if(!OperatingMode.isUnset(mSharedPref)) return;
+                if(ModeConfirmActivity.autoMode(getContext()) == ModeConfirmActivity.MODE_NONE) return;
+                applyControllerMode(desc, supported);
+            }
+        });
+    }
+
+    /** The activation radio that stands for an auto-applied mode, or 0 for one the overlay has no radio for. */
+    private static int activationRadioFor(int mode) {
+        switch(mode) {
+            case OperatingMode.LEOPARD: return R.id.radioActivationLeopard;
+            case OperatingMode.DENZA:   return R.id.radioActivationDenza;
+            case OperatingMode.ICAR03T: return R.id.radioActivationIcar03t;
+            case OperatingMode.GWM:     return R.id.radioActivationGwm;
+            case OperatingMode.JETOUR:  return R.id.radioActivationJetour;
+            case OperatingMode.LYNKCO:  return R.id.radioActivationLynkco;
+            case OperatingMode.FSE:     return R.id.radioActivationFse;
+            case OperatingMode.NORMAL:  return R.id.radioActivationNormal;
+            default:                    return 0;
+        }
+    }
+
+    private static int modeLabelFor(int mode) {
+        switch(mode) {
+            case OperatingMode.LEOPARD: return R.string.mode_leopard;
+            case OperatingMode.DENZA:   return R.string.mode_denza;
+            case OperatingMode.ICAR03T: return R.string.mode_icar03t;
+            case OperatingMode.GWM:     return R.string.mode_gwm;
+            case OperatingMode.JETOUR:  return R.string.mode_jetour;
+            case OperatingMode.LYNKCO:  return R.string.mode_lynkco;
+            case OperatingMode.FSE:     return R.string.mode_fse;
+            default:                    return R.string.mode_normal;
         }
     }
 
