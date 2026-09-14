@@ -219,6 +219,10 @@ shared secret (lives only in the live functions — never commit it).
   prompt" (activate_device rotates the token by serial). `enroll_device` itself stays NULL on
   every refusal on purpose, and its anonymous reissue only fires when Postgres holds NO token
   row — that `have_row` guard is what stops a stranger with the VIN from taking a car's token.
+- RPC `get_car_type(device_hw_id)` → the store's car id (`leopard`, `denza`, `tank500`, …) or NULL
+  (2026-09-14, read-only, from `store_installs.car`). First run with no saved mode: the app reads
+  the controller's `car_family.txt`/`car.txt`, then this RPC, and only then asks the driver.
+  Leopard family → Leopard on the driver instance, FSE on the passenger (user 999) instance.
 - `app_versions` columns `version_code, version_name, apk_url, changelog` (anon-readable);
   hardware-id prefix format; activation codes since 2026-09-07: **6 random digits minted by
   the admin-site generator** (D1 `issued_codes`, 30 min since 2026-09-14, one car), the owner's reserve `572`+3
