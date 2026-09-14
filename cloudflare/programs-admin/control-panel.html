@@ -2818,7 +2818,7 @@
             $('gen-status').innerHTML = '<span class="badge warn">بانتظار التفعيل من العربية</span> اكتب الكود في أي برنامج من برامجنا على العربية.';
             $('gen-code-wrap').hidden = false;
             genTick(); gen.timer = setInterval(genTick, 1000); gen.poll = setInterval(genPollStatus, 5000);
-            recordNotice('تم إصدار كود تفعيل ' + r.serial, 'صالح 10 دقائق', '', Date.now(), 'gen-issued-' + r.serial, true);
+            recordNotice('تم إصدار كود تفعيل ' + r.serial, 'صالح 30 دقيقة', '', Date.now(), 'gen-issued-' + r.serial, true);
             genRecent();
         } catch (e) { alertDialog('تعذّر إصدار الكود', errMsg(e)); }
         finally { btn.disabled = false; }

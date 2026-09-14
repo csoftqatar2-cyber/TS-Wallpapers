@@ -221,7 +221,7 @@ shared secret (lives only in the live functions — never commit it).
   row — that `have_row` guard is what stops a stranger with the VIN from taking a car's token.
 - `app_versions` columns `version_code, version_name, apk_url, changelog` (anon-readable);
   hardware-id prefix format; activation codes since 2026-09-07: **6 random digits minted by
-  the admin-site generator** (D1 `issued_codes`, 10 min, one car), the owner's reserve `572`+3
+  the admin-site generator** (D1 `issued_codes`, 30 min since 2026-09-14, one car), the owner's reserve `572`+3
   digits, the sold block 578300001–100, and every code already on file (7078/578). The open
   `578` space is closed — the Cloudflare worker decides, Postgres only commits.
 - RPC `report_crash(device_hw_id, crash_text, app_version, app_version_code, device_mode,

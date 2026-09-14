@@ -31,7 +31,13 @@
         .btn { font:inherit; font-weight:800; font-size:1.35rem; color:#1a1006; background:linear-gradient(135deg, var(--primary), var(--accent)); border:0; border-radius:18px; padding:22px 34px; min-height:72px; min-width:min(92vw, 360px); cursor:pointer; box-shadow:0 14px 34px -14px rgba(245,158,11,.7); }
         .btn:disabled { opacity:.55; cursor:default; }
         .btn.secondary { background:rgba(255,255,255,.06); color:var(--text); border:1px solid var(--border); font-size:1rem; min-height:48px; padding:12px 20px; box-shadow:none; }
-        .row { display:grid; grid-template-columns:auto 1fr auto; align-items:center; gap:12px; padding:12px 14px; margin-bottom:10px; border:1px solid var(--border); border-radius:16px; background:rgba(0,0,0,.22); text-align:start; }
+        .row { display:grid; grid-template-columns:auto 1fr auto auto; align-items:center; gap:12px; padding:12px 14px; margin-bottom:10px; border:1px solid var(--border); border-radius:16px; background:rgba(0,0,0,.22); text-align:start; }
+        /* Copy button beside the code: a real button, not "tap the number" — a driver on the phone
+           with us should see what to press. Turns green with «تم النسخ» for two seconds. */
+        .row .copy { width:44px; height:44px; border-radius:12px; border:1px solid var(--border); background:rgba(255,255,255,.06); color:var(--text); display:inline-flex; align-items:center; justify-content:center; cursor:pointer; padding:0; font:inherit; }
+        .row .copy svg { width:22px; height:22px; fill:none; stroke:currentColor; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
+        .row .copy.done { border-color:rgba(34,197,94,.6); color:var(--ok); }
+        .row .copied { grid-column:1 / -1; font-size:.9rem; color:var(--ok); }
         .row .code { font-family:'Cairo', ui-monospace, monospace; font-size:clamp(1.9rem, 9vw, 2.8rem); font-weight:800; letter-spacing:.14em; direction:ltr; user-select:all; line-height:1.1; }
         .row .timer { font-size:1.25rem; font-weight:700; direction:ltr; color:var(--warn); min-width:4.2em; text-align:center; }
         .row .mark { font-size:1.8rem; width:2em; text-align:center; }
@@ -122,7 +128,9 @@
             const mark = c.used_by ? '<span class="mark" style="color:var(--ok)">&#10003;</span>' : (left <= 0 ? '<span class="mark" style="color:var(--bad)">&#10005;</span>' : '<span class="mark">&#8987;</span>');
             const timer = c.used_by ? 'تم' : (left <= 0 ? 'انتهى' : fmt(left));
             const sub = c.used_by ? `<span class="vin">${esc(c.used_by)}</span>` : (left <= 0 ? '<span class="sub">انتهت الصلاحية — أصدر كودًا جديدًا</span>' : '<span class="sub">اكتب الكود في العربية خلال المدة</span>');
-            return `<div class="${cls}" data-serial="${esc(c.serial)}">${mark}<div class="code">${esc(c.serial)}</div><div class="timer">${timer}</div>${sub}</div>`;
+            const copy = `<button type="button" class="copy${c.copiedAt && Date.now() - c.copiedAt < 2000 ? ' done' : ''}" data-copy="${esc(c.serial)}" title="نسخ الكود" aria-label="نسخ الكود"><svg viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h9"/></svg></button>`;
+            const copied = c.copiedAt && Date.now() - c.copiedAt < 2000 ? '<span class="copied">تم نسخ الكود</span>' : '';
+            return `<div class="${cls}" data-serial="${esc(c.serial)}">${mark}<div class="code">${esc(c.serial)}</div><div class="timer">${timer}</div>${copy}${copied}${sub}</div>`;
         }).join('');
         const alive = list.some(c => !c.used_by && c.expiresAt > Date.now());
         if (!alive) { clearInterval(ticker); clearInterval(poller); ticker = poller = null; }
@@ -145,12 +153,27 @@
             const r = await api('/local/codes/issue', {});
             codes.set(r.serial, { serial: r.serial, expiresAt: new Date(r.expires_at).getTime(), used_by: null });
             render(); armTimers();
-            notify('تم إصدار كود تفعيل ' + r.serial, 'صالح 10 دقائق');
+            notify('تم إصدار كود تفعيل ' + r.serial, 'صالح 30 دقيقة');
         } catch (e) { $('err').textContent = e.message || String(e); }
         finally { b.disabled = false; }
     }
     $('gen').addEventListener('click', issue);
-    $('codes').addEventListener('click', e => { const row = e.target.closest('[data-serial]'); if (row) { try { navigator.clipboard.writeText(row.dataset.serial); } catch (err) {} } });
+    // Copy = the button beside the code (tapping the number itself still selects it). Clipboard API
+    // first; the execCommand fallback covers older WebViews and the odd browser that refuses it.
+    async function copyCode(serial) {
+        let ok = false;
+        try { await navigator.clipboard.writeText(serial); ok = true; } catch (err) { ok = false; }
+        if (!ok) {
+            try {
+                const ta = document.createElement('textarea'); ta.value = serial; ta.setAttribute('readonly', ''); ta.style.position = 'fixed'; ta.style.opacity = '0';
+                document.body.appendChild(ta); ta.select(); ta.setSelectionRange(0, serial.length); ok = document.execCommand('copy'); document.body.removeChild(ta);
+            } catch (err) { ok = false; }
+        }
+        const c = codes.get(serial);
+        if (c) { c.copiedAt = ok ? Date.now() : 0; render(); if (ok) setTimeout(render, 2100); }
+        if (!ok) $('err').textContent = 'تعذّر النسخ — اضغط مطوّلاً على الكود وانسخه';
+    }
+    $('codes').addEventListener('click', e => { const b = e.target.closest('[data-copy]'); if (b) { e.preventDefault(); copyCode(b.dataset.copy); } });
     $('login').addEventListener('submit', async e => { e.preventDefault(); $('login-err').textContent = ''; try { await login($('pw').value); $('pw').value = ''; } catch (err) { $('login-err').textContent = err.message; } });
     document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && codes.size) pollAll(); });
     (async () => {

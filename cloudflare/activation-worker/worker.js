@@ -39,7 +39,7 @@
 
 /**
  * Accepted activation codes (owner's rule of 2026-09-07 — the open '578' space is CLOSED):
- *   generator — a 6-digit code minted on the admin site (issued_codes): valid for ten
+ *   generator — a 6-digit code minted on the admin site (issued_codes): valid for thirty
  *               minutes and for one car. This is the normal path from now on.
  *   '572' + 3 digits — the owner's reserve block (572001 … 572999), typed by hand when the
  *               generator is unavailable. Single use, like every other code.
