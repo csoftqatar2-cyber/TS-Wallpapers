@@ -87,7 +87,9 @@ final class CarTypeFile {
         if(word.equals("leopard")) return Family.LEOPARD;
         if(word.equals("ti7")) return Family.LEOPARD;
         if(word.equals("denza")) return Family.DENZA;
-        return Family.UNKNOWN;
+        // The store writes this file too (cars without a controller) with its own car id verbatim
+        // (tank500, jetour_t2, dong_feng, …) — the same vocabulary the get_car_type RPC answers with.
+        return familyOfStoreCar(word);
     }
 
     /**
