@@ -59,66 +59,185 @@ public class ModeConfirmActivity extends AppCompatActivity {
     private static boolean sControllerOutcomeNoted = false;
 
     /**
-     * The operating mode the controller's car key stands for on THIS unit, or {@link #MODE_NONE}.
-     *
-     * Only the two families {@link CarTypeFile} knows are mapped, and each still has to pass the
-     * same support gate its radio button does: a Leopard key on a unit without live-wallpaper
-     * support must not silently put the car into a mode that cannot work there — that car keeps
-     * being asked, with the option dimmed, exactly as today.
+     * The store's answer to "which car is this?" ({@code get_car_type}), asked at most once per
+     * process. {@code sStoreAsked} separates "never asked" from "asked, and the answer was null or
+     * the call failed": a car that is offline is asked again on its next launch, not every time
+     * the gate is consulted in this one. {@code sStoreCar} is the raw store id
+     * ({@code leopard}, {@code tank500}, …) so the log and the breadcrumb can name it.
      */
-    static int controllerMode(Context ctx, String key) {
-        switch(CarTypeFile.familyOf(key)) {
+    private static volatile boolean sStoreAsked = false;
+    private static volatile boolean sStoreInFlight = false;
+    private static volatile String sStoreCar = null;
+    private static final java.util.List<Runnable> sStoreWaiters = new java.util.ArrayList<>();
+
+    /**
+     * The operating mode a car family stands for on THIS unit, or {@link #MODE_NONE}.
+     *
+     * The family may come from the controller's files or from the store's RPC — the source does
+     * not matter here. Each family still has to pass the same support gate its radio button does:
+     * a Leopard answer on a unit without live-wallpaper support must not silently put the car into
+     * a mode that cannot work there — that car keeps being asked, with the option dimmed, exactly
+     * as today.
+     *
+     * <p><b>The Leopard family is two modes on a two-screen car.</b> A BYD Leopard unit runs this
+     * app twice: user 0 on the driver screen, where the wallpaper hand-off is the product, and a
+     * second Android user (999) on the passenger strip, whose product is the drawn FSE screen.
+     * The instance knows which it is ({@link WallpaperRepo#isSecondaryInstance}), so a Leopard
+     * answer from any source is Leopard on the driver screen and FSE on the passenger one — the
+     * exact pair the owner used to set by hand on every such car. FSE needs no support gate: it
+     * is the app's own window.
+     */
+    static int controllerMode(Context ctx, CarTypeFile.Family family) {
+        if(family == null) return MODE_NONE;
+        switch(family) {
             case LEOPARD:
+                if(WallpaperRepo.isSecondaryInstance()) return OperatingMode.FSE;
                 return OperatingMode.isSupported(ctx) ? OperatingMode.LEOPARD : MODE_NONE;
             case DENZA:
                 return OperatingMode.isDenzaSupported(ctx) ? OperatingMode.DENZA : MODE_NONE;
+            case ICAR03T:
+                return OperatingMode.isIcar03tSupported(ctx) ? OperatingMode.ICAR03T : MODE_NONE;
+            case GWM:
+                return OperatingMode.GWM;
+            case LYNKCO:
+                return OperatingMode.isLynkcoSupported(ctx) ? OperatingMode.LYNKCO : MODE_NONE;
+            case JETOUR:
+                return OperatingMode.JETOUR;
+            case OTHERS:
+                // The plain drawn screen. Applied, not asked: the owner's table names these cars
+                // as Others on purpose, so the question would only ever have one answer.
+                return OperatingMode.NORMAL;
             default:
                 return MODE_NONE;
         }
     }
 
     /**
-     * Answer the mode question from the controller's car file instead of asking the driver.
+     * The mode every source that has already answered agrees on for this unit, or
+     * {@link #MODE_NONE}. Files first — {@code car_family.txt}, then {@code car.txt}
+     * ({@link CarTypeFile#read}) — then the store's answer, if it has arrived in this process
+     * ({@link #askStoreAsync}). Never touches the network: this is asked on the main thread.
+     */
+    static int autoMode(Context ctx) {
+        int mode = controllerMode(ctx, CarTypeFile.read());
+        if(mode != MODE_NONE) return mode;
+        return controllerMode(ctx, CarTypeFile.familyOfStoreCar(sStoreCar));
+    }
+
+    /** True when {@link #autoMode} would be answered by the store rather than the controller's files. */
+    static boolean autoModeIsFromStore(Context ctx) {
+        return controllerMode(ctx, CarTypeFile.read()) == MODE_NONE && sStoreCar != null;
+    }
+
+    /**
+     * Answer the mode question from what the car already knows instead of asking the driver.
      *
      * The owner's rule (2026-09-10): لوحة تحكم ذبذبة has already chosen the car on every head
-     * unit it runs on, and an app must not ask again. So, on an install where no mode was EVER
-     * saved ({@link OperatingMode#isUnset}) and the file names a family this app knows, the mode
-     * is applied here through the same three writes the radio buttons make — {@code set},
-     * {@code setConfirmed}, {@code reportModeAsync} — so prefs, the manager's mode column, the
-     * hand-off routing and the folder mirror all see exactly what a human's pick would have
-     * produced. Settings can still change it afterwards, as always.
+     * unit it runs on, and an app must not ask again. Extended 2026-09-14 to the second publisher
+     * of that choice, ذبذبة ستور, whose picker answer the backend serves by hardware id — most
+     * cars carry the store and no controller, so neither file exists there. Resolution order:
+     * {@code car_family.txt} → {@code car.txt} → the store's {@code get_car_type} answer (asked
+     * off the main thread by {@link #askStoreAsync}; this method only reads what has arrived).
+     *
+     * On an install where no mode was EVER saved ({@link OperatingMode#isUnset}) and a source
+     * names a family this app knows, the mode is applied here through the same writes the radio
+     * buttons make — {@code set}, {@code setConfirmed}, {@code reportModeAsync}, and for FSE the
+     * start-on-boot switch — so prefs, the manager's mode column, the hand-off routing and the
+     * folder mirror all see exactly what a human's pick would have produced. Settings can still
+     * change it afterwards, as always.
      *
      * A saved mode of any kind is never touched: a driver's choice, a migration's pin, or an
-     * earlier run of this very method. An unknown key, an empty or missing file, an unsupported
-     * unit or any error leaves the question to the driver, as before.
+     * earlier run of this very method. An unknown answer, missing files, an unsupported unit or
+     * any error leaves the question to the driver, as before.
      *
      * @return true only when the mode was applied by THIS call.
      */
     static boolean answerFromController(Context ctx, SharedPreferences prefs) {
         try {
             if(!OperatingMode.isUnset(prefs)) return false;
-            String key = CarTypeFile.readKey();
-            int mode = controllerMode(ctx, key);
+            int mode = controllerMode(ctx, CarTypeFile.read());
+            String source = "car_family.txt/car.txt";   // CarTypeFile.read() just logged which
             if(mode == MODE_NONE) {
-                if(!sControllerOutcomeNoted) {
+                String car = sStoreCar;
+                mode = controllerMode(ctx, CarTypeFile.familyOfStoreCar(car));
+                source = "get_car_type=" + (car == null ? "<none>" : car);
+            }
+            if(mode == MODE_NONE) {
+                if(!sControllerOutcomeNoted && sStoreAsked) {
                     sControllerOutcomeNoted = true;
-                    CrashReporter.breadcrumb("car.txt=" + (key.isEmpty() ? "<none>" : key)
-                            + " -> no auto mode, asking the driver");
+                    CrashReporter.breadcrumb(source + " -> no auto mode, asking the driver");
                 }
                 return false;
             }
             OperatingMode.set(prefs, mode);
             OperatingMode.setConfirmed(prefs);
+            // FSE means "the car boots into this screen" — the same write the two human paths
+            // make. The overlay grant a boot-time start also needs is NOT asked for here: nobody
+            // is standing at a screen that answered itself.
+            if(mode == OperatingMode.FSE) {
+                prefs.edit().putBoolean(BootReceiver.PREF_AUTO_START, true).apply();
+            }
             new WallpaperRepo(ctx).reportModeAsync();
             String wire = OperatingMode.wire(prefs);
             // Log.e survives the release build's log stripping; this is the one line a technician
             // reading logcat on the bench needs to see.
-            Log.e(TAG, "car.txt=" + key + " → mode=" + wire);
-            CrashReporter.breadcrumb("car.txt=" + key + " -> mode=" + wire + " (auto-applied, driver not asked)");
+            Log.e(TAG, source + " → mode=" + wire
+                    + (WallpaperRepo.isSecondaryInstance() ? " (secondary instance)" : ""));
+            CrashReporter.breadcrumb(source + " -> mode=" + wire + " (auto-applied, driver not asked)");
             return true;
         } catch(Throwable t) {
             return false;
         }
+    }
+
+    /**
+     * Ask the store which car this is, once per process, off the main thread, and run
+     * {@code onAnswered} on the main thread when the answer is in — whatever it was. The caller
+     * then re-asks {@link #answerFromController}, which reads the cached answer; nothing is
+     * applied here. Skipped outright when a mode is already saved or the files already answer,
+     * because then there is no question left to ask the network.
+     *
+     * The waiters list is for the two screens that can be showing the question while the call is
+     * in flight (the activation overlay and the confirm gate) — each gets its callback, and a
+     * screen created after the answer arrived gets it straight away. The callback always runs,
+     * exactly once, whether or not the network was asked, so a screen can put its "detecting…"
+     * line up before this call and take it down in the callback.
+     */
+    static void askStoreAsync(final Context ctx, final SharedPreferences prefs, final Runnable onAnswered) {
+        final android.os.Handler main = new android.os.Handler(android.os.Looper.getMainLooper());
+        if(!OperatingMode.isUnset(prefs) || controllerMode(ctx, CarTypeFile.read()) != MODE_NONE) {
+            if(onAnswered != null) main.post(onAnswered);
+            return;
+        }
+        synchronized(sStoreWaiters) {
+            if(sStoreAsked && !sStoreInFlight) {
+                if(onAnswered != null) main.post(onAnswered);
+                return;
+            }
+            if(onAnswered != null) sStoreWaiters.add(onAnswered);
+            if(sStoreInFlight) return;
+            sStoreInFlight = true;
+        }
+        final Context app = ctx.getApplicationContext() != null ? ctx.getApplicationContext() : ctx;
+        new Thread(new Runnable() {
+            @Override public void run() {
+                String car = null;
+                try {
+                    car = new WallpaperRepo(app).fetchStoreCarType();
+                } catch(Throwable ignored) {
+                    // fetchStoreCarType never throws; belt and braces around the constructor.
+                }
+                final Runnable[] waiters;
+                synchronized(sStoreWaiters) {
+                    sStoreCar = car;
+                    sStoreAsked = true;
+                    sStoreInFlight = false;
+                    waiters = sStoreWaiters.toArray(new Runnable[0]);
+                    sStoreWaiters.clear();
+                }
+                for(Runnable r : waiters) main.post(r);
+            }
+        }, "get_car_type").start();
     }
 
     @Override
@@ -180,6 +299,19 @@ public class ModeConfirmActivity extends AppCompatActivity {
             updateDesc(mode);
             setConfirmEnabled(confirm, mode != MODE_NONE);
         });
+
+        // The files did not answer (or this car has no controller). The store may still know:
+        // ask it while the list is on screen, and if it names a family this app knows the mode is
+        // applied and the screen leaves on its own. A driver who picks first wins — the answer
+        // only lands on an install that is still unset.
+        if(OperatingMode.isUnset(mPrefs)) {
+            if(mDesc != null) mDesc.setText(R.string.mode_detecting_from_store);
+            ModeConfirmActivity.askStoreAsync(this, mPrefs, () -> {
+                if(isFinishing() || isDestroyed()) return;
+                if(answerFromController(ModeConfirmActivity.this, mPrefs)) { openApp(); return; }
+                updateDesc(selectedMode());
+            });
+        }
 
         confirm.setOnClickListener(v -> {
             int mode = selectedMode();

@@ -540,6 +540,38 @@ public class WallpaperRepo {
         }
     }
 
+    /** Connect and read budget for {@link #fetchStoreCarType}: one short question, asked once per process. */
+    private static final int CAR_TYPE_TIMEOUT_MS = 4000;
+
+    /**
+     * The car ذبذبة ستور's picker chose on this unit, as the backend's read-only RPC
+     * {@code get_car_type(device_hw_id)} returns it — {@code leopard}, {@code denza},
+     * {@code tank500}, … — or null when the store never checked in here, the car is unknown, the
+     * RPC is missing on an older backend, the network is down, or anything else went wrong.
+     *
+     * Blocking, with a short timeout on both ends: it is asked while the driver is looking at the
+     * "which car is this?" question, and a slow answer is worth exactly as much as no answer. Call
+     * from a background thread; never throws. The one {@code Log.e} line survives the release
+     * build's log stripping — with the {@code CarTypeFile} lines it is what tells a technician
+     * reading logcat where the mode came from.
+     */
+    public String fetchStoreCarType() {
+        try {
+            String sbUrl = getSupabaseUrl();
+            if (sbUrl.contains("YOUR_SUPABASE_PROJECT")) return null;
+            JSONObject body = new JSONObject();
+            body.put("device_hw_id", getDeviceId());
+            String answer = httpPost(sbUrl + "/rest/v1/rpc/get_car_type", body.toString(),
+                    CAR_TYPE_TIMEOUT_MS, CAR_TYPE_TIMEOUT_MS);
+            String car = CarTypeFile.storeCarOfRpcBody(answer);
+            Log.e("CarTypeFile", "get_car_type: " + (car == null ? "null" : car));
+            return car;
+        } catch (Throwable t) {
+            Log.e("CarTypeFile", "get_car_type: failed: " + t);
+            return null;
+        }
+    }
+
     /**
      * RPC that returns one folder-mirror channel's images for this car (empty when not
      * configured). Every mirror channel has its own RPC with the same shape and the same
@@ -2124,10 +2156,14 @@ public class WallpaperRepo {
     }
 
     private String httpPost(String urlStr, String jsonBody) throws Exception {
+        return httpPost(urlStr, jsonBody, 15000, 20000);
+    }
+
+    private String httpPost(String urlStr, String jsonBody, int connectTimeoutMs, int readTimeoutMs) throws Exception {
         URL url = new URL(urlStr);
         HttpURLConnection conn = (HttpURLConnection) url.openConnection();
-        conn.setConnectTimeout(15000);
-        conn.setReadTimeout(20000);
+        conn.setConnectTimeout(connectTimeoutMs);
+        conn.setReadTimeout(readTimeoutMs);
         conn.setRequestMethod("POST");
         conn.setRequestProperty("Accept", "application/json");
         conn.setRequestProperty("Content-Type", "application/json");
