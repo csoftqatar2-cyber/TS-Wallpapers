@@ -36,7 +36,7 @@ public class CarTypeFileCheck {
         expect("denza_z9gt_2027", CarTypeFile.Family.DENZA);
 
         // Everything else keeps asking the driver.
-        expect("ti7", CarTypeFile.Family.UNKNOWN);
+        expect("ti7", CarTypeFile.Family.LEOPARD);          // owner 2026-09-14: Ti7 = Leopard family
         expect("lynkco", CarTypeFile.Family.UNKNOWN);      // 'l' + letter is not a Leopard key
         expect("l", CarTypeFile.Family.UNKNOWN);
         expect("l_8", CarTypeFile.Family.UNKNOWN);
@@ -55,7 +55,7 @@ public class CarTypeFileCheck {
         expectWord("leopard", CarTypeFile.Family.LEOPARD);
         expectWord(" leopard ", CarTypeFile.Family.LEOPARD);   // trimmed
         expectWord("denza", CarTypeFile.Family.DENZA);
-        expectWord("ti7", CarTypeFile.Family.UNKNOWN);        // no wallpapers mode for it yet: ask
+        expectWord("ti7", CarTypeFile.Family.LEOPARD);        // owner 2026-09-14: Ti7 = Leopard family
         expectWord("Leopard", CarTypeFile.Family.UNKNOWN);    // case-sensitive like the key
         expectWord("", CarTypeFile.Family.UNKNOWN);
         expectWord(null, CarTypeFile.Family.UNKNOWN);

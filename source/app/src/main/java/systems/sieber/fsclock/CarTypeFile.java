@@ -58,13 +58,15 @@ final class CarTypeFile {
         return familyOf(readKey());
     }
 
-    /** The controller's family word → our family. {@code ti7} and anything else stay UNKNOWN (asked). */
+    /** The controller's family word → our family ({@code ti7} counts as Leopard, owner 2026-09-14); anything else stays UNKNOWN (asked). */
     static Family familyOfWord(String word) {
         if(word == null) return Family.UNKNOWN;
         word = word.trim();
         if(word.equals("leopard")) return Family.LEOPARD;
         if(word.equals("denza")) return Family.DENZA;
-        return Family.UNKNOWN;
+        // The store writes this file too (cars without a controller) and it writes its own car id
+        // verbatim (ti7, tank500, jetour_t2, …) — the same vocabulary the RPC answers with.
+        return familyOfStoreCar(word);
     }
 
     /**
@@ -118,6 +120,7 @@ final class CarTypeFile {
             return Family.LEOPARD;
         }
         if(key.startsWith("denza")) return Family.DENZA;
+        if(key.equals("ti7")) return Family.LEOPARD;   // owner 2026-09-14: Ti7 belongs to the Leopard family
         return Family.UNKNOWN;
     }
 
