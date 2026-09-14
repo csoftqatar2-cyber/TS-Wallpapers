@@ -327,6 +327,11 @@ public class FullscreenActivity extends AppCompatActivity {
 
         // initial event state update
         mContentView.updateEventView();
+
+        // Location and "display over other apps", asked for here on an activated car rather
+        // than on a Settings visit nobody makes on a passenger screen. No-op when both are held
+        // (the installer pre-grants them) or while the activation card is still up.
+        StartupPermissions.requestIfMissing(this);
     }
 
     @Override
@@ -418,6 +423,8 @@ public class FullscreenActivity extends AppCompatActivity {
     @Override
     public void onRequestPermissionsResult(int callbackId, @NonNull String[] permissions, @NonNull int[] grantResults) {
         super.onRequestPermissionsResult(callbackId, permissions, grantResults);
+        // The startup location ask was answered: the overlay ask follows it, never beside it.
+        StartupPermissions.onRequestPermissionsResult(this, callbackId);
         int i = 0;
         for(String p : permissions) {
             if(p.equals(Manifest.permission.READ_CALENDAR)) {
