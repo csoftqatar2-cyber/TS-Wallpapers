@@ -147,6 +147,8 @@
             border: 1px solid var(--panel-border); background: rgba(255,255,255,.05); color: var(--text-main);
             padding: 8px 14px; border-radius: 12px; font-family: inherit; font-size: .88rem; font-weight: 600;
             transition: all .2s ease;
+            /* A button label never wraps: «حفظ» was breaking into «حف / ظ» inside narrow table cells. */
+            white-space: nowrap; flex-shrink: 0;
         }
         .btn:hover { border-color: var(--panel-border-hover); background: rgba(255,255,255,.09); }
         .btn:focus-visible, input:focus-visible, .tab:focus-visible, .chip:focus-visible, .expander:focus-visible {
