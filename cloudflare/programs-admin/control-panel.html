@@ -414,6 +414,17 @@
         .car-app b { display: block; font-size: .8rem; color: var(--text-muted); margin-bottom: 4px; }
         .car-app .ver { font-family: var(--mono); direction: ltr; unicode-bidi: isolate; font-size: .9rem; }
         .bars { display: block; width: 100%; height: 170px; direction: ltr; }
+        /* Day bars (voice usage / cost): HTML, never stretched. Bars grow from the bottom of a fixed
+           track; the cell width is capped so a handful of days does not turn into slabs. */
+        .daybars { direction: ltr; padding: 6px 4px 2px; }
+        .daybars-cap { font-size: .78rem; color: var(--text-muted); margin: 0 4px 6px; direction: rtl; text-align: right; }
+        .daybars-row { display: flex; align-items: flex-end; gap: 6px; overflow-x: auto; padding-bottom: 2px; }
+        .daybar-cell { flex: 0 0 auto; width: clamp(14px, calc((100% - 6px * (var(--n) - 1)) / var(--n)), 56px); display: flex; flex-direction: column; align-items: center; gap: 3px; }
+        .daybar-val { font-size: .68rem; color: var(--text-muted); height: 1em; line-height: 1; white-space: nowrap; }
+        .daybar-track { width: 100%; height: 120px; display: flex; align-items: flex-end; background: rgba(255,255,255,.04); border-radius: 6px; overflow: hidden; }
+        .daybar-fill { width: 100%; background: var(--primary); border-radius: 6px 6px 0 0; }
+        .daybar-fill.empty { background: rgba(255,255,255,.08); height: 2px !important; }
+        .daybar-tick { font-size: .68rem; color: var(--text-muted); height: 1em; line-height: 1; white-space: nowrap; }
         .bars rect:hover { filter: brightness(1.3); }
         .car-thumbs { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 8px; }
         .car-thumbs a { display: block; aspect-ratio: 1; border-radius: 10px; overflow: hidden; background: rgba(0,0,0,.3); border: 1px solid var(--panel-border); position: relative; }
@@ -4040,15 +4051,21 @@
         catch (e) { carCache.tslink.set(hw, { error: errMsg(e) }); }
         if (carOpen === hw) renderCarPage(hw);
     }
+    // Plain HTML bars, not a stretched SVG: the old `preserveAspectRatio="none"` scaled a 320-unit
+    // drawing to the full card width, so with a few days the bars became slabs and the text was
+    // smeared five times wide. Here the text is real text and each bar is a flex cell whose width
+    // is capped, so four days look like four bars and 120 days still fit.
     function dayBars(days, valueKey, label, fmt) {
         if (!days.length) return '<div class="empty">لا بيانات</div>';
-        const w = Math.max(320, days.length * 14), h = 170, pad = 22, bw = Math.max(4, (w - 10) / days.length - 3);
         const max = Math.max(1e-9, ...days.map(d => Number(d[valueKey]) || 0));
-        const bars = days.map((d, i) => { const v = Number(d[valueKey]) || 0; const bh = v ? Math.max(2, v / max * (h - pad - 14)) : 0; const x = 5 + i * ((w - 10) / days.length);
-            return `<rect x="${x.toFixed(1)}" y="${(h - pad - bh).toFixed(1)}" width="${bw.toFixed(1)}" height="${bh.toFixed(1)}" rx="2" fill="${v ? 'var(--primary)' : 'rgba(255,255,255,.08)'}"><title>${esc(d.day)}: ${esc(fmt ? fmt(v) : v)} ${esc(label)}${d.n != null && valueKey !== 'n' ? ` · ${esc(d.n)} أمر` : ''}${d.bad ? ` · ${esc(d.bad)} لم يُفهم` : ''}</title></rect>`; }).join('');
-        const step = Math.max(1, Math.ceil(days.length / 6));
-        const ticks = days.map((d, i) => (i === 0 || i === days.length - 1 || i % step === 0) ? `<text x="${(5 + i * ((w - 10) / days.length)).toFixed(1)}" y="${h - 6}" font-size="10" fill="var(--text-muted)">${esc(d.day.slice(5))}</text>` : '').join('');
-        return `<div class="table-wrap"><svg class="bars" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" role="img" aria-label="${esc(label)} بالأيام"><text x="5" y="12" font-size="10" fill="var(--text-muted)">الأعلى: ${esc(fmt ? fmt(max) : max)}</text>${bars}${ticks}</svg></div>`;
+        const step = Math.max(1, Math.ceil(days.length / 8));
+        const cells = days.map((d, i) => {
+            const v = Number(d[valueKey]) || 0, pct = v ? Math.max(2, v / max * 100) : 0;
+            const tip = `${d.day}: ${fmt ? fmt(v) : v} ${label}${d.n != null && valueKey !== 'n' ? ` · ${d.n} أمر` : ''}${d.bad ? ` · ${d.bad} لم يُفهم` : ''}`;
+            const tick = (i === 0 || i === days.length - 1 || i % step === 0) ? esc(d.day.slice(5)) : '';
+            return `<div class="daybar-cell" title="${esc(tip)}"><div class="daybar-val">${v ? esc(fmt ? fmt(v) : v) : ''}</div><div class="daybar-track"><div class="daybar-fill${v ? '' : ' empty'}" style="height:${pct}%"></div></div><div class="daybar-tick">${tick}</div></div>`;
+        }).join('');
+        return `<div class="daybars" role="img" aria-label="${esc(label)} بالأيام"><div class="daybars-cap">الأعلى: <span class="num">${esc(fmt ? fmt(max) : max)}</span></div><div class="daybars-row" style="--n:${days.length}">${cells}</div></div>`;
     }
     function carSection(title, icon, body, wide) { return `<div class="car-section${wide ? ' wide' : ''}"><h3><i class="fa-solid ${icon}"></i>${esc(title)}</h3>${body}</div>`; }
     function renderCarPage(hw) {
