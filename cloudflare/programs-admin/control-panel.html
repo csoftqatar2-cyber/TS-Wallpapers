@@ -168,6 +168,9 @@
         .toggle input { accent-color: var(--primary); width: 16px; height: 16px; cursor: pointer; }
         .vcalc-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; }
         .vcalc-grid label { display: flex; flex-direction: column; gap: 6px; font-size: .85rem; color: var(--text-muted); }
+        /* No native spinner arrows on number fields (owner, 2026-09-15). */
+        input[type=number] { -moz-appearance: textfield; appearance: textfield; }
+        input[type=number]::-webkit-inner-spin-button, input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; appearance: none; margin: 0; display: none; }
         .vcalc-grid input { width: 100%; background: rgba(0,0,0,.35); border: 1px solid var(--panel-border); color: var(--text-main); padding: 10px 14px; border-radius: 12px; font-family: var(--mono); font-size: 1.05rem; direction: ltr; text-align: right; }
         #vcalc-body td { font-family: var(--mono); direction: ltr; unicode-bidi: isolate; text-align: right; }
         #vcalc-body td:first-child { font-family: inherit; direction: rtl; }
@@ -186,6 +189,59 @@
         #vcalc-cmp-body tr.cheapest td { background: rgba(52,211,153,.07); }
         #vcalc-cmp-body tr.cheapest td.m { color: var(--success); font-weight: 700; }
         #vcalc-cmp-body tr.selected td:first-child { box-shadow: inset -3px 0 0 var(--primary); }
+        #vcalc-cmp-body tr.unused td { opacity: .62; }
+        #vcalc-cmp-body td:first-child { min-width: 210px; }
+        .vcalc-basis .badge, .vcalc-model-line .badge, #vcalc-cmp-body td .badge { white-space: normal; text-align: start; }
+        #vcalc-cmp-body td.p1m { font-size: .8rem; white-space: nowrap; }
+        #vcalc-cmp-body td.p1m bdi { font-family: var(--mono); }
+        /* Owner (2026-09-15): no white spinner arrows on number fields; typing and arrow keys still work. */
+        input[type=number] { -moz-appearance: textfield; appearance: textfield; }
+        input[type=number]::-webkit-inner-spin-button, input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; appearance: none; margin: 0; }
+        /* Model picker: a themed listbox instead of the native <select> (which mixed RTL/LTR and cut names). */
+        .vcalc-field { display: flex; flex-direction: column; gap: 6px; font-size: .85rem; color: var(--text-muted); min-width: 0; }
+        #vcalc-model[hidden] { display: none !important; }
+        .vsel { position: relative; min-width: 0; }
+        .vsel-btn { width: 100%; min-height: 46px; display: flex; align-items: center; gap: 8px; text-align: start; background: rgba(0,0,0,.35); border: 1px solid var(--panel-border); color: var(--text-main); padding: 7px 12px; border-radius: 12px; font: inherit; font-size: .9rem; cursor: pointer; white-space: normal; }
+        .vsel-btn:hover { border-color: var(--panel-border-hover); }
+        .vsel-btn:focus-visible, .vsel.open .vsel-btn { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(255,154,61,.15); }
+        .vsel-btn .vsel-cur { flex: 1; min-width: 0; overflow-wrap: anywhere; line-height: 1.35; }
+        .vsel-btn .vsel-cur .vsel-meta { margin-top: 2px; }
+        .vsel-btn > i { color: var(--text-muted); font-size: .75rem; transition: transform .15s; }
+        .vsel.open .vsel-btn > i { transform: rotate(180deg); }
+        .vsel-list { position: absolute; top: calc(100% + 6px); inset-inline-start: 0; z-index: 40; width: max(100%, min(460px, calc(100vw - 32px))); max-height: min(60vh, 400px); overflow-y: auto; overscroll-behavior: contain; background: #1c160e; border: 1px solid var(--panel-border-hover); border-radius: 14px; box-shadow: 0 18px 44px #000b; padding: 6px; direction: rtl; }
+        .vsel-group { font-size: .74rem; color: var(--text-muted); padding: 8px 10px 4px; border-top: 1px solid var(--panel-border); margin-top: 4px; }
+        .vsel-group:first-child { border-top: 0; margin-top: 0; }
+        .vsel-opt { border: 1px solid transparent; border-radius: 11px; padding: 7px 10px; cursor: pointer; color: var(--text-main); line-height: 1.4; }
+        .vsel-opt + .vsel-opt { margin-top: 3px; }
+        .vsel-opt:hover { background: rgba(255,255,255,.05); }
+        .vsel-opt.active { background: rgba(255,255,255,.06); border-color: var(--panel-border-hover); }
+        .vsel-opt[aria-selected="true"] { background: rgba(255,154,61,.16); border-color: var(--primary); }
+        .vsel-l1 { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; font-weight: 700; font-size: .9rem; overflow-wrap: anywhere; }
+        .vsel-meta { display: flex; flex-wrap: wrap; gap: 2px 10px; font-size: .74rem; color: var(--text-muted); font-weight: 400; }
+        .vsel-meta bdi { font-family: var(--mono); }
+        .vsel-meta .vsel-mid { direction: ltr; unicode-bidi: isolate; font-family: var(--mono); overflow-wrap: anywhere; }
+        .vsel-why { font-size: .74rem; color: var(--accent); font-weight: 400; }
+        @media (max-width: 560px) { .vsel-list { width: 100%; } }
+        /* Controller cars table: voice numbers are buttons that open the per-day chart. */
+        th.th-help { cursor: help; }
+        th.th-help .th-sub { display: block; font-weight: 400; font-size: .7rem; opacity: .8; }
+        .vcell { background: none; border: 1px dashed transparent; border-radius: 8px; padding: 2px 6px; margin: -2px -6px; color: inherit; font: inherit; cursor: pointer; text-align: start; }
+        .vcell:hover, .vcell:focus-visible { border-color: var(--primary); background: rgba(255,154,61,.08); outline: none; }
+        .vcell.big .num { font-size: 1.05rem; font-weight: 700; color: var(--accent); }
+        .vcell .sub { display: block; }
+        .vchart-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 6px; margin: 4px 0 10px; text-align: start; }
+        .vchart-tiles > div { background: rgba(255,255,255,.04); border: 1px solid var(--panel-border); border-radius: 12px; padding: 6px 9px; }
+        .vchart-tiles b { display: block; font-size: .72rem; color: var(--text-muted); font-weight: 600; }
+        .vchart-tiles .v { font-family: var(--mono); direction: ltr; unicode-bidi: isolate; font-size: 1.05rem; font-weight: 700; }
+        .vchart-tiles .hl { border-color: var(--primary); background: rgba(255,154,61,.1); }
+        .vchart-scroll { overflow-x: auto; overflow-y: hidden; direction: ltr; border: 1px solid var(--panel-border); border-radius: 12px; background: rgba(0,0,0,.2); }
+        .vchart-scroll svg { display: block; }
+        .vchart-scroll rect[data-i] { cursor: pointer; }
+        .vchart-legend { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: .74rem; color: var(--text-muted); margin: 6px 0; text-align: start; }
+        .vchart-legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; vertical-align: middle; margin-inline-end: 4px; }
+        .vchart-info { min-height: 1.6em; font-size: .8rem; margin: 6px 0; text-align: start; color: var(--text-main); }
+        .vchart-note { font-size: .76rem; color: var(--warn); text-align: start; margin: 4px 0; }
+        .vchart-pop .swal2-html-container { margin: 8px 10px 0 !important; overflow-x: hidden; }
 
         /* ---------- Inputs ---------- */
         input[type=text], input[type=password], input[type=search], select {
@@ -396,14 +452,39 @@
         .hw-link { color: var(--accent); text-decoration: none; }
         .hw-link:hover { text-decoration: underline; }
         .spark { width: 100%; height: 48px; display: block; }
-        /* ---- per-car page ---- */
-        body.car-open #tabs, body.car-open .tab-panel, body.car-open .subtabs { display: none !important; }
-        #page-car { display: none; }
-        body.car-open #page-car { display: block; }
-        .car-head { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-bottom: 14px; }
-        .car-head h2 { font-size: 1.25rem; margin: 0; }
-        .car-head .hw { font-family: var(--mono); direction: ltr; unicode-bidi: isolate; color: var(--text-muted); font-size: .85rem; }
-        .car-sections { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 14px; }
+        /* ---- per-car view: a modal over the page (owner's call 2026-09-15) ----
+           Any car link anywhere opens the same popup, the hash still carries the car so a refresh or a
+           shared link reopens it, and renderCarPage stays the renderer - only the container moved. */
+        body.car-open { overflow: hidden; }
+        #car-dialog { margin: auto; width: min(1100px, 94vw); max-height: 90vh; padding: 0; background: #1c160e; color: var(--text-main); border: 1px solid var(--panel-border-hover); border-radius: 18px; overflow: hidden; }
+        #car-dialog::backdrop { background: #000c; backdrop-filter: blur(4px); }
+        #page-car { display: flex; flex-direction: column; max-height: 90vh; min-width: 0; }
+        .car-head { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 14px 18px; margin: 0; background: rgba(0,0,0,.25); border-bottom: 1px solid var(--panel-border); }
+        .car-headline { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+        .car-head h2 { font-size: 1.2rem; margin: 0; }
+        .car-head .hw { font-family: var(--mono); direction: ltr; unicode-bidi: isolate; color: var(--text-muted); font-size: .85rem; text-align: start; }
+        .car-close { width: 38px; height: 38px; padding: 0; justify-content: center; border-radius: 50%; font-size: 1.05rem; flex: 0 0 auto; }
+        .car-body { padding: 16px 18px 20px; overflow: auto; overscroll-behavior: contain; min-height: 0; }
+        .car-sections { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(420px, 100%), 1fr)); gap: 14px; align-items: start; }
+        /* A heading with a table (or a chart) under it is a card, never a bare line of text. */
+        .sub-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(320px, 100%), 1fr)); gap: 12px; align-items: start; }
+        .sub-card { background: rgba(0,0,0,.18); border: 1px solid var(--panel-border); border-radius: 14px; padding: 12px 14px; min-width: 0; }
+        .sub-card.wide { grid-column: 1 / -1; }
+        .sub-card > h4 { font-size: .86rem; color: var(--accent); margin: 0 0 10px; display: flex; align-items: center; gap: 8px; }
+        .sub-card > h4 i { font-size: .8rem; color: var(--primary); }
+        .sub-card > .btn { margin-top: 10px; }
+        .owner-note { font-size: .88rem; line-height: 1.7; margin: 0; overflow-wrap: anywhere; }
+        .car-stats { margin-bottom: 12px; }
+        .car-chips { display: flex; gap: 6px; flex-wrap: wrap; margin: 0 0 12px; }
+        .chart-duo { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(320px, 100%), 1fr)); gap: 14px; }
+        .chart-box { min-width: 0; background: rgba(255,255,255,.03); border: 1px solid var(--panel-border); border-radius: 12px; padding: 10px 12px; }
+        .chart-box > h5 { font-size: .8rem; font-weight: 700; color: var(--text-muted); margin: 0 0 8px; }
+        /* Same treatment for the panels (controller, TS Link, store, Leo): heading + table in one card. */
+        .panel-card { background: var(--panel-bg); border: 1px solid var(--panel-border); border-radius: 18px; padding: 14px 16px; min-width: 0; margin: 0 0 14px; }
+        .panel-card > h3, .panel-card > .ctl-h, .panel-card > .card-title { margin: 0 0 10px; }
+        .panel-card > h3 > i, .panel-card > .ctl-h > i { color: var(--primary); margin-inline-end: 4px; }
+        .panel-card > .table-wrap:last-child, .panel-card > .note:last-child, .panel-card > .chips:last-child { margin-bottom: 0; }
+        .panel-card > .note { margin-top: 10px; }
         .car-section { background: var(--panel-bg); border: 1px solid var(--panel-border); border-radius: 18px; padding: 14px 16px; min-width: 0; }
         .car-section.wide { grid-column: 1 / -1; }
         .car-section h3 { font-size: .95rem; margin: 0 0 10px; display: flex; align-items: center; gap: 8px; }
@@ -416,11 +497,22 @@
         .bars { display: block; width: 100%; height: 170px; direction: ltr; }
         /* Day bars (voice usage / cost): HTML, never stretched. Bars grow from the bottom of a fixed
            track; the cell width is capped so a handful of days does not turn into slabs. */
-        .daybars { direction: ltr; padding: 6px 4px 2px; }
+        .daybars { direction: ltr; padding: 6px 4px 2px; min-width: 0; }
         .daybars-cap { font-size: .78rem; color: var(--text-muted); margin: 0 4px 6px; direction: rtl; text-align: right; }
-        .daybars-row { display: flex; align-items: flex-end; gap: 6px; overflow-x: auto; padding-bottom: 2px; }
-        .daybar-cell { flex: 0 0 auto; width: clamp(14px, calc((100% - 6px * (var(--n) - 1)) / var(--n)), 56px); display: flex; flex-direction: column; align-items: center; gap: 3px; }
+        /* Two fixes the owner asked for (2026-09-15):
+           1) a handful of days used to hug the inline start of a full-width card with a wide empty gap -
+              the row is centred now, "safe" so the overflow stays reachable when there are many days;
+           2) overflow-y is pinned to hidden. Left implicit it computes to "auto" next to overflow-x, and
+              the 8px horizontal scrollbar tipped the row into a vertical overflow - that was the thin
+              arrowed strip that appeared on the far side of the chart with nothing to scroll. */
+        .daybars-row { display: flex; align-items: flex-end; gap: 6px; overflow-x: auto; overflow-y: hidden; padding-bottom: 2px; justify-content: center; justify-content: safe center; scrollbar-width: thin; scrollbar-color: rgba(251,191,36,.45) rgba(255,255,255,.05); }
+        .daybars-row::-webkit-scrollbar { height: 8px; width: 0; }
+        .daybars-row::-webkit-scrollbar-track { background: rgba(255,255,255,.05); border-radius: 8px; }
+        .daybars-row::-webkit-scrollbar-thumb { background: rgba(251,191,36,.45); border-radius: 8px; }
+        .daybars-row::-webkit-scrollbar-button { display: none; width: 0; height: 0; }
+        .daybar-cell { flex: 0 0 auto; width: clamp(14px, calc((100% - 6px * (var(--n) - 1)) / var(--n)), 64px); display: flex; flex-direction: column; align-items: center; gap: 3px; }
         .daybar-val { font-size: .68rem; color: var(--text-muted); height: 1em; line-height: 1; white-space: nowrap; }
+        .daybars.dense .daybar-val { display: none; }
         .daybar-track { width: 100%; height: 120px; display: flex; align-items: flex-end; background: rgba(255,255,255,.04); border-radius: 6px; overflow: hidden; }
         .daybar-fill { width: 100%; background: var(--primary); border-radius: 6px 6px 0 0; }
         .daybar-fill.empty { background: rgba(255,255,255,.08); height: 2px !important; }
@@ -433,6 +525,11 @@
         .stat-card[title] { cursor: help; }
         .money span { display: block; font-family: var(--mono); direction: ltr; unicode-bidi: isolate; }
         .money span + span { color: var(--text-muted); font-size: .85em; }
+        .stat-card.credit-low  { border-color: rgba(251,191,36,.55); }
+        .stat-card.credit-crit { border-color: rgba(239,68,68,.6); background: linear-gradient(0deg, rgba(239,68,68,.08), rgba(239,68,68,.08)), var(--panel-bg); }
+        .stat-info p .stat-na { font-size: 1.1rem; font-family: inherit; }
+        .stat-extra { font-size: .72rem; color: var(--text-muted); line-height: 1.5; margin-top: 4px; }
+        .stat-extra .n { font-family: var(--mono); direction: ltr; unicode-bidi: isolate; }
         .car-type { display: block; font-weight: 600; }
         .car-type + .sub { display: block; }
         pre.report { direction: ltr; text-align: left; white-space: pre-wrap; font-family: var(--mono); font-size: .74rem; background: rgba(0,0,0,.25); padding: 10px; border-radius: 10px; max-height: 360px; overflow: auto; }
@@ -552,6 +649,11 @@
             .table-wrap td[colspan] > .empty, .table-wrap td[colspan] > .detail-body, tr.detail-row td > div { max-width: calc(100vw - 56px); }
             #notif-history { padding: 12px; }
             pre.crash, pre.report { font-size: .72rem; }
+            #car-dialog { width: min(1100px, 100vw - 12px); max-height: 94vh; border-radius: 14px; }
+            #page-car { max-height: 94vh; }
+            .car-head { padding: 10px 12px; }
+            .car-body { padding: 12px 12px 16px; }
+            .chart-duo { gap: 10px; }
         }
         /* Shared control sizing and wrapping, including dynamically rendered rows. */
         .btn, .chip, .subtab, .tab {
@@ -567,7 +669,7 @@
         .toolbar > .note, .toolbar > .sub, .control-row > strong { overflow-wrap: anywhere; }
         .wp-form-grid { align-items: end; }
         .wp-form-grid > .btn, #controller-settings fieldset > .btn { min-height: 46px; }
-        .car-sections { grid-template-columns: repeat(auto-fit, minmax(min(340px, 100%), 1fr)); }
+        .car-sections { grid-template-columns: repeat(auto-fit, minmax(min(420px, 100%), 1fr)); }
         #controller-settings fieldset:has(#fleet-fuel-price) { grid-template-columns: repeat(auto-fit, minmax(min(180px, 100%), 1fr)); }
         #controller-settings .toolbar { margin-bottom: 0; }
     </style>
@@ -631,19 +733,6 @@
 
         <!-- ============ Tabs ============ -->
         <div class="card">
-            <section id="page-car" aria-live="polite">
-                <div class="car-head">
-                    <button class="btn" type="button" id="car-back"><i class="fa-solid fa-arrow-right"></i> رجوع</button>
-                    <h2 id="car-title">سيارة</h2>
-                    <span class="hw" id="car-hw"></span>
-                    <span id="car-badges"></span>
-                    <span style="flex:1"></span>
-                    <button class="btn sm" type="button" id="car-copy" title="نسخ رابط الصفحة"><i class="fa-solid fa-link"></i> نسخ الرابط</button>
-                    <button class="btn sm" type="button" id="car-refresh"><i class="fa-solid fa-rotate"></i> تحديث</button>
-                </div>
-                <div id="car-err"></div>
-                <div class="car-sections" id="car-sections"></div>
-            </section>
             <div class="tabs" role="tablist" id="tabs">
                 <button class="tab active" role="tab" data-tab="devices"><i class="fa-solid fa-microchip"></i> الأجهزة <span class="count" id="cnt-devices">0</span></button>
                 <button class="tab" role="tab" data-tab="wallpapers"><i class="fa-solid fa-images"></i> الخلفيات</button>
@@ -763,9 +852,9 @@
                 <div id="crashes-err"></div>
                 <p class="note" style="margin-bottom:12px;">التقارير المحمّلة مجمّعة حسب التطبيق وتوقيع العطل؛ الأعطال المحلولة منفصلة عن الحالية.</p>
                 <div id="crashes-list"></div>
-                <div id="leo-crashes" style="margin-top:22px;">
-                    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px;">
-                        <h3 style="font-size:1rem;">أعطال TS Leo Dash <span class="sub" style="display:inline">(Worker tsleo-checkin، قراءة فقط)</span></h3>
+                <div id="leo-crashes" class="panel-card" style="margin-top:22px;">
+                    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px;">
+                        <h3 class="ctl-h" style="margin:0;font-size:1rem;color:var(--text-main);"><i class="fa-solid fa-bug"></i> أعطال TS Leo Dash <span class="sub" style="display:inline">(Worker tsleo-checkin، قراءة فقط)</span></h3>
                         <button class="btn sm" type="button" id="leo-crash-refresh"><i class="fa-solid fa-rotate"></i> تحديث</button>
                     </div>
                     <div id="leo-crash-err"></div>
@@ -786,15 +875,23 @@
                     <span class="note">قراءة فقط من لوحة TS Link عبر المشغّل المحلي. الكتابة (حذف، فك اقتران، حظر مرسِل، نشر) من لوحة TS Link الأصلية (Admin.cmd).</span>
                 </div>
                 <div class="stats-grid" id="tsl-stats"></div>
-                <div class="card" style="margin:12px 0;"><h3 style="font-size:.9rem;color:var(--text-muted);margin-bottom:6px;">أحداث آخر 30 يومًا</h3><div id="tsl-spark"></div></div>
-                <div class="table-wrap">
-                    <table id="tsl-cars" style="min-width:900px;">
-                        <thead><tr><th></th><th>السيارة</th><th>hwId</th><th>آخر ظهور</th><th>مرسِلون مقترنون</th><th>أحداث 30 يومًا</th><th>أحداث العمر</th><th>أول ظهور</th></tr></thead>
-                        <tbody id="tsl-cars-body"><tr><td colspan="8"><div class="empty">افتح التبويب لتحميل البيانات</div></td></tr></tbody>
-                    </table>
-                </div>
-                <h3 style="font-size:.9rem;color:var(--text-muted);margin:16px 0 6px;">الإصدارات المنشورة على المُرحِّل</h3>
-                <div class="table-wrap"><table id="tsl-versions" style="min-width:700px;"><thead id="tsl-ver-head"></thead><tbody id="tsl-ver-body"></tbody></table></div>
+                <section class="panel-card">
+                    <h3 class="ctl-h"><i class="fa-solid fa-chart-line"></i> أحداث آخر 30 يومًا</h3>
+                    <div id="tsl-spark"></div>
+                </section>
+                <section class="panel-card">
+                    <h3 class="ctl-h"><i class="fa-solid fa-car"></i> السيارات</h3>
+                    <div class="table-wrap">
+                        <table id="tsl-cars" style="min-width:900px;">
+                            <thead><tr><th></th><th>السيارة</th><th>hwId</th><th>آخر ظهور</th><th>مرسِلون مقترنون</th><th>أحداث 30 يومًا</th><th>أحداث العمر</th><th>أول ظهور</th></tr></thead>
+                            <tbody id="tsl-cars-body"><tr><td colspan="8"><div class="empty">افتح التبويب لتحميل البيانات</div></td></tr></tbody>
+                        </table>
+                    </div>
+                </section>
+                <section class="panel-card">
+                    <h3 class="ctl-h"><i class="fa-solid fa-code-branch"></i> الإصدارات المنشورة على المُرحِّل</h3>
+                    <div class="table-wrap"><table id="tsl-versions" style="min-width:700px;"><thead id="tsl-ver-head"></thead><tbody id="tsl-ver-body"></tbody></table></div>
+                </section>
             </section>
 
             <!-- ---- Controller telemetry (read-only, separate Supabase project, keyed by VIN) ---- -->
@@ -807,15 +904,24 @@
                         <span class="note" id="ctl-coverage">تليمتري الكونترولر مفتاحه VIN؛ يغطي السيارات ذات VIN فقط.</span>
                     </div>
                     <div class="stats-grid" id="ctl-stats"></div>
-                    <h3 class="ctl-h">السيارات</h3><div class="table-wrap"><table style="min-width:800px;"><thead id="ctl-cars-head"></thead><tbody id="ctl-cars-body"></tbody></table></div>
-                    <h3 class="ctl-h">سجل الأوامر <span class="sub" style="display:inline">(آخر 200)</span></h3>
-                    <div id="ctl-kinds" class="chips" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;"></div>
-                    <div class="table-wrap"><table style="min-width:800px;"><thead id="ctl-events-head"></thead><tbody id="ctl-events-body"></tbody></table></div>
-                    <h3 class="ctl-h">استعمال المساعد الصوتي لكل سيارة/يوم (من سجل الأوامر)</h3>
-                    <div class="table-wrap"><table style="min-width:500px;"><thead><tr><th>VIN</th><th>اليوم</th><th>أوامر</th></tr></thead><tbody id="ctl-voice-body"></tbody></table></div>
-                    <h3 class="ctl-h">الفجوات (طلبات السائقين غير المطابقة، 30 يومًا)</h3>
-                    <div class="table-wrap"><table style="min-width:600px;"><thead id="ctl-gaps-head"></thead><tbody id="ctl-gaps-body"></tbody></table></div>
-                    <p class="note" style="margin-top:10px;">النشر (سعر الوقود، موجّه النظام) والاستعادة من لوحة الكونترولر الأصلية فقط. لا مفتاح OpenRouter هنا.</p>
+                    <section class="panel-card">
+                        <h3 class="ctl-h"><i class="fa-solid fa-car"></i> السيارات</h3>
+                        <div class="table-wrap"><table style="min-width:800px;"><thead id="ctl-cars-head"></thead><tbody id="ctl-cars-body"></tbody></table></div>
+                    </section>
+                    <section class="panel-card">
+                        <h3 class="ctl-h"><i class="fa-solid fa-list-ul"></i> سجل الأوامر <span class="sub" style="display:inline">(آخر 200)</span></h3>
+                        <div id="ctl-kinds" class="chips" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;"></div>
+                        <div class="table-wrap"><table style="min-width:800px;"><thead id="ctl-events-head"></thead><tbody id="ctl-events-body"></tbody></table></div>
+                    </section>
+                    <section class="panel-card">
+                        <h3 class="ctl-h"><i class="fa-solid fa-microphone"></i> استعمال المساعد الصوتي لكل سيارة/يوم (من سجل الأوامر)</h3>
+                        <div class="table-wrap"><table style="min-width:500px;"><thead><tr><th>VIN</th><th>اليوم</th><th>أوامر</th></tr></thead><tbody id="ctl-voice-body"></tbody></table></div>
+                    </section>
+                    <section class="panel-card">
+                        <h3 class="ctl-h"><i class="fa-solid fa-circle-question"></i> الفجوات (طلبات السائقين غير المطابقة، 30 يومًا)</h3>
+                        <div class="table-wrap"><table style="min-width:600px;"><thead id="ctl-gaps-head"></thead><tbody id="ctl-gaps-body"></tbody></table></div>
+                        <p class="note">النشر (سعر الوقود، موجّه النظام) والاستعادة من لوحة الكونترولر الأصلية فقط. لا مفتاح OpenRouter هنا.</p>
+                    </section>
                 </div>
             </section>
 
@@ -846,19 +952,21 @@
                     <div class="detail-box"><h4><i class="fa-solid fa-car"></i> أنشط الأجهزة</h4><div id="store-top-devices"></div></div>
                     <div class="detail-box"><h4><i class="fa-solid fa-tags"></i> الإصدارات</h4><div id="store-versions"></div></div>
                 </div>
-                <div class="card-title" style="margin-top:6px;"><i class="fa-solid fa-list"></i> آخر 200 حدث
-                    <span class="spacer"></span>
-                    <select id="ev-kind" style="width:auto; padding:6px 12px; font-size:.85rem;">
-                        <option value="">كل الأنواع</option>
-                    </select>
-                    <button class="btn sm" id="ev-reload" type="button"><i class="fa-solid fa-rotate"></i></button>
-                </div>
-                <div class="table-wrap">
-                    <table id="ev-table" style="min-width:800px;">
-                        <thead><tr><th>الوقت</th><th>الجهاز</th><th>النوع</th><th>التطبيق</th><th>النتيجة</th><th>التفاصيل</th></tr></thead>
-                        <tbody id="ev-body"></tbody>
-                    </table>
-                </div>
+                <section class="panel-card">
+                    <div class="card-title"><i class="fa-solid fa-list"></i> آخر 200 حدث
+                        <span class="spacer"></span>
+                        <select id="ev-kind" style="width:auto; padding:6px 12px; font-size:.85rem;">
+                            <option value="">كل الأنواع</option>
+                        </select>
+                        <button class="btn sm" id="ev-reload" type="button"><i class="fa-solid fa-rotate"></i></button>
+                    </div>
+                    <div class="table-wrap">
+                        <table id="ev-table" style="min-width:800px;">
+                            <thead><tr><th>الوقت</th><th>الجهاز</th><th>النوع</th><th>التطبيق</th><th>النتيجة</th><th>التفاصيل</th></tr></thead>
+                            <tbody id="ev-body"></tbody>
+                        </table>
+                    </div>
+                </section>
             </section>
 
             <!-- ---- Tokens ---- -->
@@ -901,7 +1009,13 @@
                     <div class="vcalc-grid">
                         <label><span>عدد السيارات</span><input type="number" id="vcalc-cars" min="0" step="1" value="100" inputmode="numeric"></label>
                         <label><span>أوامر يومية لكل سيارة</span><input type="number" id="vcalc-daily" min="0" step="1" value="10" inputmode="numeric"></label>
-                        <label><span>الموديل المحسوب عليه</span><select id="vcalc-model"><option value="">سعر يدوي (بدون موديل)</option></select></label>
+                        <div class="vcalc-field"><span id="vcalc-model-label">الموديل المحسوب عليه</span>
+                            <select id="vcalc-model" hidden aria-hidden="true" tabindex="-1"><option value="">سعر يدوي (بدون موديل)</option></select>
+                            <div class="vsel" id="vcalc-model-dd">
+                                <button type="button" class="vsel-btn" id="vcalc-model-btn" aria-haspopup="listbox" aria-expanded="false" aria-controls="vcalc-model-list" aria-labelledby="vcalc-model-label vcalc-model-cur"><span class="vsel-cur" id="vcalc-model-cur">سعر يدوي (بدون موديل)</span><i class="fa-solid fa-chevron-down" aria-hidden="true"></i></button>
+                                <div class="vsel-list" id="vcalc-model-list" role="listbox" tabindex="-1" aria-labelledby="vcalc-model-label" hidden></div>
+                            </div>
+                        </div>
                         <label><span>سعر الأمر الواحد (دولار)</span><input type="number" id="vcalc-price" min="0" step="any" value="0.001" inputmode="decimal"><span class="vcalc-basis" id="vcalc-basis"></span></label>
                     </div>
                     <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:10px 0 12px;">
@@ -918,12 +1032,12 @@
                     <p class="note" style="margin-top:8px;">الشهر = 30 يومًا، السنة = 365 يومًا، الدولار = 3.64 ريال قطري.</p>
                     <h4 style="margin:16px 0 8px;font-size:.95rem;"><i class="fa-solid fa-scale-balanced"></i> مقارنة الموديل الأساسي والاحتياطية</h4>
                     <div class="table-wrap">
-                        <table style="min-width:560px;">
-                            <thead><tr><th>الموديل</th><th>سعر الأمر</th><th>شهريًا (دولار)</th><th>شهريًا (ريال)</th><th>الأساس</th><th></th></tr></thead>
+                        <table style="min-width:860px;">
+                            <thead><tr><th>الموديل</th><th title="سعر OpenRouter الرسمي لكل مليون توكن إدخال">إدخال / مليون</th><th title="سعر OpenRouter الرسمي لكل مليون توكن إخراج">إخراج / مليون</th><th title="سعر OpenRouter الرسمي لكل مليون توكن صوت (إن أعلنه الموديل)">صوت / مليون</th><th>سعر الأمر</th><th>شهريًا (دولار)</th><th>شهريًا (ريال)</th><th>الأساس</th><th></th></tr></thead>
                             <tbody id="vcalc-cmp-body"></tbody>
                         </table>
                     </div>
-                    <p class="note" style="margin-top:8px;" id="vcalc-cmp-note">«فعلي» = متوسط تكلفة الأوامر المسجّلة لهذا الموديل (5 أوامر على الأقل). «تقدير» = متوسط توكنات الأوامر المسجّلة × أسعار OpenRouter المعلنة للموديل.</p>
+                    <p class="note" style="margin-top:8px;" id="vcalc-cmp-note">«فعلي» = متوسط ما حاسبتنا عليه OpenRouter فعلًا عن كل أمر مدفوع لهذا الموديل (أمر واحد على الأقل). «محسوب» = للموديل الذي لم نستعمله: متوسط توكنات أوامرنا المدفوعة الحقيقية × سعر OpenRouter الرسمي للموديل (توكنات الصوت داخل توكنات الإدخال في سجلّنا فتُحسب بسعر الإدخال). لا توجد أسعار تقديرية غير ذلك. «غير مستخدم» = احتياطي بعد الثاني؛ الـ Worker يرسل الأساسي + أول احتياطيين فقط.</p>
                 </section>
             </section>
 
@@ -947,6 +1061,25 @@
         <footer>ملف محلي — لا يُنشر. الكتابة: حظر/فك موحّد، تسمية، إعدادات الصوت، إدارة الخلفيات والاستثناءات ونشر الإصدارات.</footer>
     </div>
 
+    <dialog id="car-dialog" aria-labelledby="car-title">
+        <section id="page-car" aria-live="polite">
+            <div class="car-head">
+                <button class="btn car-close" type="button" id="car-back" title="إغلاق" aria-label="إغلاق"><i class="fa-solid fa-xmark"></i></button>
+                <div class="car-headline">
+                    <h2 id="car-title">سيارة</h2>
+                    <span class="hw" id="car-hw"></span>
+                </div>
+                <span id="car-badges"></span>
+                <span style="flex:1"></span>
+                <button class="btn sm" type="button" id="car-copy" title="نسخ رابط الصفحة"><i class="fa-solid fa-link"></i> نسخ الرابط</button>
+                <button class="btn sm" type="button" id="car-refresh"><i class="fa-solid fa-rotate"></i> تحديث</button>
+            </div>
+            <div class="car-body">
+                <div id="car-err"></div>
+                <div class="car-sections" id="car-sections"></div>
+            </div>
+        </section>
+    </dialog>
     <dialog id="wp-private-dialog" class="wp-dialog" aria-labelledby="wp-private-title"><div class="toolbar"><h3 id="wp-private-title">الصور المخصصة حسب السيارة</h3><button class="btn" type="button" data-wp-close="wp-private-dialog">إغلاق</button></div><input type="search" id="wp-private-search" placeholder="بحث باسم السيارة أو الملف أو المعرّف" aria-label="بحث الصور الخاصة"><div id="wp-private-body"></div></dialog>
     <dialog id="wp-target-dialog" class="wp-dialog" aria-labelledby="wp-target-title"><div class="toolbar"><h3 id="wp-target-title">تخصيص الخلفية</h3><button class="btn" type="button" data-wp-close="wp-target-dialog">إغلاق</button></div><p class="note" id="wp-target-note"></p><input type="search" id="wp-dialog-search" aria-label="بحث السيارات" placeholder="اسم السيارة أو الكود أو المعرّف"><div id="wp-dialog-cars" class="wp-car-list"></div><div id="wp-dialog-error" role="alert"></div><div class="toolbar"><button class="btn primary" id="wp-target-save" type="button">حفظ</button></div></dialog>
     <script src="/vendor/supabase-2.115.0.js"></script>
@@ -2394,7 +2527,7 @@
     const VOICE_LABELS = {
         'voice.openrouter_key': 'مفتاح OpenRouter',
         'voice.model': 'الموديل',
-        'voice.models_fallback': 'النماذج الاحتياطية (حتى 3)',
+        'voice.models_fallback': 'النماذج الاحتياطية (حتى 2)',
         'voice.daily_quota_per_car': 'الحد اليومي لكل سيارة',
         'voice.minute_quota_per_car': 'الحد في الدقيقة لكل سيارة',
     };
@@ -2411,8 +2544,16 @@
     function updateFallbackCounter(input) {
         if (input.dataset.key !== 'voice.models_fallback') return;
         const counter = input.parentElement.querySelector('[data-fallback-count]'); if (!counter) return;
-        try { const n = voiceFallbackModels(input.value).length; counter.textContent = `${n}/3`; counter.className = 'badge num ' + (n > 3 ? 'bad' : ''); }
-        catch (e) { counter.textContent = 'صيغة غير صالحة'; counter.className = 'badge bad'; }
+        // The voice Worker sends primary + the first TWO fallbacks (OpenRouter caps "models" at 3). A longer list is still
+        // accepted and kept, but everything after the 2nd is never tried — say so instead of refusing it.
+        try { const n = voiceFallbackModels(input.value).length; counter.textContent = `${n}/${VOICE_FALLBACK_USED}`; counter.className = 'badge num ' + (n > VOICE_FALLBACK_USED ? 'warn' : ''); counter.title = n > VOICE_FALLBACK_USED ? 'الثالث وما بعده غير مستخدم: الـ Worker يرسل الأساسي + أول احتياطيين فقط' : ''; }
+        catch (e) { counter.textContent = 'صيغة غير صالحة'; counter.className = 'badge bad'; counter.title = ''; }
+    }
+    const VOICE_FALLBACK_USED = 2;
+    // Mirror of worker/src/index.js: [primary, ...chain.filter(m => m !== primary)].slice(0, 3) — chain positions 0..1 are used.
+    function voiceFallbackUsedIds(primary, value) {
+        let chain = []; try { chain = voiceFallbackModels(value).map(m => String(m).trim()).filter(Boolean); } catch (e) { return new Set(); }
+        return new Set(chain.filter(m => m !== String(primary || '').trim()).slice(0, VOICE_FALLBACK_USED));
     }
     function maskSecret(value) {
         const text = String(value == null ? '' : value);
@@ -2433,11 +2574,12 @@
         if (!list.length) { $('voice-body').innerHTML = `<tr><td colspan="5"><div class="empty"><i class="fa-solid fa-microphone-lines"></i>لا صفوف voice.* (أو لا صلاحية قراءة)</div></td></tr>`; return; }
         $('voice-body').innerHTML = list.map(r => {
             const secret = isSecretKey(r.key);
-            const cur = secret ? (r.hint != null ? (r.hint ? `<span class="num" style="direction:ltr;display:inline-block">${esc(r.hint)}</span> <span class="sub">القيمة لا تُقرأ من المتصفح</span>` : '<span class="sub">(فارغ)</span>') : maskSecret(r.value)) : `<span class="num" style="direction:ltr;display:inline-block">${esc(r.value == null ? '' : r.value)}</span>`;
+            let cur = secret ? (r.hint != null ? (r.hint ? `<span class="num" style="direction:ltr;display:inline-block">${esc(r.hint)}</span> <span class="sub">القيمة لا تُقرأ من المتصفح</span>` : '<span class="sub">(فارغ)</span>') : maskSecret(r.value)) : `<span class="num" style="direction:ltr;display:inline-block">${esc(r.value == null ? '' : r.value)}</span>`;
+            if (r.key === 'voice.models_fallback') { try { const all = voiceFallbackModels(r.value).map(m => String(m).trim()).filter(Boolean); const primary = String((state.voice.find(x => x.key === 'voice.model') || {}).value || '').trim(); const extra = all.filter(m => m !== primary).slice(VOICE_FALLBACK_USED); if (extra.length) cur += `<span class="sub" style="color:var(--warn)">غير مستخدم (بعد الاحتياطي الثاني): <span class="num">${esc(extra.join(', '))}</span></span>`; } catch (e) {} }
             return `<tr data-key="${esc(r.key)}">
                 <td><span class="name" style="font-size:.9rem">${esc(VOICE_LABELS[r.key] || r.key)}</span><span class="hw">${esc(r.key)}</span></td>
                 <td>${cur}</td>
-                <td><input type="${secret ? 'password' : 'text'}" class="voice-input" data-key="${esc(r.key)}" autocomplete="off" spellcheck="false" placeholder="${secret ? 'الصق المفتاح الجديد كاملًا' : esc(r.value == null ? '' : r.value)}" style="direction:ltr;min-width:220px">${r.key === 'voice.models_fallback' ? '<span class="badge num" data-fallback-count>0/3</span>' : ''}</td>
+                <td><input type="${secret ? 'password' : 'text'}" class="voice-input" data-key="${esc(r.key)}" autocomplete="off" spellcheck="false" placeholder="${secret ? 'الصق المفتاح الجديد كاملًا' : esc(r.value == null ? '' : r.value)}" style="direction:ltr;min-width:220px">${r.key === 'voice.models_fallback' ? '<span class="badge num" data-fallback-count>0/2</span>' : ''}</td>
                 <td>${timeCell(r.updated_at)}</td>
                 <td><button class="btn sm voice-save" type="button" data-key="${esc(r.key)}"><i class="fa-solid fa-floppy-disk"></i> حفظ</button></td>
             </tr>`;
@@ -2450,14 +2592,15 @@
         if (!inp) return;
         const value = String(inp.value);
         if (!value.trim()) { alertDialog('قيمة فارغة', 'اكتب القيمة الجديدة أولًا.'); return; }
+        let fallbackWarn = '';
         if (key === 'voice.models_fallback') {
-            try { if (voiceFallbackModels(value).length > 3) throw new Error('الحد الأقصى 3 نماذج احتياطية.'); }
+            try { const n = voiceFallbackModels(value).length; if (n > VOICE_FALLBACK_USED) fallbackWarn = `<br><small style="color:#fbbf24">تنبيه: ${n} نماذج احتياطية، والـ Worker يستعمل أول ${VOICE_FALLBACK_USED} فقط؛ الثالث وما بعده غير مستخدم (يُحفظ كما هو).</small>`; }
             catch (err) { alertDialog('قيمة غير صالحة', errMsg(err)); return; }
         }
         if (/quota/.test(key) && !/^\d+$/.test(value.trim())) { alertDialog('قيمة غير صالحة', 'الحدود أرقام صحيحة فقط.'); return; }
         const secret = isSecretKey(key);
         const shown = secret ? maskSecret(value) : esc(value);
-        const ok = await confirmDialog({ title: `حفظ ${esc(VOICE_LABELS[key] || key)}`, html: `<b style="direction:ltr;display:inline-block">${shown}</b><br><small style="opacity:.7">يستبدل القيمة الحالية كاملة؛ الـ Worker يلتقطها خلال دقيقة.</small>`, confirmText: 'حفظ' });
+        const ok = await confirmDialog({ title: `حفظ ${esc(VOICE_LABELS[key] || key)}`, html: `<b style="direction:ltr;display:inline-block">${shown}</b><br><small style="opacity:.7">يستبدل القيمة الحالية كاملة؛ الـ Worker يلتقطها خلال دقيقة.</small>${fallbackWarn}`, confirmText: 'حفظ' });
         if (!ok) return;
         try {
             const res = await restWrite('PATCH', `admin_settings?key=eq.${encodeURIComponent(key)}`, { value: secret ? value : value.trim(), updated_at: new Date().toISOString() }, 'return=representation');
@@ -2646,10 +2789,10 @@
         const head = $(headId), body = $(bodyId); if (!head || !body) return;
         const list = Array.isArray(rows) ? rows : [];
         const keys = []; list.forEach(r => Object.keys(r || {}).forEach(k => { if (!keys.includes(k)) keys.push(k); }));
-        const shown = keys.filter(k => !(opts.hide || []).includes(k)).slice(0, 14);
-        head.innerHTML = `<tr>${shown.map(k => `<th>${esc((opts.labels || {})[k] || k)}</th>`).join('')}</tr>`;
+        const shown = keys.filter(k => !(opts.hide || []).includes(k)).slice(0, opts.max || 14);
+        head.innerHTML = `<tr>${shown.map(k => opts.th ? opts.th(k) : `<th>${esc((opts.labels || {})[k] || k)}</th>`).join('')}</tr>`;
         listControls({ hostId: bodyId, key: bodyId, rows: list, pageSize: opts.limit || 50, searchText: opts.searchText,
-            render: page => { body.innerHTML = page.length ? page.map(r => `<tr>${shown.map(k => `<td>${opts.cell ? opts.cell(k, r[k], r) : cellValue(k, r[k])}</td>`).join('')}</tr>`).join('') : `<tr><td colspan="${shown.length || 1}"><div class="empty">${esc(opts.empty || 'لا بيانات')}</div></td></tr>`; }
+            render: page => { body.innerHTML = page.length ? page.map(r => `<tr>${shown.map(k => `<td>${opts.cell ? opts.cell(k, r[k], r) : cellValue(k, r[k])}</td>`).join('')}</tr>`).join('') : `<tr><td colspan="${shown.length || 1}"><div class="empty">${esc(opts.empty || 'لا بيانات')}</div></td></tr>`; if (opts.afterRender) { try { opts.afterRender(page); } catch (e) { /* a display hook never breaks the table */ } } }
         });
     }
     function sparkline(values, labels) {
@@ -2743,6 +2886,7 @@
         $('ctl-content').hidden = !(LOCAL_PROXY && LOCAL_FLAGS.controller);
         if (!LOCAL_PROXY || !LOCAL_FLAGS.controller) { state.ctlLoaded = true; return; }
         state.ctlLoaded = true; setErr('ctl-err', '');
+        loadOpenrouterCredits(epoch);   // its own tile; not awaited, so it never holds up the others
         const calls = {
             stats: () => localPost('/local/controller/thab_admin_stats', {}),
             cars: () => localPost('/local/controller/thab_admin_cars', {}),
@@ -2768,7 +2912,10 @@
         const strip = s => s.replace(/[\u0640\u0610-\u061a\u064b-\u065f\u0670\u06d6-\u06ed\u08d3-\u08ff]/g, '');
         const seen = new Set(); let total = 0;
         const clean = entries.map((entry, i) => {
-            const phrase = String(entry.phrase || '').trim(), canonical = String(entry.canonical || '').trim();
+            // Same normalisation as thab_voice_overlay_clean / VoiceConfigManager.normalise: runs of plain spaces become
+            // one space, then trim — so «دريشة  كبيرة» and «دريشة كبيرة» are one pair and the length is what is stored.
+            const collapse = s => String(s || '').replace(/ +/g, ' ').trim();
+            const phrase = collapse(entry.phrase), canonical = collapse(entry.canonical);
             const label = 'الصف ' + (i + 1) + ': ';
             if (!phrase || !canonical) throw new Error(label + 'الكلمة والمعنى مطلوبان.');
             if (phrase.length > 32 || canonical.length > 32) throw new Error(label + 'الحد الأقصى 32 حرفًا لكل كلمة أو معنى.');
@@ -2929,14 +3076,16 @@
     function renderControllerContent() {
         const c = state.ctl || {}; const asRows = v => Array.isArray(v) ? v : (v && typeof v === 'object' && Array.isArray(v.rows)) ? v.rows : (v && typeof v === 'object' ? [v] : []);
         const stats = Array.isArray(c.stats) ? (c.stats[0] || {}) : (c.stats || {});
-        $('ctl-stats').innerHTML = Object.entries(stats).filter(([, v]) => typeof v !== 'object').map(([k, v]) => { const m = CTL_STAT_META[k] || {}; return tile(m.label || k, /cost/i.test(k) ? moneyHtml(v) : cellValue(k, v), m.icon || 'fa-gauge-high', m.color || 'blue', m.help || k); }).join('') || '<div class="empty">لا إحصاءات</div>';
+        $('ctl-stats').innerHTML = (Object.entries(stats).filter(([, v]) => typeof v !== 'object').map(([k, v]) => { const m = CTL_STAT_META[k] || {}; return tile(m.label || k, /cost/i.test(k) ? moneyHtml(v) : cellValue(k, v), m.icon || 'fa-gauge-high', m.color || 'blue', m.help || k); }).join('') || '<div class="empty">لا إحصاءات</div>') + orCreditsTile();
         const cars = asRows(c.cars);
         const joined = cars.filter(r => vinToHw(vinOf(r))).length;
         const vinTotal = state.devices.filter(d => /^VIN-/i.test(d.hardware_id || '')).length;
         $('ctl-coverage').textContent = `تليمتري الكونترولر مفتاحه VIN؛ ${cars.length} سيارة في التليمتري، ${joined} منها مطابقة في devices؛ السيارات ذات VIN من كل السيارات ${vinTotal} من ${state.devices.length} (الباقي بلا VIN ولا يمكن أن يظهر هنا).`;
         // car = null means the installer never confirmed the car profile: the unit reads gauges but moves
         // nothing (windows/seats) — by design, but the customer must not be left like that. Flag it loudly.
-        genericTable('ctl-cars-head', 'ctl-cars-body', cars, { empty: 'لا سيارات', cell: (k, v, r) => /^vin$/i.test(k) ? vinCell(String(v || '')) : (/^car$/i.test(k) && !v) ? '<span class="badge bad" title="لم يُختر نوع السيارة على الشاشة: البرنامج يقرأ العدّادات فقط ولا يحرّك زجاجاً ولا مقعداً">⚠ بلا نوع مؤكَّد</span>' : k === 'overlay_rev' ? overlayCell(r) : (k === 'overlay_at' || k === 'overlay_state') ? '' : cellValue(k, v), labels: { overlay_rev: 'القاموس عند آخر تشغيل', overlay_at: '', overlay_state: '' }, hide: ['overlay_at', 'overlay_state'] });
+        // Voice columns first (owner, 2026-09-15): commands used, commands billed, cost — each opens the per-day chart.
+        const ctlCarLabels = { overlay_rev: 'القاموس عند آخر تشغيل', overlay_at: '', overlay_state: '' };
+        genericTable('ctl-cars-head', 'ctl-cars-body', ctlCarsDisplayRows(cars), { empty: 'لا سيارات', max: 24, th: k => ctlCarHeadTh(k, ctlCarLabels), afterRender: page => voiceBilledSchedule(page), cell: (k, v, r) => { const vc = ctlCarVoiceCell(k, v, r); if (vc != null) return vc; return /^vin$/i.test(k) ? vinCell(String(v || '')) : (/^car$/i.test(k) && !v) ? '<span class="badge bad" title="لم يُختر نوع السيارة على الشاشة: البرنامج يقرأ العدّادات فقط ولا يحرّك زجاجاً ولا مقعداً">⚠ بلا نوع مؤكَّد</span>' : k === 'overlay_rev' ? overlayCell(r) : (k === 'overlay_at' || k === 'overlay_state') ? '' : cellValue(k, v); }, labels: ctlCarLabels, hide: ['overlay_at', 'overlay_state'] });
         const events = asRows(c.events);
         const kinds = [...new Set(events.map(e => String(e.kind || e.type || '')).filter(Boolean))];
         $('ctl-kinds').innerHTML = [`<button class="chip ${ctlKind ? '' : 'active'}" data-ctlkind="">الكل</button>`, ...kinds.map(k => `<button class="chip ${ctlKind === k ? 'active' : ''}" data-ctlkind="${esc(k)}">${esc(k)}</button>`)].join('');
@@ -3754,6 +3903,305 @@
     // =====================================================================
     const USD_QAR = 3.64;
     function moneyHtml(v) { const usd = Number(v) || 0; return `<span class="money"><span>$${usd.toFixed(2)}</span><span>${(usd * USD_QAR).toFixed(2)} ر.ق</span></span>`; }
+    // =====================================================================
+    //  Per-car voice log (thab_admin_events, kind = 'voice') — ONE loader shared by the controller cars table
+    //  («أوامر اتحسبت فلوس»), the daily-chart popup and the car page «الأوامر الصوتية».
+    //
+    //  RPC semantics (supabase/migrations/20260829_usage_telemetry.sql §5-ب), read before touching this:
+    //      where (p_since_id is null or id > p_since_id)  order by id desc  limit least(p_limit, 2000)
+    //  Every call returns the NEWEST ≤2000 rows above p_since_id. So p_since_id pages FORWARD only (rows that
+    //  arrived after the highest id we hold) and nothing can reach rows older than a car's newest 2000.
+    //  - first load: one call; a full page (2000) means older rows exist that this RPC cannot return → capped.
+    //  - refresh: p_since_id = highest id held, repeated while pages come back full. A full page means the rows
+    //    between what we hold and what came back are unreachable, so the old rows are dropped (capped).
+    //  Pruning: thab_ingest deletes events received more than 400 days ago; thab_cars counters are never pruned.
+    //  So rows.length < thab_cars.voice_turns ⇒ the detail log is incomplete and the UI says from which day it starts.
+    // =====================================================================
+    const VOICE_LOG_CAP = 2000;
+    const voiceLog = new Map(), voiceLogPending = new Map(), voiceLogErr = new Map();
+    let voiceLogEpoch = -1;
+    const voiceLogKey = vin => String(vin || '').trim().toLowerCase();
+    const voiceRowsOf = res => Array.isArray(res) ? res : (res && Array.isArray(res.rows)) ? res.rows : [];
+    const voiceMaxId = (rows, floor) => rows.reduce((m, e) => Math.max(m, Number(e && e.id) || 0), floor || 0);
+    async function voiceLogFetch(post, vin, prev) {
+        const held = prev && Array.isArray(prev.rows) ? prev.rows : null;
+        let since = held ? (prev.maxId != null ? prev.maxId : voiceMaxId(held)) : null;
+        let capped = !!(prev && prev.capped), gap = false, calls = 0;
+        const fresh = [];
+        for (;;) {
+            const page = voiceRowsOf(await post('/local/controller/thab_admin_events', { p_limit: VOICE_LOG_CAP, p_vin: vin, p_kind: 'voice', p_since_id: since }));
+            calls++;
+            fresh.push(...page);
+            if (page.length < VOICE_LOG_CAP) break;
+            gap = true;                                   // rows between `since` and this page's oldest row are out of reach
+            if (since == null || calls >= 20) break;      // first load: newer-than-this-page is only what arrived just now
+            since = voiceMaxId(page, since);
+        }
+        const byId = new Map();
+        for (const e of fresh) if (e && e.id != null) byId.set(String(e.id), e);
+        if (held && !gap) for (const e of held) if (e && e.id != null && !byId.has(String(e.id))) byId.set(String(e.id), e);
+        if (gap) capped = true;
+        const rows = [...byId.values()].sort((a, b) => (Number(b.id) || 0) - (Number(a.id) || 0));
+        return { rows, capped, maxId: voiceMaxId(rows, held && !gap ? since || 0 : 0), calls, fetchedAt: Date.now() };
+    }
+    function ctlCarByVin(vin) {
+        const k = voiceLogKey(vin); if (!k) return null;
+        const c = state.ctl && state.ctl.cars; const cars = Array.isArray(c) ? c : (c && Array.isArray(c.rows)) ? c.rows : [];
+        return cars.find(r => voiceLogKey(vinOf(r)) === k) || null;
+    }
+    function voiceLogGet(vin, opts = {}) {
+        if (voiceLogEpoch !== sessionEpoch) { voiceLog.clear(); voiceLogErr.clear(); voiceLogEpoch = sessionEpoch; }
+        const k = voiceLogKey(vin); if (!k) return Promise.reject(new Error('لا VIN'));
+        const car = ctlCarByVin(vin);
+        const turns = opts.turns != null ? Number(opts.turns) : (car && car.voice_turns != null ? Number(car.voice_turns) : null);
+        const have = voiceLog.get(k);
+        if (have && !opts.refresh && (turns == null || have.turns === turns)) return Promise.resolve(have);
+        if (voiceLogPending.has(k)) return voiceLogPending.get(k);
+        const epoch = sessionEpoch;
+        const p = voiceLogFetch(localPost, car ? vinOf(car) : String(vin).trim(), have).then(res => {
+            if (epoch !== sessionEpoch) throw new Error('تغيّرت الجلسة');
+            res.turns = turns;
+            voiceLog.set(k, res); voiceLogErr.delete(k);
+            return res;
+        }, err => { voiceLogErr.set(k, { msg: errMsg(err), at: Date.now() }); throw err; }).finally(() => voiceLogPending.delete(k));
+        voiceLogPending.set(k, p);
+        return p;
+    }
+    // «اتحسب فلوس» = the turn reached the model and OpenRouter billed it: cost > 0 or any tokens > 0.
+    // A cancelled / silent / no-model / proxy-error turn has neither, and is a press, not a paid command.
+    function isBilledVoice(e) {
+        if (!e) return false;
+        const n = v => Number(v) || 0;
+        return n(e.cost_usd != null ? e.cost_usd : e.cost) > 0 || n(e.total_tokens != null ? e.total_tokens : e.tt) > 0
+            || n(e.prompt_tokens != null ? e.prompt_tokens : e.pt) > 0 || n(e.completion_tokens != null ? e.completion_tokens : e.ct) > 0;
+    }
+    // Asia/Qatar is UTC+3 all year (no DST), the same rule as qatarDay().
+    function qatarDayOf(v) { const t = ts(v); return t ? new Date(t + 3 * 3600000).toISOString().slice(0, 10) : ''; }
+    function voiceLogSummary(log, car) {
+        const rows = (log && log.rows) || []; let billed = 0, cost = 0, ok = 0, firstDay = '', lastAt = '';
+        for (const e of rows) {
+            if (isBilledVoice(e)) billed++;
+            cost += Number(e.cost_usd) || 0; if (e.outcome === 'ok') ok++;
+            const at = e.at || e.received_at, d = qatarDayOf(at);
+            if (d && (!firstDay || d < firstDay)) firstDay = d;
+            if (at && String(at) > lastAt) lastAt = String(at);
+        }
+        const turns = car && car.voice_turns != null && Number.isFinite(Number(car.voice_turns)) ? Number(car.voice_turns) : null;
+        const missing = turns != null ? Math.max(0, turns - rows.length) : 0;
+        // A capped first page with exactly voice_turns rows is still complete; without the counter we cannot tell.
+        const complete = missing === 0 && (!(log && log.capped) || turns != null);
+        return { n: rows.length, billed, cost, ok, firstDay, lastAt, turns, missing, complete, capped: !!(log && log.capped) };
+    }
+    // One entry per Qatar day from startDay to endDay (both included), zero-filled. Days before coverDay are
+    // flagged unknown: the detail log does not reach them, so a 0 there would be a lie.
+    function voiceDaily(rows, startDay, endDay, coverDay) {
+        const by = new Map();
+        for (const e of rows || []) {
+            const d = qatarDayOf(e.at || e.received_at); if (!d) continue;
+            let x = by.get(d); if (!x) by.set(d, x = { n: 0, billed: 0, cost: 0, ok: 0 });
+            x.n++; if (isBilledVoice(e)) x.billed++; x.cost += Number(e.cost_usd) || 0; if (e.outcome === 'ok') x.ok++;
+        }
+        const keys = [...by.keys()].sort();
+        const isDay = s => /^\d{4}-\d{2}-\d{2}$/.test(String(s || ''));
+        let start = isDay(startDay) ? startDay : (keys[0] || endDay), end = isDay(endDay) ? endDay : (keys[keys.length - 1] || start);
+        if (keys.length && keys[0] < start) start = keys[0];
+        if (keys.length && keys[keys.length - 1] > end) end = keys[keys.length - 1];
+        const out = []; if (!isDay(start) || !isDay(end)) return out;
+        for (let t = Date.parse(start + 'T00:00:00Z'), last = Date.parse(end + 'T00:00:00Z'), guard = 0; t <= last && guard < 4000; t += DAY, guard++) {
+            const day = new Date(t).toISOString().slice(0, 10), x = by.get(day);
+            out.push({ day, n: x ? x.n : 0, billed: x ? x.billed : 0, cost: x ? x.cost : 0, ok: x ? x.ok : 0, unknown: !!coverDay && day < coverDay });
+        }
+        return out;
+    }
+    const usdFine = v => '$' + (Number(v) || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 4 });
+    const qarFine = v => ((Number(v) || 0) * USD_QAR).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 4 }) + ' ر.ق';
+    const intEn = v => (Number(v) || 0).toLocaleString('en-US');
+    function voiceDayText(d) {
+        if (!d) return '';
+        if (d.unknown && !d.n) return `${d.day}: غير متاح في السجل التفصيلي`;
+        return `${d.day}: ${intEn(d.n)} أمر · ${intEn(d.billed)} اتحسبت فلوس · ${usdFine(d.cost)} (${qarFine(d.cost)})`;
+    }
+    // Daily bars in the dayBars() style, but at a fixed pixel scale so a long history scrolls instead of squashing.
+    function voiceChartSvg(days) {
+        const n = days.length; if (!n) return '<div class="empty">لا أيام</div>';
+        const H = 200, top = 20, bottom = 26, left = 30, right = 44, plotH = H - top - bottom;
+        const slot = Math.max(16, Math.min(44, Math.floor(300 / n)));
+        const W = left + right + n * slot, bw = Math.max(6, slot - 5);
+        const maxN = Math.max(1, ...days.map(d => d.n)), maxC = Math.max(0, ...days.map(d => d.cost));
+        const yN = v => top + plotH - (v / maxN) * plotH, yC = v => top + plotH - (maxC ? v / maxC : 0) * plotH;
+        const xs = i => left + i * slot + (slot - bw) / 2;
+        let g = `<line x1="${left}" x2="${W - right}" y1="${top + plotH}" y2="${top + plotH}" stroke="rgba(255,255,255,.18)"/>`
+              + `<line x1="${left}" x2="${W - right}" y1="${top}" y2="${top}" stroke="rgba(255,255,255,.07)" stroke-dasharray="3 4"/>`
+              + `<line x1="${left}" x2="${W - right}" y1="${(top + plotH / 2).toFixed(1)}" y2="${(top + plotH / 2).toFixed(1)}" stroke="rgba(255,255,255,.07)" stroke-dasharray="3 4"/>`
+              + `<text x="${left - 4}" y="${top + 4}" font-size="10" text-anchor="end" fill="var(--text-muted)">${esc(intEn(maxN))}</text>`
+              + `<text x="${left - 4}" y="${top + plotH + 4}" font-size="10" text-anchor="end" fill="var(--text-muted)">0</text>`
+              + (maxC ? `<text x="${W - right + 4}" y="${top + 4}" font-size="10" fill="var(--accent)">${esc(usdFine(maxC))}</text>` : '');
+        let bars = '', pts = [];
+        days.forEach((d, i) => {
+            const x = xs(i);
+            if (d.unknown && !d.n) bars += `<rect x="${(left + i * slot).toFixed(1)}" y="${top}" width="${slot}" height="${plotH}" fill="rgba(255,255,255,.035)"/>`;
+            if (d.n) { const h = Math.max(2, (d.n / maxN) * plotH); bars += `<rect x="${x.toFixed(1)}" y="${(top + plotH - h).toFixed(1)}" width="${bw}" height="${h.toFixed(1)}" rx="2" fill="rgba(255,154,61,.35)"/>`; }
+            if (d.billed) { const h = Math.max(2, (d.billed / maxN) * plotH); bars += `<rect x="${(x + bw * 0.2).toFixed(1)}" y="${(top + plotH - h).toFixed(1)}" width="${(bw * 0.6).toFixed(1)}" height="${h.toFixed(1)}" rx="2" fill="var(--primary)"/>`; }
+            if (maxC) pts.push(`${(x + bw / 2).toFixed(1)},${yC(d.cost).toFixed(1)}`);
+        });
+        const line = maxC ? `<polyline fill="none" stroke="var(--accent)" stroke-width="1.6" stroke-linejoin="round" points="${pts.join(' ')}"/>` + days.map((d, i) => d.cost ? `<circle cx="${(xs(i) + bw / 2).toFixed(1)}" cy="${yC(d.cost).toFixed(1)}" r="2.4" fill="var(--accent)"/>` : '').join('') : '';
+        const step = Math.max(1, Math.ceil(52 / slot));
+        const ticks = days.map((d, i) => (i === 0 || i === n - 1 || (i % step === 0 && n - 1 - i >= step)) ? `<text x="${(left + i * slot + slot / 2).toFixed(1)}" y="${H - 8}" font-size="10" text-anchor="middle" fill="var(--text-muted)">${esc(d.day.slice(5))}</text>` : '').join('');
+        const hits = days.map((d, i) => `<rect data-i="${i}" x="${left + i * slot}" y="0" width="${slot}" height="${H - bottom}" fill="transparent"><title>${esc(voiceDayText(d))}</title></rect>`).join('');
+        return `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img" aria-label="الأوامر الصوتية في اليوم">${g}${bars}${line}${ticks}${hits}</svg>`;
+    }
+    function voiceChartModel(car, log, today) {
+        const s = voiceLogSummary(log, car);
+        const hw = vinToHw(vinOf(car)); const r = hw ? carRow(hw) : null; const dev = r && r.dev;
+        const seenDay = qatarDayOf(car.first_seen), actDay = dev ? qatarDayOf(dev.activated_at) : '';
+        const startDay = seenDay || actDay || s.firstDay || today;
+        const coverDay = !s.complete ? (s.firstDay || today) : '';
+        const days = voiceDaily(log.rows, startDay, today, coverDay);
+        const turns = s.turns != null ? s.turns : s.n;
+        const cost = car.voice_cost_usd != null ? Number(car.voice_cost_usd) : s.cost;
+        const plus = s.complete ? '' : '+';
+        const avg = s.billed ? s.cost / s.billed : 0;
+        const tile = (label, v, hl, title) => `<div class="${hl ? 'hl' : ''}"${title ? ` title="${esc(title)}"` : ''}><b>${label}</b>${v}</div>`;
+        const tiles = `<div class="vchart-tiles">`
+            + tile('الأوامر المستخدمة', `<span class="v">${esc(intEn(turns))}</span>`, true, 'كل ضغطة على زر الصوت، حتى الملغاة أو بدون كلام أو بخطأ (thab_cars.voice_turns)')
+            + tile('اتحسبت فلوس', `<span class="v">${esc(intEn(s.billed) + plus)}</span>`, true, 'أوامر وصلت للموديل وحاسبتنا عليها OpenRouter (تكلفة > 0 أو توكنات > 0)' + (s.complete ? '' : ' — من السجل التفصيلي المتاح فقط'))
+            + tile('التكلفة', moneyHtml(cost), true, 'مجموع ما دفعناه لـ OpenRouter عن هذه السيارة منذ البداية (thab_cars.voice_cost_usd)')
+            + tile('متوسط الأمر المدفوع', `<span class="v">${s.billed ? esc(usdFine(avg)) : '—'}</span>`, false, 'تكلفة الأوامر في السجل ÷ الأوامر التي اتحسبت فلوس فيه')
+            + tile('أوامر نُفّذت', `<span class="v">${esc(intEn(car.voice_ok != null ? car.voice_ok : s.ok))}</span>`)
+            + tile('أوامر لم تُفهم', `<span class="v">${car.voice_unmatched != null ? esc(intEn(car.voice_unmatched)) : '—'}</span>`)
+            + tile('مرات فتح البرنامج', `<span class="v">${car.runs != null ? esc(intEn(car.runs)) : '—'}</span>`)
+            + tile('الأيام', `<span class="v">${esc(intEn(days.length))}</span>`, false, `من ${startDay} إلى ${today} (توقيت قطر)`)
+            + `</div>`;
+        const from = `<div class="note" style="text-align:start">من ${seenDay ? `أول ظهور للبرنامج <span class="num">${esc(seenDay)}</span>` : actDay ? `التفعيل <span class="num">${esc(actDay)}</span>` : `<span class="num">${esc(startDay)}</span>`}${actDay && seenDay && actDay !== seenDay ? ` · تفعيل الجهاز <span class="num">${esc(actDay)}</span>` : ''} حتى اليوم <span class="num">${esc(today)}</span> — الأيام بتوقيت قطر.</div>`;
+        let warn = '';
+        if (!s.complete) warn = s.n
+            ? `<div class="vchart-note">السجل التفصيلي متاح من <span class="num">${esc(s.firstDay)}</span>${s.missing ? ` — ${esc(intEn(s.missing))} أمر أقدم غير متاح بالتفصيل` : ''} (الخادم يعيد آخر ${esc(intEn(VOICE_LOG_CAP))} أمر لكل سيارة ويحذف ما مضى عليه 400 يوم). الأيام الرمادية قبله غير معروفة وليست صفرًا؛ «اتحسبت فلوس» محسوبة من المتاح فقط، أما الأوامر المستخدمة والتكلفة فمن العدّاد الكامل.</div>`
+            : `<div class="vchart-note">لا يوجد سجل تفصيلي لهذه السيارة${turns ? ` رغم ${esc(intEn(turns))} أمر في العدّاد` : ''}.</div>`;
+        const legend = `<div class="vchart-legend"><span><i style="background:rgba(255,154,61,.35)"></i>كل الأوامر في اليوم</span><span><i style="background:var(--primary)"></i>اتحسبت فلوس</span><span><i style="background:var(--accent);height:3px;border-radius:2px"></i>التكلفة (المحور الأيمن)</span>${s.complete ? '' : '<span><i style="background:rgba(255,255,255,.1)"></i>غير متاح</span>'}</div>`;
+        const active = days.filter(d => d.n).reverse();
+        const table = `<details style="margin-top:8px;text-align:start"><summary class="sub" style="display:list-item;cursor:pointer">جدول الأيام التي فيها أوامر (${esc(intEn(active.length))})</summary><div class="table-wrap" style="max-height:260px;overflow:auto"><table style="min-width:360px"><thead><tr><th>اليوم</th><th>أوامر</th><th>اتحسبت فلوس</th><th>التكلفة</th></tr></thead><tbody>${active.map(d => `<tr><td>${num(d.day)}</td><td>${num(intEn(d.n))}</td><td>${num(intEn(d.billed))}</td><td><span class="money"><span>${esc(usdFine(d.cost))}</span><span>${esc(qarFine(d.cost))}</span></span></td></tr>`).join('') || '<tr><td colspan="4"><div class="empty">لا أوامر</div></td></tr>'}</tbody></table></div></details>`;
+        const html = `${tiles}${from}${warn}${legend}<div class="vchart-scroll">${voiceChartSvg(days)}</div><div class="vchart-info" aria-live="polite">اضغط على أي يوم لرؤية أرقامه.</div>${table}`;
+        return { html, days, summary: s };
+    }
+    function voiceChartWire(root, days) {
+        if (!root) return;
+        const sc = root.querySelector('.vchart-scroll'), info = root.querySelector('.vchart-info');
+        if (sc) { sc.scrollLeft = sc.scrollWidth; requestAnimationFrame(() => { sc.scrollLeft = sc.scrollWidth; }); }   // newest day in view first
+        const show = e => { const t = e.target.closest && e.target.closest('rect[data-i]'); if (!t || !info) return; info.textContent = voiceDayText(days[Number(t.dataset.i)]); };
+        if (sc) { sc.addEventListener('click', show); sc.addEventListener('pointerover', show); }
+    }
+    async function openVoiceChart(vin) {
+        vin = String(vin || '').trim(); if (!vin) return;
+        if (!LOCAL_PROXY || !LOCAL_FLAGS.controller) { alertDialog('غير متاح', 'تليمتري الكونترولر غير متاح في هذه الجلسة.', 'info'); return; }
+        const car = ctlCarByVin(vin) || { vin };
+        const hw = vinToHw(vinOf(car)), r = hw ? carRow(hw) : null;
+        const who = [r && (r.name || r.serial), car.note, car.car].filter(Boolean).map(String);
+        const title = 'الاستهلاك اليومي للأوامر الصوتية';
+        const head = `<div class="note" style="text-align:start;margin-bottom:6px"><span class="num">${esc(vinOf(car) || vin)}</span>${who.length ? ' · ' + esc(who.join(' · ')) : ''}</div>`;
+        const build = (log, err) => {
+            if (err) return `${head}<div class="note" style="color:#fca5a5;text-align:start">${esc(errMsg(err))}</div>`;
+            const m = voiceChartModel(car, log, qatarDay(0));
+            return { html: head + m.html, days: m.days };
+        };
+        const refreshCells = () => voiceBilledRefreshCells(voiceLogKey(vin));
+        if (hasSwal()) {
+            Swal.fire({
+                title, html: `<div id="vchart-root">${head}<div class="empty">جارٍ تحميل سجل أوامر السيارة…</div></div>`, width: 'min(860px, 96vw)',
+                background: '#1c160e', color: '#fff', confirmButtonText: 'إغلاق', confirmButtonColor: '#ff9a3d', customClass: { popup: 'vchart-pop' },
+                didOpen: () => {
+                    voiceLogGet(vinOf(car) || vin, { refresh: true }).then(log => {
+                        const root = document.getElementById('vchart-root'); if (!root) return;
+                        const b = build(log); root.innerHTML = b.html; voiceChartWire(root, b.days);
+                    }).catch(e => { const root = document.getElementById('vchart-root'); if (root) root.innerHTML = build(null, e); }).finally(refreshCells);
+                },
+            });
+            return;
+        }
+        try {
+            const b = build(await voiceLogGet(vinOf(car) || vin, { refresh: true }));
+            const p = themedFallbackDialog({ title, html: b.html, confirmText: 'إغلاق', cancel: false });
+            voiceChartWire([...document.querySelectorAll('dialog.wp-dialog')].pop(), b.days);
+            refreshCells(); await p;
+        } catch (e) { refreshCells(); alertDialog('تعذّر تحميل السجل', errMsg(e)); }
+    }
+    // «أوامر اتحسبت فلوس» cell: filled lazily for the rows on the visible page, two cars at a time, cached per VIN.
+    // A later refresh only asks for rows newer than the highest id held (p_since_id), so it stays cheap.
+    const voiceBilledQueue = []; let voiceBilledActive = 0;
+    function voiceBilledCell(vin, turns) {
+        const k = voiceLogKey(vin), t = Number(turns) || 0, log = voiceLog.get(k), err = voiceLogErr.get(k);
+        let inner;
+        if (!t) inner = num('0');
+        else if (log) { const s = voiceLogSummary(log, { voice_turns: t }); inner = num(intEn(s.billed) + (s.complete ? '' : '+')) + (s.complete ? '' : `<span class="sub">من السجل المتاح منذ ${esc(s.firstDay || '—')}</span>`); }
+        else if (err) inner = `<span class="sub" style="color:#fca5a5">تعذّر الحساب — اضغط</span>`;
+        else if (!LOCAL_PROXY || !LOCAL_FLAGS.controller) inner = '<span class="sub">—</span>';
+        else inner = '<span class="sub">جارٍ الحساب…</span>';
+        const tip = err && !log ? err.msg : 'أوامر وصلت للموديل وحاسبتنا عليها OpenRouter (تكلفة > 0 أو توكنات > 0). اضغط لرسم الاستهلاك اليومي.';
+        return `<button type="button" class="vcell big" data-voice-chart="${esc(vin)}" data-billed-cell="${esc(k)}" data-turns="${t}" title="${esc(tip)}">${inner}</button>`;
+    }
+    function voiceBilledSchedule(rows) {
+        if (!LOCAL_PROXY || !LOCAL_FLAGS.controller) return;
+        if (voiceLogEpoch !== sessionEpoch) { voiceLog.clear(); voiceLogErr.clear(); voiceLogEpoch = sessionEpoch; }
+        for (const r of rows || []) {
+            const vin = vinOf(r), t = Number(r && r.voice_turns) || 0, k = voiceLogKey(vin);
+            if (!k || !t) continue;
+            const log = voiceLog.get(k), err = voiceLogErr.get(k);
+            if (log && log.turns === t) continue;
+            if (err && Date.now() - err.at < 60000) continue;
+            if (voiceLogPending.has(k) || voiceBilledQueue.some(q => q.k === k)) continue;
+            voiceBilledQueue.push({ k, vin, t });
+        }
+        voiceBilledPump();
+    }
+    function voiceBilledPump() {
+        while (voiceBilledActive < 2 && voiceBilledQueue.length) {
+            const job = voiceBilledQueue.shift(); voiceBilledActive++;
+            voiceLogGet(job.vin, { turns: job.t }).catch(() => {}).finally(() => { voiceBilledActive--; voiceBilledRefreshCells(job.k); voiceBilledPump(); });
+        }
+    }
+    function voiceBilledRefreshCells(k) {
+        document.querySelectorAll('[data-billed-cell]').forEach(el => { if (el.dataset.billedCell === k) el.outerHTML = voiceBilledCell(el.dataset.voiceChart, Number(el.dataset.turns) || 0); });
+    }
+    document.addEventListener('click', e => {
+        const b = e.target.closest && e.target.closest('[data-voice-chart]'); if (!b) return;
+        e.preventDefault(); openVoiceChart(b.dataset.voiceChart);
+    });
+    // Controller cars table headers: Arabic name, a short second line, and the exact definition on hover.
+    const CTL_CAR_HEAD = {
+        voice_turns:     ['الأوامر المستخدمة', 'ضغطات زر الصوت', 'كل مرة ضغط فيها السائق زر الصوت، حتى لو ألغى أو لم يتكلم أو حدث خطأ (thab_cars.voice_turns). اضغط الرقم لرسم الاستهلاك اليومي.'],
+        voice_billed:    ['أوامر اتحسبت فلوس', 'وصلت للموديل', 'الأوامر التي وصلت فعلًا لموديل الذكاء الاصطناعي وحاسبتنا عليها OpenRouter (تكلفة > 0 أو توكنات > 0)، محسوبة من سجل أوامر السيارة. «+» = السجل التفصيلي لا يغطي كل تاريخها. اضغط لرسم الاستهلاك اليومي.'],
+        voice_cost_usd:  ['التكلفة', 'دولار · ريال', 'مجموع ما دفعناه لـ OpenRouter عن أوامر هذه السيارة منذ البداية (thab_cars.voice_cost_usd)، بالدولار وتحته بالريال القطري. اضغط لرسم الاستهلاك اليومي.'],
+        voice_ok:        ['أوامر نُفّذت', '', 'أوامر فُهمت ونُفّذت فعلًا (outcome = ok).'],
+        voice_unmatched: ['أوامر لم تُفهم', '', 'الموديل لم يطابقها بأمر من القائمة، أو كانت ثقته منخفضة، أو الأمر غير مدعوم في هذه السيارة (unmatched / lowconf / unsupported).'],
+        runs:            ['مرات فتح البرنامج', '', 'عدد مرات تشغيل ذبذبة داشبورد على هذه السيارة (launch).'],
+        voice_tokens:    ['التوكنات', '', 'مجموع توكنات الموديل لكل أوامر السيارة (thab_cars.voice_tokens).'],
+        last_voice_at:   ['آخر أمر صوتي', '', 'وقت آخر ضغطة على زر الصوت.'],
+        voice_turns_30d: ['ضغطات آخر 30 يوم', '', 'ضغطات زر الصوت خلال آخر 30 يومًا (من السجل التفصيلي).'],
+        voice_cost_30d:  ['تكلفة آخر 30 يوم', '', 'تكلفة الأوامر خلال آخر 30 يومًا (من السجل التفصيلي)، بالدولار وتحته بالريال.'],
+    };
+    const CTL_CAR_ORDER = ['vin', 'car', 'voice_turns', 'voice_billed', 'voice_cost_usd', 'voice_ok', 'voice_unmatched', 'runs', 'version_name', 'version_code', 'note', 'first_seen', 'last_seen', 'last_report_at', 'overlay_rev'];
+    function ctlCarsDisplayRows(cars) {
+        return cars.map(r => {
+            if (!r || typeof r !== 'object') return r;
+            const hasVoice = 'voice_turns' in r, o = {};
+            CTL_CAR_ORDER.forEach(k => { if (k === 'voice_billed' ? hasVoice : (k in r)) o[k] = k === 'voice_billed' ? null : r[k]; });
+            Object.keys(r).forEach(k => { if (!(k in o)) o[k] = r[k]; });
+            return o;
+        });
+    }
+    function ctlCarHeadTh(k, labels) {
+        const h = CTL_CAR_HEAD[k];
+        if (!h) return `<th>${esc((labels || {})[k] || k)}</th>`;
+        return `<th class="th-help" title="${esc(h[2])}">${esc(h[0])}${h[1] ? `<span class="th-sub">${esc(h[1])}</span>` : ''}</th>`;
+    }
+    function ctlCarVoiceCell(k, v, r) {
+        const vin = vinOf(r);
+        if (k === 'voice_turns') return vin ? `<button type="button" class="vcell big" data-voice-chart="${esc(vin)}" title="اضغط لرسم الاستهلاك اليومي">${num(intEn(v))}${r.voice_turns_30d != null ? `<span class="sub">آخر 30 يوم: ${esc(intEn(r.voice_turns_30d))}</span>` : ''}</button>` : num(intEn(v));
+        if (k === 'voice_billed') return vin ? voiceBilledCell(vin, r.voice_turns) : '<span class="sub">—</span>';
+        if (k === 'voice_cost_usd') return vin ? `<button type="button" class="vcell" data-voice-chart="${esc(vin)}" title="اضغط لرسم الاستهلاك اليومي">${moneyHtml(v)}</button>` : moneyHtml(v);
+        if (k === 'voice_cost_30d') return moneyHtml(v);
+        if (k === 'voice_ok' || k === 'voice_unmatched' || k === 'runs' || k === 'voice_tokens' || k === 'voice_turns_30d') return v == null ? '<span class="sub">—</span>' : num(intEn(v));
+        return null;
+    }
     // Voice cost calculator (voice settings sub-tab): cars × daily commands × price per command.
     const VCALC_KEY = 'vcalc.v1';
     function vcalcMoney(v) { return v.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: Math.abs(v) < 1 && v !== 0 ? 4 : 2 }); }
@@ -3768,22 +4216,39 @@
         $('vcalc-hint').textContent = Number.isFinite(quota) && quota > 0 && daily > quota ? `تنبيه: الحد اليومي الحالي لكل سيارة ${quota} أمر، السيارة لن تتجاوزه.` : '';
         vcalcRenderBasis();
         vcalcRenderCompare(cars, daily);
-        try { localStorage.setItem(VCALC_KEY, JSON.stringify({ cars: $('vcalc-cars').value, daily: $('vcalc-daily').value, price: $('vcalc-price').value, model: vcalc.model, basis: vcalc.basis, fleetN: vcalc.fleetN })); } catch (e) {}
+        try { vcalcDdRender(); } catch (e) { /* picker not in this page */ }
+        try { localStorage.setItem(VCALC_KEY, JSON.stringify({ cars: $('vcalc-cars').value, daily: $('vcalc-daily').value, price: $('vcalc-price').value, model: vcalc.model, basis: vcalc.basis, fleetN: vcalc.fleetN, fleetSrc: vcalc.fleetSrc })); } catch (e) {}
     }
     // ---- Model basis: which model the price per command is for (primary + fallbacks from voice.* settings) ----
-    // basis: 'manual' (typed price) | 'model' (price derived for vcalc.model) | 'fleet' (all-models average from stats).
-    const vcalc = { model: '', basis: 'manual', fleetN: 0, prices: {}, pricesKey: '', pricesBusy: false, pricesErr: '', pricesTriedAt: 0, events: null, eventsBusy: false, eventsTriedAt: 0 };
-    const VCALC_MIN_ACTUAL = 5;
+    // basis: 'manual' (typed price) | 'model' (price derived for vcalc.model) | 'fleet' (all-models average).
+    const vcalc = { model: '', basis: 'manual', fleetN: 0, fleetSrc: '', prices: {}, pricesKey: '', pricesBusy: false, pricesErr: '', pricesTriedAt: 0, events: null, eventsBusy: false, eventsTriedAt: 0 };
+    const VCALC_MIN_ACTUAL = 5;   // no longer a threshold (owner, 2026-09-15): one billed command is already a real price
+    // Suggested OpenRouter models for the calculator ONLY — shown in the picker and the comparison, never written to
+    // voice.* settings. One constant so the list is replaced in one place.
+    const VCALC_SUGGESTED = [
+        { id: 'google/gemini-2.5-flash', why: 'مستقر وسريع ويفهم الصوت كويس؛ أغلى من Lite شوية. لازم يتقفل التفكير (reasoning) عشان السرعة.' },
+        { id: 'google/gemini-3.8-flash', why: 'أحدث Flash بنفس سعر 3.7؛ منافس مباشر للاحتياطي التاني.' },
+        { id: 'google/gemini-2.5-flash-lite', why: 'أرخص موديل صوت في OpenRouter وسريع جدًا؛ خطر أعلى في فهم اللهجة والنفي.' },
+        { id: 'openai/gpt-audio-mini', why: 'مزوّد مختلف عن Google لو Google وقع؛ لازم نتأكد إن مخرجات JSON شغالة معاه.' },
+        { id: 'google/gemini-3.6-flash', why: 'بديل ثابت بنفس سعر 3.7/3.8؛ مفيش ميزة واضحة غير إنه نسخة تانية للمقارنة.' },
+    ];
+    const VCALC_SUGGESTED_NOTE = 'ترشيحات Codex وGemini — لازم تتجرب على أوامر خليجية حقيقية قبل ما تتحط في الإعدادات';
     function vcalcPrice(v) { return Number(v).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 6 }); }
     function vcalcModels() {
         const rows = state.voice || [];
         const primary = String((rows.find(r => r.key === 'voice.model') || {}).value || '').trim();
+        const fbValue = (rows.find(r => r.key === 'voice.models_fallback') || {}).value;
         let fallbacks = [];
-        try { fallbacks = voiceFallbackModels((rows.find(r => r.key === 'voice.models_fallback') || {}).value).map(m => String(m).trim()).filter(Boolean); } catch (e) {}
+        try { fallbacks = voiceFallbackModels(fbValue).map(m => String(m).trim()).filter(Boolean); } catch (e) {}
+        const used = voiceFallbackUsedIds(primary, fbValue);
         const out = [], seen = new Set();
         if (primary) { out.push({ id: primary, role: 'primary' }); seen.add(primary.toLowerCase()); }
-        fallbacks.forEach(id => { if (!seen.has(id.toLowerCase())) { seen.add(id.toLowerCase()); out.push({ id, role: 'fallback' }); } });
+        fallbacks.forEach(id => { if (!seen.has(id.toLowerCase())) { seen.add(id.toLowerCase()); out.push({ id, role: used.has(id) ? 'fallback' : 'unused' }); } });
         return out;
+    }
+    function vcalcSuggested(models) {
+        const seen = new Set((models || vcalcModels()).map(m => m.id.toLowerCase()));
+        return VCALC_SUGGESTED.filter(s => s && s.id && !seen.has(String(s.id).toLowerCase())).map(s => ({ id: String(s.id), role: 'suggested', why: s.why || '' }));
     }
     function vcalcModelName(id) {
         const p = vcalc.prices[id];
@@ -3791,7 +4256,11 @@
         const tail = String(id).split('/').pop().replace(/:.*$/, '');
         return tail.split(/[-_]+/).filter(Boolean).map(w => /^\d/.test(w) ? w : w.charAt(0).toUpperCase() + w.slice(1)).join(' ') || String(id);
     }
-    const vcalcRoleBadge = role => role === 'primary' ? '<span class="badge ok">الأساسي</span>' : role === 'fallback' ? '<span class="badge info">احتياطي</span>' : '<span class="badge muted">غير موجود في الإعدادات الحالية</span>';
+    const vcalcRoleBadge = role => role === 'primary' ? '<span class="badge ok">الأساسي</span>'
+        : role === 'fallback' ? '<span class="badge info">احتياطي</span>'
+        : role === 'unused' ? '<span class="badge muted" title="احتياطي بعد الثاني: الـ Worker يرسل الأساسي + أول احتياطيين فقط، فهذا لا يُجرَّب أبدًا">غير مستخدم</span>'
+        : role === 'suggested' ? '<span class="badge warn" title="للحساب والمقارنة فقط — لا يُحفظ في الإعدادات">مقترح</span>'
+        : '<span class="badge muted">غير موجود في الإعدادات الحالية</span>';
     // Telemetry rows come in any shape: the command's numbers may sit on the row or inside data / payload / meta.
     function vcalcField(e, keys) {
         if (!e || typeof e !== 'object') return undefined;
@@ -3806,7 +4275,10 @@
     function vcalcEvents() {
         const c = state.ctl || {};
         const base = Array.isArray(c.events) ? c.events : (c.events && Array.isArray(c.events.rows)) ? c.events.rows : [];
+        // thab_events rows name the numbers cost_usd / prompt_tokens / completion_tokens / total_tokens; the car's batch
+        // names them cost / pt / ct / tt. Both are read. Per-car logs already loaded (cars table, popup) add coverage.
         const all = base.concat(vcalc.events || []);
+        voiceLog.forEach(l => { if (l && Array.isArray(l.rows)) for (const e of l.rows) all.push(e); });
         const seen = new Set(), out = [];
         for (const e of all) {
             if (!e || typeof e !== 'object') continue;
@@ -3815,45 +4287,96 @@
             const model = vcalcField(e, ['model']);
             const kind = String(e.kind || e.type || '');
             if (model == null && !/voice|assist|speech|command/i.test(kind)) continue;
-            out.push({
-                model: model == null ? '' : String(model).trim(),
-                cost: vcalcNumOf(vcalcField(e, ['cost'])),
-                pt: vcalcNumOf(vcalcField(e, ['pt', 'prompt_tokens'])),
-                ct: vcalcNumOf(vcalcField(e, ['ct', 'completion_tokens'])),
-            });
+            const cost = vcalcNumOf(vcalcField(e, ['cost', 'cost_usd']));
+            const pt = vcalcNumOf(vcalcField(e, ['pt', 'prompt_tokens'])), ct = vcalcNumOf(vcalcField(e, ['ct', 'completion_tokens'])), tt = vcalcNumOf(vcalcField(e, ['tt', 'total_tokens']));
+            out.push({ model: model == null ? '' : String(model).trim(), cost, pt, ct, tt, billed: (cost || 0) > 0 || (tt || 0) > 0 || (pt || 0) > 0 || (ct || 0) > 0 });
         }
         return out;
     }
-    // One price per command for a model: real average when enough logged commands, else token estimate, else none.
+    // Exact OpenRouter list price per token for a model: undefined = not fetched yet, null = not on OpenRouter.
+    function vcalcRates(p) {
+        if (!p || typeof p !== 'object') return null;
+        const f = v => (v == null || v === '' || !Number.isFinite(Number(v))) ? null : Number(v);
+        const prompt = f(p.prompt), completion = f(p.completion);
+        if (prompt == null || completion == null) return null;
+        const audio = f(p.audio != null ? p.audio : p.input_audio != null ? p.input_audio : p.audio_input);
+        return { prompt, completion, audio: audio != null && audio > 0 ? audio : null, request: f(p.request) || 0 };
+    }
+    function vcalcPer1M(v) {
+        const n = Number(v); if (v == null || v === '' || !Number.isFinite(n)) return null;
+        return '$' + (n * 1e6).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 6 });
+    }
+    function vcalcPriceStatus(id) {
+        const p = vcalc.prices[id];
+        if (p === null) return { kind: 'missing', text: 'غير موجود على OpenRouter' };
+        const r = vcalcRates(p);
+        if (r) return { kind: 'ok', rates: r };
+        if (p && typeof p === 'object') return { kind: 'missing', text: 'OpenRouter لا يعلن سعرًا لهذا الموديل' };
+        if (vcalc.pricesBusy || (!vcalc.pricesErr && !vcalc.pricesTriedAt && SESSION_TOKEN)) return { kind: 'loading', text: 'جارٍ جلب الأسعار…' };
+        if (vcalc.pricesErr) return { kind: 'error', text: 'تعذّر جلب الأسعار: ' + vcalc.pricesErr };
+        if (!SESSION_TOKEN) return { kind: 'error', text: 'الأسعار تحتاج جلسة أدمن' };
+        return { kind: 'loading', text: 'جارٍ جلب الأسعار…' };
+    }
+    // «إدخال $X / مليون · إخراج $Y / مليون · صوت $Z / مليون» as separate spans (numbers bidi-isolated).
+    function vcalcPriceMeta(id) {
+        const st = vcalcPriceStatus(id);
+        if (st.kind !== 'ok') return `<span${st.kind === 'error' || st.kind === 'missing' ? ' style="color:#fca5a5"' : ''}>${esc(st.text)}</span>`;
+        const r = st.rates;
+        return `<span>إدخال <bdi dir="ltr">${esc(vcalcPer1M(r.prompt))}</bdi> / مليون</span><span>إخراج <bdi dir="ltr">${esc(vcalcPer1M(r.completion))}</bdi> / مليون</span>${r.audio ? `<span>صوت <bdi dir="ltr">${esc(vcalcPer1M(r.audio))}</bdi> / مليون</span>` : ''}${r.request ? `<span>+ <bdi dir="ltr">$${esc(vcalcPrice(r.request))}</bdi> لكل طلب</span>` : ''}`;
+    }
+    // One price per command for a model. Only two answers are allowed (owner, 2026-09-15 — no estimates):
+    //  'actual'   — the real average of what OpenRouter billed us for THIS model (≥1 billed command, all of them);
+    //  'computed' — a model we never used: our real billed commands' average tokens × the model's exact list price.
+    // Otherwise no per-command price at all (the per-1M list prices are still shown).
     function vcalcModelPrice(id, evs) {
         evs = evs || vcalcEvents();
         const low = String(id).toLowerCase();
-        const costs = evs.filter(e => e.model.toLowerCase() === low && e.cost != null && e.cost >= 0).map(e => e.cost);
-        if (costs.length >= VCALC_MIN_ACTUAL) return { price: costs.reduce((a, b) => a + b, 0) / costs.length, basis: 'actual', n: costs.length };
-        const tok = evs.filter(e => e.pt != null && e.ct != null && e.pt >= 0 && e.ct >= 0);
-        const p = vcalc.prices[id];
-        if (!tok.length) return { price: null, basis: 'none', reason: 'no-tokens', n: costs.length };
-        if (!p || p.prompt == null || p.completion == null) return { price: null, basis: 'none', reason: p === null ? 'no-model' : vcalc.pricesBusy ? 'loading' : 'no-prices', n: costs.length, tokens: tok.length };
+        const billed = evs.filter(e => e.billed);
+        const costs = billed.filter(e => e.model.toLowerCase() === low && e.cost != null && e.cost >= 0).map(e => e.cost);
+        if (costs.length) return { price: costs.reduce((a, b) => a + b, 0) / costs.length, basis: 'actual', n: costs.length };
+        const tok = billed.filter(e => e.pt != null && e.ct != null && e.pt >= 0 && e.ct >= 0 && e.pt + e.ct > 0);
+        if (!tok.length) return { price: null, basis: 'none', reason: 'no-tokens', n: 0 };
+        const st = vcalcPriceStatus(id);
+        if (st.kind !== 'ok') return { price: null, basis: 'none', reason: st.kind === 'missing' ? 'no-model' : st.kind === 'loading' ? 'loading' : 'no-prices', n: 0, tokens: tok.length };
+        const r = st.rates;
         const avgPt = tok.reduce((a, e) => a + e.pt, 0) / tok.length, avgCt = tok.reduce((a, e) => a + e.ct, 0) / tok.length;
-        return { price: avgPt * p.prompt + avgCt * p.completion, basis: 'estimate', n: costs.length, tokens: tok.length, avgPt, avgCt };
+        return { price: avgPt * r.prompt + avgCt * r.completion + r.request, basis: 'computed', n: 0, tokens: tok.length, avgPt, avgCt, rates: r };
+    }
+    function vcalcFormula(r) {
+        const t = v => v.toLocaleString('en-US', { maximumFractionDigits: 1 });
+        return `متوسط ${t(r.avgPt)} توكن إدخال × ${vcalcPer1M(r.rates.prompt)} / مليون\n+ متوسط ${t(r.avgCt)} توكن إخراج × ${vcalcPer1M(r.rates.completion)} / مليون${r.rates.request ? `\n+ $${vcalcPrice(r.rates.request)} لكل طلب` : ''}\n= $${vcalcPrice(r.price)} للأمر\nالتوكنات من ${r.tokens.toLocaleString('en-US')} أمر مدفوع حقيقي. توكنات الصوت داخل توكنات الإدخال في سجلّنا ولا تُفصل، فحُسبت بسعر الإدخال${r.rates.audio ? ` (سعر الصوت الرسمي ${vcalcPer1M(r.rates.audio)} / مليون غير مطبّق)` : ''}.`;
     }
     function vcalcBasisBadge(r) {
-        if (r.basis === 'actual') return `<span class="badge ok">متوسط فعلي من ${r.n.toLocaleString('en-US')} أمر</span>`;
-        if (r.basis === 'estimate') return `<span class="badge warn" title="متوسط ${Math.round(r.avgPt).toLocaleString('en-US')} توكن إدخال و${Math.round(r.avgCt).toLocaleString('en-US')} توكن إخراج من ${r.tokens.toLocaleString('en-US')} أمر">تقدير من أسعار OpenRouter</span>`;
-        const why = { 'no-tokens': 'لا توجد بيانات توكنات في السجل', 'no-model': 'الموديل غير موجود في OpenRouter', loading: 'جارٍ تحميل الأسعار…', 'no-prices': vcalc.pricesErr ? `تعذّر جلب الأسعار: ${vcalc.pricesErr}` : 'أسعار OpenRouter غير متاحة' }[r.reason] || 'لا بيانات';
+        if (r.basis === 'actual') return `<span class="badge ok" title="متوسط ما حاسبتنا عليه OpenRouter فعلًا (usage.cost) عن ${r.n.toLocaleString('en-US')} أمر مدفوع لهذا الموديل">فعلي — ${r.n.toLocaleString('en-US')} أمر</span>`;
+        if (r.basis === 'computed') return `<span class="badge info" title="${esc(vcalcFormula(r))}">محسوب بأسعار OpenRouter الرسمية على توكنات أوامرنا الفعلية (${r.tokens.toLocaleString('en-US')} أمر)</span>`;
+        const why = { 'no-tokens': 'لا توجد توكنات أوامر حقيقية بعد — لا سعر للأمر', 'no-model': 'الموديل غير موجود على OpenRouter', loading: 'جارٍ جلب الأسعار…', 'no-prices': vcalc.pricesErr ? `تعذّر جلب الأسعار: ${vcalc.pricesErr}` : 'أسعار OpenRouter غير متاحة' }[r.reason] || 'لا بيانات';
         return `<span class="badge muted">${esc(why)}</span>`;
     }
+    function vcalcPriceIds() {
+        const ids = [], seen = new Set();
+        const add = id => { id = String(id || '').trim(); if (id && !seen.has(id)) { seen.add(id); ids.push(id); } };
+        vcalcModels().forEach(m => add(m.id)); add(vcalc.model); VCALC_SUGGESTED.forEach(s => s && add(s.id));
+        return ids;
+    }
     async function vcalcLoadPrices(force) {
-        const ids = vcalcModels().map(m => m.id);
-        if (vcalc.model && !ids.includes(vcalc.model)) ids.push(vcalc.model);
+        const ids = vcalcPriceIds();
         if (!ids.length || !SESSION_TOKEN || vcalc.pricesBusy) return;
-        const key = ids.slice(0, 10).join(',');
+        const key = ids.join(',');
         if (!force && key === vcalc.pricesKey && (!vcalc.pricesErr || Date.now() - vcalc.pricesTriedAt < 60000)) return;
         vcalc.pricesBusy = true; vcalc.pricesKey = key; vcalc.pricesTriedAt = Date.now();
-        try {
-            const r = await localGet('/local/openrouter-prices?models=' + encodeURIComponent(key));
-            vcalc.prices = Object.assign({}, vcalc.prices, (r && r.models) || {}); vcalc.pricesErr = '';
-        } catch (e) { vcalc.pricesErr = errMsg(e); }
+        try { vcalcDdRender(); } catch (e) {}
+        const errs = [];
+        // The prices route takes at most 10 ids per call: page through them.
+        for (let i = 0; i < ids.length; i += 10) {
+            const chunk = ids.slice(i, i + 10);
+            try {
+                const r = await localGet('/local/openrouter-prices?models=' + encodeURIComponent(chunk.join(',')));
+                const got = (r && r.models) || {}, next = Object.assign({}, vcalc.prices);
+                chunk.forEach(id => { if (Object.prototype.hasOwnProperty.call(got, id)) next[id] = got[id]; else if (r && r.models) next[id] = null; });
+                vcalc.prices = next;
+            } catch (e) { errs.push(errMsg(e)); }
+        }
+        vcalc.pricesErr = errs[0] || '';
         vcalc.pricesBusy = false;
         vcalcSync();
     }
@@ -3868,18 +4391,25 @@
         vcalc.eventsBusy = false;
         vcalcSync();
     }
+    // Picker entries: manual, the models in voice.* (primary / fallback / unused), a stale saved one, then suggestions.
+    function vcalcOptions() {
+        const models = vcalcModels();
+        const list = [{ id: '', role: 'manual', group: 'manual' }, ...models.map(m => ({ id: m.id, role: m.role, group: 'current' }))];
+        const sugg = vcalcSuggested(models);
+        if (vcalc.model && !list.some(m => m.id === vcalc.model) && !sugg.some(s => s.id === vcalc.model)) list.push({ id: vcalc.model, role: 'stale', group: 'current' });
+        return list.concat(sugg.map(s => ({ id: s.id, role: 'suggested', why: s.why, group: 'suggested' })));
+    }
     // Rebuild the model list, re-derive the price when it follows a model, redraw. Safe to call before init.
     function vcalcSync() {
         if (!$('vcalc') || !$('vcalc-model')) return;
-        const models = vcalcModels();
         const sel = $('vcalc-model');
-        const list = models.slice();
-        if (vcalc.model && !list.some(m => m.id === vcalc.model)) list.push({ id: vcalc.model, role: 'stale' });
-        const roleText = { primary: 'الأساسي', fallback: 'احتياطي', stale: 'محفوظ سابقًا' };
-        const html = `<option value="">سعر يدوي (بدون موديل)</option>` + list.map(m => `<option value="${esc(m.id)}">${esc(vcalcModelName(m.id))} — ${roleText[m.role]} (${esc(m.id)})</option>`).join('');
+        const roleText = { primary: 'الأساسي', fallback: 'احتياطي', unused: 'غير مستخدم', stale: 'محفوظ سابقًا', suggested: 'مقترح' };
+        // The hidden <select> stays the value holder (existing listeners + localStorage), the themed list is the UI.
+        const html = vcalcOptions().map(m => m.role === 'manual' ? `<option value="">سعر يدوي (بدون موديل)</option>` : `<option value="${esc(m.id)}">${esc(vcalcModelName(m.id))} — ${roleText[m.role]} (${esc(m.id)})</option>`).join('');
         if (sel.dataset.html !== html) { sel.innerHTML = html; sel.dataset.html = html; }
         sel.value = vcalc.basis === 'model' ? vcalc.model : '';
-        if (models.length) { vcalcLoadPrices(); vcalcLoadEvents(); }
+        if (vcalcPriceIds().length) vcalcLoadPrices();
+        if (vcalcModels().length) vcalcLoadEvents();
         if (vcalc.basis === 'model' && vcalc.model) vcalcApplyModel();
         vcalcRender();
     }
@@ -3888,18 +4418,27 @@
         if (r.price != null && Number.isFinite(r.price)) $('vcalc-price').value = r.price.toFixed(8).replace(/\.?0+$/, '') || '0';
         return r;
     }
+    function vcalcRoleOf(id) {
+        const o = vcalcOptions().find(x => x.id === id);
+        return o ? o.role : 'stale';
+    }
     function vcalcRenderBasis() {
         const line = $('vcalc-model-line'), under = $('vcalc-basis'); if (!line || !under) return;
         if (vcalc.basis === 'model' && vcalc.model) {
-            const id = vcalc.model, m = vcalcModels().find(x => x.id === id), r = vcalcModelPrice(id);
+            const id = vcalc.model, r = vcalcModelPrice(id);
             const nameHtml = `<b>${esc(vcalcModelName(id))}</b> <span class="vcalc-id">(${esc(id)})</span>`;
             const keep = r.price == null ? ' <span class="badge muted">السعر الحالي يدوي</span>' : '';
-            line.innerHTML = `<span>السعر محسوب على:</span> ${nameHtml} ${vcalcRoleBadge(m ? m.role : 'stale')} ${vcalcBasisBadge(r)}${keep}`;
+            line.innerHTML = `<span>السعر محسوب على:</span> ${nameHtml} ${vcalcRoleBadge(vcalcRoleOf(id))} ${vcalcBasisBadge(r)}${keep} <span class="vsel-meta" style="width:100%">${vcalcPriceMeta(id)}</span>`;
             under.innerHTML = `محسوب على ${nameHtml} · ${vcalcBasisBadge(r)}`;
         } else if (vcalc.basis === 'fleet') {
-            const n = Number(vcalc.fleetN) || 0;
-            line.innerHTML = `<span>السعر محسوب على:</span> <b>كل الموديلات معًا</b> <span class="badge ok">متوسط فعلي من ${n.toLocaleString('en-US')} أمر</span>`;
-            under.innerHTML = `متوسط فعلي لكل الموديلات من ${n.toLocaleString('en-US')} أمر`;
+            const n = Number(vcalc.fleetN) || 0, nt = n.toLocaleString('en-US');
+            const badge = vcalc.fleetSrc === 'all'
+                ? `<span class="badge ok" title="تكلفة الصوت الإجمالية (cost_total) ÷ عدد الأوامر التي اتحسبت فلوس في كل السيارات منذ البداية">فعلي: إجمالي التكلفة ÷ ${nt} أمر اتحسب فلوس</span>`
+                : vcalc.fleetSrc === 'log'
+                ? `<span class="badge ok" title="متوسط تكلفة الأوامر المدفوعة في السجل التفصيلي المحمّل (آخر المسجّل، ليس كل التاريخ)">فعلي: متوسط ${nt} أمر مدفوع من السجل</span>`
+                : `<span class="badge muted" title="حُفظ قبل تصحيح الحساب (كان يقسم على كل الضغطات)">متوسط محفوظ سابقًا — اضغط «استخدم متوسط التكلفة الفعلي» لإعادة الحساب</span>`;
+            line.innerHTML = `<span>السعر محسوب على:</span> <b>كل الموديلات معًا</b> ${badge}`;
+            under.innerHTML = badge;
         } else {
             line.innerHTML = `<span>السعر محسوب على:</span> <b>سعر يدوي</b> <span class="badge muted">بدون موديل محدد</span>`;
             under.innerHTML = '<span class="badge muted">سعر يدوي</span>';
@@ -3907,20 +4446,26 @@
     }
     function vcalcRenderCompare(cars, daily) {
         const body = $('vcalc-cmp-body'); if (!body) return;
-        const models = vcalcModels();
-        if (!models.length) { body.innerHTML = '<tr><td colspan="6"><div class="empty">لا يوجد موديل أساسي أو احتياطي في إعدادات voice.* (أو لم تُحمَّل بعد)</div></td></tr>'; return; }
+        const models = vcalcModels(), sugg = vcalcSuggested(models);
+        if (!models.length && !sugg.length) { body.innerHTML = '<tr><td colspan="9"><div class="empty">لا يوجد موديل أساسي أو احتياطي في إعدادات voice.* (أو لم تُحمَّل بعد)</div></td></tr>'; return; }
         const evs = vcalcEvents();
         const monthly = cars * daily * 30;
-        const rows = models.map(m => ({ m, r: vcalcModelPrice(m.id, evs) }));
+        const rows = models.concat(sugg).map(m => ({ m, r: vcalcModelPrice(m.id, evs) }));
         const priced = rows.filter(x => x.r.price != null && Number.isFinite(x.r.price));
         const cheapest = priced.length > 1 ? priced.reduce((a, b) => b.r.price < a.r.price ? b : a) : null;
-        body.innerHTML = rows.map(x => {
+        const empty = !models.length ? '<tr><td colspan="9"><div class="empty">لا يوجد موديل أساسي أو احتياطي في إعدادات voice.* (أو لم تُحمَّل بعد)</div></td></tr>' : '';
+        body.innerHTML = empty + rows.map((x, i) => {
             const { m, r } = x, has = r.price != null && Number.isFinite(r.price);
             const usd = has ? r.price * monthly : 0;
-            const cls = [x === cheapest ? 'cheapest' : '', vcalc.basis === 'model' && vcalc.model === m.id ? 'selected' : ''].join(' ').trim();
-            const basis = r.basis === 'actual' ? `<span class="badge ok">فعلي (${r.n.toLocaleString('en-US')})</span>` : r.basis === 'estimate' ? '<span class="badge warn">تقدير</span>' : vcalcBasisBadge(r);
-            return `<tr class="${cls}">
-                <td><b>${esc(vcalcModelName(m.id))}</b> ${vcalcRoleBadge(m.role)}${x === cheapest ? ' <span class="badge ok">الأرخص</span>' : ''}<br><span class="vcalc-id">${esc(m.id)}</span></td>
+            const cls = [x === cheapest ? 'cheapest' : '', vcalc.basis === 'model' && vcalc.model === m.id ? 'selected' : '', m.role === 'unused' ? 'unused' : ''].join(' ').trim();
+            const basis = r.basis === 'actual' ? `<span class="badge ok" title="متوسط ما حاسبتنا عليه OpenRouter فعلًا">فعلي (${r.n.toLocaleString('en-US')})</span>` : r.basis === 'computed' ? `<span class="badge info" title="${esc(vcalcFormula(r))}">محسوب بأسعار OpenRouter (${r.tokens.toLocaleString('en-US')} أمر)</span>` : vcalcBasisBadge(r);
+            const st = vcalcPriceStatus(m.id), rt = st.rates;
+            const p1m = v => `<td class="p1m">${v ? `<bdi dir="ltr">${esc(v)}</bdi>` : '—'}</td>`;
+            const priceCells = st.kind === 'ok' ? p1m(vcalcPer1M(rt.prompt)) + p1m(vcalcPer1M(rt.completion)) + p1m(rt.audio ? vcalcPer1M(rt.audio) : '') : `<td class="p1m" colspan="3"><span class="sub"${st.kind === 'loading' ? '' : ' style="color:#fca5a5"'}>${esc(st.text)}</span></td>`;
+            const sep = m.role === 'suggested' && (i === 0 || rows[i - 1].m.role !== 'suggested') ? '<tr><td colspan="9" class="sub" style="display:table-cell;padding-top:14px">موديلات مقترحة (للمقارنة فقط — لا تُحفظ في الإعدادات)<span class="sub">' + esc(VCALC_SUGGESTED_NOTE) + '</span></td></tr>' : '';
+            return `${sep}<tr class="${cls}">
+                <td><b>${esc(vcalcModelName(m.id))}</b> ${vcalcRoleBadge(m.role)}${x === cheapest ? ' <span class="badge ok">الأرخص</span>' : ''}<br><span class="vcalc-id">${esc(m.id)}</span>${m.why ? `<span class="sub">${esc(m.why)}</span>` : ''}</td>
+                ${priceCells}
                 <td class="m">${has ? '$' + vcalcPrice(r.price) : '—'}</td>
                 <td class="m">${has ? '$' + vcalcMoney(usd) : '—'}</td>
                 <td class="m">${has ? vcalcMoney(usd * USD_QAR) + ' ر.ق' : '—'}</td>
@@ -3935,9 +4480,65 @@
         if (id) {
             vcalcLoadPrices(); vcalcLoadEvents();
             const r = vcalcApplyModel();
-            if (r.price == null) toast('info', r.reason === 'no-tokens' ? 'لا توجد بيانات توكنات في السجل — بقي السعر اليدوي.' : r.reason === 'loading' ? 'جارٍ تحميل أسعار OpenRouter — يتحدّث السعر تلقائيًا.' : 'لا يوجد سعر لهذا الموديل بعد — بقي السعر اليدوي.');
+            if (r.price == null) toast('info', r.reason === 'no-tokens' ? 'لا توجد توكنات أوامر حقيقية بعد — لا سعر للأمر؛ بقي السعر اليدوي.' : r.reason === 'loading' ? 'جارٍ جلب أسعار OpenRouter — يتحدّث السعر تلقائيًا.' : r.reason === 'no-model' ? 'الموديل غير موجود على OpenRouter — بقي السعر اليدوي.' : 'أسعار OpenRouter غير متاحة الآن — بقي السعر اليدوي.');
         }
         vcalcSync();
+    }
+    // ---- Themed model picker (listbox) over the hidden #vcalc-model ----
+    const vdd = { open: false, active: -1, opts: [] };
+    function vcalcOptHtml(o, i, selected) {
+        const l1 = o.role === 'manual' ? '<span>سعر يدوي (بدون موديل)</span>' : `<span>${esc(vcalcModelName(o.id))}</span> ${vcalcRoleBadge(o.role)}`;
+        const meta = o.role === 'manual' ? '<span>تكتب سعر الأمر بنفسك</span>' : `<span class="vsel-mid">${esc(o.id)}</span>${vcalcPriceMeta(o.id)}`;
+        return `<div class="vsel-opt" role="option" id="vcalc-opt-${i}" data-i="${i}" aria-selected="${selected ? 'true' : 'false'}"><div class="vsel-l1">${l1}</div><div class="vsel-meta">${meta}</div>${o.why ? `<div class="vsel-why">${esc(o.why)}</div>` : ''}</div>`;
+    }
+    function vcalcDdRender() {
+        const list = $('vcalc-model-list'), cur = $('vcalc-model-cur'), sel = $('vcalc-model'); if (!list || !cur || !sel) return;
+        const opts = vcalcOptions(); vdd.opts = opts;
+        const value = sel.value;
+        let html = '', group = 'manual';
+        opts.forEach((o, i) => {
+            if (o.group !== group) { html += `<div class="vsel-group" role="presentation">${o.group === 'suggested' ? `موديلات مقترحة — للحساب فقط، لا تُحفظ في الإعدادات<span class="vsel-why" style="display:block">${esc(VCALC_SUGGESTED_NOTE)}</span>` : 'الموديلات في الإعدادات الحالية'}</div>`; group = o.group; }
+            html += vcalcOptHtml(o, i, o.id === value);
+        });
+        if (list.dataset.html !== html) { const st = list.scrollTop; list.innerHTML = html; list.dataset.html = html; list.scrollTop = st; if (vdd.open) vddSetActive(Math.min(vdd.active, opts.length - 1), true); }
+        const o = opts.find(x => x.id === value) || opts[0];
+        cur.innerHTML = o.role === 'manual' ? 'سعر يدوي (بدون موديل)' : `<span class="vsel-l1"><span>${esc(vcalcModelName(o.id))}</span> ${vcalcRoleBadge(o.role)}</span><span class="vsel-meta"><span class="vsel-mid">${esc(o.id)}</span></span>`;
+    }
+    function vddSetActive(i, noScroll) {
+        const list = $('vcalc-model-list'); if (!list) return;
+        const n = vdd.opts.length; if (!n) return;
+        vdd.active = Math.max(0, Math.min(n - 1, i));
+        list.querySelectorAll('.vsel-opt.active').forEach(el => el.classList.remove('active'));
+        const el = $('vcalc-opt-' + vdd.active);
+        if (el) { el.classList.add('active'); if (!noScroll) el.scrollIntoView({ block: 'nearest' }); }
+        list.setAttribute('aria-activedescendant', el ? el.id : '');
+    }
+    function vddPlace() {
+        const dd = $('vcalc-model-dd'), list = $('vcalc-model-list'); if (!dd || !list) return;
+        list.style.insetInlineStart = ''; list.style.left = '';
+        const r = dd.getBoundingClientRect(), lw = list.offsetWidth, vw = document.documentElement.clientWidth;
+        // RTL: anchored to the field's right edge and growing leftwards; if that leaves the screen, anchor by `left`.
+        if (r.right - lw < 8) { list.style.insetInlineStart = 'auto'; list.style.left = Math.max(8 - r.left, Math.min(0, vw - 8 - lw - r.left)) + 'px'; }
+    }
+    function vddOpen() {
+        const dd = $('vcalc-model-dd'), list = $('vcalc-model-list'), btn = $('vcalc-model-btn'); if (!dd || !list || !btn) return;
+        vcalcDdRender();
+        list.hidden = false; dd.classList.add('open'); btn.setAttribute('aria-expanded', 'true'); vdd.open = true;
+        const i = vdd.opts.findIndex(o => o.id === $('vcalc-model').value);
+        vddPlace(); vddSetActive(i < 0 ? 0 : i);
+        list.focus({ preventScroll: true });
+    }
+    function vddClose(focusBtn) {
+        const dd = $('vcalc-model-dd'), list = $('vcalc-model-list'), btn = $('vcalc-model-btn'); if (!dd || !list || !btn) return;
+        list.hidden = true; dd.classList.remove('open'); btn.setAttribute('aria-expanded', 'false'); vdd.open = false; vdd.active = -1;
+        if (focusBtn) btn.focus();
+    }
+    function vddChoose(i) {
+        const o = vdd.opts[i], sel = $('vcalc-model'); if (!o || !sel) return;
+        vddClose(true);
+        if (![...sel.options].some(x => x.value === o.id)) { const opt = document.createElement('option'); opt.value = o.id; opt.textContent = o.id; sel.appendChild(opt); }
+        sel.value = o.id;
+        sel.dispatchEvent(new Event('change', { bubbles: true }));
     }
     (function vcalcInit() {
         if (!$('vcalc')) return;
@@ -3949,6 +4550,7 @@
                 if (['manual', 'model', 'fleet'].includes(s.basis)) vcalc.basis = s.basis;
                 if (vcalc.basis === 'model' && !vcalc.model) vcalc.basis = 'manual';
                 vcalc.fleetN = Number(s.fleetN) || 0;
+                if (s.fleetSrc === 'all' || s.fleetSrc === 'log') vcalc.fleetSrc = s.fleetSrc;
             }
         } catch (e) {}
         $('vcalc').addEventListener('input', e => {
@@ -3958,14 +4560,53 @@
         });
         $('vcalc-model').addEventListener('change', e => vcalcSelectModel(e.target.value));
         $('vcalc-cmp-body').addEventListener('click', e => { const b = e.target.closest('[data-vcalc-model]'); if (b) vcalcSelectModel(b.dataset.vcalcModel); });
-        $('vcalc-actual').addEventListener('click', () => {
+        const btn = $('vcalc-model-btn'), list = $('vcalc-model-list'), dd = $('vcalc-model-dd');
+        if (btn && list && dd) {
+            btn.addEventListener('click', () => { if (vdd.open) vddClose(false); else vddOpen(); });
+            btn.addEventListener('keydown', e => { if (['ArrowDown', 'ArrowUp', 'Enter', ' '].includes(e.key)) { e.preventDefault(); vddOpen(); } });
+            list.addEventListener('keydown', e => {
+                if (e.key === 'ArrowDown') { e.preventDefault(); vddSetActive(vdd.active + 1); }
+                else if (e.key === 'ArrowUp') { e.preventDefault(); vddSetActive(vdd.active - 1); }
+                else if (e.key === 'Home') { e.preventDefault(); vddSetActive(0); }
+                else if (e.key === 'End') { e.preventDefault(); vddSetActive(vdd.opts.length - 1); }
+                else if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); if (vdd.active >= 0) vddChoose(vdd.active); }
+                else if (e.key === 'Escape') { e.preventDefault(); vddClose(true); }
+                else if (e.key === 'Tab') vddClose(false);
+            });
+            list.addEventListener('click', e => { const o = e.target.closest('.vsel-opt'); if (o) vddChoose(Number(o.dataset.i)); });
+            list.addEventListener('mousemove', e => { const o = e.target.closest('.vsel-opt'); if (o && Number(o.dataset.i) !== vdd.active) vddSetActive(Number(o.dataset.i), true); });
+            document.addEventListener('pointerdown', e => { if (vdd.open && !dd.contains(e.target)) vddClose(false); });
+            window.addEventListener('resize', () => { if (vdd.open) vddPlace(); });
+        }
+        // Fleet average = what we really paid ÷ commands that were really billed (not ÷ every button press).
+        $('vcalc-actual').addEventListener('click', async () => {
             const c = state.ctl || {}; const st = Array.isArray(c.stats) ? (c.stats[0] || {}) : (c.stats || {});
-            const cost = Number(st.cost_total), n = Number(st.voice_total);
-            if (!(cost > 0 && n > 0)) { toast('info', 'لا توجد بيانات تكلفة فعلية بعد — افتح تبويب التليمتري أولًا.'); return; }
-            $('vcalc-price').value = (cost / n).toFixed(6);
-            vcalc.basis = 'fleet'; vcalc.fleetN = n; if ($('vcalc-model')) $('vcalc-model').value = '';
+            const cost = Number(st.cost_total);
+            const carsRaw = Array.isArray(c.cars) ? c.cars : (c.cars && Array.isArray(c.cars.rows)) ? c.cars.rows : [];
+            const withVoice = carsRaw.filter(r => Number(r && r.voice_turns) > 0 && vinOf(r));
+            let exact = null;
+            if (cost > 0 && withVoice.length && LOCAL_PROXY && LOCAL_FLAGS.controller && withVoice.length <= 80) {
+                const btnA = $('vcalc-actual'); btnA.disabled = true;
+                try {
+                    if (withVoice.some(r => !voiceLog.has(voiceLogKey(vinOf(r))))) toast('info', 'جارٍ عدّ الأوامر المدفوعة في كل السيارات…');
+                    for (let i = 0; i < withVoice.length; i += 3) await Promise.all(withVoice.slice(i, i + 3).map(r => voiceLogGet(vinOf(r), { turns: r.voice_turns })));
+                    let billed = 0, complete = true;
+                    for (const r of withVoice) { const s = voiceLogSummary(voiceLog.get(voiceLogKey(vinOf(r))), r); if (!s.complete) { complete = false; break; } billed += s.billed; }
+                    if (complete && billed > 0) exact = billed;
+                } catch (e) { /* fall back to the loaded log below */ }
+                btnA.disabled = false;
+            }
+            let price, n, src;
+            if (exact) { price = cost / exact; n = exact; src = 'all'; }
+            else {
+                const paid = vcalcEvents().filter(e => e.billed && e.cost != null && e.cost >= 0);
+                if (!paid.length) { toast('info', 'لا توجد أوامر مدفوعة مسجّلة بعد — افتح تبويب التليمتري أولًا.'); return; }
+                price = paid.reduce((a, e) => a + e.cost, 0) / paid.length; n = paid.length; src = 'log';
+            }
+            $('vcalc-price').value = price.toFixed(6);
+            vcalc.basis = 'fleet'; vcalc.fleetN = n; vcalc.fleetSrc = src; if ($('vcalc-model')) $('vcalc-model').value = '';
             vcalcRender();
-            toast('success', `متوسط الأمر الفعلي $${(cost / n).toFixed(6)} (من ${n.toLocaleString('en-US')} أمر)`);
+            toast('success', `متوسط الأمر المدفوع الفعلي $${price.toFixed(6)} (${src === 'all' ? 'إجمالي التكلفة ÷ ' : 'من '}${n.toLocaleString('en-US')} أمر اتحسب فلوس)`);
         });
         vcalcSync();
     })();
@@ -3983,6 +4624,55 @@
         voice_30d:        { label: 'أوامر صوتية آخر 30 يوم',    help: 'الأوامر الصوتية خلال آخر 30 يوم.', icon: 'fa-microphone', color: 'purple' },
         cost_30d:         { label: 'تكلفة الصوت آخر 30 يوم',     help: 'تكلفة نموذج الذكاء الاصطناعي عن أوامر آخر 30 يوم. بالدولار وتحته بالريال القطري.', icon: 'fa-dollar-sign', color: 'orange' },
     };
+
+    // ---------- OpenRouter balance tile (the account that pays for voice) ----------
+    // The Worker asks thab-voice over a service binding; only numbers come back, never the key.
+    // Kept on `state` and `var` (not let/const) because loadController can run before this line is reached.
+    var OR_CREDITS_HELP = 'الرصيد المتبقي في حساب OpenRouter اللي بندفع منه الأوامر الصوتية';
+    var OR_CREDITS_REASON = {
+        no_key: 'لا يوجد مفتاح OpenRouter في إعدادات الصوت',
+        config_unavailable: 'تعذّر قراءة إعدادات الصوت',
+        unlimited_key_needs_management_key: 'مفتاح الصوت بلا حد، ورصيد الحساب يحتاج Management key من OpenRouter',
+        management_key_rejected: 'OpenRouter رفض مفتاح الإدارة',
+        key_rejected: 'OpenRouter رفض مفتاح الصوت',
+        credits_upstream: 'OpenRouter لم يرد على طلب الرصيد',
+        key_upstream: 'OpenRouter لم يرد على طلب المفتاح',
+        binding_missing: 'ربط خدمة الصوت غير موجود في الـ Worker',
+        rpc_failed: 'تعذّر الوصول إلى خدمة الصوت',
+        bad_reply: 'رد غير مفهوم من خدمة الصوت',
+        unknown: 'سبب غير معروف',
+    };
+    async function loadOpenrouterCredits(epoch) {
+        state.orCredits = { loading: true }; refreshOrCreditsTile();
+        let next;
+        try { next = { data: await localGet('/local/openrouter-credits') }; }
+        catch (err) { next = { error: errMsg(err) }; }
+        if (epoch !== sessionEpoch) return;
+        state.orCredits = next; refreshOrCreditsTile();
+    }
+    function refreshOrCreditsTile() {
+        const el = document.getElementById('ctl-or-credits');
+        if (el) el.outerHTML = orCreditsTile();
+    }
+    function orCreditsTile() {
+        const s = state.orCredits || { loading: true }, d = s.data;
+        const usd = v => '$' + (Number(v) || 0).toFixed(2);
+        let value, extra = '', cls = '', color = 'green';
+        if (s.loading) { value = '<span class="sub">جارِ التحميل…</span>'; color = 'blue'; }
+        else if (d && d.ok && d.remaining != null) {
+            const rem = Number(d.remaining);
+            value = moneyHtml(rem);
+            if (rem < 5) { cls = ' credit-crit'; color = 'red'; } else if (rem < 20) { cls = ' credit-low'; color = 'yellow'; }
+            const bought = d.source === 'key_limit' ? 'حد المفتاح' : 'المشترى';
+            extra = `${bought} <span class="n">${esc(usd(d.total_credits))}</span> · المستخدم <span class="n">${esc(usd(d.total_usage))}</span>`;
+        } else {
+            value = '<span class="stat-na">غير متاح</span>'; color = 'red';
+            const why = s.error ? s.error : (OR_CREDITS_REASON[d && d.reason] || OR_CREDITS_REASON.unknown);
+            const bad = d && [d.credits_status, d.key_status].find(x => x != null && x !== 200); const st = bad != null ? ` (HTTP ${Number(bad)})` : '';
+            extra = esc(why + st) + (d && d.total_usage != null ? ` · المستخدم <span class="n">${esc(usd(d.total_usage))}</span>` : '');
+        }
+        return `<div class="stat-card${cls}" id="ctl-or-credits" title="${esc(OR_CREDITS_HELP)}"><div class="stat-info"><h3>رصيد OpenRouter المتبقي</h3><p>${value}</p>${extra ? `<div class="stat-extra">${extra}</div>` : ''}</div><div class="stat-icon ${color}"><i class="fa-solid fa-wallet"></i></div></div>`;
+    }
 
     // =====================================================================
     //  Per-car page: everything we know about one car, keyed by its hardware id / VIN
@@ -4006,12 +4696,16 @@
     }
     function carRow(hw) { return wallpaperCar(hw) || state.merged.find(x => x.hw === hw) || null; }
     function vinOfHw(hw) { const m = /^VIN-(.+)$/i.exec(String(hw || '')); return m ? m[1] : ''; }
+    // The car view is a popup: one dialog reused by every car link on the site. Opening a second car
+    // only re-renders its body, and the hash keeps carrying the car so a refresh reopens the popup.
+    const carDialog = $('car-dialog');
     function openCar(hw) {
         if (!hw) return;
         const r = carRow(hw); carOpen = r ? r.hw : hw;
         document.body.classList.add('car-open');
         if (location.hash !== '#car=' + encodeURIComponent(carOpen)) history.pushState(null, '', '#car=' + encodeURIComponent(carOpen));
-        window.scrollTo({ top: 0 });
+        if (!carDialog.open) carDialog.showModal();
+        const scroller = carDialog.querySelector('.car-body'); if (scroller) scroller.scrollTop = 0;
         renderCarPage(carOpen);
         if (LOCAL_PROXY && LOCAL_FLAGS.controller && !state.ctlLoaded) loadController().then(() => carOpen && renderCarPage(carOpen));
         if (LOCAL_PROXY && !state.tslinkLoaded) loadTslink().then(() => { if (carOpen) { renderCarPage(carOpen); loadCarTslink(carOpen); } });
@@ -4021,9 +4715,12 @@
     }
     function closeCar() {
         carOpen = null; document.body.classList.remove('car-open');
+        if (carDialog.open) carDialog.close();   // fires 'close'; carOpen is already null so it stops here
         if (/^#car=/.test(location.hash)) history.pushState(null, '', location.pathname + location.search);
     }
     $('car-back').addEventListener('click', closeCar);
+    carDialog.addEventListener('close', () => { if (carOpen) closeCar(); });   // Esc and the browser's own close
+    carDialog.addEventListener('click', e => { if (e.target === carDialog) closeCar(); });   // click on the scrim
     $('car-copy').addEventListener('click', () => copyText(location.origin + location.pathname + '#car=' + encodeURIComponent(carOpen || '')));
     $('car-refresh').addEventListener('click', () => { if (!carOpen) return; carCache.voice.delete(carOpen); carCache.tslink.delete(carOpen); carCache.crashes.delete(carOpen); loadCarVoice(carOpen); loadCarTslink(carOpen); loadCarCrashes(carOpen); if (SESSION_TOKEN) loadAll(); });
     window.addEventListener('popstate', () => { const m = /^#car=(.+)$/.exec(location.hash); if (m) openCar(decodeURIComponent(m[1])); else if (carOpen) closeCar(); });
@@ -4033,8 +4730,11 @@
         if (carCache.voice.has(hw)) return;
         carCache.voice.set(hw, { loading: true });
         try {
-            const rows = await localPost('/local/controller/thab_admin_events', { p_limit: 5000, p_vin: vin, p_kind: 'voice', p_since_id: null });
-            carCache.voice.set(hw, { rows: Array.isArray(rows) ? rows : (rows && rows.rows) || [] });
+            // Through the shared paged loader: the RPC caps p_limit at 2000, so the old single p_limit: 5000 call
+            // silently truncated heavy cars. A refresh only asks for rows newer than the highest id already held.
+            const log = await voiceLogGet(vin, { refresh: true });
+            carCache.voice.set(hw, { rows: log.rows, log });
+            voiceBilledRefreshCells(voiceLogKey(vin));
         } catch (e) { carCache.voice.set(hw, { error: errMsg(e) }); }
         if (carOpen === hw) renderCarPage(hw);
     }
@@ -4065,7 +4765,7 @@
             const tick = (i === 0 || i === days.length - 1 || i % step === 0) ? esc(d.day.slice(5)) : '';
             return `<div class="daybar-cell" title="${esc(tip)}"><div class="daybar-val">${v ? esc(fmt ? fmt(v) : v) : ''}</div><div class="daybar-track"><div class="daybar-fill${v ? '' : ' empty'}" style="height:${pct}%"></div></div><div class="daybar-tick">${tick}</div></div>`;
         }).join('');
-        return `<div class="daybars" role="img" aria-label="${esc(label)} بالأيام"><div class="daybars-cap">الأعلى: <span class="num">${esc(fmt ? fmt(max) : max)}</span></div><div class="daybars-row" style="--n:${days.length}">${cells}</div></div>`;
+        return `<div class="daybars${days.length > 24 ? ' dense' : ''}" role="img" aria-label="${esc(label)} بالأيام"><div class="daybars-cap">الأعلى: <span class="num">${esc(fmt ? fmt(max) : max)}</span></div><div class="daybars-row" style="--n:${days.length}">${cells}</div></div>`;
     }
     function carSection(title, icon, body, wide) { return `<div class="car-section${wide ? ' wide' : ''}"><h3><i class="fa-solid ${icon}"></i>${esc(title)}</h3>${body}</div>`; }
     function renderCarPage(hw) {
@@ -4111,22 +4811,24 @@
             else if (v.error) body = `<div class="note" style="color:#fca5a5">${esc(v.error)}</div>`;
             else {
                 const rows = v.rows; const byDay = new Map();
-                for (const e of rows) { const day = String(e.at || e.received_at || '').slice(0, 10); if (!day) continue; if (!byDay.has(day)) byDay.set(day, { day, n: 0, ok: 0, bad: 0, cost: 0 }); const x = byDay.get(day); x.n++; if (e.outcome === 'ok') x.ok++; else x.bad++; x.cost += Number(e.cost_usd) || 0; }
+                for (const e of rows) { const day = qatarDayOf(e.at || e.received_at); if (!day) continue; if (!byDay.has(day)) byDay.set(day, { day, n: 0, ok: 0, bad: 0, cost: 0 }); const x = byDay.get(day); x.n++; if (e.outcome === 'ok') x.ok++; else x.bad++; x.cost += Number(e.cost_usd) || 0; }
                 const days = [...byDay.values()].sort((a, b) => a.day.localeCompare(b.day));
                 const filled = []; if (days.length) { let cur = new Date(days[0].day + 'T00:00:00Z'); const last = new Date(days[days.length - 1].day + 'T00:00:00Z'); while (cur <= last) { const k = cur.toISOString().slice(0, 10); filled.push(byDay.get(k) || { day: k, n: 0, ok: 0, bad: 0, cost: 0 }); cur = new Date(cur.getTime() + 86400000); } }
                 const tot = rows.length, ok = rows.filter(e => e.outcome === 'ok').length, cost = rows.reduce((a, e) => a + (Number(e.cost_usd) || 0), 0);
                 const last = rows.map(e => e.at || e.received_at).filter(Boolean).sort().at(-1);
                 const outcomes = {}; rows.forEach(e => { const k = e.outcome || '?'; outcomes[k] = (outcomes[k] || 0) + 1; });
                 const OUT = { ok: 'نُفّذ', unmatched: 'لم يُفهم', lowconf: 'ثقة منخفضة', unsupported: 'غير مدعوم', range: 'خارج النطاق', locked: 'مقفول' };
-                body = `<div class="car-apps" style="margin-bottom:10px"><div class="car-app"><b>إجمالي الأوامر</b><span class="ver">${esc(tot)}</span></div><div class="car-app"><b>نُفّذت</b><span class="ver">${esc(ok)}</span></div><div class="car-app"><b>لم تُفهم</b><span class="ver">${esc(tot - ok)}</span></div><div class="car-app"><b>التكلفة</b>${moneyHtml(cost)}</div><div class="car-app"><b>آخر أمر</b>${last ? timeCell(last) : '<span class="sub">—</span>'}</div></div>
-                    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">${Object.entries(outcomes).sort((a, b) => b[1] - a[1]).map(([k, n]) => `<span class="badge ${k === 'ok' ? 'ok' : 'warn'}">${esc(OUT[k] || k)}: ${esc(n)}</span>`).join('')}</div>
-                    <h4 style="margin:8px 0 4px;font-size:.85rem;color:var(--text-muted)">عدد الأوامر في اليوم</h4>${dayBars(filled.slice(-120), 'n', 'أمر')}
-                    <h4 style="margin:8px 0 4px;font-size:.85rem;color:var(--text-muted)">التكلفة في اليوم (دولار)</h4>${dayBars(filled.slice(-120), 'cost', 'دولار', x => '$' + Number(x).toFixed(3))}
-                    <details style="margin-top:8px"><summary class="sub">جدول الأيام (${days.length})</summary><div class="table-wrap"><table style="min-width:420px"><thead><tr><th>اليوم</th><th>أوامر</th><th>نُفّذ</th><th>لم يُفهم</th><th>التكلفة</th></tr></thead><tbody>${days.slice().reverse().map(x => `<tr><td>${num(x.day)}</td><td>${num(x.n)}</td><td>${num(x.ok)}</td><td>${num(x.bad)}</td><td>${moneyHtml(x.cost)}</td></tr>`).join('')}</tbody></table></div></details>
-                    <details style="margin-top:8px"><summary class="sub">آخر 50 أمرًا</summary><div class="table-wrap"><table style="min-width:520px"><thead><tr><th>الوقت</th><th>النتيجة</th><th>ما سُمع</th><th>أوامر نُفّذت</th><th>التكلفة</th></tr></thead><tbody>${rows.slice().sort((a, b) => String(b.at).localeCompare(String(a.at))).map(e => `<tr><td>${timeCell(e.at)}</td><td><span class="badge ${e.outcome === 'ok' ? 'ok' : 'warn'}">${esc(OUT[e.outcome] || e.outcome || '?')}</span></td><td>${esc(e.heard || '—')}</td><td>${num(e.actions_done != null ? `${e.actions_done}/${e.actions_requested != null ? e.actions_requested : '?'}` : '—')}</td><td>${moneyHtml(e.cost_usd)}</td></tr>`).join('')}</tbody></table></div></details>`;
+                const vCar = ctlCarByVin(vin), vSum = voiceLogSummary(v.log || { rows, capped: false }, vCar);
+                const vCover = vSum.complete ? '' : `<div class="vchart-note">السجل التفصيلي متاح من <span class="num">${esc(vSum.firstDay || '—')}</span>${vSum.missing ? ` — ${esc(intEn(vSum.missing))} أمر أقدم غير متاح بالتفصيل` : ''}؛ الأرقام هنا من السجل المتاح (الخادم يعيد آخر ${esc(intEn(VOICE_LOG_CAP))} أمر لكل سيارة).</div>`;
+                const stats = `<div class="car-apps car-stats"><div class="car-app"><b>إجمالي الأوامر</b><span class="ver">${esc(tot)}</span></div><div class="car-app" title="أوامر وصلت للموديل وحاسبتنا عليها OpenRouter (تكلفة > 0 أو توكنات > 0)"><b>اتحسبت فلوس</b><span class="ver">${esc(intEn(vSum.billed))}</span></div><div class="car-app"><b>نُفّذت</b><span class="ver">${esc(ok)}</span></div><div class="car-app"><b>لم تُفهم</b><span class="ver">${esc(tot - ok)}</span></div><div class="car-app"><b>التكلفة</b>${moneyHtml(cost)}</div><div class="car-app"><b>آخر أمر</b>${last ? timeCell(last) : '<span class="sub">—</span>'}</div></div>`;
+                const chips = `<div class="car-chips">${Object.entries(outcomes).sort((a, b) => b[1] - a[1]).map(([k, n]) => `<span class="badge ${k === 'ok' ? 'ok' : 'warn'}">${esc(OUT[k] || k)}: ${esc(n)}</span>`).join('')}</div>`;
+                const charts = `<div class="sub-card wide"><h4><i class="fa-solid fa-chart-column"></i> الرسوم اليومية</h4><div class="chart-duo"><div class="chart-box"><h5>عدد الأوامر في اليوم</h5>${dayBars(filled.slice(-120), 'n', 'أمر')}</div><div class="chart-box"><h5>التكلفة في اليوم (دولار)</h5>${dayBars(filled.slice(-120), 'cost', 'دولار', x => '$' + Number(x).toFixed(3))}</div></div></div>`;
+                const daysCard = `<div class="sub-card"><h4><i class="fa-solid fa-calendar-days"></i> جدول الأيام (${days.length})</h4><div class="table-wrap"><table style="min-width:420px"><thead><tr><th>اليوم</th><th>أوامر</th><th>نُفّذ</th><th>لم يُفهم</th><th>التكلفة</th></tr></thead><tbody>${days.slice().reverse().map(x => `<tr><td>${num(x.day)}</td><td>${num(x.n)}</td><td>${num(x.ok)}</td><td>${num(x.bad)}</td><td>${moneyHtml(x.cost)}</td></tr>`).join('')}</tbody></table></div></div>`;
+                const lastCard = `<div class="sub-card"><h4><i class="fa-solid fa-list-ul"></i> آخر 50 أمرًا</h4><div class="table-wrap"><table style="min-width:520px"><thead><tr><th>الوقت</th><th>النتيجة</th><th>ما سُمع</th><th>أوامر نُفّذت</th><th>التكلفة</th></tr></thead><tbody>${rows.slice().sort((a, b) => String(b.at).localeCompare(String(a.at))).map(e => `<tr><td>${timeCell(e.at)}</td><td><span class="badge ${e.outcome === 'ok' ? 'ok' : 'warn'}">${esc(OUT[e.outcome] || e.outcome || '?')}</span></td><td>${esc(e.heard || '—')}</td><td>${num(e.actions_done != null ? `${e.actions_done}/${e.actions_requested != null ? e.actions_requested : '?'}` : '—')}</td><td>${moneyHtml(e.cost_usd)}</td></tr>`).join('')}</tbody></table></div></div>`;
+                body = vCover + `<div class="toolbar" style="margin-bottom:8px"><button type="button" class="btn sm" data-voice-chart="${esc(vCar ? vinOf(vCar) : vin)}"><i class="fa-solid fa-chart-column"></i> رسم الاستهلاك اليومي منذ التفعيل</button></div>` + stats + chips + `<div class="sub-grid">${charts}${daysCard}${lastCard}</div>`;
             }
             const owner = crashRows(state.ctl?.cars).find(c => vinOf(c).toLowerCase() === vin.toLowerCase());
-            if (vin) body += `<h4>ملاحظة المالك</h4><p>${esc(owner?.note || 'لا توجد ملاحظة')}</p><button type="button" class="btn sm" data-owner-note="${esc(vin)}" ${LOCAL_PROXY && LOCAL_FLAGS.controller ? '' : 'disabled'}>تعديل ملاحظة المالك</button>`;
+            if (vin) body += `<div class="sub-grid" style="margin-top:12px"><div class="sub-card wide"><h4><i class="fa-solid fa-note-sticky"></i> ملاحظة المالك</h4><p class="owner-note">${esc(owner?.note || 'لا توجد ملاحظة')}</p><button type="button" class="btn sm" data-owner-note="${esc(vin)}" ${LOCAL_PROXY && LOCAL_FLAGS.controller ? '' : 'disabled'}>تعديل ملاحظة المالك</button></div></div>`;
             S.push(carSection('الأوامر الصوتية (ذبذبة داشبورد)', 'fa-microphone', body, true));
         }
         if (r) {
