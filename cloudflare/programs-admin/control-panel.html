@@ -46,7 +46,7 @@
             --font-family: 'Cairo', 'Segoe UI', Tahoma, sans-serif;
             --mono: 'Rajdhani', 'Consolas', 'Courier New', monospace;
         }
-        * { box-sizing: border-box; margin: 0; padding: 0; }
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
         html { overflow-x: hidden; }
         body {
             background-color: var(--bg-color);
@@ -131,7 +131,7 @@
         .subtab { border: 1px solid var(--panel-border); background: rgba(255,255,255,.03); color: var(--text-muted); border-radius: 10px; padding: 6px 12px; cursor: pointer; font: inherit; font-size: .84rem; }
         .subtab:hover { color: var(--text-main); border-color: var(--panel-border-hover); }
         .subtab.active { color: #1a1006; background: linear-gradient(135deg, var(--primary), var(--accent)); border-color: transparent; font-weight: 700; }
-        .sub-panel { display: none; } .sub-panel.active { display: block; }
+        .sub-panel { display: none; min-width: 0; max-width: 100%; } .sub-panel.active { display: block; }
         .app-h { font-size: 1rem; margin: 0 0 10px; }
         .conn { font-size: .78rem; font-weight: 600; padding: 2px 10px; border-radius: 10px; margin-inline-start: 10px; vertical-align: middle; border: 1px solid transparent; }
         .conn.ok { color: var(--success); background: rgba(34,197,94,.12); border-color: rgba(34,197,94,.3); }
@@ -166,7 +166,7 @@
 
         .toggle { display: inline-flex; align-items: center; gap: 8px; font-size: .85rem; color: var(--text-muted); cursor: pointer; user-select: none; }
         .toggle input { accent-color: var(--primary); width: 16px; height: 16px; cursor: pointer; }
-        .vcalc-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; }
+        .vcalc-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(180px, 100%), 1fr)); gap: 12px; }
         .vcalc-grid label { display: flex; flex-direction: column; gap: 6px; font-size: .85rem; color: var(--text-muted); }
         /* No native spinner arrows on number fields (owner, 2026-09-15). */
         input[type=number] { -moz-appearance: textfield; appearance: textfield; }
@@ -335,15 +335,16 @@
 
         /* ---------- Stats ---------- */
         .stats-grid {
-            display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 14px; margin-bottom: 26px;
+            display: grid; grid-template-columns: repeat(auto-fit, minmax(min(190px, 100%), 1fr)); gap: 14px; margin-bottom: 26px;
         }
         .stat-card {
             background: var(--panel-bg); border: 1px solid var(--panel-border); border-radius: 18px; padding: 16px 18px;
             display: flex; align-items: center; justify-content: space-between; gap: 10px;
-            position: relative; overflow: hidden; backdrop-filter: blur(16px); transition: all .25s ease; cursor: default;
+            position: relative; min-width: 0; overflow: hidden; backdrop-filter: blur(16px); transition: all .25s ease; cursor: default;
         }
         .stat-card.clickable { cursor: pointer; }
         .stat-card:hover { border-color: var(--panel-border-hover); transform: translateY(-2px); box-shadow: 0 10px 25px -10px rgba(0,0,0,.5); }
+        .stat-info { min-width: 0; overflow-wrap: anywhere; }
         .stat-info h3 { font-size: .8rem; color: var(--text-muted); font-weight: 500; margin-bottom: 4px; }
         .stat-info p { font-size: 1.8rem; font-weight: 700; color: var(--text-main); font-family: var(--mono); direction: ltr; unicode-bidi: isolate; text-align: right; }
         .stat-info p.small { font-size: .95rem; line-height: 1.4; font-family: var(--mono); }
@@ -360,9 +361,10 @@
         /* ---------- Cards / tabs ---------- */
         .card {
             background: var(--panel-bg); border: 1px solid var(--panel-border); border-radius: 22px; padding: 22px;
-            backdrop-filter: blur(16px); box-shadow: 0 4px 30px rgba(0,0,0,.2); margin-bottom: 22px;
+            min-width: 0; max-width: 100%; backdrop-filter: blur(16px); box-shadow: 0 4px 30px rgba(0,0,0,.2); margin-bottom: 22px;
         }
-        .card-title { font-size: 1.1rem; font-weight: 700; margin-bottom: 16px; display: flex; align-items: center; gap: 10px; color: #fff; border-bottom: 1px solid rgba(255,255,255,.05); padding-bottom: 10px; flex-wrap: wrap; }
+        .card-title { font-size: 1.1rem; font-weight: 700; margin-bottom: 16px; display: flex; align-items: center; gap: 10px; min-width: 0; max-width: 100%; color: #fff; border-bottom: 1px solid rgba(255,255,255,.05); padding-bottom: 10px; flex-wrap: wrap; }
+        .card-title > *, .card-head > *, .group-head > *, .row-actions > *, #store-secret-row > *, .control-row > * { min-width: 0; max-width: 100%; }
         .card-title i { color: var(--primary); }
         .card-title .spacer { flex: 1; }
 
@@ -376,14 +378,15 @@
         .tab:disabled { opacity: .4; cursor: not-allowed; }
         .tab .count { font-family: var(--mono); font-size: .8rem; background: rgba(0,0,0,.25); padding: 1px 7px; border-radius: 8px; direction: ltr; }
         .tab.active .count { background: rgba(0,0,0,.18); }
-        .tab-panel { display: none; }
+        .tab-panel { display: none; min-width: 0; max-width: 100%; }
         .tab-panel.active { display: block; }
 
         /* ---------- Filters ---------- */
-        .toolbar { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-bottom: 14px; }
-        .toolbar .search { flex: 1 1 260px; position: relative; }
+        .toolbar { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; min-width: 0; max-width: 100%; margin-bottom: 14px; }
+        .toolbar > *, .toolbar .search { min-width: 0; max-width: 100%; }
+        .toolbar .search { flex: 1 1 240px; position: relative; }
         .toolbar .search i { position: absolute; right: 13px; top: 50%; transform: translateY(-50%); color: var(--text-muted); }
-        .toolbar .search input { padding-right: 38px; }
+        .toolbar .search input, .toolbar > input[type="search"] { width: 100%; min-width: 0; padding-right: 38px; }
         .chips { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 14px; }
         .chip {
             background: rgba(255,255,255,.04); border: 1px solid var(--panel-border); color: var(--text-muted); cursor: pointer;
@@ -395,7 +398,7 @@
         .chip .n { font-family: var(--mono); direction: ltr; font-size: .8rem; opacity: .85; }
 
         /* ---------- Tables ---------- */
-        .table-wrap { overflow-x: auto; border-radius: 14px; border: 1px solid var(--panel-border); }
+        .table-wrap { width: 100%; min-width: 0; max-width: 100%; overflow-x: auto; border-radius: 14px; border: 1px solid var(--panel-border); }
         table { width: 100%; border-collapse: collapse; font-size: .88rem; min-width: 900px; }
         thead th {
             text-align: right; padding: 11px 12px; font-size: .78rem; font-weight: 700; color: var(--text-muted);
@@ -434,8 +437,8 @@
         .expander:hover { color: var(--primary); background: rgba(255,255,255,.05); }
         .actions { display: flex; gap: 5px; flex-wrap: nowrap; }
 
-        .detail-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px; }
-        .detail-box { background: rgba(255,255,255,.03); border: 1px solid var(--panel-border); border-radius: 14px; padding: 12px 14px; }
+        .detail-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(280px, 100%), 1fr)); gap: 14px; min-width: 0; max-width: 100%; }
+        .detail-box { background: rgba(255,255,255,.03); border: 1px solid var(--panel-border); border-radius: 14px; padding: 12px 14px; min-width: 0; max-width: 100%; }
         .detail-box h4 { font-size: .85rem; color: var(--accent); margin-bottom: 8px; display: flex; align-items: center; gap: 8px; }
         .detail-box h4 i { font-size: .8rem; }
         .kv { display: grid; grid-template-columns: auto 1fr; gap: 3px 12px; font-size: .82rem; }
@@ -459,7 +462,7 @@
         details.crash-item summary::before { content: '\25B8'; color: var(--text-muted); font-size: .8rem; }
         details.crash-item[open] summary::before { content: '\25BE'; }
         .crash-head { font-family: var(--mono); direction: ltr; unicode-bidi: isolate; color: var(--text-muted); font-size: .78rem; }
-        .crash-first { color: #fca5a5; font-family: 'Consolas', monospace; direction: ltr; unicode-bidi: isolate; font-size: .76rem; flex: 1; min-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .crash-first { color: #fca5a5; font-family: 'Consolas', monospace; direction: ltr; unicode-bidi: isolate; font-size: .76rem; flex: 1 1 200px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
         .group { border: 1px solid var(--panel-border); border-radius: 14px; padding: 12px 16px; margin-bottom: 10px; background: rgba(255,255,255,.02); }
         .group-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 6px; }
@@ -513,7 +516,7 @@
         }
         /* Header, bounded tables and keyboard accessibility. */
         [hidden] { display: none !important; }
-        .container, .card, .tab-panel, .detail-box, .logo-text, .header-tools { min-width: 0; max-width: 100%; }
+        .container, main, .card, .tab-panel, .sub-panel, .panel-card, .sub-card, .detail-box, .logo-text, .header-tools { min-width: 0; max-width: 100%; }
         .table-wrap { width: 100%; max-width: 100%; overscroll-behavior-x: contain; }
         .detail-grid { grid-template-columns: repeat(auto-fit, minmax(min(280px, 100%), 1fr)); }
         #brand-home { display: flex; flex-shrink: 0; padding: 4px 8px; border-radius: 12px;  }
@@ -524,7 +527,7 @@
         /* Opens from the bell at the far inline-end of the header and grows INTO the page, capped to the viewport,
            so nothing is ever clipped by the header or the window edge. */
         /* Fixed to the viewport and positioned by JS under the bell, clamped so it never leaves the screen. */
-        #notif-history { position: fixed; top: 64px; left: 12px; width: min(420px, calc(100vw - 24px)); max-height: min(520px, calc(100vh - 80px)); overflow: auto; background: #211a12; border: 1px solid var(--panel-border-hover); border-radius: 14px; padding: 14px; z-index: 60; box-shadow: 0 16px 40px #0008; overflow-wrap: anywhere; }
+        #notif-history { position: fixed; top: 64px; left: 12px; width: min(420px, calc(100dvw - 24px)); max-height: min(520px, calc(100dvh - 80px)); overflow: auto; background: #211a12; border: 1px solid var(--panel-border-hover); border-radius: 14px; padding: 14px; z-index: 60; box-shadow: 0 16px 40px #0008; overflow-wrap: anywhere; }
         header, .header-tools, #notif-wrap { overflow: visible; }
         .notif-item { display: block; width: 100%; text-align: start; margin-top: 8px; white-space: normal; overflow-wrap: anywhere; }
         .usage-source { max-width: 260px; white-space: normal; }
@@ -537,7 +540,7 @@
            Any car link anywhere opens the same popup, the hash still carries the car so a refresh or a
            shared link reopens it, and renderCarPage stays the renderer - only the container moved. */
         body.car-open { overflow: hidden; }
-        #car-dialog { margin: auto; width: min(1100px, 94vw); max-height: 90vh; padding: 0; background: #1c160e; color: var(--text-main); border: 1px solid var(--panel-border-hover); border-radius: 18px; overflow: hidden; }
+        #car-dialog { margin: auto; width: min(1100px, calc(100% - 24px)); max-width: calc(100% - 24px); max-height: 90vh; padding: 0; background: #1c160e; color: var(--text-main); border: 1px solid var(--panel-border-hover); border-radius: 18px; overflow: hidden; }
         #car-dialog::backdrop { background: #000c; backdrop-filter: blur(4px); }
         #page-car { display: flex; flex-direction: column; max-height: 90vh; min-width: 0; }
         .car-head { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 14px 18px; margin: 0; background: rgba(0,0,0,.25); border-bottom: 1px solid var(--panel-border); }
@@ -545,11 +548,11 @@
         .car-head h2 { font-size: 1.2rem; margin: 0; }
         .car-head .hw { font-family: var(--mono); direction: ltr; unicode-bidi: isolate; color: var(--text-muted); font-size: .85rem; text-align: start; }
         .car-close { width: 38px; height: 38px; padding: 0; justify-content: center; border-radius: 50%; font-size: 1.05rem; flex: 0 0 auto; }
-        .car-body { padding: 16px 18px 20px; overflow: auto; overscroll-behavior: contain; min-height: 0; }
-        .car-sections { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(420px, 100%), 1fr)); gap: 14px; align-items: start; }
+        .car-body { padding: 16px 18px 20px; overflow: auto; overscroll-behavior: contain; min-width: 0; min-height: 0; }
+        .car-sections { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(420px, 100%), 1fr)); gap: 14px; min-width: 0; max-width: 100%; align-items: start; }
         /* A heading with a table (or a chart) under it is a card, never a bare line of text. */
-        .sub-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(320px, 100%), 1fr)); gap: 12px; align-items: start; }
-        .sub-card { background: rgba(0,0,0,.18); border: 1px solid var(--panel-border); border-radius: 14px; padding: 12px 14px; min-width: 0; }
+        .sub-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(320px, 100%), 1fr)); gap: 12px; min-width: 0; max-width: 100%; align-items: start; }
+        .sub-card { background: rgba(0,0,0,.18); border: 1px solid var(--panel-border); border-radius: 14px; padding: 12px 14px; min-width: 0; max-width: 100%; overflow-wrap: anywhere; }
         .sub-card.wide { grid-column: 1 / -1; }
         .sub-card > h4 { font-size: .86rem; color: var(--accent); margin: 0 0 10px; display: flex; align-items: center; gap: 8px; }
         .sub-card > h4 i { font-size: .8rem; color: var(--primary); }
@@ -557,28 +560,28 @@
         .owner-note { font-size: .88rem; line-height: 1.7; margin: 0; overflow-wrap: anywhere; }
         .car-stats { margin-bottom: 12px; }
         .car-chips { display: flex; gap: 6px; flex-wrap: wrap; margin: 0 0 12px; }
-        .chart-duo { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(320px, 100%), 1fr)); gap: 14px; }
-        .chart-box { min-width: 0; background: rgba(255,255,255,.03); border: 1px solid var(--panel-border); border-radius: 12px; padding: 10px 12px; }
+        .chart-duo { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(320px, 100%), 1fr)); gap: 14px; min-width: 0; max-width: 100%; }
+        .chart-box { min-width: 0; max-width: 100%; background: rgba(255,255,255,.03); border: 1px solid var(--panel-border); border-radius: 12px; padding: 10px 12px; }
         .chart-box > h5 { font-size: .8rem; font-weight: 700; color: var(--text-muted); margin: 0 0 8px; }
         /* Same treatment for the panels (controller, TS Link, store, Leo): heading + table in one card. */
-        .panel-card { background: var(--panel-bg); border: 1px solid var(--panel-border); border-radius: 18px; padding: 14px 16px; min-width: 0; margin: 0 0 14px; }
+        .panel-card { background: var(--panel-bg); border: 1px solid var(--panel-border); border-radius: 18px; padding: 14px 16px; min-width: 0; max-width: 100%; overflow-wrap: anywhere; margin: 0 0 14px; }
         .panel-card > h3, .panel-card > .ctl-h, .panel-card > .card-title { margin: 0 0 10px; }
         .panel-card > h3 > i, .panel-card > .ctl-h > i { color: var(--primary); margin-inline-end: 4px; }
         .panel-card > .table-wrap:last-child, .panel-card > .note:last-child, .panel-card > .chips:last-child { margin-bottom: 0; }
         .panel-card > .note { margin-top: 10px; }
-        .car-section { background: var(--panel-bg); border: 1px solid var(--panel-border); border-radius: 18px; padding: 14px 16px; min-width: 0; }
+        .car-section { background: var(--panel-bg); border: 1px solid var(--panel-border); border-radius: 18px; padding: 14px 16px; min-width: 0; max-width: 100%; overflow-wrap: anywhere; }
         .car-section.wide { grid-column: 1 / -1; }
         .car-section h3 { font-size: .95rem; margin: 0 0 10px; display: flex; align-items: center; gap: 8px; }
         .car-section h3 i { color: var(--primary); }
         .car-section .kv { font-size: .86rem; }
-        .car-apps { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 8px; }
-        .car-app { background: rgba(255,255,255,.04); border: 1px solid var(--panel-border); border-radius: 12px; padding: 8px 10px; }
+        .car-apps { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(180px, 100%), 1fr)); gap: 8px; min-width: 0; }
+        .car-app { background: rgba(255,255,255,.04); border: 1px solid var(--panel-border); border-radius: 12px; padding: 8px 10px; min-width: 0; overflow-wrap: anywhere; }
         .car-app b { display: block; font-size: .8rem; color: var(--text-muted); margin-bottom: 4px; }
         .car-app .ver { font-family: var(--mono); direction: ltr; unicode-bidi: isolate; font-size: .9rem; }
         .bars { display: block; width: 100%; height: 170px; direction: ltr; }
         /* Day bars (voice usage / cost): HTML, never stretched. Bars grow from the bottom of a fixed
            track; the cell width is capped so a handful of days does not turn into slabs. */
-        .daybars { direction: ltr; padding: 6px 4px 2px; min-width: 0; }
+        .daybars { direction: ltr; padding: 6px 4px 2px; min-width: 0; max-width: 100%; }
         .daybars-cap { font-size: .78rem; color: var(--text-muted); margin: 0 4px 6px; direction: rtl; text-align: right; }
         /* Two fixes the owner asked for (2026-09-15):
            1) a handful of days used to hug the inline start of a full-width card with a wide empty gap -
@@ -586,7 +589,7 @@
            2) overflow-y is pinned to hidden. Left implicit it computes to "auto" next to overflow-x, and
               the 8px horizontal scrollbar tipped the row into a vertical overflow - that was the thin
               arrowed strip that appeared on the far side of the chart with nothing to scroll. */
-        .daybars-row { display: flex; align-items: flex-end; gap: 6px; overflow-x: auto; overflow-y: hidden; padding-bottom: 2px; justify-content: center; justify-content: safe center; scrollbar-width: thin; scrollbar-color: rgba(251,191,36,.45) rgba(255,255,255,.05); }
+        .daybars-row { display: flex; align-items: flex-end; gap: 6px; min-width: 0; max-width: 100%; overflow-x: auto; overflow-y: hidden; padding-bottom: 2px; justify-content: center; justify-content: safe center; scrollbar-width: thin; scrollbar-color: rgba(251,191,36,.45) rgba(255,255,255,.05); }
         .daybars-row::-webkit-scrollbar { height: 8px; width: 0; }
         .daybars-row::-webkit-scrollbar-track { background: rgba(255,255,255,.05); border-radius: 8px; }
         .daybars-row::-webkit-scrollbar-thumb { background: rgba(251,191,36,.45); border-radius: 8px; }
@@ -632,7 +635,7 @@
         .stat-extra .n { font-family: var(--mono); direction: ltr; unicode-bidi: isolate; }
         .car-type { display: block; font-weight: 600; }
         .car-type + .sub { display: block; }
-        pre.report { direction: ltr; text-align: left; white-space: pre-wrap; font-family: var(--mono); font-size: .74rem; background: rgba(0,0,0,.25); padding: 10px; border-radius: 10px; max-height: 360px; overflow: auto; }
+        pre.report { direction: ltr; text-align: left; white-space: pre-wrap; overflow-wrap: anywhere; font-family: var(--mono); font-size: .74rem; background: rgba(0,0,0,.25); padding: 10px; border-radius: 10px; max-width: 100%; max-height: 360px; overflow: auto; }
         #controller-settings { display: grid; gap: 14px; margin-top: 16px; }
         #controller-settings fieldset { display: grid; gap: 12px; min-width: 0; }
         #controller-settings label { display: flex; flex-direction: column; gap: 6px; }
@@ -664,8 +667,9 @@
         .wp-queue { max-height:300px; overflow:auto; } .wp-queue-row { padding:10px; border-bottom:1px solid var(--panel-border); overflow-wrap:anywhere; }
         .wp-queue-row progress { display:block; width:100%; accent-color:var(--primary); }
         .wp-pagination { justify-content:center; margin-top:18px; }
-        .wp-dialog { margin:auto; width:min(820px,94vw); max-height:88vh; overflow:auto; background:#1c160e; color:var(--text-main); border:1px solid var(--panel-border-hover); border-radius:18px; padding:20px; }
+        .wp-dialog { margin:auto; width:min(820px,calc(100% - 24px)); max-width:calc(100% - 24px); max-height:88vh; overflow:auto; background:#1c160e; color:var(--text-main); border:1px solid var(--panel-border-hover); border-radius:18px; padding:20px; }
         .wp-dialog::backdrop { background:#000b; backdrop-filter:blur(4px); }
+        .wp-dialog > input[type=search] { width:100%; min-width:0; max-width:100%; }
         .wp-car-list { max-height:50vh; overflow:auto; margin:14px 0; }
         .wp-car-option { display:flex; gap:10px; padding:10px; border-bottom:1px solid var(--panel-border); align-items:center; cursor:pointer; }
         .wp-car-option input { accent-color:var(--primary); width:18px; height:18px; }
@@ -2983,7 +2987,7 @@
         if (!strip || strip.dataset.listKey !== key) {
             strip = document.createElement('div'); strip.className = 'toolbar'; strip.dir = 'rtl'; strip.dataset.listKey = key;
             strip.style.cssText = 'display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:10px 0';
-            strip.innerHTML = `${search ? '<input type="search" placeholder="بحث…" aria-label="بحث في القائمة" style="min-width:180px;flex:1">' : ''}<button type="button" class="btn sm" data-prev>‹ السابق</button><span class="sub" data-page aria-live="polite"></span><button type="button" class="btn sm" data-next>التالي ›</button><span class="num sub" data-count></span>`;
+            strip.innerHTML = `${search ? '<input type="search" placeholder="بحث…" aria-label="بحث في القائمة" style="min-width:0;flex:1 1 240px;width:100%">' : ''}<button type="button" class="btn sm" data-prev>‹ السابق</button><span class="sub" data-page aria-live="polite"></span><button type="button" class="btn sm" data-next>التالي ›</button><span class="num sub" data-count></span>`;
             if (inside) host.prepend(strip); else anchor.before(strip);
         }
         const input = strip.querySelector('input');
@@ -4148,7 +4152,7 @@
                 const icon = APP_ICONS[k] ? `<img class="tab-icon" src="${APP_ICONS[k]}" alt="" style="width:28px;height:28px">` : '<i class="fa-solid fa-cube"></i>';
                 const cur = first ? `<span class="badge info">${esc(first['الإصدار'] || '')}</span> <span class="sub" style="display:inline">${esc(first['المصدر'] || '')}</span>` : '<span class="sub">لا إصدار معروف</span>';
                 const link = first && first['الرابط'] ? ` <a href="${esc(first['الرابط'])}" target="_blank" rel="noopener" class="num" style="color:var(--accent);font-size:.78rem">تنزيل</a>` : '';
-                return `<div class="card" style="margin-bottom:10px;display:flex;gap:12px;align-items:center;flex-wrap:wrap"><div style="display:flex;gap:8px;align-items:center;min-width:180px">${icon}<strong>${esc(labels[k] || k)}</strong></div><div>${cur}${link}</div></div>`;
+                return `<div class="card" style="margin-bottom:10px;display:flex;gap:12px;align-items:center;flex-wrap:wrap"><div style="display:flex;gap:8px;align-items:center;min-width:0;flex:1 1 180px;overflow-wrap:anywhere">${icon}<strong>${esc(labels[k] || k)}</strong></div><div style="min-width:0;overflow-wrap:anywhere">${cur}${link}</div></div>`;
             }).join('');
         }
         // crashes → per app
