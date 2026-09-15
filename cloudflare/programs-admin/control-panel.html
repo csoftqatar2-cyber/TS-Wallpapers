@@ -164,6 +164,12 @@
 
         .toggle { display: inline-flex; align-items: center; gap: 8px; font-size: .85rem; color: var(--text-muted); cursor: pointer; user-select: none; }
         .toggle input { accent-color: var(--primary); width: 16px; height: 16px; cursor: pointer; }
+        .vcalc-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; }
+        .vcalc-grid label { display: flex; flex-direction: column; gap: 6px; font-size: .85rem; color: var(--text-muted); }
+        .vcalc-grid input { width: 100%; background: rgba(0,0,0,.35); border: 1px solid var(--panel-border); color: var(--text-main); padding: 10px 14px; border-radius: 12px; font-family: var(--mono); font-size: 1.05rem; direction: ltr; text-align: right; }
+        #vcalc-body td { font-family: var(--mono); direction: ltr; unicode-bidi: isolate; text-align: right; }
+        #vcalc-body td:first-child { font-family: inherit; direction: rtl; }
+        #vcalc-body tr.total td { color: var(--primary); font-weight: 700; }
 
         /* ---------- Inputs ---------- */
         input[type=text], input[type=password], input[type=search], select {
@@ -520,6 +526,23 @@
             #notif-history { padding: 12px; }
             pre.crash, pre.report { font-size: .72rem; }
         }
+        /* Shared control sizing and wrapping, including dynamically rendered rows. */
+        .btn, .chip, .subtab, .tab {
+            min-height: 40px; max-width: 100%; line-height: 1.5;
+            vertical-align: middle; justify-content: center; overflow-wrap: anywhere;
+        }
+        .subtab { display: inline-flex; align-items: center; gap: 6px; }
+        .control-row { display: flex; gap: 6px; }
+        .control-row, .actions, .chips, .subtabs, .notif-state, .wp-types { align-items: center; flex-wrap: wrap; }
+        .toolbar, .control-row, .chips, .actions, .car-head { min-width: 0; max-width: 100%; }
+        .toolbar > *, .control-row > *, .car-head > *, .card-title > * { max-width: 100%; }
+        .toolbar > .search, .control-row > div { min-width: 0; }
+        .toolbar > .note, .toolbar > .sub, .control-row > strong { overflow-wrap: anywhere; }
+        .wp-form-grid { align-items: end; }
+        .wp-form-grid > .btn, #controller-settings fieldset > .btn { min-height: 46px; }
+        .car-sections { grid-template-columns: repeat(auto-fit, minmax(min(340px, 100%), 1fr)); }
+        #controller-settings fieldset:has(#fleet-fuel-price) { grid-template-columns: repeat(auto-fit, minmax(min(180px, 100%), 1fr)); }
+        #controller-settings .toolbar { margin-bottom: 0; }
     </style>
 </head>
 <body>
@@ -619,8 +642,8 @@
                 <details class="group" open><summary class="card-title">رفع خلفيات جديدة</summary>
                     <form id="wp-upload-form">
                         <fieldset id="wp-upload-fields" class="wp-form-grid">
-                            <label id="wp-mode-label">١ — نوع العربية (وضع التشغيل)<select id="wp-target-mode"><option value="">كل الأوضاع — المكتبة المشتركة</option><option value="leopard">Leopard</option><option value="denza">Denza</option><option value="icar03t">ICAR 03T</option><option value="fse">Leopard (FSE)</option><option value="normal">Others</option><option value="lynkco">Lynk and Co</option><option value="gwm">GWM</option><option value="jetour">Jetour</option></select></label>
-                            <label>٢ — وجهة التسليم داخل العربية<select id="wp-channel"></select></label>
+                            <label id="wp-mode-label">1 — نوع العربية (وضع التشغيل)<select id="wp-target-mode"><option value="">كل الأوضاع — المكتبة المشتركة</option><option value="leopard">Leopard</option><option value="denza">Denza</option><option value="icar03t">ICAR 03T</option><option value="fse">Leopard (FSE)</option><option value="normal">Others</option><option value="lynkco">Lynk and Co</option><option value="gwm">GWM</option><option value="jetour">Jetour</option></select></label>
+                            <label>2 — وجهة التسليم داخل العربية<select id="wp-channel"></select></label>
                             <label>من يرى الخلفية؟<select id="wp-target"><option value="global">عام</option><option value="private">عربية محددة</option></select></label>
                             <p id="wp-scope-note" class="note wp-wide"></p>
                             <div id="wp-car-fields" class="wp-wide" hidden><label for="wp-car-search">ابحث بالاسم أو الكود أو المعرّف</label><input type="search" id="wp-car-search"><select id="wp-car-select" aria-label="السيارة المستهدفة"></select><label for="wp-custom-hw">أو معرّف العتاد يدويًا</label><input type="text" id="wp-custom-hw" class="num"><label for="wp-qr-file">قراءة معرّف السيارة من صورة QR</label><input type="file" id="wp-qr-file" accept="image/*"><p class="note" id="wp-qr-result" role="status"></p></div>
@@ -656,6 +679,7 @@
                     <span class="note" id="dev-count-note"></span>
                 </div>
                 <div class="chips" id="dev-chips"></div>
+                <div class="chips" id="dev-type-chips" style="margin-top:-4px"></div>
                 <div class="table-wrap">
                     <table id="dev-table">
                         <thead>
@@ -758,7 +782,7 @@
                     <div class="stats-grid" id="ctl-stats"></div>
                     <h3 class="ctl-h">السيارات</h3><div class="table-wrap"><table style="min-width:800px;"><thead id="ctl-cars-head"></thead><tbody id="ctl-cars-body"></tbody></table></div>
                     <h3 class="ctl-h">سجل الأوامر <span class="sub" style="display:inline">(آخر 200)</span></h3>
-                    <div id="ctl-kinds" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;"></div>
+                    <div id="ctl-kinds" class="chips" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;"></div>
                     <div class="table-wrap"><table style="min-width:800px;"><thead id="ctl-events-head"></thead><tbody id="ctl-events-body"></tbody></table></div>
                     <h3 class="ctl-h">استعمال المساعد الصوتي لكل سيارة/يوم (من سجل الأوامر)</h3>
                     <div class="table-wrap"><table style="min-width:500px;"><thead><tr><th>VIN</th><th>اليوم</th><th>أوامر</th></tr></thead><tbody id="ctl-voice-body"></tbody></table></div>
@@ -777,7 +801,7 @@
                     <div id="secret-pop" hidden>
                         <label for="secret-input" style="font-size:.82rem; display:block; margin-bottom:6px;">سر أدمن الستور (لا يُحفظ)</label>
                         <input type="password" id="secret-input" autocomplete="off">
-                        <div style="display:flex; gap:6px; margin-top:8px;">
+                        <div class="control-row" style="display:flex; gap:6px; margin-top:8px;">
                             <button class="btn primary sm" type="button" id="secret-apply"><i class="fa-solid fa-check"></i> تطبيق</button>
                             <button class="btn sm" type="button" id="secret-clear"><i class="fa-solid fa-eraser"></i> مسح</button>
                         </div>
@@ -843,6 +867,27 @@
                         <tbody id="voice-body"></tbody>
                     </table>
                 </div>
+
+                <!-- Cost calculator: cars × daily commands × price per command, in USD and QAR. Client-side only. -->
+                <section class="car-section" id="vcalc" style="margin-top:18px;">
+                    <h3><i class="fa-solid fa-calculator"></i> حاسبة تكلفة الأوامر الصوتية</h3>
+                    <div class="vcalc-grid">
+                        <label><span>عدد السيارات</span><input type="number" id="vcalc-cars" min="0" step="1" value="100" inputmode="numeric"></label>
+                        <label><span>أوامر يومية لكل سيارة</span><input type="number" id="vcalc-daily" min="0" step="1" value="10" inputmode="numeric"></label>
+                        <label><span>سعر الأمر الواحد (دولار)</span><input type="number" id="vcalc-price" min="0" step="any" value="0.001" inputmode="decimal"></label>
+                    </div>
+                    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:10px 0 12px;">
+                        <button class="btn sm" type="button" id="vcalc-actual"><i class="fa-solid fa-chart-line"></i> استخدم متوسط التكلفة الفعلي</button>
+                        <span class="note" id="vcalc-hint"></span>
+                    </div>
+                    <div class="table-wrap">
+                        <table style="min-width:460px;">
+                            <thead><tr><th>المدة</th><th>عدد الأوامر</th><th>بالدولار</th><th>بالريال القطري</th></tr></thead>
+                            <tbody id="vcalc-body"></tbody>
+                        </table>
+                    </div>
+                    <p class="note" style="margin-top:8px;">الشهر = 30 يومًا، السنة = 365 يومًا، الدولار = 3.64 ريال قطري.</p>
+                </section>
             </section>
 
             <!-- ---- Block log ---- -->
@@ -1237,7 +1282,7 @@
         errors: {},         // section -> message
         merged: [],         // unified rows
         expanded: new Set(),
-        filter: 'all', search: '',
+        filter: 'all', search: '', carType: '',
         evKind: '',
         loading: false,
         lastLoad: 0,
@@ -1582,10 +1627,28 @@
         { k: 'conflict', l: 'تعارض توكن', red: true, fn: r => r.conflicts > 0 },
         { k: 'noseen30', l: 'لم يُشاهد 30 يوم', fn: r => !r.lastSeen || r.lastSeen < Date.now() - 30 * DAY },
     ];
-    function filteredDevices() {
+    // Car-type filter: THABTHABA STORE's car name only (owner, 2026-09-15). The wallpapers mode is NOT a
+    // car type — its «leopard»/«denza» modes are a display setting and put a Denza under Leopard.
+    const CAR_TYPE_UNKNOWN = 'بدون ذبذبة ستور';
+    function carTypeKey(r) {
+        const car = String(r.storeRows.map(x => x.car).find(Boolean) || (r.store && r.store.car) || '').trim();
+        if (!car || car === '—') return CAR_TYPE_UNKNOWN;
+        return car.charAt(0).toUpperCase() + car.slice(1);
+    }
+    function filteredDevices(skipType) {
         const f = FILTERS.find(x => x.k === state.filter) || FILTERS[0];
         const q = state.search.trim().toLowerCase();
-        return state.merged.filter(r => f.fn(r) && (!q || r.searchBlob.includes(q)));
+        return state.merged.filter(r => f.fn(r) && (!q || r.searchBlob.includes(q)) && (skipType || !state.carType || carTypeKey(r).toLowerCase() === state.carType.toLowerCase()));
+    }
+    function renderTypeChips() {
+        const counts = new Map();
+        filteredDevices(true).forEach(r => { const k = carTypeKey(r); const id = k.toLowerCase(); const e = counts.get(id) || { label: k, n: 0 }; e.n++; counts.set(id, e); });
+        const rows = [...counts.values()].sort((a, b) => (a.label === CAR_TYPE_UNKNOWN) - (b.label === CAR_TYPE_UNKNOWN) || b.n - a.n || a.label.localeCompare(b.label));
+        const total = rows.reduce((s, x) => s + x.n, 0);
+        $('dev-type-chips').innerHTML = `<span class="note" style="align-self:center;margin-inline-end:4px"><i class="fa-solid fa-car"></i> نوع السيارة (من ذبذبة ستور):</span>`
+            + `<button class="chip ${!state.carType ? 'active' : ''}" data-ctype="" type="button">كل الأنواع <span class="n">${total}</span></button>`
+            + rows.map(x => `<button class="chip ${state.carType.toLowerCase() === x.label.toLowerCase() ? 'active' : ''}" data-ctype="${esc(x.label)}" type="button">${esc(x.label)} <span class="n">${x.n}</span></button>`).join('');
+        $('dev-type-chips').querySelectorAll('.chip').forEach(el => el.addEventListener('click', () => { state.carType = el.dataset.ctype; renderDevices(); }));
     }
     function renderDevices() {
         renderDevicesContent();
@@ -1609,6 +1672,7 @@
             return `<button class="chip ${f.red ? 'red' : ''} ${state.filter === f.k ? 'active' : ''}" data-f="${f.k}" type="button">${esc(f.l)} <span class="n">${n}</span></button>`;
         }).join('');
         $('dev-chips').querySelectorAll('.chip').forEach(el => el.addEventListener('click', () => { state.filter = el.dataset.f; renderDevices(); }));
+        renderTypeChips();
 
         const list = filteredDevices();
         $('dev-count-note').textContent = `${list.length} من ${state.merged.length}`;
@@ -1986,11 +2050,12 @@
         }
         return [...groups.values()].sort((a, b) => ts(b.reports[0].at) - ts(a.reports[0].at));
     }
-    function unresolvedReports(reports) { return crashGroups(reports).filter(g => !g.resolved).flatMap(g => g.reports); }
+    // "Current" everywhere the number is shown: unresolved AND seen inside the crash window.
+    function unresolvedReports(reports) { const days = crashWindowDays(); return crashGroups(reports).filter(g => !g.resolved && inCrashWindow(g, days)).flatMap(g => g.reports); }
     function updateCrashCounts() {
         const reports = unresolvedReports(allCrashReports());
         $('cnt-crashes').textContent = reports.length;
-        $('cnt-crashes').title = 'تقارير الأعطال الحالية المحمّلة';
+        $('cnt-crashes').title = 'تقارير الأعطال المفتوحة التي ظهرت خلال ' + (CRASH_WINDOWS.find(w => w[0] === crashWindowDays()) || CRASH_WINDOWS[0])[1];
         for (const app of ['wallpapers', 'store', 'leo', 'controller']) {
             const button = document.querySelector(`#panel-${app} .subtab[data-sub="crashes"]`);
             if (button) button.innerHTML = `الأعطال <span class="badge num">${reports.filter(c => c.app === app).length}</span>`;
@@ -2000,18 +2065,44 @@
         const r = c.raw;
         return `<details class="crash-item"><summary><span class="badge">${esc(crashAppLabel(c.app))}</span>${c.vin ? vinCell(c.vin) : hwLink(c.hw)} ${esc(c.car)} <span class="num">${esc(c.version)} (${esc(c.code ?? '—')})</span>${timeCell(c.at)}<span class="crash-first">${esc([r.exc, String(r.stack || c.text).split('\n')[0]].filter(Boolean).join(' · '))}</span></summary><pre class="report">${esc(c.text)}</pre>${r.breadcrumbs ? `<h4>خطوات ما قبل العطل</h4><pre class="report">${esc(typeof r.breadcrumbs === 'string' ? r.breadcrumbs : JSON.stringify(r.breadcrumbs, null, 2))}</pre>` : ''}${r.logcat_tail ? `<h4>سجل الجهاز</h4><pre class="report">${esc(r.logcat_tail)}</pre>` : ''}</details>`;
     }
+    // Owner's rule (2026-09-15): opening «الأعطال» must show what is STILL happening, not history.
+    // A crash group is "current" when it is unresolved AND was last seen inside the window
+    // (7 days by default); older unresolved groups go to their own box, and resolved groups to a
+    // third box — each with its own count, none mixed into the default view.
+    const CRASH_WINDOWS = [[7, 'آخر ٧ أيام'], [30, 'آخر ٣٠ يومًا'], [0, 'كل الفترة']];
+    function crashWindowDays() { try { const v = Number(localStorage.getItem('crash:windowDays')); return CRASH_WINDOWS.some(w => w[0] === v) ? v : 7; } catch (e) { return 7; } }
+    function crashBox() { try { return localStorage.getItem('crash:box') || 'current'; } catch (e) { return 'current'; } }
+    function inCrashWindow(g, days) { return !days || (Date.now() - ts(g.lastAt)) <= days * 86400000; }
+    function crashStatusCell(g) {
+        const rr = g.resolution;
+        if (g.regressed) return `<span class="badge bad">رجع تاني بعد الحل</span><span class="sub">حُلّ في النسخة ${esc(rr.fixed_version_code ?? '—')} ${esc(relTime(rr.resolved_at))}</span>`;
+        if (g.resolved) return `<span class="badge ok">محلول ✓</span><span class="sub">النسخة ${esc(rr.fixed_version_code ?? '—')} · ${esc(relTime(rr.resolved_at))}</span>${rr.note ? `<p class="sub">${esc(rr.note)}</p>` : ''}`;
+        return '<span class="badge warn">مفتوح</span>';
+    }
     function renderCrashView(hostId, reports, notice = '') {
         const host = typeof hostId === 'string' ? $(hostId) : hostId; if (!host) return;
         const key = host.id; host.dataset.crashView = 'true';
-        const groups = crashGroups(reports), current = groups.filter(g => !g.resolved), resolved = groups.filter(g => g.resolved);
-        host.innerHTML = `${notice ? `<p class="note">${esc(notice)}</p>` : ''}${state.errors.crashResolutions ? '<p class="note">تعذّر تحميل سجل الحلول؛ العدادات مؤقتة وإجراءات الحل غير متاحة حتى التحديث.</p>' : ''}<h4>الأعطال الحالية (${current.length})</h4><div id="${key}-current"></div><details><summary>أعطال محلولة (${resolved.length})</summary><div id="${key}-resolved"></div></details>`;
-        for (const [suffix, rows] of [['current', current], ['resolved', resolved]]) {
+        const days = crashWindowDays(), box = crashBox();
+        const groups = crashGroups(reports);
+        const current = groups.filter(g => !g.resolved && inCrashWindow(g, days));
+        const stale = groups.filter(g => !g.resolved && !inCrashWindow(g, days));
+        const resolved = groups.filter(g => g.resolved);
+        const boxes = [['current', 'الحالية', current], ['resolved', 'المحلولة', resolved], ['stale', 'قديمة لم تتكرر', stale]];
+        host.innerHTML = `${notice ? `<p class="note">${esc(notice)}</p>` : ''}${state.errors.crashResolutions ? '<p class="note">تعذّر تحميل سجل الحلول؛ العدادات مؤقتة وإجراءات الحل غير متاحة حتى التحديث.</p>' : ''}
+            <div class="toolbar" style="gap:8px;flex-wrap:wrap;align-items:center">
+                ${boxes.map(([k, label, rows]) => `<button type="button" class="btn sm${box === k ? ' primary' : ''}" data-crash-box="${k}">${label} <span class="badge num">${rows.length}</span></button>`).join('')}
+                <span class="note" style="margin-inline-start:auto">الحالية = مفتوحة وظهرت خلال</span>
+                <select data-crash-window class="btn sm">${CRASH_WINDOWS.map(([d, l]) => `<option value="${d}"${d === days ? ' selected' : ''}>${l}</option>`).join('')}</select>
+            </div>
+            ${boxes.map(([k, label, rows]) => `<div id="${key}-${k}" data-crash-box-body="${k}" ${box === k ? '' : 'hidden'}></div>`).join('')}`;
+        host.querySelectorAll('[data-crash-box]').forEach(b => b.addEventListener('click', () => { try { localStorage.setItem('crash:box', b.dataset.crashBox); } catch (e) {} renderCrashView(host, reports, notice); }));
+        const sel = host.querySelector('[data-crash-window]'); if (sel) sel.addEventListener('change', () => { try { localStorage.setItem('crash:windowDays', sel.value); } catch (e) {} renderCrashView(host, reports, notice); updateCrashCounts(); });
+        for (const [suffix, , rows] of boxes) {
             const id = key + '-' + suffix;
             listControls({ hostId: id, rows, key: id, searchText: g => [crashAppLabel(g.app), g.signature, g.resolution?.note, ...g.reports.map(c => [c.hw, c.car, c.version, c.code, c.text].join(' '))].join(' '), render: page => {
-                $(id).innerHTML = page.length ? `<div class="table-wrap"><table><thead><tr><th>التطبيق / التوقيع</th><th>العدد</th><th>السيارات</th><th>الإصدارات</th><th>أول / آخر ظهور</th><th>الحل</th></tr></thead><tbody>${page.map((g, i) => {
-                    const rr = g.resolution;
-                    return `<tr><td><span class="badge">${esc(crashAppLabel(g.app))}</span> <span class="num" title="${esc(g.signature)}">${esc(g.signature.slice(0, 100))}</span>${g.regressed ? '<span class="badge bad">رجع تاني</span>' : ''}<details><summary>التقارير</summary><div id="${id}-reports-${i}"></div></details></td><td class="num">${esc(g.count)}</td><td class="num">${esc(g.cars)}</td><td>${esc(g.versions)}</td><td>${timeCell(g.firstAt)} / ${timeCell(g.lastAt)}</td><td>${rr ? `<p>${esc(rr.note || 'بلا ملاحظة')}</p><span class="sub">نسخة الإصلاح: ${esc(rr.fixed_version_code ?? '—')}</span>${timeCell(rr.resolved_at)}` : ''}<button type="button" class="btn sm" data-crash-action="${g.resolved ? 'undo' : 'resolve'}" data-crash-app="${esc(g.app)}" data-signature="${esc(g.signature)}" ${state.errors.crashResolutions ? 'disabled' : ''}>${g.resolved ? 'إلغاء الحل' : 'تم الحل ✓'}</button></td></tr>`;
-                }).join('')}</tbody></table></div>` : '<div class="empty">لا أعطال</div>';
+                $(id).innerHTML = page.length ? `<div class="table-wrap"><table><thead><tr><th>التطبيق / التوقيع</th><th>العدد</th><th>السيارات</th><th>الإصدارات</th><th>أول / آخر ظهور</th><th>الحالة</th><th>إجراء</th></tr></thead><tbody>${page.map((g, i) => {
+                    return `<tr><td><span class="badge">${esc(crashAppLabel(g.app))}</span> <span class="num" title="${esc(g.signature)}">${esc(g.signature.slice(0, 100))}</span><details><summary>التقارير</summary><div id="${id}-reports-${i}"></div></details></td><td class="num">${esc(g.count)}</td><td class="num">${esc(g.cars)}</td><td>${esc(g.versions)}</td><td>${timeCell(g.firstAt)} / ${timeCell(g.lastAt)}</td><td>${crashStatusCell(g)}</td><td><button type="button" class="btn sm" data-crash-action="${g.resolved ? 'undo' : 'resolve'}" data-crash-app="${esc(g.app)}" data-signature="${esc(g.signature)}" ${state.errors.crashResolutions ? 'disabled' : ''}>${g.resolved ? 'إلغاء الحل' : 'تم الحل ✓'}</button></td></tr>`;
+                }).join('')}</tbody></table></div>` : `<div class="empty">${suffix === 'current' ? `لا أعطال مفتوحة خلال ${esc(CRASH_WINDOWS.find(w => w[0] === days)[1])}` : 'لا شيء هنا'}</div>`;
                 page.forEach((g, i) => listControls({ hostId: `${id}-reports-${i}`, key: id + ':reports:' + JSON.stringify([g.app, g.signature]), rows: g.reports, searchText: c => [c.hw, c.version, c.text].join(' '), render: list => { $(`${id}-reports-${i}`).innerHTML = list.map(crashReportHtml).join(''); } }));
             } });
         }
@@ -2019,7 +2110,7 @@
     function controllerCrashNotice() { return !LOCAL_PROXY || !LOCAL_FLAGS.controller || !state.ctl || state.ctl.crashUnavailable || (!crashRows(state.ctl.crashes).length && !crashRows(state.ctl.crashGroups).length) ? 'تبليغ الأعطال لم يصل بعد للسيارات (ينتظر تشغيل الهجرة ونشر إصدار)' : ''; }
     function renderControllerCrashGroups(host) {
         if (!host) return;
-        host.innerHTML = `<p class="note">حدود التبليغ: ٢٠ تقريرًا لكل سيارة يوميًا، و٥ ملفات معلّقة على السيارة.</p><h4>مجموعات كل السيارات خلال ٣٠ يومًا</h4><div id="${host.id}-server-groups"></div><details><summary>أحدث التقارير المحمّلة</summary><div id="${host.id}-latest"></div></details>`;
+        host.innerHTML = `<p class="note">حدود التبليغ: 20 تقريرًا لكل سيارة يوميًا، و5 ملفات معلّقة على السيارة.</p><h4>مجموعات كل السيارات خلال 30 يومًا</h4><div id="${host.id}-server-groups"></div><details><summary>أحدث التقارير المحمّلة</summary><div id="${host.id}-latest"></div></details>`;
         const latestReports = allCrashReports().filter(c => c.app === 'controller');
         const reports = crashRows(state.ctl?.crashGroups).map(r => {
             const latest = latestReports.filter(c => c.signature === r.fingerprint).map(c => c.raw);
@@ -2256,7 +2347,7 @@
     const VOICE_LABELS = {
         'voice.openrouter_key': 'مفتاح OpenRouter',
         'voice.model': 'الموديل',
-        'voice.models_fallback': 'النماذج الاحتياطية (حتى ٣)',
+        'voice.models_fallback': 'النماذج الاحتياطية (حتى 3)',
         'voice.daily_quota_per_car': 'الحد اليومي لكل سيارة',
         'voice.minute_quota_per_car': 'الحد في الدقيقة لكل سيارة',
     };
@@ -2312,7 +2403,7 @@
         const value = String(inp.value);
         if (!value.trim()) { alertDialog('قيمة فارغة', 'اكتب القيمة الجديدة أولًا.'); return; }
         if (key === 'voice.models_fallback') {
-            try { if (voiceFallbackModels(value).length > 3) throw new Error('الحد الأقصى ٣ نماذج احتياطية.'); }
+            try { if (voiceFallbackModels(value).length > 3) throw new Error('الحد الأقصى 3 نماذج احتياطية.'); }
             catch (err) { alertDialog('قيمة غير صالحة', errMsg(err)); return; }
         }
         if (/quota/.test(key) && !/^\d+$/.test(value.trim())) { alertDialog('قيمة غير صالحة', 'الحدود أرقام صحيحة فقط.'); return; }
@@ -2624,7 +2715,7 @@
     let ctlKind = '', fleetCrashApp = '';
     let glossaryDraft = null, glossaryDirty = false, glossaryMode = 'table', glossaryText = '';
     function validateGlossary(entries) {
-        if (!Array.isArray(entries) || entries.length > 80) throw new Error('القاموس يقبل ٨٠ زوجًا كحد أقصى.');
+        if (!Array.isArray(entries) || entries.length > 80) throw new Error('القاموس يقبل 80 زوجًا كحد أقصى.');
         const allowed = /^[\u0600-\u06ff\u0750-\u077f\u08a0-\u08ff\ufb50-\ufdff\ufe70-\ufefcA-Za-z0-9 _-]+$/;
         const strip = s => s.replace(/[\u0640\u0610-\u061a\u064b-\u065f\u0670\u06d6-\u06ed\u08d3-\u08ff]/g, '');
         const seen = new Set(); let total = 0;
@@ -2632,7 +2723,7 @@
             const phrase = String(entry.phrase || '').trim(), canonical = String(entry.canonical || '').trim();
             const label = 'الصف ' + (i + 1) + ': ';
             if (!phrase || !canonical) throw new Error(label + 'الكلمة والمعنى مطلوبان.');
-            if (phrase.length > 32 || canonical.length > 32) throw new Error(label + 'الحد الأقصى ٣٢ حرفًا لكل كلمة أو معنى.');
+            if (phrase.length > 32 || canonical.length > 32) throw new Error(label + 'الحد الأقصى 32 حرفًا لكل كلمة أو معنى.');
             if (!allowed.test(phrase) || !allowed.test(canonical)) throw new Error(label + 'استخدم الحروف العربية أو اللاتينية والأرقام والمسافة والشرطة والشرطة السفلية فقط.');
             const p = strip(phrase), c = strip(canonical);
             if (p === c) throw new Error(label + 'الكلمة يجب أن تختلف عن معناها بعد إزالة التشكيل والتطويل.');
@@ -2641,7 +2732,7 @@
             seen.add(key); total += phrase.length + canonical.length;
             return { phrase, canonical };
         });
-        if (total > 2000) throw new Error('مجموع حروف القاموس يجب ألا يتجاوز ٢٠٠٠ حرف.');
+        if (total > 2000) throw new Error('مجموع حروف القاموس يجب ألا يتجاوز 2000 حرف.');
         return clean;
     }
     function parseGlossaryText(text) {
@@ -2656,6 +2747,32 @@
             $('glossary-body').innerHTML = rows.map(r => `<tr><td><input aria-label="الكلمة كما يقولها السائق" data-glossary-field="phrase" data-row="${r.i}" value="${esc(r.row.phrase)}" maxlength="32"></td><td><input aria-label="المعنى أو الأمر الفصيح" data-glossary-field="canonical" data-row="${r.i}" value="${esc(r.row.canonical)}" maxlength="32"></td><td><button type="button" class="btn sm danger" data-glossary-delete="${r.i}">حذف</button></td></tr>`).join('') || '<tr><td colspan="3" class="empty">القاموس فارغ</td></tr>';
         } });
     }
+    /* CAR_COMMANDS:BEGIN — generated by Thabthaba Dashboard/tools/export_panel_commands.py */
+    const CAR_COMMANDS = {"version":"2.30.0 (165)","aliases":{"l5_ui6":"l5_2026_ui6"},"cars":{"l5_ui5":{"label":"LEOPARD 5 ULTRA · 2026 · UI5","measured":true,"groups":[["المكيف",[["حرارة السائق","measured"],["حرارة الراكب","measured"],["سرعة المروحة","measured"],["وضع تلقائي","measured"],["إعادة ضبط التكييف","measured"],["تشغيل التكييف","measured"],["إيقاف التكييف","measured"],["إيقاف مزيل الضباب الأمامي","measured"],["تشغيل مزيل الضباب الأمامي","measured"],["إيقاف مزيل الضباب الخلفي","measured"],["تشغيل مزيل الضباب الخلفي","measured"],["هواء خارجي","measured"],["وضع يدوي","measured"],["إيقاف أقصى تبريد","measured"],["تشغيل أقصى تبريد","measured"],["إزالة الضباب","measured"],["هواء للوجه","measured"],["وجه وأقدام","measured"],["هواء للقدمين","measured"],["أقدام وإزالة ضباب","measured"],["إيقاف التنظيف السريع","measured"],["تشغيل التنظيف السريع","measured"],["إيقاف قفل الأطفال","measured"],["تشغيل قفل الأطفال","measured"],["قفل الخلف","measured"],["فتح قفل الخلف","measured"],["تدوير داخلي","measured"],["حرارة موحّدة","measured"],["حرارة منفصلة","measured"],["إيقاف تهوية المقصورة","measured"],["تشغيل تهوية المقصورة","measured"],["المروحة 1","measured"],["المروحة 3","measured"],["المروحة 5","measured"],["المروحة 7","measured"],["إيقاف المروحة","measured"]]],["الكراسي",[["تهوية السائق","measured"],["تدفئة السائق","measured"],["تهوية الراكب","measured"],["تدفئة الراكب","measured"],["تهوية المقعد الخلفي الأيسر","measured"],["تدفئة المقعد الخلفي الأيسر","measured"],["تهوية المقعد الخلفي الأيمن","measured"],["تدفئة المقعد الخلفي الأيمن","measured"],["مساج السائق","measured"],["مساج الراكب","measured"]]],["النوافذ",[["نافذة السائق","measured"],["نافذة الراكب","measured"],["النافذة الخلفية اليسرى","measured"],["النافذة الخلفية اليمنى","measured"]]],["السقف والستارة",[["تهوية السقف","measured"],["غلق السقف","measured"],["وضع الراحة للسقف","measured"],["نصف السقف","measured"],["فتح السقف","measured"],["إيقاف السقف","measured"],["غلق الستارة","measured"],["نصف الستارة","measured"],["فتح الستارة","measured"],["إيقاف الستارة","measured"],["غلق فتحة السقف","measured"],["نصف فتحة السقف","measured"],["فتح فتحة السقف","measured"],["تهوية فتحة السقف","measured"],["غلق حاجب الشمس","measured"],["فتح حاجب الشمس","measured"],["لمبات القراءة","measured"]]],["المرايات",[["طي وفتح المرايات","measured"]]],["القيادة والتعليق",[["ارتفاع السيارة","measured"],["قفل الدفرنس","measured"],["أوضاع الطرق","measured"],["Auto Hold","measured"],["وظائف أوضاع الطرق","measured"],["نظام التعليق","inherited"],["وضع القيادة","measured"]]],["الطاقة والدفع",[["تبديل EV / HEV","measured"]]],["الإضاءة الداخلية",[["لون الإضاءة الداخلية","measured"],["تغيير ألوان الإضاءة تلقائيًا","measured"],["سطوع الإضاءة الداخلية","measured"]]],["الإضاءة الخارجية",[["الإضاءة الخارجية","measured"]]],["الثلاجة",[["الثلاجة","measured"]]],["الصوت",[["صوت النظام","measured"],["صوت الملاحة","measured"]]]]},"l5_navi_ui5":{"label":"LEOPARD 5 NAVI · UI5","measured":true,"groups":[["المكيف",[["حرارة السائق","measured"],["حرارة الراكب","measured"],["سرعة المروحة","measured"],["وضع تلقائي","measured"],["تشغيل التكييف","measured"],["إيقاف التكييف","measured"],["إيقاف مزيل الضباب الأمامي","measured"],["تشغيل مزيل الضباب الأمامي","measured"],["إيقاف مزيل الضباب الخلفي","measured"],["تشغيل مزيل الضباب الخلفي","measured"],["هواء خارجي","measured"],["وضع يدوي","measured"],["إيقاف أقصى تبريد","measured"],["تشغيل أقصى تبريد","measured"],["إزالة الضباب","measured"],["هواء للوجه","measured"],["وجه وأقدام","measured"],["هواء للقدمين","measured"],["أقدام وإزالة ضباب","measured"],["إيقاف التنظيف السريع","measured"],["تشغيل التنظيف السريع","measured"],["تدوير داخلي","measured"],["حرارة موحّدة","measured"],["حرارة منفصلة","measured"],["إيقاف تهوية المقصورة","measured"],["تشغيل تهوية المقصورة","measured"],["المروحة 1","measured"],["المروحة 3","measured"],["المروحة 5","measured"],["المروحة 7","measured"]]],["الكراسي",[["تهوية السائق","measured"],["تدفئة السائق","measured"],["تهوية الراكب","measured"],["تدفئة الراكب","measured"],["تدفئة المقعد الخلفي الأيسر","measured"],["تدفئة المقعد الخلفي الأيمن","measured"],["مساج السائق","measured"],["مساج الراكب","measured"]]],["النوافذ",[["نافذة السائق","measured"],["نافذة الراكب","measured"],["النافذة الخلفية اليسرى","measured"],["النافذة الخلفية اليمنى","measured"]]],["السقف والستارة",[["تهوية السقف","measured"],["غلق السقف","measured"],["وضع الراحة للسقف","measured"],["نصف السقف","measured"],["فتح السقف","measured"],["إيقاف السقف","measured"],["غلق الستارة","measured"],["نصف الستارة","measured"],["فتح الستارة","measured"],["إيقاف الستارة","measured"],["غلق فتحة السقف","measured"],["نصف فتحة السقف","measured"],["فتح فتحة السقف","measured"],["تهوية فتحة السقف","measured"],["غلق حاجب الشمس","measured"],["فتح حاجب الشمس","measured"],["لمبات القراءة","measured"]]],["المرايات",[["طي وفتح المرايات","measured"]]],["القيادة والتعليق",[["وضع القيادة","inherited"]]],["الطاقة والدفع",[["تبديل EV / HEV","ignored"]]],["الإضاءة الداخلية",[["لون الإضاءة الداخلية","measured"],["تغيير ألوان الإضاءة تلقائيًا","measured"],["سطوع الإضاءة الداخلية","measured"]]],["الصوت",[["صوت النظام","measured"],["صوت الملاحة","measured"]]]]},"l5_2026_ui6":{"label":"LEOPARD 5 ULTRA · 2026 · UI6","measured":true,"groups":[["المكيف",[["حرارة السائق","measured"],["حرارة الراكب","measured"],["سرعة المروحة","measured"],["وضع تلقائي","measured"],["إعادة ضبط التكييف","measured"],["تشغيل التكييف","measured"],["إيقاف التكييف","measured"],["إيقاف مزيل الضباب الأمامي","measured"],["تشغيل مزيل الضباب الأمامي","measured"],["إيقاف مزيل الضباب الخلفي","measured"],["تشغيل مزيل الضباب الخلفي","measured"],["هواء خارجي","measured"],["وضع يدوي","measured"],["إيقاف أقصى تبريد","measured"],["تشغيل أقصى تبريد","measured"],["إزالة الضباب","measured"],["هواء للوجه","measured"],["وجه وأقدام","measured"],["هواء للقدمين","measured"],["أقدام وإزالة ضباب","measured"],["إيقاف التنظيف السريع","measured"],["تشغيل التنظيف السريع","measured"],["إيقاف قفل الأطفال","measured"],["تشغيل قفل الأطفال","measured"],["قفل الخلف","measured"],["فتح قفل الخلف","measured"],["تدوير داخلي","measured"],["حرارة موحّدة","measured"],["حرارة منفصلة","measured"],["إيقاف تهوية المقصورة","measured"],["تشغيل تهوية المقصورة","measured"],["المروحة 1","measured"],["المروحة 3","measured"],["المروحة 5","measured"],["المروحة 7","measured"],["إيقاف المروحة","measured"],["تدفئة المقود","measured"]]],["الكراسي",[["تهوية السائق","measured"],["تدفئة السائق","measured"],["تهوية الراكب","measured"],["تدفئة الراكب","measured"],["تهوية المقعد الخلفي الأيسر","measured"],["تدفئة المقعد الخلفي الأيسر","measured"],["تهوية المقعد الخلفي الأيمن","measured"],["تدفئة المقعد الخلفي الأيمن","measured"],["مساج السائق","measured"],["مساج الراكب","measured"]]],["النوافذ",[["نافذة السائق","measured"],["نافذة الراكب","measured"],["النافذة الخلفية اليسرى","measured"],["النافذة الخلفية اليمنى","measured"]]],["السقف والستارة",[["تهوية السقف","measured"],["غلق السقف","measured"],["وضع الراحة للسقف","measured"],["نصف السقف","measured"],["فتح السقف","measured"],["إيقاف السقف","measured"],["غلق الستارة","measured"],["نصف الستارة","measured"],["فتح الستارة","measured"],["إيقاف الستارة","measured"],["غلق فتحة السقف","measured"],["نصف فتحة السقف","measured"],["فتح فتحة السقف","measured"],["تهوية فتحة السقف","measured"],["غلق حاجب الشمس","measured"],["فتح حاجب الشمس","measured"],["لمبات القراءة","measured"]]],["المرايات",[["طي وفتح المرايات","measured"]]],["القيادة والتعليق",[["ارتفاع السيارة","measured"],["قفل الدفرنس","measured"],["أوضاع الطرق","measured"],["Auto Hold","measured"],["وظائف أوضاع الطرق","measured"],["نظام التعليق","inherited"],["وضع القيادة","inherited"]]],["الطاقة والدفع",[["نسبة الحفظ","measured"],["تبديل EV / HEV","measured"],["وضع حفظ الشحن","measured"],["وضع التوفير الأقصى","measured"]]],["الإضاءة الداخلية",[["لون الإضاءة الداخلية","measured"],["تغيير ألوان الإضاءة تلقائيًا","measured"],["سطوع الإضاءة الداخلية","measured"]]],["الإضاءة الخارجية",[["الإضاءة الخارجية","measured"]]],["الثلاجة",[["الثلاجة","measured"]]],["الصوت",[["صوت النظام","measured"],["صوت الملاحة","measured"]]]]},"l5_2025_ui6":{"label":"LEOPARD 5 ULTRA · 2025 · UI6","measured":true,"groups":[["المكيف",[["حرارة السائق","measured"],["حرارة الراكب","measured"],["سرعة المروحة","measured"],["إيقاف التنظيف الآلي","measured"],["تشغيل التنظيف الآلي","measured"],["وضع تلقائي","measured"],["إعادة ضبط التكييف","measured"],["تشغيل التكييف","measured"],["إيقاف التكييف","measured"],["إيقاف مزيل الضباب الأمامي","measured"],["تشغيل مزيل الضباب الأمامي","measured"],["إيقاف مزيل الضباب الخلفي","measured"],["تشغيل مزيل الضباب الخلفي","measured"],["هواء خارجي","measured"],["وضع يدوي","measured"],["إيقاف أقصى تبريد","measured"],["تشغيل أقصى تبريد","measured"],["إزالة الضباب","measured"],["هواء للوجه","measured"],["وجه وأقدام","measured"],["هواء للقدمين","measured"],["أقدام وإزالة ضباب","measured"],["إيقاف التنظيف السريع","measured"],["تشغيل التنظيف السريع","measured"],["إيقاف قفل الأطفال","measured"],["تشغيل قفل الأطفال","measured"],["قفل الخلف","measured"],["فتح قفل الخلف","measured"],["تدوير داخلي","measured"],["حرارة موحّدة","measured"],["حرارة منفصلة","measured"],["تدفئة بالوقود","measured"],["تدفئة كهربائية","measured"],["المروحة 1","measured"],["المروحة 3","measured"],["المروحة 5","measured"],["المروحة 7","measured"],["إيقاف المروحة","measured"]]],["الكراسي",[["تهوية السائق","measured"],["تدفئة السائق","measured"],["تهوية الراكب","measured"],["تدفئة الراكب","measured"],["تدفئة المقعد الخلفي الأيسر","measured"],["تدفئة المقعد الخلفي الأيمن","measured"],["مساج السائق","measured"],["مساج الراكب","measured"]]],["النوافذ",[["نافذة السائق","measured"],["نافذة الراكب","measured"],["النافذة الخلفية اليسرى","measured"],["النافذة الخلفية اليمنى","measured"]]],["السقف والستارة",[["تهوية السقف","measured"],["غلق السقف","measured"],["وضع الراحة للسقف","measured"],["نصف السقف","measured"],["فتح السقف","measured"],["إيقاف السقف","measured"],["غلق الستارة","measured"],["نصف الستارة","measured"],["فتح الستارة","measured"],["إيقاف الستارة","measured"],["غلق فتحة السقف","measured"],["نصف فتحة السقف","measured"],["فتح فتحة السقف","measured"],["تهوية فتحة السقف","measured"],["غلق حاجب الشمس","measured"],["فتح حاجب الشمس","measured"],["لمبات القراءة","measured"]]],["المرايات",[["طي وفتح المرايات","measured"]]],["القيادة والتعليق",[["وضع القيادة","inherited"]]],["الطاقة والدفع",[["تبديل EV / HEV","inherited"]]],["الإضاءة الداخلية",[["لون الإضاءة الداخلية","measured"],["تغيير ألوان الإضاءة تلقائيًا","measured"],["سطوع الإضاءة الداخلية","measured"]]],["الصوت",[["صوت النظام","measured"],["صوت الملاحة","measured"]]]]},"l7_ui6":{"label":"LEOPARD 7 · UI6","measured":true,"groups":[["القيادة والتعليق",[["وضع القيادة","inherited"]]]]},"l7_2025_ui5":{"label":"LEOPARD 7 · 2025 · UI5","measured":true,"groups":[["المكيف",[["حرارة السائق","measured"],["حرارة الراكب","measured"],["سرعة المروحة","measured"],["حرارة الخلف","ignored"],["إيقاف التنظيف الآلي","inherited"],["تشغيل التنظيف الآلي","inherited"],["وضع تلقائي","inherited"],["إعادة ضبط التكييف","inherited"],["تشغيل التكييف","measured"],["إيقاف التكييف","measured"],["إيقاف مزيل الضباب الأمامي","inherited"],["تشغيل مزيل الضباب الأمامي","inherited"],["إيقاف مزيل الضباب الخلفي","inherited"],["تشغيل مزيل الضباب الخلفي","inherited"],["هواء خارجي","inherited"],["وضع يدوي","inherited"],["إيقاف أقصى تبريد","inherited"],["تشغيل أقصى تبريد","inherited"],["إزالة الضباب","inherited"],["هواء للوجه","inherited"],["وجه وأقدام","inherited"],["هواء للقدمين","inherited"],["أقدام وإزالة ضباب","inherited"],["إيقاف التنظيف السريع","inherited"],["تشغيل التنظيف السريع","inherited"],["إيقاف التكييف الخلفي","inherited"],["تشغيل التكييف الخلفي","inherited"],["الوضع التلقائي للخلف","inherited"],["إيقاف قفل الأطفال","inherited"],["تشغيل قفل الأطفال","inherited"],["قفل الخلف","inherited"],["الوضع اليدوي للخلف","inherited"],["هواء للوجه بالخلف","inherited"],["هواء للأقدام بالخلف","inherited"],["فتح قفل الخلف","inherited"],["إيقاف المروحة الخلفية","inherited"],["المروحة الخلفية 3","inherited"],["المروحة الخلفية 7","inherited"],["تدوير داخلي","inherited"],["حرارة موحّدة","measured"],["حرارة منفصلة","measured"],["إيقاف تهوية المقصورة","inherited"],["تشغيل تهوية المقصورة","inherited"],["تدفئة بالوقود","inherited"],["تدفئة كهربائية","inherited"],["المروحة 1","inherited"],["المروحة 3","inherited"],["المروحة 5","inherited"],["المروحة 7","inherited"],["إيقاف المروحة","inherited"],["تدفئة المقود","measured"]]],["الكراسي",[["تهوية السائق","measured"],["تدفئة السائق","measured"],["تهوية الراكب","measured"],["تدفئة الراكب","measured"],["تهوية المقعد الخلفي الأيسر","measured"],["تدفئة المقعد الخلفي الأيسر","measured"],["تهوية المقعد الخلفي الأيمن","measured"],["تدفئة المقعد الخلفي الأيمن","measured"],["مساج السائق","measured"],["مساج الراكب","measured"]]],["النوافذ",[["نافذة السائق","measured"],["نافذة الراكب","measured"],["النافذة الخلفية اليسرى","measured"],["النافذة الخلفية اليمنى","measured"]]],["السقف والستارة",[["تهوية السقف","measured"],["غلق السقف","measured"],["وضع الراحة للسقف","inherited"],["نصف السقف","inherited"],["فتح السقف","inherited"],["إيقاف السقف","inherited"],["غلق الستارة","measured"],["نصف الستارة","measured"],["فتح الستارة","inherited"],["إيقاف الستارة","inherited"],["غلق فتحة السقف","inherited"],["نصف فتحة السقف","inherited"],["فتح فتحة السقف","inherited"],["تهوية فتحة السقف","inherited"],["غلق حاجب الشمس","inherited"],["فتح حاجب الشمس","inherited"],["لمبات القراءة","measured"]]],["المرايات",[["طي وفتح المرايات","measured"]]],["القيادة والتعليق",[["قفل الدفرنس","ignored"],["أوضاع الطرق","measured"],["Auto Hold","measured"],["نظام التعليق","measured"],["وضع القيادة","measured"]]],["الطاقة والدفع",[["نسبة الحفظ","measured"],["تبديل EV / HEV","measured"],["وضع حفظ الشحن","measured"]]],["الإضاءة الداخلية",[["لون الإضاءة الداخلية","measured"],["تغيير ألوان الإضاءة تلقائيًا","inherited"],["سطوع الإضاءة الداخلية","measured"]]],["الإضاءة الخارجية",[["الإضاءة الخارجية","measured"]]],["الثلاجة",[["الثلاجة","measured"]]],["الصوت",[["صوت النظام","measured"],["صوت الملاحة","measured"]]]]},"l8_2025_ui5":{"label":"LEOPARD 8 · 2025 · UI5","measured":true,"groups":[["المكيف",[["حرارة السائق","measured"],["حرارة الراكب","measured"],["سرعة المروحة","measured"],["حرارة الخلف","measured"],["إيقاف التنظيف الآلي","measured"],["تشغيل التنظيف الآلي","measured"],["وضع تلقائي","measured"],["إعادة ضبط التكييف","measured"],["تشغيل التكييف","measured"],["إيقاف التكييف","measured"],["إيقاف مزيل الضباب الأمامي","measured"],["تشغيل مزيل الضباب الأمامي","measured"],["إيقاف مزيل الضباب الخلفي","measured"],["تشغيل مزيل الضباب الخلفي","measured"],["هواء خارجي","measured"],["وضع يدوي","measured"],["إيقاف أقصى تبريد","measured"],["تشغيل أقصى تبريد","measured"],["إزالة الضباب","measured"],["هواء للوجه","measured"],["وجه وأقدام","measured"],["هواء للقدمين","measured"],["أقدام وإزالة ضباب","measured"],["إيقاف التنظيف السريع","measured"],["تشغيل التنظيف السريع","measured"],["إيقاف التكييف الخلفي","measured"],["تشغيل التكييف الخلفي","measured"],["الوضع التلقائي للخلف","measured"],["إيقاف قفل الأطفال","measured"],["تشغيل قفل الأطفال","measured"],["قفل الخلف","measured"],["الوضع اليدوي للخلف","measured"],["هواء للوجه بالخلف","measured"],["هواء للأقدام بالخلف","measured"],["فتح قفل الخلف","measured"],["إيقاف المروحة الخلفية","measured"],["المروحة الخلفية 3","measured"],["المروحة الخلفية 7","measured"],["تدوير داخلي","measured"],["حرارة موحّدة","measured"],["حرارة منفصلة","measured"],["إيقاف تهوية المقصورة","measured"],["تشغيل تهوية المقصورة","measured"],["تدفئة بالوقود","measured"],["تدفئة كهربائية","measured"],["المروحة 1","measured"],["المروحة 3","measured"],["المروحة 5","measured"],["المروحة 7","measured"],["إيقاف المروحة","measured"]]],["الكراسي",[["تهوية السائق","measured"],["تدفئة السائق","measured"],["تهوية الراكب","measured"],["تدفئة الراكب","measured"],["تهوية المقعد الخلفي الأيسر","measured"],["تدفئة المقعد الخلفي الأيسر","measured"],["تهوية المقعد الخلفي الأيمن","measured"],["تدفئة المقعد الخلفي الأيمن","measured"],["مساج السائق","measured"],["مساج الراكب","measured"]]],["النوافذ",[["نافذة السائق","measured"],["نافذة الراكب","measured"],["النافذة الخلفية اليسرى","measured"],["النافذة الخلفية اليمنى","measured"]]],["السقف والستارة",[["تهوية السقف","measured"],["غلق السقف","measured"],["وضع الراحة للسقف","measured"],["نصف السقف","measured"],["فتح السقف","measured"],["إيقاف السقف","measured"],["غلق الستارة","measured"],["نصف الستارة","measured"],["فتح الستارة","measured"],["إيقاف الستارة","measured"],["غلق فتحة السقف","measured"],["نصف فتحة السقف","measured"],["فتح فتحة السقف","measured"],["تهوية فتحة السقف","measured"],["غلق حاجب الشمس","measured"],["فتح حاجب الشمس","measured"],["لمبات القراءة","measured"]]],["المرايات",[["طي وفتح المرايات","measured"]]],["القيادة والتعليق",[["ارتفاع السيارة","measured"],["قفل الدفرنس","measured"],["أوضاع الطرق","measured"],["Auto Hold","demo"],["وظائف أوضاع الطرق","measured"],["نظام التعليق","inherited"],["وضع القيادة","measured"]]],["الطاقة والدفع",[["تبديل EV / HEV","measured"]]],["الإضاءة الداخلية",[["لون الإضاءة الداخلية","measured"],["تغيير ألوان الإضاءة تلقائيًا","measured"],["سطوع الإضاءة الداخلية","measured"]]],["الإضاءة الخارجية",[["الإضاءة الخارجية","measured"]]],["الثلاجة",[["الثلاجة","measured"]]],["الصوت",[["صوت النظام","measured"],["صوت الملاحة","measured"]]]]},"l8_2025_ui6":{"label":"LEOPARD 8 · 2025 · UI6","measured":false,"groups":[["القيادة والتعليق",[["وضع القيادة","inherited"]]]]},"l8_2026_ui5":{"label":"LEOPARD 8 · 2026 · UI5","measured":false,"groups":[["القيادة والتعليق",[["وضع القيادة","inherited"]]]]},"l8_2026_ui6":{"label":"LEOPARD 8 · 2026 · UI6","measured":false,"groups":[["القيادة والتعليق",[["وضع القيادة","inherited"]]]]},"l8":{"label":"LEOPARD 8 · 2026 · UI5","measured":false,"groups":[["القيادة والتعليق",[["وضع القيادة","inherited"]]]]},"denza_b5":{"label":"DENZA B5","measured":true,"groups":[]},"ti7":{"label":"TI 7","measured":true,"groups":[]}}};
+    /* CAR_COMMANDS:END */
+    // «أوامر كل نوع سيارة»: which chip is open survives the background re-render of this card.
+    let carCmdSel = '';
+    const CAR_CMD_STATUS = { measured: ['ok', 'مُجرّب على السيارة'], vendor: ['info', 'من برنامج BYD'], inherited: ['warn', 'غير مُجرّب — منقول من سيارة مشابهة'], ignored: ['bad', 'السيارة لم تنفّذه'], demo: ['muted', 'وضع التجربة فقط'] };
+    function renderCarCommands() {
+        const host = $('controller-car-cmds'); if (!host) return;
+        const key = CAR_COMMANDS.cars[carCmdSel] ? carCmdSel : (CAR_COMMANDS.aliases[carCmdSel] || '');
+        const car = CAR_COMMANDS.cars[key];
+        if (!car) { host.innerHTML = ''; return; }
+        const all = car.groups.flatMap(([, items]) => items);
+        const count = s => all.filter(([, st]) => st === s).length;
+        const legend = Object.entries(CAR_CMD_STATUS).filter(([s]) => count(s)).map(([s, [cls, label]]) => `<span class="badge ${cls}">${label} <span class="num">${count(s)}</span></span>`).join('');
+        host.innerHTML = `<div class="car-section" style="background:rgba(0,0,0,.2)">
+            <h3>${esc(car.label)} <span class="hw" style="display:inline">${esc(key)}</span><span class="badge num">${all.length} أمر</span></h3>
+            <div style="margin-bottom:10px">${legend}</div>
+            ${car.groups.map(([title, items]) => `<div style="margin-top:10px"><div class="sub" style="font-weight:700;margin-bottom:4px">${esc(title)} <span class="num">(${items.length})</span></div>${items.map(([ar, st]) => `<span class="badge ${(CAR_CMD_STATUS[st] || ['muted'])[0]}" title="${esc((CAR_CMD_STATUS[st] || ['', st])[1])}">${esc(ar)}</span>`).join('')}</div>`).join('')}
+        </div>`;
+    }
+    document.addEventListener('click', e => {
+        const b = e.target.closest('[data-cartype]'); if (!b) return;
+        carCmdSel = carCmdSel === b.dataset.cartype ? '' : b.dataset.cartype;
+        document.querySelectorAll('[data-cartype]').forEach(x => x.classList.toggle('active', x.dataset.cartype === carCmdSel));
+        renderCarCommands();
+    });
     function renderControllerSettings() {
         const parent = $('sub-controller-voice'); if (!parent) return;
         let host = $('controller-settings');
@@ -2666,9 +2783,9 @@
         // Preserve the draft and form inputs across background refreshes.
         const saved = {}; host.querySelectorAll('[data-preserve]').forEach(el => { saved[el.id] = el.value; });
         if (!glossaryDirty) { glossaryDraft = (live?.entries || []).map(e => ({ phrase: e.phrase, canonical: e.canonical })); glossaryText = glossaryDraft.map(e => e.phrase + ' : ' + e.canonical).join('\n'); }
-        host.innerHTML = `<section class="car-section"><h3>قاموس اللهجة (المصطلحات الخارجية ومعناها)</h3><p class="note">النسخة الحية: <span class="num">${esc(live?.rev ?? '—')}</span> · ٨٠ زوجًا، ٣٢ حرفًا للحقل، ٢٠٠٠ حرف إجمالًا.</p>${c.overlayError ? '<p class="note">تعذّر تحميل القاموس؛ حدّث البيانات قبل النشر.</p>' : ''}<fieldset ${c.overlayError ? 'disabled' : ''} style="border:0;padding:0"><div class="toolbar"><button type="button" class="chip ${glossaryMode === 'table' ? 'active' : ''}" data-glossary-mode="table">جدول</button><button type="button" class="chip ${glossaryMode === 'text' ? 'active' : ''}" data-glossary-mode="text">الكلمة : المعنى</button></div><div id="glossary-table" ${glossaryMode === 'text' ? 'hidden' : ''}><div class="table-wrap"><table><thead><tr><th>الكلمة كما يقولها السائق</th><th>المعنى / الأمر الفصيح</th><th></th></tr></thead><tbody id="glossary-body"></tbody></table></div><button type="button" class="btn sm" data-glossary-add>إضافة صف</button></div><label id="glossary-text-label" ${glossaryMode === 'table' ? 'hidden' : ''}>الكلمة : المعنى — زوج واحد في كل سطر<textarea id="glossary-text" rows="8" style="width:100%">${esc(glossaryText)}</textarea></label><label>ملاحظة النشر<input id="glossary-note" maxlength="200" data-preserve></label><button type="button" class="btn" data-controller-write="overlay">انشر إلى كل السيارات</button></fieldset><h4>سجل القاموس</h4><div id="glossary-history"></div></section>
+        host.innerHTML = `<section class="car-section"><h3>قاموس اللهجة (المصطلحات الخارجية ومعناها)</h3><p class="note">النسخة الحية: <span class="num">${esc(live?.rev ?? '—')}</span> · 80 زوجًا، 32 حرفًا للحقل، 2000 حرف إجمالًا.</p>${c.overlayError ? '<p class="note">تعذّر تحميل القاموس؛ حدّث البيانات قبل النشر.</p>' : ''}<fieldset ${c.overlayError ? 'disabled' : ''} style="border:0;padding:0"><div class="toolbar"><button type="button" class="chip ${glossaryMode === 'table' ? 'active' : ''}" data-glossary-mode="table">جدول</button><button type="button" class="chip ${glossaryMode === 'text' ? 'active' : ''}" data-glossary-mode="text">الكلمة : المعنى</button></div><div id="glossary-table" ${glossaryMode === 'text' ? 'hidden' : ''}><div class="table-wrap"><table><thead><tr><th>الكلمة كما يقولها السائق</th><th>المعنى / الأمر الفصيح</th><th></th></tr></thead><tbody id="glossary-body"></tbody></table></div><button type="button" class="btn sm" data-glossary-add>إضافة صف</button></div><label id="glossary-text-label" ${glossaryMode === 'table' ? 'hidden' : ''}>الكلمة : المعنى — زوج واحد في كل سطر<textarea id="glossary-text" rows="8" style="width:100%">${esc(glossaryText)}</textarea></label><label>ملاحظة النشر<input id="glossary-note" maxlength="200" data-preserve></label><button type="button" class="btn" data-controller-write="overlay">انشر إلى كل السيارات</button></fieldset><h4>سجل القاموس</h4><div id="glossary-history"></div></section>
         <section class="car-section"><h3>سعر الوقود لكل السيارات</h3><p class="note">السعر الفعّال: <span class="num">${esc(fuel?.price ?? '—')} ${esc(fuel?.currency || '')}</span> · ${esc(fuel?.grade || '')}</p>${c.fuelError ? '<p class="note">تعذّر تحميل سجل الوقود؛ حدّث البيانات قبل النشر.</p>' : ''}<fieldset ${c.fuelError ? 'disabled' : ''} style="border:0;padding:0"><label>السعر<input id="fleet-fuel-price" type="number" min="0.001" max="100" step="0.001" value="${esc(fuel?.price ?? '')}" data-preserve></label><label>العملة<input id="fleet-fuel-currency" maxlength="8" value="${esc(fuel?.currency || 'QAR')}" data-preserve></label><label>الدرجة<input id="fleet-fuel-grade" maxlength="24" value="${esc(fuel?.grade || 'super95')}" data-preserve></label><label>ملاحظة<input id="fleet-fuel-note" maxlength="200" data-preserve></label><button type="button" class="btn" data-controller-write="fuel">نشر سعر الوقود</button></fieldset><h4>سجل سعر الوقود</h4><div id="fleet-fuel-history"></div></section>
-        <section class="car-section"><h3>أوامر كل نوع سيارة</h3><p class="note">أوامر أنواع السيارات مضمّنة في ملفات التطبيق ولا يمكن تعديلها عن بُعد حاليًا.</p><div id="controller-car-types"></div></section>`;
+        <section class="car-section"><h3>أوامر كل نوع سيارة</h3><p class="note">اضغط على نوع السيارة لعرض أوامره. الرقم = عدد السيارات المسجّلة. القائمة من نسخة الكونترولر ${esc(CAR_COMMANDS.version)} ولا تُعدّل عن بُعد.</p><div id="controller-car-types" class="chips"></div><div id="controller-car-cmds" style="margin-top:12px"></div></section>`;
         Object.entries(saved).forEach(([id, value]) => { if ($(id)) $(id).value = value; });
         renderGlossaryRows();
         listControls({ hostId: 'glossary-history', rows: crashRows(c.overlay), searchText: r => [r.rev, r.note, JSON.stringify(r.entries)].join(' '), render: rows => {
@@ -2678,7 +2795,11 @@
             $('fleet-fuel-history').innerHTML = `<div class="table-wrap"><table><thead><tr><th>السعر</th><th>العملة</th><th>الدرجة</th><th>الملاحظة</th><th>النشر</th><th>الحالة</th></tr></thead><tbody>${rows.map(r => `<tr><td class="num">${esc(r.price)}</td><td class="num">${esc(r.currency)}</td><td>${esc(r.grade)}</td><td>${esc(r.note || '')}</td><td>${timeCell(r.published_at)}</td><td>${r.active ? '<span class="badge ok">فعّال</span>' : 'سابق'}</td></tr>`).join('') || '<tr><td colspan="6" class="empty">لا سجل</td></tr>'}</tbody></table></div>`;
         } });
         const types = new Map(); crashRows(c.cars).forEach(r => { const type = r.car || 'غير محدد'; types.set(type, (types.get(type) || 0) + 1); });
-        listControls({ hostId: 'controller-car-types', rows: [...types].map(([car, count]) => ({ car, count })), searchText: r => r.car, render: rows => { $('controller-car-types').innerHTML = rows.map(r => `<span class="chip">${esc(r.car)} <span class="num">${r.count}</span></span>`).join('') || '<div class="empty">لا أنواع مسجّلة</div>'; } });
+        Object.keys(CAR_COMMANDS.cars).forEach(k => { if (!types.has(k)) types.set(k, 0); });
+        const typeKey = t => CAR_COMMANDS.cars[t] ? t : (CAR_COMMANDS.aliases[t] && CAR_COMMANDS.cars[CAR_COMMANDS.aliases[t]] ? CAR_COMMANDS.aliases[t] : '');
+        const typeRows = [...types].map(([car, count]) => ({ car, count, key: typeKey(car), label: (CAR_COMMANDS.cars[typeKey(car)] || {}).label || '' })).sort((a, b) => b.count - a.count || a.car.localeCompare(b.car));
+        listControls({ hostId: 'controller-car-types', rows: typeRows, searchText: r => r.car + ' ' + r.label, render: rows => { $('controller-car-types').innerHTML = rows.map(r => r.key ? `<button type="button" class="chip ${carCmdSel === r.car ? 'active' : ''}" data-cartype="${esc(r.car)}" title="${esc(r.label)}">${esc(r.car)} <span class="num">${r.count}</span></button>` : `<span class="chip" style="cursor:default" title="لا توجد قائمة أوامر لهذا النوع">${esc(r.car)} <span class="num">${r.count}</span></span>`).join('') || '<div class="empty">لا أنواع مسجّلة</div>'; } });
+        renderCarCommands();
     }
     document.addEventListener('input', e => {
         const el = e.target;
@@ -2694,7 +2815,7 @@
                 else glossaryText = glossaryDraft.map(r => r.phrase + ' : ' + r.canonical).join('\n');
                 glossaryMode = b.dataset.glossaryMode; renderControllerSettings(); return;
             }
-            if (b.hasAttribute('data-glossary-add')) { if (glossaryDraft.length >= 80) throw new Error('الحد الأقصى ٨٠ زوجًا.'); glossaryDraft.push({ phrase: '', canonical: '' }); glossaryDirty = true; renderGlossaryRows(); return; }
+            if (b.hasAttribute('data-glossary-add')) { if (glossaryDraft.length >= 80) throw new Error('الحد الأقصى 80 زوجًا.'); glossaryDraft.push({ phrase: '', canonical: '' }); glossaryDirty = true; renderGlossaryRows(); return; }
             if (b.hasAttribute('data-glossary-delete')) { glossaryDraft.splice(Number(b.dataset.glossaryDelete), 1); glossaryDirty = true; renderGlossaryRows(); return; }
             if (!LOCAL_PROXY || !LOCAL_FLAGS.controller) throw new Error('اتصال الكونترولر غير متاح.');
             b.disabled = true;
@@ -2708,16 +2829,16 @@
                 await loadController(); return;
             } else if (b.hasAttribute('data-overlay-restore')) {
                 rpc = 'thab_admin_voice_overlay_restore'; args = { p_rev: Number(b.dataset.overlayRestore) };
-                title = 'إعادة نشر نسخة القاموس؟'; html = `سيُعاد نشر محتوى النسخة ${esc(args.p_rev)} برقم نسخة جديد أعلى. ستلتقط السيارات التغيير خلال ٦ ساعات. أي مسودة غير منشورة ستُستبدل.`;
+                title = 'إعادة نشر نسخة القاموس؟'; html = `سيُعاد نشر محتوى النسخة ${esc(args.p_rev)} برقم نسخة جديد أعلى. ستلتقط السيارات التغيير خلال 6 ساعات. أي مسودة غير منشورة ستُستبدل.`;
             } else if (b.dataset.controllerWrite === 'overlay') {
                 const entries = validateGlossary(glossaryMode === 'text' ? parseGlossaryText(glossaryText) : glossaryDraft);
-                const note = $('glossary-note').value.trim(); if (note.length > 200) throw new Error('الملاحظة لا تتجاوز ٢٠٠ حرف.');
+                const note = $('glossary-note').value.trim(); if (note.length > 200) throw new Error('الملاحظة لا تتجاوز 200 حرف.');
                 rpc = 'thab_admin_voice_overlay_publish'; args = { p_entries: entries, p_note: note };
-                title = 'نشر القاموس إلى كل السيارات؟'; html = `${entries.length ? `سيُنشر ${entries.length} زوجًا.` : 'سيتم إيقاف القاموس في كل السيارات'} ستلتقط السيارات التغيير خلال ٦ ساعات.`;
+                title = 'نشر القاموس إلى كل السيارات؟'; html = `${entries.length ? `سيُنشر ${entries.length} زوجًا.` : 'سيتم إيقاف القاموس في كل السيارات'} ستلتقط السيارات التغيير خلال 6 ساعات.`;
             } else {
                 const priceInput = $('fleet-fuel-price'), price = Number(priceInput.value), currency = $('fleet-fuel-currency').value.trim(), grade = $('fleet-fuel-grade').value.trim(), note = $('fleet-fuel-note').value.trim();
                 if (!priceInput.checkValidity() || !Number.isFinite(price) || price < 0.001 || price > 100) throw new Error('أدخل سعرًا من 0.001 إلى 100 بخطوة 0.001.');
-                if (!currency || currency.length > 8 || !grade || grade.length > 24 || note.length > 200) throw new Error('العملة مطلوبة حتى ٨ أحرف، والدرجة حتى ٢٤ حرفًا، والملاحظة حتى ٢٠٠ حرف.');
+                if (!currency || currency.length > 8 || !grade || grade.length > 24 || note.length > 200) throw new Error('العملة مطلوبة حتى 8 أحرف، والدرجة حتى 24 حرفًا، والملاحظة حتى 200 حرف.');
                 rpc = 'thab_admin_fuel_price_publish'; args = { p_price: price, p_currency: currency, p_grade: grade, p_note: note };
                 title = 'نشر سعر الوقود لكل السيارات؟'; html = `${esc(price)} ${esc(currency)} · ${esc(grade)}<br>${esc(note)}`;
             }
@@ -2849,7 +2970,7 @@
         try {
             const r = await localGet('/local/auth/devices');
             const rows = (r && r.devices) || [];
-            box.innerHTML = rows.length ? rows.map(d => `<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:6px 0;border-top:1px solid var(--panel-border)"><div><strong>${esc(d.label || 'جهاز')}</strong>${d.current ? ' <span class="badge ok">هذا الجهاز</span>' : ''}${d.revoked ? ' <span class="badge bad">ملغى</span>' : ''}<span class="hw">${esc(d.ip || '')} · ${esc(relTime(d.last_seen))}</span></div><span style="display:flex;gap:4px"><button class="btn sm" type="button" data-rename-dev="${esc(d.id)}" title="تسمية الجهاز"><i class="fa-solid fa-pen"></i></button>${d.revoked || d.current ? '' : `<button class="btn sm danger" type="button" data-revoke="${esc(d.id)}">إلغاء</button>`}</span></div>`).join('') : '<span class="sub">لا أجهزة</span>';
+            box.innerHTML = rows.length ? rows.map(d => `<div class="control-row" style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:6px 0;border-top:1px solid var(--panel-border)"><div><strong>${esc(d.label || 'جهاز')}</strong>${d.current ? ' <span class="badge ok">هذا الجهاز</span>' : ''}${d.revoked ? ' <span class="badge bad">ملغى</span>' : ''}<span class="hw">${esc(d.ip || '')} · ${esc(relTime(d.last_seen))}</span></div><span class="control-row" style="display:flex;gap:4px"><button class="btn sm" type="button" data-rename-dev="${esc(d.id)}" title="تسمية الجهاز"><i class="fa-solid fa-pen"></i></button>${d.revoked || d.current ? '' : `<button class="btn sm danger" type="button" data-revoke="${esc(d.id)}">إلغاء</button>`}</span></div>`).join('') : '<span class="sub">لا أجهزة</span>';
         } catch (e) { box.innerHTML = `<span class="sub">${esc(errMsg(e))}</span>`; }
     }
     document.addEventListener('click', async e => {
@@ -3466,7 +3587,7 @@
         moveChildren($('panel-voice'), $('sub-controller-voice'));
         // crashes tab: app filter chips over the two blocks
         const cp = $('panel-crashes');
-        const chips = document.createElement('div'); chips.id = 'crash-app-chips'; chips.style.cssText = 'display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px;';
+        const chips = document.createElement('div'); chips.id = 'crash-app-chips'; chips.className = 'chips'; chips.style.cssText = 'display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px;';
         chips.innerHTML = `<button type="button" class="chip active" data-crashapp="">كل التطبيقات</button>${['wallpapers', 'store', 'leo', 'controller'].map(k => `<button type="button" class="chip" data-crashapp="${k}">${esc(crashAppLabel(k))}</button>`).join('')}`;
         cp.insertBefore(chips, cp.firstChild);
         chips.addEventListener('click', e => { const b = e.target.closest('[data-crashapp]'); if (!b) return; chips.querySelectorAll('.chip').forEach(c => c.classList.toggle('active', c === b)); fleetCrashApp = b.dataset.crashapp; renderCrashes(); });
@@ -3584,6 +3705,34 @@
     // =====================================================================
     const USD_QAR = 3.64;
     function moneyHtml(v) { const usd = Number(v) || 0; return `<span class="money"><span>$${usd.toFixed(2)}</span><span>${(usd * USD_QAR).toFixed(2)} ر.ق</span></span>`; }
+    // Voice cost calculator (voice settings sub-tab): cars × daily commands × price per command.
+    const VCALC_KEY = 'vcalc.v1';
+    function vcalcMoney(v) { return v.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: Math.abs(v) < 1 && v !== 0 ? 4 : 2 }); }
+    function vcalcNum(id) { const n = Number($(id).value); return Number.isFinite(n) && n > 0 ? n : 0; }
+    function vcalcRender() {
+        const cars = vcalcNum('vcalc-cars'), daily = vcalcNum('vcalc-daily'), price = vcalcNum('vcalc-price');
+        const perDay = cars * daily;
+        const rows = [['يوميًا — سيارة واحدة', daily], ['شهريًا — سيارة واحدة', daily * 30], ['يوميًا — كل السيارات', perDay], ['شهريًا — كل السيارات', perDay * 30], ['سنويًا — كل السيارات', perDay * 365]];
+        $('vcalc-body').innerHTML = rows.map(([label, n], i) => { const usd = n * price; return `<tr class="${i === 3 ? 'total' : ''}"><td>${label}</td><td>${Math.round(n).toLocaleString('en-US')}</td><td>$${vcalcMoney(usd)}</td><td>${vcalcMoney(usd * USD_QAR)} ر.ق</td></tr>`; }).join('');
+        const quotaRow = (state.voice || []).find(r => r.key === 'voice.daily_quota_per_car');
+        const quota = quotaRow ? Number(quotaRow.value) : NaN;
+        $('vcalc-hint').textContent = Number.isFinite(quota) && quota > 0 && daily > quota ? `تنبيه: الحد اليومي الحالي لكل سيارة ${quota} أمر، السيارة لن تتجاوزه.` : '';
+        try { localStorage.setItem(VCALC_KEY, JSON.stringify({ cars: $('vcalc-cars').value, daily: $('vcalc-daily').value, price: $('vcalc-price').value })); } catch (e) {}
+    }
+    (function vcalcInit() {
+        if (!$('vcalc')) return;
+        try { const s = JSON.parse(localStorage.getItem(VCALC_KEY) || 'null'); if (s) ['cars', 'daily', 'price'].forEach(k => { if (s[k] != null && s[k] !== '') $('vcalc-' + k).value = s[k]; }); } catch (e) {}
+        $('vcalc').addEventListener('input', e => { if (e.target.matches('#vcalc input')) vcalcRender(); });
+        $('vcalc-actual').addEventListener('click', () => {
+            const c = state.ctl || {}; const st = Array.isArray(c.stats) ? (c.stats[0] || {}) : (c.stats || {});
+            const cost = Number(st.cost_total), n = Number(st.voice_total);
+            if (!(cost > 0 && n > 0)) { toast('info', 'لا توجد بيانات تكلفة فعلية بعد — افتح تبويب التليمتري أولًا.'); return; }
+            $('vcalc-price').value = (cost / n).toFixed(6);
+            vcalcRender();
+            toast('success', `متوسط الأمر الفعلي $${(cost / n).toFixed(6)} (من ${n.toLocaleString('en-US')} أمر)`);
+        });
+        vcalcRender();
+    })();
     const CTL_STAT_META = {
         cars_total:       { label: 'السيارات المسجّلة',        help: 'كل سيارة فتحت الكونترولر مرة واحدة على الأقل وأرسلت تليمتري.', icon: 'fa-car', color: 'blue' },
         cars_active_7d:   { label: 'نشطة آخر 7 أيام',          help: 'سيارات فتحت الكونترولر خلال آخر 7 أيام.', icon: 'fa-bolt', color: 'green' },
@@ -4072,7 +4221,7 @@
                 const where = folder ? `<span class="badge info" title="${esc(folder.folder)}">${esc(folder.label)}</span>` : '<span class="badge">تطبيق ذبذبة</span>';
                 return `<div class="toolbar"><span class="sub">${esc(wallpaperFilename(w.url))}</span>${where}<span class="badge">${esc(wallpaperIsVideo(w) ? 'فيديو' : 'صورة')}</span><button class="btn sm danger" type="button" data-wp-act="delete" data-wp-id="${esc(w.id)}">حذف نهائيًا</button></div>`;
             }).join('');
-            return `<div class="group" data-list-car="${esc(hw)}">${head}${body}</div>`;
+            return `<div class="group" data-list-car="${esc(hw)}"><div class="control-row">${head}</div>${body}</div>`;
         }).join('') || '<p class="empty">لا صور مخصصة تطابق البحث</p>';
     }
     function addWallpaperForDevice(hw) {
