@@ -1606,7 +1606,10 @@
         try { document.execCommand('copy'); done(); } catch (e) { promptDialog({ title: 'انسخ المعرّف', value: text }); }
         document.body.removeChild(ta);
     }
-    const hasSwal = () => typeof window.Swal !== 'undefined';
+    // SweetAlert renders into <body>; while a modal <dialog> (the car popup) is open, the top layer covers it and
+    // showModal() makes the rest of the page inert — the alert exists but is invisible and unclickable
+    // («لما بدوس عليه مش بيحصل حاجة», owner 2026-09-15). Fall back to our own <dialog>, which stacks above.
+    const hasSwal = () => typeof window.Swal !== 'undefined' && !document.querySelector('dialog[open]:modal');
     function toast(icon, title) {
         if (hasSwal()) Swal.fire({ icon, titleText: title, timer: 1600, showConfirmButton: false, background: '#1c160e', color: '#fff', toast: true, position: 'top' });
         else { const el = $('fallback-toast'); el.textContent = title; el.hidden = false; clearTimeout(toast.timer); toast.timer = setTimeout(() => { el.hidden = true; }, 3000); }
@@ -1636,10 +1639,10 @@
         if (hasSwal()) Swal.fire({ icon: icon || 'error', titleText: title, text, background: '#1c160e', color: '#fff', confirmButtonColor: '#ff9a3d' });
         else return themedFallbackDialog({ title, html: esc(text || ''), confirmText: 'حسنًا', cancel: false });
     }
-    function themedFallbackDialog({ title, html = '', input = false, value = '', placeholder = '', confirmText, cancel = true }) {
+    function themedFallbackDialog({ title, html = '', input = false, value = '', placeholder = '', confirmText, cancel = true, wide = false }) {
         return new Promise(resolve => {
             const dialog = document.createElement('dialog'); dialog.dir = 'rtl'; dialog.className = 'wp-dialog';
-            dialog.style.cssText = 'background:var(--panel,#1c160e);color:var(--text,#fff);border:1px solid var(--panel-border,#69513b);border-radius:16px;padding:24px;max-width:90vw;width:480px';
+            dialog.style.cssText = 'background:var(--panel,#1c160e);color:var(--text,#fff);border:1px solid var(--panel-border,#69513b);border-radius:16px;padding:24px;max-width:calc(100% - 24px);width:' + (wide ? 'min(860px, calc(100% - 24px))' : '480px');
             dialog.innerHTML = `<form method="dialog"><h3>${esc(title)}</h3><div>${html}</div>${input ? `<input type="text" aria-label="${esc(title)}" value="${esc(value)}" placeholder="${esc(placeholder)}" style="width:100%;margin:16px 0">` : ''}<div class="toolbar" style="margin-top:18px"><button class="btn" value="ok">${esc(confirmText)}</button>${cancel ? '<button class="btn" value="cancel" formnovalidate>إلغاء</button>' : ''}</div></form>`;
             dialog.addEventListener('close', () => { const result = dialog.returnValue === 'ok' ? input ? dialog.querySelector('input').value : true : input ? null : false; dialog.remove(); resolve(result); }, { once: true });
             document.body.appendChild(dialog); dialog.showModal();
@@ -4022,7 +4025,13 @@
     }
     $('notif-bell').addEventListener('click', () => { const pop = $('notif-history'); pop.hidden = !pop.hidden; $('notif-bell').setAttribute('aria-expanded', String(!pop.hidden)); if (!pop.hidden) { updateNotificationToggle(); renderNotificationHistory(); placeNotifPopup(); } });
     window.addEventListener('resize', placeNotifPopup); window.addEventListener('scroll', placeNotifPopup, { passive: true });
-    $('notif-list').addEventListener('click', e => { const b = e.target.closest('[data-notice]'); const n = b && notifications[Number(b.dataset.notice)]; if (n) showDevice(n.hw); });
+    // A notice names one car: open its popup right away (owner, 2026-09-15 — filtering the devices table was not
+    // what «اضغط على التوكن» was expected to do). Unknown hardware ids still fall back to the filtered table.
+    $('notif-list').addEventListener('click', e => {
+        const b = e.target.closest('[data-notice]'); const n = b && notifications[Number(b.dataset.notice)]; if (!n) return;
+        $('notif-history').hidden = true; $('notif-bell').setAttribute('aria-expanded', 'false');
+        if (n.hw && carRow(n.hw)) openCar(n.hw); else showDevice(n.hw);
+    });
     document.addEventListener('click', e => { if (!e.target.closest('#notif-wrap')) { $('notif-history').hidden = true; $('notif-bell').setAttribute('aria-expanded', 'false'); } });
     // =====================================================================
     //  Two-level navigation: fleet tabs, then one tab per app with the same sub-tabs
@@ -4490,7 +4499,7 @@
         }
         try {
             const b = build(await voiceLogGet(vinOf(car) || vin, { refresh: true }));
-            const p = themedFallbackDialog({ title, html: b.html, confirmText: 'إغلاق', cancel: false });
+            const p = themedFallbackDialog({ title, html: b.html, confirmText: 'إغلاق', cancel: false, wide: true });
             voiceChartWire([...document.querySelectorAll('dialog.wp-dialog')].pop(), b.days);
             refreshCells(); await p;
         } catch (e) { refreshCells(); alertDialog('تعذّر تحميل السجل', errMsg(e)); }
