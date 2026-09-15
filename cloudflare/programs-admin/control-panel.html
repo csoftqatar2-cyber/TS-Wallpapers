@@ -27,6 +27,7 @@
 
     <style>
         :root {
+            color-scheme: dark; /* native widgets (dropdown popups, scrollbars, file buttons) follow the dark page */
             --bg-color: #14100b;
             --panel-bg: rgba(46, 36, 23, 0.5);
             --panel-border: rgba(255, 214, 160, 0.14);
@@ -79,7 +80,6 @@
             background: linear-gradient(to left, #ffffff, #d1d5db);
             -webkit-background-clip: text; -webkit-text-fill-color: transparent;
         }
-        .logo-text p { font-size: .82rem; color: var(--text-muted); }
         .header-tools { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 
         .pill {
@@ -251,6 +251,87 @@
         input:focus, select:focus { border-color: var(--primary); outline: none; box-shadow: 0 0 0 3px rgba(255,154,61,.15); }
         input::placeholder { color: var(--text-muted); opacity: .7; }
         select option { background: #1c160e; }
+
+        /* ---------- Dropdown lists (every native <select> on the page) ----------
+           Owner (2026-09-15): the closed box was already dark, but opening it drew the
+           white Windows list with black text and a blue highlight. `color-scheme: dark`
+           is the fallback that darkens that native popup in every browser; the
+           @supports block further down takes over on Chromium 135+ and draws the list
+           with the site's own colours. Plain element selectors on purpose — most of
+           these selects are filled by innerHTML at runtime. */
+        select {
+            color-scheme: dark;
+            cursor: pointer;
+            /* The native RTL arrow sat glued to the left border — draw our own, inset ~14px. */
+            -webkit-appearance: none; -moz-appearance: none; appearance: none;
+            background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5 6 6.5l5-5' fill='none' stroke='%23b0a48f' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: left 14px center;
+            background-size: 12px 8px;
+            padding-left: 40px;
+        }
+        /* Selects that are dressed as small buttons (the crash-window picker) keep the button look. */
+        select.btn, select.btn.sm {
+            background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5 6 6.5l5-5' fill='none' stroke='%23b0a48f' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: left 10px center;
+            background-size: 10px 7px;
+            padding-left: 26px;
+        }
+        /* #ev-kind carries its padding inline; keep its text clear of the chevron. */
+        #ev-kind { padding-left: 32px !important; }
+        /* Arabic labels right-aligned, Latin paths still readable. */
+        select option, select optgroup { direction: rtl; text-align: right; }
+
+        @supports (appearance: base-select) {
+            /* Chromium 135+: the popup becomes real, styleable DOM. */
+            select, ::picker(select) { appearance: base-select; }
+            select {
+                width: 100%; min-height: 0;
+                background: rgba(0,0,0,.35); background-image: none;
+                border: 1px solid var(--panel-border); border-radius: 12px;
+                color: var(--text-main);
+                padding: 10px 14px;
+                font-family: inherit; font-size: .95rem; line-height: 1.5; font-weight: inherit;
+                text-align: start;
+                /* push the chevron to the far (left, in RTL) edge; the 14px inline padding is its inset */
+                justify-content: space-between; gap: 12px;
+            }
+            select:focus, select:open { border-color: var(--primary); outline: none; box-shadow: 0 0 0 3px rgba(255,154,61,.15); }
+            select.btn, select.btn.sm {
+                background: rgba(255,255,255,.05); background-image: none;
+                border: 1px solid var(--panel-border); border-radius: 9px;
+                color: var(--text-main); font-family: inherit; font-size: .8rem; font-weight: 600;
+                padding: 5px 10px; min-height: 40px;
+            }
+            #ev-kind { padding-left: 12px !important; }
+            select::picker-icon {
+                color: var(--text-muted); font-size: .8em;
+                margin-inline-start: 12px; /* the button's own 14px inline padding is the inset from the border */
+                transition: transform .18s ease;
+            }
+            select.btn::picker-icon { margin-inline-start: 8px; }
+            select:open::picker-icon { transform: rotate(180deg); }
+            select::picker(select) {
+                background: #1c160e;
+                border: 1px solid var(--panel-border);
+                border-radius: 12px;
+                box-shadow: 0 18px 44px #000b;
+                padding: 6px;
+                direction: rtl;
+                color: var(--text-main);
+                font-family: inherit; font-size: .95rem;
+                max-height: min(60vh, 420px); overflow-y: auto;
+            }
+            select option {
+                padding: 10px 14px; border-radius: 8px;
+                background: transparent; color: var(--text-main);
+                direction: rtl; text-align: right; line-height: 1.4;
+            }
+            select option:hover, select option:focus-visible { background: rgba(255,255,255,.06); outline: none; }
+            select option:checked { background: var(--primary); color: #1c160e; font-weight: 700; }
+            select option::checkmark { display: none; }
+        }
 
         /* ---------- Stats ---------- */
         .stats-grid {
@@ -528,6 +609,25 @@
         .stat-card.credit-low  { border-color: rgba(251,191,36,.55); }
         .stat-card.credit-crit { border-color: rgba(239,68,68,.6); background: linear-gradient(0deg, rgba(239,68,68,.08), rgba(239,68,68,.08)), var(--panel-bg); }
         .stat-info p .stat-na { font-size: 1.1rem; font-family: inherit; }
+        /* Home: one horizontal strip instead of big tiles (owner, 2026-09-15). */
+        #stats-grid:has(.home-strip) { display: block; }
+        .home-strip { display: flex; align-items: stretch; background: var(--panel-bg); border: 1px solid var(--panel-border); border-radius: 18px; backdrop-filter: blur(16px); overflow: hidden; }
+        .hs-item { flex: 1 1 auto; min-width: 0; display: flex; align-items: center; gap: 10px; padding: 12px 14px; cursor: pointer; transition: background .2s; position: relative; }
+        .hs-item + .hs-item::before { content: ''; position: absolute; inset-inline-start: 0; top: 18%; bottom: 18%; width: 1px; background: var(--panel-border); }
+        .hs-item:hover, .hs-item:focus-visible { background: rgba(255,255,255,.04); outline: none; }
+        .hs-ic { font-size: 1.05rem; width: 36px; height: 36px; border-radius: 10px; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; }
+        .hs-ic.blue { color: #3b82f6; background: rgba(59,130,246,.12); } .hs-ic.green { color: var(--success); background: rgba(16,185,129,.12); }
+        .hs-ic.purple { color: var(--accent); background: rgba(168,85,247,.12); } .hs-ic.orange { color: var(--primary); background: rgba(255,154,61,.12); }
+        .hs-txt { display: flex; flex-direction: column; min-width: 0; line-height: 1.25; }
+        .hs-label { font-size: .76rem; color: var(--text-muted); white-space: nowrap; }
+        .hs-val { font-family: var(--mono); font-size: 1.45rem; font-weight: 700; color: var(--text-main); direction: ltr; unicode-bidi: isolate; text-align: right; white-space: nowrap; }
+        .hs-sub { font-size: .7rem; color: var(--text-muted); white-space: normal; overflow-wrap: anywhere; }
+        .hs-sub .n { font-family: var(--mono); direction: ltr; unicode-bidi: isolate; }
+        .hs-wait { color: var(--text-muted); } .hs-na { font-family: inherit; font-size: 1rem; color: #fca5a5; }
+        .hs-item.low .hs-val { color: var(--warn); } .hs-item.crit .hs-val { color: #fca5a5; } .hs-item.good .hs-val { color: var(--success); }
+        @media (max-width: 1100px) { .hs-item { padding: 10px 10px; gap: 8px; } .hs-ic { width: 30px; height: 30px; font-size: .9rem; } .hs-val { font-size: 1.2rem; } }
+        /* Narrow screens: the strip wraps into rows instead of scrolling sideways. */
+        @media (max-width: 800px) { .home-strip { flex-wrap: wrap; } .hs-item { flex: 1 1 45%; } .hs-item + .hs-item::before { display: none; } .hs-item { border-top: 1px solid var(--panel-border); } .hs-item:first-child { border-top: 0; } }
         .stat-extra { font-size: .72rem; color: var(--text-muted); line-height: 1.5; margin-top: 4px; }
         .stat-extra .n { font-family: var(--mono); direction: ltr; unicode-bidi: isolate; }
         .car-type { display: block; font-weight: 600; }
@@ -599,7 +699,6 @@
             .logo-area { gap: 10px; }
             #brand-logo { height: 40px; width: 40px; border-radius: 10px; }
             .logo-text h1 { font-size: 1.05rem; line-height: 1.3; }
-            .logo-text p { font-size: .74rem; }
             .conn { margin-inline-start: 6px; font-size: .72rem; }
             .header-tools { width: 100%; }
             .header-tools .btn { flex: 0 0 auto; }
@@ -631,7 +730,6 @@
         @media (max-width: 480px) {
             .container { padding: 12px 8px 32px; }
             .card { padding: 10px; }
-            .logo-text p { display: none; }
             .logo-text h1 { font-size: 1rem; }
             #brand-logo { height: 36px; width: 36px; border-radius: 9px; }
             .stat-card { padding: 10px; }
@@ -672,6 +770,48 @@
         .car-sections { grid-template-columns: repeat(auto-fit, minmax(min(420px, 100%), 1fr)); }
         #controller-settings fieldset:has(#fleet-fuel-price) { grid-template-columns: repeat(auto-fit, minmax(min(180px, 100%), 1fr)); }
         #controller-settings .toolbar { margin-bottom: 0; }
+        /* Fixed column tracks keep short values from stretching the devices table. */
+        table.resizable-table { table-layout: fixed; min-width: 0; }
+        .resizable-table > thead > tr > th { padding-inline-end: 12px; }
+        .resizable-table > thead > tr > th,
+        .resizable-table > tbody > tr:not(.detail-row) > td { overflow: hidden; text-overflow: ellipsis; }
+        .column-resize-handle {
+            position: absolute; inset-block: 0; inset-inline-end: 0; width: 9px;
+            cursor: col-resize; touch-action: none; user-select: none; z-index: 2;
+            border-inline-end: 2px solid transparent;
+        }
+        .column-resize-handle:hover, .column-resize-handle:focus-visible,
+        .resizing-columns .column-resize-handle { border-color: var(--primary); background: rgba(255,154,61,.12); }
+        .resizing-columns, .resizing-columns * { cursor: col-resize !important; user-select: none !important; }
+        .device-columns > thead > tr > th,
+        .device-columns > tbody > tr:not(.detail-row) > td { min-width: 0; padding: 7px 8px; line-height: 1.35; }
+        .device-columns > thead > tr > th { padding-inline-end: 12px; }
+        .device-columns > tbody > tr:not(.detail-row) > td :is(.name, .hw, .sub, .cell-ver, .car-type) {
+            max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+            overflow-wrap: normal; word-break: normal;
+        }
+        .device-columns > tbody > tr:not(.detail-row) > td > :is(.name, .car-type) { display: block; }
+        .device-columns > tbody > tr:not(.detail-row) > td > .badge {
+            max-width: 100%; box-sizing: border-box; overflow: hidden; vertical-align: middle;
+            padding: 2px 5px; gap: 3px; line-height: 1.35;
+        }
+        .device-columns > tbody > tr:not(.detail-row) > td > .actions {
+            display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px;
+        }
+        .device-columns > tbody > tr:not(.detail-row) > td > .actions > .btn {
+            min-width: 0; min-height: 30px; padding: 3px 4px; font-size: .76rem;
+            line-height: 1.2; white-space: nowrap; overflow-wrap: normal;
+        }
+        /* Auto-fit measures an invisible, unconstrained copy of just one column. */
+        table.column-measure {
+            position: fixed; top: 0; left: 0; visibility: hidden; pointer-events: none;
+            width: max-content !important; min-width: 0 !important; max-width: none !important; table-layout: auto;
+        }
+        table.column-measure th, table.column-measure td,
+        table.column-measure td :is(.name, .hw, .sub, .cell-ver, .car-type, .badge) {
+            width: auto !important; max-width: none !important; white-space: nowrap !important; overflow: visible !important;
+        }
+        table.column-measure .actions { grid-template-columns: repeat(2, max-content) !important; }
     </style>
 </head>
 <body>
@@ -705,7 +845,6 @@
                 <a href="#" id="brand-home" aria-label="الرئيسية"><img id="brand-logo" src="data:image/png;base64,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" alt="THABTHABA STORE"></a>
                 <div class="logo-text">
                     <h1>Thabthaba Programs Admin <span id="conn-word" class="conn muted" role="status">غير متصل</span></h1>
-                    <p>THABTHABA STORE — ستة تطبيقات، خلفية تفعيل واحدة · ملف محلي</p>
                 </div>
             </div>
             <div class="header-tools">
@@ -793,11 +932,12 @@
                 <div class="toolbar">
                     <div class="search"><i class="fa-solid fa-magnifying-glass"></i><input type="search" id="dev-search" placeholder="بحث: المعرّف / السيريال / الاسم / السيارة"></div>
                     <span class="note" id="dev-count-note"></span>
+                    <button type="button" class="btn sm" id="dev-reset-columns">إعادة ضبط عرض الأعمدة</button>
                 </div>
                 <div class="chips" id="dev-chips"></div>
                 <div class="chips" id="dev-type-chips" style="margin-top:-4px"></div>
                 <div class="table-wrap">
-                    <table id="dev-table">
+                    <table id="dev-table" class="device-columns" data-column-widths="56,184,96,88,112,112,140,112,104,112,96,180,104,100,132">
                         <thead>
                             <tr>
                                 <th style="width:28px"></th>
@@ -1259,6 +1399,133 @@
     //  أدوات عامة
     // =====================================================================
     const $ = (id) => document.getElementById(id);
+    // One track per header; repeat calls also handle replacement headers without duplicate listeners.
+    function makeResizableTable(table, key) {
+        if (!table || !table.tHead || !table.tHead.rows.length) return;
+        const headers = [...table.tHead.rows[0].cells];
+        if (!headers.length || headers.some(th => th.colSpan !== 1)) return;
+        const previous = table._columnResize;
+        if (previous && previous.headers.length === headers.length && previous.headers.every((th, i) => th === headers[i])) {
+            previous.apply();
+            return previous;
+        }
+        if (previous) previous.destroy();
+        const min = 56;
+        const clamp = w => Math.max(min, Math.round(w));
+        const configured = (table.dataset.columnWidths || '').split(',').map(Number);
+        const defaults = headers.map((th, i) => Number.isFinite(configured[i]) && configured[i] > 0 ? clamp(configured[i]) : 128);
+        let widths = defaults.slice();
+        try {
+            const saved = JSON.parse(localStorage.getItem(key));
+            if (Array.isArray(saved) && saved.length === headers.length) {
+                widths = saved.map((w, i) => typeof w === 'number' && Number.isFinite(w) && w > 0 ? clamp(w) : defaults[i]);
+            }
+        } catch (e) { /* Storage may be disabled or contain old data. */ }
+        let group = table.querySelector(':scope > colgroup');
+        if (!group) { group = document.createElement('colgroup'); table.insertBefore(group, table.tHead); }
+        group.replaceChildren(...headers.map(() => document.createElement('col')));
+        const cols = [...group.children], handles = [];
+        table.classList.add('resizable-table');
+        table.style.minWidth = '0';
+        const save = () => { try { localStorage.setItem(key, JSON.stringify(widths)); } catch (e) {} };
+        const apply = () => {
+            cols.forEach((col, i) => { col.style.width = widths[i] + 'px'; });
+            table.style.width = widths.reduce((sum, w) => sum + w, 0) + 'px';
+            handles.forEach((handle, i) => handle.setAttribute('aria-valuenow', String(widths[i])));
+        };
+        let finishDrag = null;
+        const autoFit = index => {
+            const probe = document.createElement('table');
+            probe.className = table.className + ' column-measure';
+            probe.dir = getComputedStyle(table).direction;
+            probe.setAttribute('aria-hidden', 'true');
+            const head = probe.createTHead(), body = probe.createTBody();
+            // Skip detail/empty rows and nested tables; only this table's column contributes.
+            [...table.rows].forEach(row => {
+                if (row.hidden || row.cells.length !== headers.length || [...row.cells].some(cell => cell.colSpan !== 1)) return;
+                const cell = row.cells[index].cloneNode(true);
+                cell.removeAttribute('id');
+                cell.querySelectorAll('[id]').forEach(el => el.removeAttribute('id'));
+                cell.querySelectorAll('.column-resize-handle').forEach(el => el.remove());
+                (row.parentElement === table.tHead ? head : body).insertRow().appendChild(cell);
+            });
+            table.parentElement.appendChild(probe);
+            try { widths[index] = clamp(probe.getBoundingClientRect().width + 2); }
+            finally { probe.remove(); }
+            apply(); save();
+        };
+        headers.forEach((th, index) => {
+            th.style.width = 'auto';
+            th.querySelectorAll('.column-resize-handle').forEach(el => el.remove());
+            const handle = document.createElement('span');
+            handle.className = 'column-resize-handle';
+            handle.tabIndex = 0;
+            handle.setAttribute('role', 'separator');
+            handle.setAttribute('aria-orientation', 'vertical');
+            handle.setAttribute('aria-valuemin', String(min));
+            handle.setAttribute('aria-label', 'عرض العمود: ' + (th.textContent.trim() || String(index + 1)));
+            handle.title = 'اسحب لتغيير العرض · انقر مرتين للملاءمة التلقائية';
+            handle.addEventListener('click', e => e.stopPropagation());
+            handle.addEventListener('dblclick', e => { e.preventDefault(); e.stopPropagation(); autoFit(index); });
+            handle.addEventListener('keydown', e => {
+                const rtl = getComputedStyle(table).direction === 'rtl';
+                if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); autoFit(index); }
+                else if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+                    e.preventDefault(); e.stopPropagation();
+                    widths[index] = clamp(widths[index] + (e.key === 'ArrowLeft' ? -1 : 1) * (rtl ? -1 : 1) * 8);
+                    apply(); save();
+                }
+            });
+            handle.addEventListener('pointerdown', e => {
+                if (e.button !== 0 || e.isPrimary === false) return;
+                e.preventDefault(); e.stopPropagation();
+                if (finishDrag) finishDrag();
+                const startX = e.clientX, startWidth = widths[index], pointerId = e.pointerId;
+                const direction = getComputedStyle(table).direction === 'rtl' ? -1 : 1;
+                const move = event => {
+                    if (event.pointerId !== pointerId) return;
+                    event.preventDefault();
+                    widths[index] = clamp(startWidth + (event.clientX - startX) * direction);
+                    apply();
+                };
+                const finish = event => {
+                    if (event && event.pointerId !== undefined && event.pointerId !== pointerId) return;
+                    if (event && event.type === 'pointerup') move(event);
+                    document.removeEventListener('pointermove', move);
+                    document.removeEventListener('pointerup', finish);
+                    document.removeEventListener('pointercancel', finish);
+                    handle.removeEventListener('lostpointercapture', finish);
+                    window.removeEventListener('blur', finish);
+                    finishDrag = null;
+                    table.classList.remove('resizing-columns');
+                    if (handle.hasPointerCapture(pointerId)) handle.releasePointerCapture(pointerId);
+                    save();
+                };
+                finishDrag = finish;
+                document.addEventListener('pointermove', move, { passive: false });
+                document.addEventListener('pointerup', finish);
+                document.addEventListener('pointercancel', finish);
+                handle.addEventListener('lostpointercapture', finish);
+                window.addEventListener('blur', finish);
+                table.classList.add('resizing-columns');
+                handle.setPointerCapture(pointerId);
+            });
+            th.appendChild(handle); handles.push(handle);
+        });
+        const api = { headers, apply, autoFit,
+            reset() {
+                if (finishDrag) finishDrag();
+                widths = defaults.slice(); apply();
+                try { localStorage.removeItem(key); } catch (e) {}
+            },
+            destroy() { if (finishDrag) finishDrag(); handles.forEach(handle => handle.remove()); }
+        };
+        table._columnResize = api;
+        apply();
+        return api;
+    }
+    makeResizableTable($('dev-table'), 'colw:dev-table');
+    $('dev-reset-columns').addEventListener('click', () => makeResizableTable($('dev-table'), 'colw:dev-table').reset());
     function esc(s) {
         return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
     }
@@ -1752,31 +2019,62 @@
             { h: 'إجمالي الأجهزة', v: m.length, ic: 'fa-microchip', c: 'blue', f: 'all' },
             { h: 'نشط', v: m.filter(r => r.active && !r.status.blockedAny).length, ic: 'fa-circle-check', c: 'green', f: 'active' },
             // One tile for every kind of block (owner, 2026-09-08); clicking it opens the devices list filtered to «محظور».
-            { h: 'محظور', v: m.filter(r => r.status.blockedAny).length, ic: 'fa-ban', c: 'red', f: 'blocked' },
-            { h: 'محاولات فاشلة > 0', v: m.filter(r => r.attempts > 0).length, ic: 'fa-hand', c: 'yellow', f: 'attempts' },
-            { h: 'توكنات صادرة', v: state.tokens.length, ic: 'fa-ticket', c: 'cyan', f: 'notoken' },
-            { h: 'تعارضات تسجيل', v: m.filter(r => r.conflicts > 0).length, ic: 'fa-triangle-exclamation', c: 'red', f: 'conflict' },
+            // «محاولات فاشلة» / «توكنات صادرة» / «تعارضات تسجيل» tiles removed from home by the owner (2026-09-15);
+            // the same filters stay as chips in the devices tab.
             { h: 'أعطال آخر 7 أيام', v: unresolvedReports(allCrashReports()).filter(c => ts(c.at) >= cutoff).length, ic: 'fa-bug', c: 'purple', f: null, t: 'crashes' },
         ];
-        const lv = latestVersions();
-        let html = stats.map(s => `
-            <div class="stat-card clickable" ${s.f ? `data-filter="${s.f}"` : `data-tab="${s.t}"`} tabindex="0" role="button" title="${s.f ? 'الأجهزة — ' + esc(s.h) : 'فتح التبويب'}">
-                <div class="stat-info"><h3>${esc(s.h)}</h3><p>${esc(s.v)}</p></div>
-                <div class="stat-icon ${s.c}"><i class="fa-solid ${s.ic}"></i></div>
-            </div>`).join('');
-        html += `
-            <div class="stat-card clickable" data-tab="releases" tabindex="0" role="button" title="الإصدارات المنشورة لكل البرامج">
-                <div class="stat-info"><h3>آخر الإصدارات المنشورة</h3>
-                    <p class="small">
-                        <span title="app_versions">الخلفيات: ${esc(verText(lv.wp, 'version_code', 'version_name'))}</span>
-                        <span title="catalog/apps.json → store">الستور: ${esc(verText(lv.store, 'versionCode', 'versionName'))}</span>
-                        <span title="latest.json">Leo: ${esc(verText(lv.leo, 'versionCode', 'versionName'))}</span>
-                    </p>
-                </div>
-                <div class="stat-icon orange"><i class="fa-solid fa-code-branch"></i></div>
-            </div>`;
-        $('stats-grid').innerHTML = html;
-        $('stats-grid').querySelectorAll('.stat-card.clickable').forEach(el => {
+        // «آخر الإصدارات المنشورة» and «محظور» tiles removed from home by the owner (2026-09-15).
+        // Home = ONE horizontal strip (owner: «خط واحد بس أفقي»): fleet numbers, then voice usage, cost and the
+        // OpenRouter balance (same numbers as the controller tab; they fill in once its data has loaded).
+        const cs = state.ctl ? (Array.isArray(state.ctl.stats) ? (state.ctl.stats[0] || {}) : (state.ctl.stats || {})) : null;
+        const has = k => cs && cs[k] != null && cs[k] !== '';
+        const wait = '<span class="hs-wait">…</span>';
+        const nEn = v => (Number(v) || 0).toLocaleString('en-US');
+        const usd = v => '$' + (Number(v) || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        const qar = v => (Number(v) * 3.64 || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' QR';
+        const orS = state.orCredits || { loading: true }, orD = orS.data;
+        let orVal = wait, orSub = 'رصيد OpenRouter', orCls = '';
+        if (!orS.loading && orD && orD.ok && orD.remaining != null) {
+            const rem = Number(orD.remaining); orVal = usd(rem);
+            orCls = rem < 5 ? ' crit' : rem < 20 ? ' low' : ' good';
+            orSub = `<span class="n">${qar(rem)}</span> · المستخدم <span class="n">${usd(orD.total_usage)}</span> · <span class="n">${qar(orD.total_usage)}</span>`;
+        } else if (!orS.loading) { orVal = '<span class="hs-na">غير متاح</span>'; orCls = ' crit'; }
+        const items = [
+            ...stats.map(s => ({ attrs: s.f ? `data-filter="${s.f}"` : `data-tab="${s.t}"`, ic: s.ic, c: s.c, label: s.h, value: esc(nEn(s.v)), sub: '' })),
+            { attrs: 'data-tab="controller" data-sub="telemetry"', ic: 'fa-microphone', c: 'purple', label: 'أوامر صوتية آخر 24 ساعة', value: has('voice_24h') ? esc(nEn(cs.voice_24h)) : wait,   // the daily number leads (owner, 2026-09-15)
+              sub: has('voice_total') ? `الإجمالي <span class="n">${esc(nEn(cs.voice_total))}</span>${has('voice_30d') ? ` · 30 يوم <span class="n">${esc(nEn(cs.voice_30d))}</span>` : ''}` : '', title: 'ضغطات زر الصوت خلال آخر 24 ساعة، وتحتها الإجمالي منذ البداية' },
+            { attrs: 'data-tab="controller" data-sub="telemetry"', ic: 'fa-dollar-sign', c: 'orange', label: 'تكلفة الصوت', value: has('cost_total') ? esc(usd(cs.cost_total)) : wait,
+              sub: has('cost_total') ? `<span class="n">${esc(qar(cs.cost_total))}</span>${has('cost_30d') ? ` · 30 يوم <span class="n">${esc(usd(cs.cost_30d))}</span>` : ''}` : '', title: 'ما دفعناه لـ OpenRouter عن الأوامر الصوتية منذ البداية' },
+            { attrs: 'data-tab="controller" data-sub="telemetry" id="home-or-credits"', ic: 'fa-wallet', c: 'green', label: 'المتبقي في OpenRouter', value: orVal, sub: orSub, cls: orCls, title: (typeof OR_CREDITS_HELP === 'string' ? OR_CREDITS_HELP : 'رصيد OpenRouter') },
+        ];
+        // «إجمالي الأجهزة» + «نشط» merged into one box (owner, 2026-09-15): active leads, total under it.
+        {
+            const iAll = items.findIndex(it => it.attrs === 'data-filter="all"'), iAct = items.findIndex(it => it.attrs === 'data-filter="active"');
+            if (iAll >= 0 && iAct >= 0) {
+                const act = items[iAct], all = items[iAll];
+                items[iAll] = { ...all, attrs: 'data-filter="all"', ic: 'fa-microchip', c: 'blue', label: 'الأجهزة النشطة', value: act.value,
+                    sub: `من إجمالي <span class="n">${all.value}</span>`, title: 'الأجهزة النشطة من إجمالي الأجهزة — فتح قائمة الأجهزة' };
+                items.splice(iAct, 1);
+            }
+        }
+        // Crashes: last 24 h leads, with 7 and 30 days under it (owner, 2026-09-15). Open (unresolved) groups only,
+        // counted by report time — independent of the crashes tab's own window setting.
+        {
+            const i = items.findIndex(it => it.attrs === 'data-tab="crashes"');
+            if (i >= 0) {
+                let open = [];
+                try { open = crashGroups(allCrashReports()).filter(g => !g.resolved).flatMap(g => g.reports); } catch (e) {}
+                const since = d => open.filter(c => ts(c.at) >= Date.now() - d * DAY).length;
+                items[i] = { ...items[i], label: 'أعطال آخر 24 ساعة', value: esc(nEn(since(1))),
+                    sub: `7 أيام <span class="n">${esc(nEn(since(7)))}</span> · 30 يوم <span class="n">${esc(nEn(since(30)))}</span>`, title: 'تقارير أعطال مفتوحة (غير محلولة) لكل البرامج' };
+            }
+        }
+        $('stats-grid').innerHTML = `<div class="home-strip">${items.map(it => `
+            <div class="hs-item clickable${it.cls || ''}" ${it.attrs} tabindex="0" role="button" title="${esc(it.title || it.label)}">
+                <i class="fa-solid ${it.ic} hs-ic ${it.c}"></i>
+                <div class="hs-txt"><span class="hs-label">${esc(it.label)}</span><span class="hs-val">${it.value}</span>${it.sub ? `<span class="hs-sub">${it.sub}</span>` : ''}</div>
+            </div>`).join('')}</div>`;
+        $('stats-grid').querySelectorAll('.clickable').forEach(el => {
             // A tile is a shortcut: devices tab + that filter, or the tab that owns the number.
             // The tabs card sits below the tiles, so bring it into view or the click looks dead.
             const go = () => {
@@ -1826,6 +2124,7 @@
     function renderDevices() {
         renderDevicesContent();
         pageRendered('dev-body', 'dev-body', false);
+        makeResizableTable($('dev-table'), 'colw:dev-table');
     }
     function renderDevicesContent() {
         if (carOpen) renderCarPage(carOpen);
@@ -2759,7 +3058,7 @@
                 host.replaceChildren(...fixed, ...(strip ? [strip] : []), ...page.flat());
                 if (!page.length) {
                     if (!rows.length && empty.length) host.append(...empty);
-                    else { const el = document.createElement(host.tagName === 'TBODY' ? 'tr' : 'div'); el.innerHTML = host.tagName === 'TBODY' ? '<td colspan="20"><div class="empty">لا نتائج مطابقة</div></td>' : '<div class="empty">لا نتائج مطابقة</div>'; host.append(el); }
+                    else { const el = document.createElement(host.tagName === 'TBODY' ? 'tr' : 'div'); el.innerHTML = host.tagName === 'TBODY' ? `<td colspan="${host.id === 'dev-body' ? 15 : 20}"><div class="empty">لا نتائج مطابقة</div></td>` : '<div class="empty">لا نتائج مطابقة</div>'; host.append(el); }
                 }
                 renderedLists.set(host, { nodes, visible: [...host.children] });
             }
@@ -2903,6 +3202,7 @@
         r.forEach((x, i) => { if (x.status === 'fulfilled' && !x.value?.error) ctl[keys[i]] = x.value; else if (/^crash/.test(keys[i])) ctl.crashUnavailable = true; else { ctl[keys[i] + 'Error'] = true; errs.push(keys[i] + ': ' + errMsg(x.reason || x.value.error)); } });
         state.ctl = ctl; setErr('ctl-err', errs.join(' · ')); renderController();
         refreshCrashViews();
+        try { renderStats(); } catch (e) {}   // home tiles show voice usage/cost from these stats
     }
     let ctlKind = '', fleetCrashApp = '';
     let glossaryDraft = null, glossaryDirty = false, glossaryMode = 'table', glossaryText = '';
@@ -3902,7 +4202,7 @@
     //  Controller stat tiles: what each number is (hover for the explanation), money in USD + QAR
     // =====================================================================
     const USD_QAR = 3.64;
-    function moneyHtml(v) { const usd = Number(v) || 0; return `<span class="money"><span>$${usd.toFixed(2)}</span><span>${(usd * USD_QAR).toFixed(2)} ر.ق</span></span>`; }
+    function moneyHtml(v) { const usd = Number(v) || 0; return `<span class="money"><span>$${usd.toFixed(2)}</span><span>${(usd * USD_QAR).toFixed(2)} QR</span></span>`; }
     // =====================================================================
     //  Per-car voice log (thab_admin_events, kind = 'voice') — ONE loader shared by the controller cars table
     //  («أوامر اتحسبت فلوس»), the daily-chart popup and the car page «الأوامر الصوتية».
@@ -4014,7 +4314,7 @@
         return out;
     }
     const usdFine = v => '$' + (Number(v) || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 4 });
-    const qarFine = v => ((Number(v) || 0) * USD_QAR).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 4 }) + ' ر.ق';
+    const qarFine = v => ((Number(v) || 0) * USD_QAR).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 4 }) + ' QR';
     const intEn = v => (Number(v) || 0).toLocaleString('en-US');
     function voiceDayText(d) {
         if (!d) return '';
@@ -4210,7 +4510,7 @@
         const cars = vcalcNum('vcalc-cars'), daily = vcalcNum('vcalc-daily'), price = vcalcNum('vcalc-price');
         const perDay = cars * daily;
         const rows = [['يوميًا — سيارة واحدة', daily], ['شهريًا — سيارة واحدة', daily * 30], ['يوميًا — كل السيارات', perDay], ['شهريًا — كل السيارات', perDay * 30], ['سنويًا — كل السيارات', perDay * 365]];
-        $('vcalc-body').innerHTML = rows.map(([label, n], i) => { const usd = n * price; return `<tr class="${i === 3 ? 'total' : ''}"><td>${label}</td><td>${Math.round(n).toLocaleString('en-US')}</td><td>$${vcalcMoney(usd)}</td><td>${vcalcMoney(usd * USD_QAR)} ر.ق</td></tr>`; }).join('');
+        $('vcalc-body').innerHTML = rows.map(([label, n], i) => { const usd = n * price; return `<tr class="${i === 3 ? 'total' : ''}"><td>${label}</td><td>${Math.round(n).toLocaleString('en-US')}</td><td>$${vcalcMoney(usd)}</td><td>${vcalcMoney(usd * USD_QAR)} QR</td></tr>`; }).join('');
         const quotaRow = (state.voice || []).find(r => r.key === 'voice.daily_quota_per_car');
         const quota = quotaRow ? Number(quotaRow.value) : NaN;
         $('vcalc-hint').textContent = Number.isFinite(quota) && quota > 0 && daily > quota ? `تنبيه: الحد اليومي الحالي لكل سيارة ${quota} أمر، السيارة لن تتجاوزه.` : '';
@@ -4468,7 +4768,7 @@
                 ${priceCells}
                 <td class="m">${has ? '$' + vcalcPrice(r.price) : '—'}</td>
                 <td class="m">${has ? '$' + vcalcMoney(usd) : '—'}</td>
-                <td class="m">${has ? vcalcMoney(usd * USD_QAR) + ' ر.ق' : '—'}</td>
+                <td class="m">${has ? vcalcMoney(usd * USD_QAR) + ' QR' : '—'}</td>
                 <td>${basis}</td>
                 <td><button class="btn sm" type="button" data-vcalc-model="${esc(m.id)}">احسب عليه</button></td>
             </tr>`;
@@ -4653,6 +4953,7 @@
     function refreshOrCreditsTile() {
         const el = document.getElementById('ctl-or-credits');
         if (el) el.outerHTML = orCreditsTile();
+        if (document.getElementById('home-or-credits')) { try { renderStats(); } catch (e) {} }
     }
     function orCreditsTile() {
         const s = state.orCredits || { loading: true }, d = s.data;
@@ -4663,8 +4964,8 @@
             const rem = Number(d.remaining);
             value = moneyHtml(rem);
             if (rem < 5) { cls = ' credit-crit'; color = 'red'; } else if (rem < 20) { cls = ' credit-low'; color = 'yellow'; }
-            const bought = d.source === 'key_limit' ? 'حد المفتاح' : 'المشترى';
-            extra = `${bought} <span class="n">${esc(usd(d.total_credits))}</span> · المستخدم <span class="n">${esc(usd(d.total_usage))}</span>`;
+            // Owner (2026-09-15): only remaining + used, each in USD and QAR — no «المشترى».
+            extra = `المستخدم <span class="n">${esc(usd(d.total_usage))}</span> · <span class="n">${esc(((Number(d.total_usage) || 0) * 3.64).toFixed(2))} QR</span>`;
         } else {
             value = '<span class="stat-na">غير متاح</span>'; color = 'red';
             const why = s.error ? s.error : (OR_CREDITS_REASON[d && d.reason] || OR_CREDITS_REASON.unknown);
