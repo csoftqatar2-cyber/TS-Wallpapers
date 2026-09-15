@@ -25,7 +25,7 @@ import { bumpCatalogRow, readCatalogRow, CatalogRowError } from "./catalog-row.m
 
 const RPC_ALLOW = /^store_admin_[a-z0-9_]{1,40}$/u;
 const TSLINK_ADMIN_BASE = "https://tslink-bot.tsdash-qatar.workers.dev/admin/api";
-const TSLINK_GET_ALLOW = /^\/(overview|cars|versions|cars\/[A-Za-z0-9_.:@+-]{1,120})$/u;
+const TSLINK_GET_ALLOW = /^\/(overview|cars|versions|crashes|crashes\/recent|cars\/[A-Za-z0-9_.:@+-]{1,120})$/u;   // crashes: relay D1 groups (+ recent rows once the relay ships them)
 const LEO_ADMIN_BASE = "https://tsleo-checkin.tsdash-qatar.workers.dev";
 const LEO_GET_ALLOW = /^\/(crashes|cars)$/u;
 // Controller telemetry RPCs the site may call (p_secret injected here). Reads + the owner's voice/fuel
@@ -410,6 +410,28 @@ export default {
 
     // Everything below injects a secret: admin session required, verified server-side.
     if (!(await isAdmin(req, env))) return json(401, { message: "admin session required" });
+
+    // Voice cost calculator: public OpenRouter list prices for the models the owner configured
+    // (primary + fallbacks). No key is sent; the page's CSP cannot reach openrouter.ai itself.
+    if (req.method === "GET" && p === "/local/openrouter-prices") {
+      const ids = String(url.searchParams.get("models") || "").split(",").map(s => s.trim())
+        .filter(s => /^[\w.:\/-]{1,120}$/.test(s)).slice(0, 10);
+      if (!ids.length) return json(400, { message: "models required" });
+      let all = [];
+      try {
+        const r = await fetch("https://openrouter.ai/api/v1/models", { cf: { cacheTtl: 3600, cacheEverything: true } });
+        if (!r.ok) return json(502, { message: `openrouter ${r.status}` });
+        all = ((await r.json()) || {}).data || [];
+      } catch (e) { return json(502, { message: "openrouter unreachable" }); }
+      const num = v => (v == null || v === "" || !Number.isFinite(Number(v))) ? null : Number(v);
+      const models = {};
+      for (const id of ids) {
+        const m = all.find(x => x && (x.id === id || x.canonical_slug === id));
+        const pr = (m && m.pricing) || {};
+        models[id] = m ? { name: String(m.name || id), prompt: num(pr.prompt), completion: num(pr.completion), audio: num(pr.audio ?? pr.input_audio), request: num(pr.request) } : null;
+      }
+      return json(200, { models });
+    }
 
     try {
       // ---- writes: the browser never holds the write key; every write is allow-listed here ----

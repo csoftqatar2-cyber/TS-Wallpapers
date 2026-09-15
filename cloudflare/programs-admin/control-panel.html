@@ -170,6 +170,20 @@
         #vcalc-body td { font-family: var(--mono); direction: ltr; unicode-bidi: isolate; text-align: right; }
         #vcalc-body td:first-child { font-family: inherit; direction: rtl; }
         #vcalc-body tr.total td { color: var(--primary); font-weight: 700; }
+        /* Model basis + fallback comparison (same control height for inputs and the model select). */
+        .vcalc-grid label { min-width: 0; }
+        .vcalc-grid input, .vcalc-grid select { height: 46px; min-width: 0; }
+        .vcalc-grid select { width: 100%; padding: 0 12px; font-size: .92rem; text-overflow: ellipsis; }
+        .vcalc-basis { font-size: .76rem; color: var(--text-muted); line-height: 1.5; overflow-wrap: anywhere; }
+        .vcalc-basis .badge { font-size: .7rem; }
+        .vcalc-model-line { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 0 0 10px; font-size: .88rem; color: var(--text-muted); overflow-wrap: anywhere; }
+        .vcalc-model-line b { color: var(--text-main); }
+        .vcalc-id { font-family: var(--mono); direction: ltr; unicode-bidi: isolate; display: inline-block; font-size: .85em; color: var(--text-muted); }
+        #vcalc-cmp-body td { vertical-align: middle; }
+        #vcalc-cmp-body td.m { font-family: var(--mono); direction: ltr; unicode-bidi: isolate; text-align: right; white-space: nowrap; }
+        #vcalc-cmp-body tr.cheapest td { background: rgba(52,211,153,.07); }
+        #vcalc-cmp-body tr.cheapest td.m { color: var(--success); font-weight: 700; }
+        #vcalc-cmp-body tr.selected td:first-child { box-shadow: inset -3px 0 0 var(--primary); }
 
         /* ---------- Inputs ---------- */
         input[type=text], input[type=password], input[type=search], select {
@@ -874,12 +888,14 @@
                     <div class="vcalc-grid">
                         <label><span>عدد السيارات</span><input type="number" id="vcalc-cars" min="0" step="1" value="100" inputmode="numeric"></label>
                         <label><span>أوامر يومية لكل سيارة</span><input type="number" id="vcalc-daily" min="0" step="1" value="10" inputmode="numeric"></label>
-                        <label><span>سعر الأمر الواحد (دولار)</span><input type="number" id="vcalc-price" min="0" step="any" value="0.001" inputmode="decimal"></label>
+                        <label><span>الموديل المحسوب عليه</span><select id="vcalc-model"><option value="">سعر يدوي (بدون موديل)</option></select></label>
+                        <label><span>سعر الأمر الواحد (دولار)</span><input type="number" id="vcalc-price" min="0" step="any" value="0.001" inputmode="decimal"><span class="vcalc-basis" id="vcalc-basis"></span></label>
                     </div>
                     <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:10px 0 12px;">
                         <button class="btn sm" type="button" id="vcalc-actual"><i class="fa-solid fa-chart-line"></i> استخدم متوسط التكلفة الفعلي</button>
                         <span class="note" id="vcalc-hint"></span>
                     </div>
+                    <div class="vcalc-model-line" id="vcalc-model-line"></div>
                     <div class="table-wrap">
                         <table style="min-width:460px;">
                             <thead><tr><th>المدة</th><th>عدد الأوامر</th><th>بالدولار</th><th>بالريال القطري</th></tr></thead>
@@ -887,6 +903,14 @@
                         </table>
                     </div>
                     <p class="note" style="margin-top:8px;">الشهر = 30 يومًا، السنة = 365 يومًا، الدولار = 3.64 ريال قطري.</p>
+                    <h4 style="margin:16px 0 8px;font-size:.95rem;"><i class="fa-solid fa-scale-balanced"></i> مقارنة الموديل الأساسي والاحتياطية</h4>
+                    <div class="table-wrap">
+                        <table style="min-width:560px;">
+                            <thead><tr><th>الموديل</th><th>سعر الأمر</th><th>شهريًا (دولار)</th><th>شهريًا (ريال)</th><th>الأساس</th><th></th></tr></thead>
+                            <tbody id="vcalc-cmp-body"></tbody>
+                        </table>
+                    </div>
+                    <p class="note" style="margin-top:8px;" id="vcalc-cmp-note">«فعلي» = متوسط تكلفة الأوامر المسجّلة لهذا الموديل (5 أوامر على الأقل). «تقدير» = متوسط توكنات الأوامر المسجّلة × أسعار OpenRouter المعلنة للموديل.</p>
                 </section>
             </section>
 
@@ -1014,7 +1038,7 @@
         SESSION_TOKEN = null; SESSION_ISSUED = 0; refreshRetryMs = 0;
         if (refreshTimer) { clearTimeout(refreshTimer); refreshTimer = null; }
         SESSION_REFRESH = null; sessionEpoch++;
-        state.crashResolutions = []; state.storeCrashes = []; state.leoCrashes = []; state.leoCrashesLoaded = false;
+        state.crashResolutions = []; state.storeCrashes = []; state.tslinkCrashGroups = []; state.leoCrashes = []; state.leoCrashesLoaded = false;
         state.ctl = null; state.ctlLoaded = false; carCache.crashes.clear();
         glossaryDraft = null; glossaryDirty = false; glossaryText = '';
         stopFastPoll(); stopRealtime(); resetWallpaperManager();
@@ -1270,7 +1294,7 @@
     //  الحالة
     // =====================================================================
     const state = {
-        devices: [], tokens: [], versions: [], crashes: [], crashResolutions: [], storeCrashes: [], aliases: [], appSeen: [], appDaily: [], blockEvents: [],
+        devices: [], tokens: [], versions: [], crashes: [], crashResolutions: [], storeCrashes: [], tslinkCrashGroups: [], aliases: [], appSeen: [], appDaily: [], blockEvents: [],
         storeList: [], storeStats: null, storeEvents: [],
         catalog: null, leo: null,
         wallpapers: [], wallpaperHides: [],
@@ -1317,6 +1341,9 @@
             crashes: () => restGet('device_crashes?select=hardware_id,app_version,version_code,device_mode,crash_at,received_at,crash_text&order=received_at.desc&limit=300'),
             crashResolutions: () => restGet('crash_resolutions?select=*&order=resolved_at.desc&limit=1000'),
             storeCrashes: () => rpcStore('store_admin_crashes', { p_limit: 200, p_hw_id: null }),
+            // TS Link keeps its crashes in the relay's D1 (not Supabase); the relay answers grouped by
+            // fingerprint for up to 90 days — the crash window filter narrows it on the page.
+            tslinkCrashGroups: async () => LOCAL_PROXY && LOCAL_FLAGS.tslink ? ((await localGet('/local/tslink/crashes?days=90')) || {}).groups || [] : [],
             ctlCrashData: () => loadControllerCrashData(),
             leoCrashes: async () => LOCAL_PROXY && LOCAL_FLAGS.leo ? crashRows(await localGet('/local/leo/crashes?limit=200')) : [],
             aliases: () => restGet('device_id_aliases?select=old_id,current_id&limit=5000'),
@@ -2006,11 +2033,11 @@
         ]);
         return { crashes: results[0].status === 'fulfilled' ? crashRows(results[0].value) : [], crashGroups: results[1].status === 'fulfilled' ? crashRows(results[1].value) : [], crashUnavailable: results.some(r => r.status === 'rejected' || r.value?.error) };
     }
-    function crashAppLabel(app) { return ({ wallpapers: 'ذبذبة خلفيات', store: 'ذبذبة ستور', leo: 'ليو داش', controller: 'ذبذبة داشبورد' })[app] || app; }
+    function crashAppLabel(app) { return ({ wallpapers: 'ذبذبة خلفيات', store: 'ذبذبة ستور', leo: 'ليو داش', controller: 'ذبذبة داشبورد', tslink: 'TS Link' })[app] || app; }
     function normalizeCrash(app, c) {
         const text = c.crash_text || c.report || [c.exc, c.stack].filter(Boolean).join('\n');
         const rawCode = c.version_code ?? c.versionCode ?? c.app_version_code;
-        return { app, raw: c, text: String(text || ''), signature: app === 'controller' && c.fingerprint ? c.fingerprint : crashSignature(text),
+        return { app, raw: c, text: String(text || ''), signature: (app === 'controller' || app === 'tslink') && c.fingerprint ? c.fingerprint : crashSignature(text),
             hw: c.vin ? 'VIN-' + c.vin : c.hardware_id || c.hwId || c.hw_id || c.hardwareId || '',
             vin: c.vin || '', car: c.car || '', version: c.version_name || c.app_version || c.versionName || c.version || '',
             code: rawCode == null || rawCode === '' ? null : Number(rawCode), at: c.at || c.crash_at || c.receivedAt || c.received_at };
@@ -2018,6 +2045,13 @@
     function allCrashReports() {
         const reports = [['wallpapers', state.crashes], ['store', state.storeCrashes], ['leo', state.leoCrashes], ['controller', state.ctl && state.ctl.crashes]]
             .flatMap(([app, rows]) => crashRows(rows).map(c => normalizeCrash(app, c)));
+        // TS Link arrives pre-grouped (one row per fingerprint with counts), like the controller's
+        // server groups: mark it _aggregate so crashGroups() uses the relay's numbers.
+        for (const g of crashRows(state.tslinkCrashGroups)) {
+            const versions = Array.isArray(g.versions) ? g.versions : (g.versions ? [g.versions] : []);
+            const codes = versions.map(v => Number(typeof v === 'object' ? (v.versionCode ?? v.code) : String(v).match(/\((\d+)\)/)?.[1])).filter(Number.isFinite);
+            reports.push(normalizeCrash('tslink', { ...g, _aggregate: true, fingerprint: g.signature, count: g.occurrences, cars: g.cars, first_at: g.firstSeen, last_at: g.lastSeen, at: g.lastSeen, exc: g.message, stack: g.stack, car: g.model || '', version_code: codes.length ? Math.max(...codes) : null }));
+        }
         const seen = new Set(reports.filter(c => c.app === 'controller').map(controllerCrashIdentity));
         for (const cached of carCache.crashes.values()) for (const raw of cached.rows || []) {
             const c = normalizeCrash('controller', raw), key = controllerCrashIdentity(c);
@@ -2056,7 +2090,7 @@
         const reports = unresolvedReports(allCrashReports());
         $('cnt-crashes').textContent = reports.length;
         $('cnt-crashes').title = 'تقارير الأعطال المفتوحة التي ظهرت خلال ' + (CRASH_WINDOWS.find(w => w[0] === crashWindowDays()) || CRASH_WINDOWS[0])[1];
-        for (const app of ['wallpapers', 'store', 'leo', 'controller']) {
+        for (const app of ['wallpapers', 'store', 'leo', 'controller', 'tslink']) {
             const button = document.querySelector(`#panel-${app} .subtab[data-sub="crashes"]`);
             if (button) button.innerHTML = `الأعطال <span class="badge num">${reports.filter(c => c.app === app).length}</span>`;
         }
@@ -2069,7 +2103,7 @@
     // A crash group is "current" when it is unresolved AND was last seen inside the window
     // (7 days by default); older unresolved groups go to their own box, and resolved groups to a
     // third box — each with its own count, none mixed into the default view.
-    const CRASH_WINDOWS = [[7, 'آخر ٧ أيام'], [30, 'آخر ٣٠ يومًا'], [0, 'كل الفترة']];
+    const CRASH_WINDOWS = [[7, 'آخر 7 أيام'], [30, 'آخر 30 يومًا'], [0, 'كل الفترة']];
     function crashWindowDays() { try { const v = Number(localStorage.getItem('crash:windowDays')); return CRASH_WINDOWS.some(w => w[0] === v) ? v : 7; } catch (e) { return 7; } }
     function crashBox() { try { return localStorage.getItem('crash:box') || 'current'; } catch (e) { return 'current'; } }
     function inCrashWindow(g, days) { return !days || (Date.now() - ts(g.lastAt)) <= days * 86400000; }
@@ -2374,6 +2408,7 @@
     function renderVoice() {
         renderVoiceContent();
         pageRendered('voice-body');
+        try { vcalcSync(); } catch (e) { /* calculator not initialised yet; vcalcInit syncs itself */ }
     }
     function renderVoiceContent() {
         setErr('voice-err', state.errors.voice ? `admin_settings: ${state.errors.voice}` : '');
@@ -2876,6 +2911,7 @@
         renderControllerContent();
         pageRendered('ctl-voice-body');
         renderControllerSettings();
+        try { vcalcSync(); } catch (e) { /* calculator not initialised yet */ }
     }
     function renderControllerContent() {
         const c = state.ctl || {}; const asRows = v => Array.isArray(v) ? v : (v && typeof v === 'object' && Array.isArray(v.rows)) ? v.rows : (v && typeof v === 'object' ? [v] : []);
@@ -3588,7 +3624,7 @@
         // crashes tab: app filter chips over the two blocks
         const cp = $('panel-crashes');
         const chips = document.createElement('div'); chips.id = 'crash-app-chips'; chips.className = 'chips'; chips.style.cssText = 'display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px;';
-        chips.innerHTML = `<button type="button" class="chip active" data-crashapp="">كل التطبيقات</button>${['wallpapers', 'store', 'leo', 'controller'].map(k => `<button type="button" class="chip" data-crashapp="${k}">${esc(crashAppLabel(k))}</button>`).join('')}`;
+        chips.innerHTML = `<button type="button" class="chip active" data-crashapp="">كل التطبيقات</button>${['wallpapers', 'store', 'leo', 'controller', 'tslink'].map(k => `<button type="button" class="chip" data-crashapp="${k}">${esc(crashAppLabel(k))}</button>`).join('')}`;
         cp.insertBefore(chips, cp.firstChild);
         chips.addEventListener('click', e => { const b = e.target.closest('[data-crashapp]'); if (!b) return; chips.querySelectorAll('.chip').forEach(c => c.classList.toggle('active', c === b)); fleetCrashApp = b.dataset.crashapp; renderCrashes(); });
         document.addEventListener('click', e => { const b = e.target.closest('.subtab'); if (!b) return; switchSub(b.closest('.subtabs').dataset.app, b.dataset.sub); });
@@ -3656,7 +3692,7 @@
         // crashes → per app
         order.forEach(k => {
             const el = $('appcrash-' + k); if (!el) return;
-            if (['wallpapers', 'store', 'leo', 'controller'].includes(k)) {
+            if (['wallpapers', 'store', 'leo', 'controller', 'tslink'].includes(k)) {
                 if (k === 'controller') renderControllerCrashGroups(el);
                 else renderCrashView(el, allCrashReports().filter(c => c.app === k), k === 'store' && state.errors.storeCrashes ? 'تعذّر تحميل أعطال الستور؛ أعد التحديث بعد التحقق من الاتصال.' : '');
             } else el.innerHTML = '<div class="empty">هذا التطبيق لا يرفع تقارير أعطال إلى الخادم بعد</div>';
@@ -3717,21 +3753,208 @@
         const quotaRow = (state.voice || []).find(r => r.key === 'voice.daily_quota_per_car');
         const quota = quotaRow ? Number(quotaRow.value) : NaN;
         $('vcalc-hint').textContent = Number.isFinite(quota) && quota > 0 && daily > quota ? `تنبيه: الحد اليومي الحالي لكل سيارة ${quota} أمر، السيارة لن تتجاوزه.` : '';
-        try { localStorage.setItem(VCALC_KEY, JSON.stringify({ cars: $('vcalc-cars').value, daily: $('vcalc-daily').value, price: $('vcalc-price').value })); } catch (e) {}
+        vcalcRenderBasis();
+        vcalcRenderCompare(cars, daily);
+        try { localStorage.setItem(VCALC_KEY, JSON.stringify({ cars: $('vcalc-cars').value, daily: $('vcalc-daily').value, price: $('vcalc-price').value, model: vcalc.model, basis: vcalc.basis, fleetN: vcalc.fleetN })); } catch (e) {}
+    }
+    // ---- Model basis: which model the price per command is for (primary + fallbacks from voice.* settings) ----
+    // basis: 'manual' (typed price) | 'model' (price derived for vcalc.model) | 'fleet' (all-models average from stats).
+    const vcalc = { model: '', basis: 'manual', fleetN: 0, prices: {}, pricesKey: '', pricesBusy: false, pricesErr: '', pricesTriedAt: 0, events: null, eventsBusy: false, eventsTriedAt: 0 };
+    const VCALC_MIN_ACTUAL = 5;
+    function vcalcPrice(v) { return Number(v).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 6 }); }
+    function vcalcModels() {
+        const rows = state.voice || [];
+        const primary = String((rows.find(r => r.key === 'voice.model') || {}).value || '').trim();
+        let fallbacks = [];
+        try { fallbacks = voiceFallbackModels((rows.find(r => r.key === 'voice.models_fallback') || {}).value).map(m => String(m).trim()).filter(Boolean); } catch (e) {}
+        const out = [], seen = new Set();
+        if (primary) { out.push({ id: primary, role: 'primary' }); seen.add(primary.toLowerCase()); }
+        fallbacks.forEach(id => { if (!seen.has(id.toLowerCase())) { seen.add(id.toLowerCase()); out.push({ id, role: 'fallback' }); } });
+        return out;
+    }
+    function vcalcModelName(id) {
+        const p = vcalc.prices[id];
+        if (p && p.name) return String(p.name).replace(/^[^:]{1,40}:\s*/, '');
+        const tail = String(id).split('/').pop().replace(/:.*$/, '');
+        return tail.split(/[-_]+/).filter(Boolean).map(w => /^\d/.test(w) ? w : w.charAt(0).toUpperCase() + w.slice(1)).join(' ') || String(id);
+    }
+    const vcalcRoleBadge = role => role === 'primary' ? '<span class="badge ok">الأساسي</span>' : role === 'fallback' ? '<span class="badge info">احتياطي</span>' : '<span class="badge muted">غير موجود في الإعدادات الحالية</span>';
+    // Telemetry rows come in any shape: the command's numbers may sit on the row or inside data / payload / meta.
+    function vcalcField(e, keys) {
+        if (!e || typeof e !== 'object') return undefined;
+        for (let src of [e, e.data, e.payload, e.meta]) {
+            if (typeof src === 'string') { try { src = JSON.parse(src); } catch (err) { src = null; } }
+            if (!src || typeof src !== 'object') continue;
+            for (const k of keys) if (src[k] != null && src[k] !== '') return src[k];
+        }
+        return undefined;
+    }
+    const vcalcNumOf = v => (v == null || v === '' || typeof v === 'boolean' || !Number.isFinite(Number(v))) ? null : Number(v);
+    function vcalcEvents() {
+        const c = state.ctl || {};
+        const base = Array.isArray(c.events) ? c.events : (c.events && Array.isArray(c.events.rows)) ? c.events.rows : [];
+        const all = base.concat(vcalc.events || []);
+        const seen = new Set(), out = [];
+        for (const e of all) {
+            if (!e || typeof e !== 'object') continue;
+            const key = e.id != null ? 'id:' + e.id : JSON.stringify(e);
+            if (seen.has(key)) continue; seen.add(key);
+            const model = vcalcField(e, ['model']);
+            const kind = String(e.kind || e.type || '');
+            if (model == null && !/voice|assist|speech|command/i.test(kind)) continue;
+            out.push({
+                model: model == null ? '' : String(model).trim(),
+                cost: vcalcNumOf(vcalcField(e, ['cost'])),
+                pt: vcalcNumOf(vcalcField(e, ['pt', 'prompt_tokens'])),
+                ct: vcalcNumOf(vcalcField(e, ['ct', 'completion_tokens'])),
+            });
+        }
+        return out;
+    }
+    // One price per command for a model: real average when enough logged commands, else token estimate, else none.
+    function vcalcModelPrice(id, evs) {
+        evs = evs || vcalcEvents();
+        const low = String(id).toLowerCase();
+        const costs = evs.filter(e => e.model.toLowerCase() === low && e.cost != null && e.cost >= 0).map(e => e.cost);
+        if (costs.length >= VCALC_MIN_ACTUAL) return { price: costs.reduce((a, b) => a + b, 0) / costs.length, basis: 'actual', n: costs.length };
+        const tok = evs.filter(e => e.pt != null && e.ct != null && e.pt >= 0 && e.ct >= 0);
+        const p = vcalc.prices[id];
+        if (!tok.length) return { price: null, basis: 'none', reason: 'no-tokens', n: costs.length };
+        if (!p || p.prompt == null || p.completion == null) return { price: null, basis: 'none', reason: p === null ? 'no-model' : vcalc.pricesBusy ? 'loading' : 'no-prices', n: costs.length, tokens: tok.length };
+        const avgPt = tok.reduce((a, e) => a + e.pt, 0) / tok.length, avgCt = tok.reduce((a, e) => a + e.ct, 0) / tok.length;
+        return { price: avgPt * p.prompt + avgCt * p.completion, basis: 'estimate', n: costs.length, tokens: tok.length, avgPt, avgCt };
+    }
+    function vcalcBasisBadge(r) {
+        if (r.basis === 'actual') return `<span class="badge ok">متوسط فعلي من ${r.n.toLocaleString('en-US')} أمر</span>`;
+        if (r.basis === 'estimate') return `<span class="badge warn" title="متوسط ${Math.round(r.avgPt).toLocaleString('en-US')} توكن إدخال و${Math.round(r.avgCt).toLocaleString('en-US')} توكن إخراج من ${r.tokens.toLocaleString('en-US')} أمر">تقدير من أسعار OpenRouter</span>`;
+        const why = { 'no-tokens': 'لا توجد بيانات توكنات في السجل', 'no-model': 'الموديل غير موجود في OpenRouter', loading: 'جارٍ تحميل الأسعار…', 'no-prices': vcalc.pricesErr ? `تعذّر جلب الأسعار: ${vcalc.pricesErr}` : 'أسعار OpenRouter غير متاحة' }[r.reason] || 'لا بيانات';
+        return `<span class="badge muted">${esc(why)}</span>`;
+    }
+    async function vcalcLoadPrices(force) {
+        const ids = vcalcModels().map(m => m.id);
+        if (vcalc.model && !ids.includes(vcalc.model)) ids.push(vcalc.model);
+        if (!ids.length || !SESSION_TOKEN || vcalc.pricesBusy) return;
+        const key = ids.slice(0, 10).join(',');
+        if (!force && key === vcalc.pricesKey && (!vcalc.pricesErr || Date.now() - vcalc.pricesTriedAt < 60000)) return;
+        vcalc.pricesBusy = true; vcalc.pricesKey = key; vcalc.pricesTriedAt = Date.now();
+        try {
+            const r = await localGet('/local/openrouter-prices?models=' + encodeURIComponent(key));
+            vcalc.prices = Object.assign({}, vcalc.prices, (r && r.models) || {}); vcalc.pricesErr = '';
+        } catch (e) { vcalc.pricesErr = errMsg(e); }
+        vcalc.pricesBusy = false;
+        vcalcSync();
+    }
+    async function vcalcLoadEvents() {
+        if (vcalc.eventsBusy || vcalc.events || !LOCAL_PROXY || !LOCAL_FLAGS.controller || !SESSION_TOKEN) return;
+        if (Date.now() - vcalc.eventsTriedAt < 60000) return;
+        vcalc.eventsBusy = true; vcalc.eventsTriedAt = Date.now();
+        try {
+            const rows = await localPost('/local/controller/thab_admin_events', { p_limit: 2000, p_vin: null, p_kind: 'voice', p_since_id: null });
+            vcalc.events = Array.isArray(rows) ? rows : (rows && Array.isArray(rows.rows)) ? rows.rows : [];
+        } catch (e) { /* state.ctl.events still counts */ }
+        vcalc.eventsBusy = false;
+        vcalcSync();
+    }
+    // Rebuild the model list, re-derive the price when it follows a model, redraw. Safe to call before init.
+    function vcalcSync() {
+        if (!$('vcalc') || !$('vcalc-model')) return;
+        const models = vcalcModels();
+        const sel = $('vcalc-model');
+        const list = models.slice();
+        if (vcalc.model && !list.some(m => m.id === vcalc.model)) list.push({ id: vcalc.model, role: 'stale' });
+        const roleText = { primary: 'الأساسي', fallback: 'احتياطي', stale: 'محفوظ سابقًا' };
+        const html = `<option value="">سعر يدوي (بدون موديل)</option>` + list.map(m => `<option value="${esc(m.id)}">${esc(vcalcModelName(m.id))} — ${roleText[m.role]} (${esc(m.id)})</option>`).join('');
+        if (sel.dataset.html !== html) { sel.innerHTML = html; sel.dataset.html = html; }
+        sel.value = vcalc.basis === 'model' ? vcalc.model : '';
+        if (models.length) { vcalcLoadPrices(); vcalcLoadEvents(); }
+        if (vcalc.basis === 'model' && vcalc.model) vcalcApplyModel();
+        vcalcRender();
+    }
+    function vcalcApplyModel() {
+        const r = vcalcModelPrice(vcalc.model);
+        if (r.price != null && Number.isFinite(r.price)) $('vcalc-price').value = r.price.toFixed(8).replace(/\.?0+$/, '') || '0';
+        return r;
+    }
+    function vcalcRenderBasis() {
+        const line = $('vcalc-model-line'), under = $('vcalc-basis'); if (!line || !under) return;
+        if (vcalc.basis === 'model' && vcalc.model) {
+            const id = vcalc.model, m = vcalcModels().find(x => x.id === id), r = vcalcModelPrice(id);
+            const nameHtml = `<b>${esc(vcalcModelName(id))}</b> <span class="vcalc-id">(${esc(id)})</span>`;
+            const keep = r.price == null ? ' <span class="badge muted">السعر الحالي يدوي</span>' : '';
+            line.innerHTML = `<span>السعر محسوب على:</span> ${nameHtml} ${vcalcRoleBadge(m ? m.role : 'stale')} ${vcalcBasisBadge(r)}${keep}`;
+            under.innerHTML = `محسوب على ${nameHtml} · ${vcalcBasisBadge(r)}`;
+        } else if (vcalc.basis === 'fleet') {
+            const n = Number(vcalc.fleetN) || 0;
+            line.innerHTML = `<span>السعر محسوب على:</span> <b>كل الموديلات معًا</b> <span class="badge ok">متوسط فعلي من ${n.toLocaleString('en-US')} أمر</span>`;
+            under.innerHTML = `متوسط فعلي لكل الموديلات من ${n.toLocaleString('en-US')} أمر`;
+        } else {
+            line.innerHTML = `<span>السعر محسوب على:</span> <b>سعر يدوي</b> <span class="badge muted">بدون موديل محدد</span>`;
+            under.innerHTML = '<span class="badge muted">سعر يدوي</span>';
+        }
+    }
+    function vcalcRenderCompare(cars, daily) {
+        const body = $('vcalc-cmp-body'); if (!body) return;
+        const models = vcalcModels();
+        if (!models.length) { body.innerHTML = '<tr><td colspan="6"><div class="empty">لا يوجد موديل أساسي أو احتياطي في إعدادات voice.* (أو لم تُحمَّل بعد)</div></td></tr>'; return; }
+        const evs = vcalcEvents();
+        const monthly = cars * daily * 30;
+        const rows = models.map(m => ({ m, r: vcalcModelPrice(m.id, evs) }));
+        const priced = rows.filter(x => x.r.price != null && Number.isFinite(x.r.price));
+        const cheapest = priced.length > 1 ? priced.reduce((a, b) => b.r.price < a.r.price ? b : a) : null;
+        body.innerHTML = rows.map(x => {
+            const { m, r } = x, has = r.price != null && Number.isFinite(r.price);
+            const usd = has ? r.price * monthly : 0;
+            const cls = [x === cheapest ? 'cheapest' : '', vcalc.basis === 'model' && vcalc.model === m.id ? 'selected' : ''].join(' ').trim();
+            const basis = r.basis === 'actual' ? `<span class="badge ok">فعلي (${r.n.toLocaleString('en-US')})</span>` : r.basis === 'estimate' ? '<span class="badge warn">تقدير</span>' : vcalcBasisBadge(r);
+            return `<tr class="${cls}">
+                <td><b>${esc(vcalcModelName(m.id))}</b> ${vcalcRoleBadge(m.role)}${x === cheapest ? ' <span class="badge ok">الأرخص</span>' : ''}<br><span class="vcalc-id">${esc(m.id)}</span></td>
+                <td class="m">${has ? '$' + vcalcPrice(r.price) : '—'}</td>
+                <td class="m">${has ? '$' + vcalcMoney(usd) : '—'}</td>
+                <td class="m">${has ? vcalcMoney(usd * USD_QAR) + ' ر.ق' : '—'}</td>
+                <td>${basis}</td>
+                <td><button class="btn sm" type="button" data-vcalc-model="${esc(m.id)}">احسب عليه</button></td>
+            </tr>`;
+        }).join('');
+    }
+    function vcalcSelectModel(id) {
+        vcalc.model = id || '';
+        vcalc.basis = id ? 'model' : 'manual';
+        if (id) {
+            vcalcLoadPrices(); vcalcLoadEvents();
+            const r = vcalcApplyModel();
+            if (r.price == null) toast('info', r.reason === 'no-tokens' ? 'لا توجد بيانات توكنات في السجل — بقي السعر اليدوي.' : r.reason === 'loading' ? 'جارٍ تحميل أسعار OpenRouter — يتحدّث السعر تلقائيًا.' : 'لا يوجد سعر لهذا الموديل بعد — بقي السعر اليدوي.');
+        }
+        vcalcSync();
     }
     (function vcalcInit() {
         if (!$('vcalc')) return;
-        try { const s = JSON.parse(localStorage.getItem(VCALC_KEY) || 'null'); if (s) ['cars', 'daily', 'price'].forEach(k => { if (s[k] != null && s[k] !== '') $('vcalc-' + k).value = s[k]; }); } catch (e) {}
-        $('vcalc').addEventListener('input', e => { if (e.target.matches('#vcalc input')) vcalcRender(); });
+        try {
+            const s = JSON.parse(localStorage.getItem(VCALC_KEY) || 'null');
+            if (s) {
+                ['cars', 'daily', 'price'].forEach(k => { if (s[k] != null && s[k] !== '') $('vcalc-' + k).value = s[k]; });
+                if (typeof s.model === 'string') vcalc.model = s.model;
+                if (['manual', 'model', 'fleet'].includes(s.basis)) vcalc.basis = s.basis;
+                if (vcalc.basis === 'model' && !vcalc.model) vcalc.basis = 'manual';
+                vcalc.fleetN = Number(s.fleetN) || 0;
+            }
+        } catch (e) {}
+        $('vcalc').addEventListener('input', e => {
+            if (!e.target.matches('#vcalc input')) return;
+            if (e.target.id === 'vcalc-price') { vcalc.basis = 'manual'; const sel = $('vcalc-model'); if (sel) sel.value = ''; }
+            vcalcRender();
+        });
+        $('vcalc-model').addEventListener('change', e => vcalcSelectModel(e.target.value));
+        $('vcalc-cmp-body').addEventListener('click', e => { const b = e.target.closest('[data-vcalc-model]'); if (b) vcalcSelectModel(b.dataset.vcalcModel); });
         $('vcalc-actual').addEventListener('click', () => {
             const c = state.ctl || {}; const st = Array.isArray(c.stats) ? (c.stats[0] || {}) : (c.stats || {});
             const cost = Number(st.cost_total), n = Number(st.voice_total);
             if (!(cost > 0 && n > 0)) { toast('info', 'لا توجد بيانات تكلفة فعلية بعد — افتح تبويب التليمتري أولًا.'); return; }
             $('vcalc-price').value = (cost / n).toFixed(6);
+            vcalc.basis = 'fleet'; vcalc.fleetN = n; if ($('vcalc-model')) $('vcalc-model').value = '';
             vcalcRender();
             toast('success', `متوسط الأمر الفعلي $${(cost / n).toFixed(6)} (من ${n.toLocaleString('en-US')} أمر)`);
         });
-        vcalcRender();
+        vcalcSync();
     })();
     const CTL_STAT_META = {
         cars_total:       { label: 'السيارات المسجّلة',        help: 'كل سيارة فتحت الكونترولر مرة واحدة على الأقل وأرسلت تليمتري.', icon: 'fa-car', color: 'blue' },
