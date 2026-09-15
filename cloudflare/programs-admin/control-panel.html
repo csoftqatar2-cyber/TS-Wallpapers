@@ -552,7 +552,7 @@
         .car-sections { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(420px, 100%), 1fr)); gap: 14px; min-width: 0; max-width: 100%; align-items: start; }
         /* A heading with a table (or a chart) under it is a card, never a bare line of text. */
         .sub-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(320px, 100%), 1fr)); gap: 12px; min-width: 0; max-width: 100%; align-items: start; }
-        .sub-card { background: rgba(0,0,0,.18); border: 1px solid var(--panel-border); border-radius: 14px; padding: 12px 14px; min-width: 0; max-width: 100%; overflow-wrap: anywhere; }
+        .sub-card { background: rgba(0,0,0,.18); border: 1px solid var(--panel-border); border-radius: 14px; padding: 12px 14px; min-width: 0; max-width: 100%; }
         .sub-card.wide { grid-column: 1 / -1; }
         .sub-card > h4 { font-size: .86rem; color: var(--accent); margin: 0 0 10px; display: flex; align-items: center; gap: 8px; }
         .sub-card > h4 i { font-size: .8rem; color: var(--primary); }
@@ -564,12 +564,16 @@
         .chart-box { min-width: 0; max-width: 100%; background: rgba(255,255,255,.03); border: 1px solid var(--panel-border); border-radius: 12px; padding: 10px 12px; }
         .chart-box > h5 { font-size: .8rem; font-weight: 700; color: var(--text-muted); margin: 0 0 8px; }
         /* Same treatment for the panels (controller, TS Link, store, Leo): heading + table in one card. */
-        .panel-card { background: var(--panel-bg); border: 1px solid var(--panel-border); border-radius: 18px; padding: 14px 16px; min-width: 0; max-width: 100%; overflow-wrap: anywhere; margin: 0 0 14px; }
+        .panel-card { background: var(--panel-bg); border: 1px solid var(--panel-border); border-radius: 18px; padding: 14px 16px; min-width: 0; max-width: 100%; margin: 0 0 14px; }
+        /* Long prose may wrap anywhere; table cells never do — a VIN or hardware id split into two-letter lines is unreadable (owner, 2026-09-15). Wide tables scroll inside .table-wrap instead. */
+        .panel-card > .note, .panel-card > p, .sub-card > .note, .sub-card > p, .car-section > .note, .car-section .kv, .panel-card .ev-list li { overflow-wrap: anywhere; }
+        .table-wrap td, .table-wrap th { overflow-wrap: normal; word-break: normal; }
+        .table-wrap td .num, .table-wrap td.num, .table-wrap td .hw-link { white-space: nowrap; }
         .panel-card > h3, .panel-card > .ctl-h, .panel-card > .card-title { margin: 0 0 10px; }
         .panel-card > h3 > i, .panel-card > .ctl-h > i { color: var(--primary); margin-inline-end: 4px; }
         .panel-card > .table-wrap:last-child, .panel-card > .note:last-child, .panel-card > .chips:last-child { margin-bottom: 0; }
         .panel-card > .note { margin-top: 10px; }
-        .car-section { background: var(--panel-bg); border: 1px solid var(--panel-border); border-radius: 18px; padding: 14px 16px; min-width: 0; max-width: 100%; overflow-wrap: anywhere; }
+        .car-section { background: var(--panel-bg); border: 1px solid var(--panel-border); border-radius: 18px; padding: 14px 16px; min-width: 0; max-width: 100%; }
         .car-section.wide { grid-column: 1 / -1; }
         .car-section h3 { font-size: .95rem; margin: 0 0 10px; display: flex; align-items: center; gap: 8px; }
         .car-section h3 i { color: var(--primary); }
