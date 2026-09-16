@@ -139,6 +139,9 @@
         .conn.muted { color: var(--text-muted); background: rgba(255,255,255,.04); border-color: var(--panel-border); }
         .notif-state { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin: 0 0 8px; }
         #notif-bell.on { color: var(--success); }
+        .push-box { border-top: 1px solid var(--panel-border); margin: 8px 0; padding-top: 8px; }
+        .push-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+        #push-note { margin: 6px 0 0; }
         #store-secret-row .secret-wrap { position: relative; }
 
         /* ---------- Buttons ---------- */
@@ -860,7 +863,11 @@
                     <button class="btn" id="notif-bell" type="button" aria-expanded="false" aria-controls="notif-history" title="التنبيهات"><i class="fa-solid fa-bell"></i><span id="notif-error" hidden title="تعذّر التحديث السريع؛ إعادة المحاولة"></span></button>
                     <div id="notif-history" hidden>
                         <div class="notif-state"><span id="notif-label">التنبيهات: متوقفة</span><button class="btn sm" id="notif-toggle" type="button" aria-pressed="false">تفعيل</button></div>
-                        <label class="toggle"><input type="checkbox" id="notif-tokens"> تنبيهات التوكن</label>
+                        <div class="push-box" id="push-box">
+                            <div class="notif-state"><span id="push-label">إشعارات والمتصفح مغلق: …</span></div>
+                            <div class="push-actions"><button class="btn sm" id="push-enable" type="button">تفعيل الإشعارات على هذا الجهاز</button><button class="btn sm" id="push-disable" type="button" hidden>إيقاف</button><button class="btn sm" id="push-test" type="button" hidden>إرسال إشعار تجريبي</button></div>
+                            <p class="note" id="push-note" hidden></p>
+                        </div>
                         <button class="btn sm" id="sess-btn" type="button" style="margin-top:6px;"><i class="fa-solid fa-mobile-screen"></i> أجهزة الدخول</button>
                         <div id="sess-list" hidden style="margin-top:8px;"></div>
                         <strong style="display:block;margin-top:8px;">آخر التنبيهات</strong>
@@ -1831,6 +1838,7 @@
         buildMerged();
         renderAll();
         initFastPoll();
+        pushSyncOnce();
         const failed = Object.keys(state.errors);
         setStatus(failed.length ? 'error' : 'ok');
         renderGlobalError();
@@ -3800,7 +3808,11 @@
             try {
                 const n = new Notification(title, { body, icon: $('brand-logo').src, tag });
                 n.onclick = () => { window.focus(); showDevice(hw); n.close(); };
-            } catch (e) { /* The in-page history remains available if the OS rejects delivery. */ }
+            } catch (e) {
+                // Android Chrome and iOS home-screen apps have no Notification constructor ("Illegal
+                // constructor"): only a service worker may show one. The in-page history stays either way.
+                if ('serviceWorker' in navigator) navigator.serviceWorker.getRegistration('/').then(reg => reg && reg.showNotification(title, { body, tag, icon: $('brand-logo').src, dir: 'rtl', lang: 'ar', data: { url: '/' } })).catch(() => {});
+            }
         }
     }
     function activationNotice(row, store) {
@@ -3811,7 +3823,9 @@
         if (previous && (previous.at === at || previous.store !== store && Math.abs(at - previous.at) <= 120000)) return;
         activationNotices.set(id, { at, store });
         const title = (store ? 'تفعيل من الستور — ' : 'تفعيل جديد — ') + (row.client_name || row.serial_number || row.car || hw);
-        recordNotice(title, `${hw} · ${row.app_version || row.version || 'إصدار غير متاح'} · ${modeLabel(row.mode)}`, hw, at, 'activate:' + id + ':' + at);
+        // With push on this device the system notification comes from /sw.js (same tag); the page keeps
+        // the toast and the history. Store-side activations stay desktop here (not in the push feed).
+        recordNotice(title, `${hw} · ${row.app_version || row.version || 'إصدار غير متاح'} · ${modeLabel(row.mode)}`, hw, at, 'activate:' + id + ':' + at, !(store === false && pushOn()));
     }
     function queueInstantRefresh() {
         clearTimeout(instantTimer);
@@ -3839,10 +3853,15 @@
                 const events = ((r && r.events) || []).slice().reverse();
                 for (const ev of events) {
                     if (ev.at > securityWatermark) securityWatermark = ev.at;
-                    if (ev.kind === 'login_ok') continue;
+                    // login_ok = a new device session on the site (session refreshes never log one). The Worker
+                    // marks the caller's own login as self, so this device is not told about itself.
+                    if (ev.self) continue;
+                    if (ev.kind === 'login_ok' && !/sid:[A-Za-z0-9_-]{8}$/.test(String(ev.detail || ''))) continue;   // older Worker: own login cannot be told apart
                     const who = `${ev.ip || '?'}${ev.email ? ' · ' + ev.email : ''}`;
-                    const title = ev.kind === 'client_blocked' ? 'تم حظر جهاز حاول اختراق اللوحة' : ev.kind === 'login_failed' ? 'محاولة دخول فاشلة' : ev.kind === 'client_unblocked' ? 'رُفع حظر جهاز' : ev.kind;
-                    recordNotice(title, `${who}${ev.detail ? ' — ' + ev.detail : ''}`, '', ts(ev.at) || Date.now(), 'sec-' + ev.id, true);
+                    const detail = String(ev.detail || '').replace(/\s*·\s*sid:[A-Za-z0-9_-]{8}$/, '');
+                    const title = ev.kind === 'login_ok' ? 'دخول جديد إلى اللوحة' : ev.kind === 'client_blocked' ? 'تم حظر جهاز حاول اختراق اللوحة' : ev.kind === 'login_failed' ? 'محاولة دخول فاشلة' : ev.kind === 'client_unblocked' ? 'رُفع حظر جهاز' : ev.kind === 'device_revoked' ? 'أُلغيت جلسة جهاز' : ev.kind;
+                    const pushed = pushOn() && ['login_ok', 'login_failed', 'client_blocked'].includes(ev.kind);
+                    recordNotice(title, `${who}${detail ? ' — ' + detail : ''}`, '', ts(ev.at) || Date.now(), 'sec-' + ev.id, !pushed);
                 }
             } catch (e) { /* next round */ }
         }
@@ -3904,13 +3923,7 @@
         }
         return [...merged.values()];
     }
-    let tokenNotifications = false;
-    try { tokenNotifications = localStorage.getItem('notif:tokens') === '1'; } catch (e) {}
-    $('notif-tokens').checked = tokenNotifications;
-    $('notif-tokens').addEventListener('change', e => {
-        tokenNotifications = e.target.checked;
-        try { localStorage.setItem('notif:tokens', tokenNotifications ? '1' : '0'); } catch (e) {}
-    });
+    try { localStorage.removeItem('notif:tokens'); } catch (e) {}   // token notices removed 2026-09-16 («الغي نتوفكشنز التوكنز»)
     function setLiveStatus(status) {
         liveSubscribed = status === 'SUBSCRIBED';
         const failed = status === 'CHANNEL_ERROR' || status === 'TIMED_OUT';
@@ -3938,7 +3951,10 @@
             if (!row.hardware_id) return;
             const index = state.devices.findIndex(d => canonicalHw(d.hardware_id) === canonicalHw(row.hardware_id));
             const previous = { ...(index >= 0 ? state.devices[index] : {}), ...(payload.old || {}) };
-            if (kind === 'INSERT') recordNotice('جهاز جديد', `${row.hardware_id} · ${row.client_name || row.serial_number || ''}`, row.hardware_id, at, `device:${canonicalHw(row.hardware_id)}:${row.created_at || at}`);
+            // A car activating for the first time arrives as an INSERT already active: route it through
+            // activationNotice so the 60 s poll that reads the same row does not notify it a second time.
+            if (kind === 'INSERT' && row.is_active === true && row.activated_at) activationNotice(row, false);
+            else if (kind === 'INSERT') recordNotice('جهاز جديد', `${row.hardware_id} · ${row.client_name || row.serial_number || ''}`, row.hardware_id, at, `device:${canonicalHw(row.hardware_id)}:${row.created_at || at}`);
             else {
                 const activated = previous.is_active === false && row.is_active === true;
                 const changedDate = row.activated_at && Object.prototype.hasOwnProperty.call(previous, 'activated_at') && row.activated_at !== previous.activated_at;
@@ -3950,7 +3966,8 @@
             liveRows.devices.set(liveRowKey('devices', row), { row, version: realtimeRevision });
         } else if (table === 'device_block_events' && kind === 'INSERT') blockNotice(row);
         else if (table === 'device_tokens' && kind === 'INSERT') {
-            recordNotice('توكن جديد — ' + appLabel(row.app_id), row.hardware_id || '', row.hardware_id || '', at, `token:${canonicalHw(row.hardware_id)}:${row.app_id}:${row.token_issued_at || at}`, tokenNotifications);
+            // No notice for a token: every activation already announces itself, and a token row mostly fires
+            // with an unknown car («توكن جديد — ?»), which was pure noise on the phone (owner, 2026-09-16).
         } else if (table === 'device_app_seen') {
             if (!row.hardware_id || !row.app_id) return;
             const index = state.appSeen.findIndex(r => canonicalHw(r.hardware_id) === canonicalHw(row.hardware_id) && appKey(r.app_id) === appKey(row.app_id));
@@ -4015,6 +4032,96 @@
         try { localStorage.setItem('notif:on', notifOn ? '1' : '0'); } catch (e) { /* Harmless preference only. */ }
         updateNotificationToggle();
     });
+    // =====================================================================
+    //  Web Push: system notifications with the browser closed. The Worker's cron (every minute) reads
+    //  new activations (D1 devices_audit) and new site logins (security_events) and pushes them to every
+    //  subscribed device; /sw.js shows them. Subscribing needs this admin session.
+    // =====================================================================
+    const push = { cfg: null, sub: null, busy: false, note: '', syncedEpoch: -1 };
+    function pushCapable() { return window.isSecureContext && 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window; }
+    function pushOn() { return !!(push.sub && 'Notification' in window && Notification.permission === 'granted'); }
+    function iosBrowserTab() { return /iPhone|iPad|iPod/.test(navigator.userAgent) && !(navigator.standalone || (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches)); }
+    function b64uToBytes(s) { const t = String(s || '').replace(/-/g, '+').replace(/_/g, '/'); return Uint8Array.from(atob(t.padEnd(Math.ceil(t.length / 4) * 4, '=')), c => c.charCodeAt(0)); }
+    function bytesToB64u(buf) { let x = ''; new Uint8Array(buf).forEach(b => { x += String.fromCharCode(b); }); return btoa(x).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''); }
+    function pushDeviceLabel() { return (navigator.userAgent.match(/iPhone|iPad|Android|Windows|Macintosh|Linux/) || ['جهاز'])[0]; }
+    function renderPush() {
+        const label = $('push-label'); if (!label) return;
+        const served = LOCAL_PROXY && LOCAL_FLAGS.push;
+        const denied = 'Notification' in window && Notification.permission === 'denied';
+        let text, note = push.note;
+        if (!served) text = 'غير متاحة على هذا الخادم';
+        else if (!pushCapable()) { text = 'غير مدعومة هنا'; note = note || (iosBrowserTab() ? 'على iPhone: من Safari اضغط مشاركة ← «إضافة إلى الشاشة الرئيسية»، افتح الموقع من الأيقونة، ثم فعّل من هنا (iOS 16.4 أو أحدث).' : 'هذا المتصفح لا يدعم إشعارات الخلفية.'); }
+        else if (denied) { text = 'محظورة من المتصفح'; note = note || 'اسمح بالإشعارات لهذا الموقع من إعدادات المتصفح ثم أعد المحاولة.'; }
+        else text = pushOn() ? 'مفعّلة على هذا الجهاز' : 'متوقفة على هذا الجهاز';
+        label.textContent = 'إشعارات والمتصفح مغلق: ' + text;
+        $('push-enable').hidden = pushOn(); $('push-disable').hidden = !pushOn(); $('push-test').hidden = !pushOn();
+        $('push-enable').disabled = push.busy || !served || !pushCapable() || denied || !!(push.cfg && !push.cfg.enabled);
+        $('push-disable').disabled = $('push-test').disabled = push.busy;
+        $('push-note').textContent = note || ''; $('push-note').hidden = !note;
+    }
+    async function pushSync() {
+        if (!SESSION_TOKEN || !LOCAL_PROXY || !LOCAL_FLAGS.push) { renderPush(); return; }
+        try {
+            push.cfg = await localGet('/local/push/config');
+            if (pushCapable()) {
+                const reg = await navigator.serviceWorker.getRegistration('/');
+                push.sub = reg ? await reg.pushManager.getSubscription() : null;
+                // Re-register an existing subscription every session: the push service may have rotated it,
+                // and a row the cron dropped (410) comes back. An empty label keeps the stored one.
+                if (push.sub && Notification.permission === 'granted') await localPost('/local/push/subscribe', { ...push.sub.toJSON(), label: '' });
+            }
+        } catch (e) { push.note = 'تعذّر فحص إشعارات الخلفية: ' + errMsg(e); }
+        renderPush();
+    }
+    function pushSyncOnce() { if (push.syncedEpoch === sessionEpoch) return; push.syncedEpoch = sessionEpoch; pushSync(); }
+    if ('serviceWorker' in navigator) navigator.serviceWorker.addEventListener('message', e => { if (e.data && e.data.type === 'push-resubscribe') pushSync(); });
+    $('push-enable').addEventListener('click', async () => {
+        if (push.busy || !pushCapable()) { renderPush(); return; }
+        // iOS: the permission prompt has to be the first await inside the tap.
+        let permission = Notification.permission;
+        try { if (permission === 'default') permission = await Notification.requestPermission(); } catch (e) { permission = 'denied'; }
+        if (permission !== 'granted') { push.note = 'لم يُسمح بالإشعارات على هذا الجهاز.'; renderPush(); return; }
+        push.busy = true; push.note = ''; renderPush();
+        try {
+            if (!push.cfg) push.cfg = await localGet('/local/push/config');
+            if (!push.cfg || !push.cfg.enabled || !push.cfg.publicKey) throw new Error('الخادم غير مهيأ للإشعارات');
+            const reg = await navigator.serviceWorker.register('/sw.js', { scope: '/' });
+            await navigator.serviceWorker.ready;
+            let sub = await reg.pushManager.getSubscription();
+            const oldKey = sub && sub.options && sub.options.applicationServerKey;
+            if (sub && oldKey && bytesToB64u(oldKey) !== push.cfg.publicKey) { await sub.unsubscribe(); sub = null; }
+            if (!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64uToBytes(push.cfg.publicKey) });
+            await localPost('/local/push/subscribe', { ...sub.toJSON(), label: pushDeviceLabel() });
+            push.sub = sub;
+            notifOn = true; try { localStorage.setItem('notif:on', '1'); } catch (e) {}
+            updateNotificationToggle();
+            toast('success', 'تم تفعيل الإشعارات على هذا الجهاز');
+        } catch (e) { push.note = 'تعذّر التفعيل: ' + errMsg(e); }
+        finally { push.busy = false; renderPush(); }
+    });
+    $('push-disable').addEventListener('click', async () => {
+        if (push.busy || !push.sub) return;
+        push.busy = true; push.note = ''; renderPush();
+        const sub = push.sub;
+        try {
+            try { await localPost('/local/push/unsubscribe', { endpoint: sub.endpoint }); } catch (e) { /* the cron drops it on the push service's 410 */ }
+            await sub.unsubscribe();
+            push.sub = null;
+            toast('success', 'تم إيقاف إشعارات الخلفية على هذا الجهاز');
+        } catch (e) { push.note = 'تعذّر الإيقاف: ' + errMsg(e); }
+        finally { push.busy = false; renderPush(); }
+    });
+    $('push-test').addEventListener('click', async () => {
+        if (push.busy || !push.sub) return;
+        push.busy = true; push.note = ''; renderPush();
+        try {
+            await localPost('/local/push/test', { endpoint: push.sub.endpoint });
+            push.note = 'أُرسل — يظهر خلال ثوانٍ. للتجربة والمتصفح مغلق: أغلقه تمامًا وانتظر أول تفعيل أو دخول جديد.';
+        } catch (e) {
+            const m = errMsg(e);
+            push.note = /15 s/.test(m) ? 'انتظر 15 ثانية بين كل تجربة.' : /not subscribed/.test(m) ? 'هذا الجهاز غير مسجّل على الخادم — أوقف ثم فعّل من جديد.' : 'تعذّر الإرسال: ' + m;
+        } finally { push.busy = false; renderPush(); }
+    });
     function placeNotifPopup() {
         const pop = $('notif-history'), bell = $('notif-bell'); if (pop.hidden) return;
         const r = bell.getBoundingClientRect(), vw = document.documentElement.clientWidth;
@@ -4023,7 +4130,7 @@
         let left = Math.round(r.left); if (left + w > vw - 12) left = vw - 12 - w; if (left < 12) left = 12;
         pop.style.left = left + 'px'; pop.style.top = Math.round(r.bottom + 8) + 'px'; pop.style.width = w + 'px';
     }
-    $('notif-bell').addEventListener('click', () => { const pop = $('notif-history'); pop.hidden = !pop.hidden; $('notif-bell').setAttribute('aria-expanded', String(!pop.hidden)); if (!pop.hidden) { updateNotificationToggle(); renderNotificationHistory(); placeNotifPopup(); } });
+    $('notif-bell').addEventListener('click', () => { const pop = $('notif-history'); pop.hidden = !pop.hidden; $('notif-bell').setAttribute('aria-expanded', String(!pop.hidden)); if (!pop.hidden) { updateNotificationToggle(); renderPush(); renderNotificationHistory(); placeNotifPopup(); } });
     window.addEventListener('resize', placeNotifPopup); window.addEventListener('scroll', placeNotifPopup, { passive: true });
     // A notice names one car: open its popup right away (owner, 2026-09-15 — filtering the devices table was not
     // what «اضغط على التوكن» was expected to do). Unknown hardware ids still fall back to the filtered table.
