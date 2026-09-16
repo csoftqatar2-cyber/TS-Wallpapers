@@ -120,19 +120,23 @@
 
     // Several live codes at once: each row keeps its own countdown and is polled until it is bound
     // (check mark + the car id) or expires. The button is always available for the next code.
+    // A bound code has done its job: it leaves the phone screen a few seconds after the check mark, so a
+    // code that is now tied to a customer's car is not left sitting on the technician's phone (owner, 2026-09-16).
+    const USED_LINGER_MS = 6000;
     function render() {
+        for (const c of codes.values()) if (c.usedAt && Date.now() - c.usedAt >= USED_LINGER_MS) codes.delete(c.serial);
         const list = [...codes.values()];
         $('codes').innerHTML = list.map(c => {
             const left = Math.max(0, c.expiresAt - Date.now());
             const cls = c.used_by ? 'row ok' : (left <= 0 ? 'row dead' : 'row');
             const mark = c.used_by ? '<span class="mark" style="color:var(--ok)">&#10003;</span>' : (left <= 0 ? '<span class="mark" style="color:var(--bad)">&#10005;</span>' : '<span class="mark">&#8987;</span>');
             const timer = c.used_by ? 'تم' : (left <= 0 ? 'انتهى' : fmt(left));
-            const sub = c.used_by ? `<span class="vin">${esc(c.used_by)}</span>` : (left <= 0 ? '<span class="sub">انتهت الصلاحية — أصدر كودًا جديدًا</span>' : '<span class="sub">اكتب الكود في العربية خلال المدة</span>');
+            const sub = c.used_by ? `<span class="vin">${esc(c.used_by)}</span><span class="sub">يختفي خلال ${Math.max(1, Math.ceil((USED_LINGER_MS - (Date.now() - (c.usedAt || Date.now()))) / 1000))} ث</span>` : (left <= 0 ? '<span class="sub">انتهت الصلاحية — أصدر كودًا جديدًا</span>' : '<span class="sub">اكتب الكود في العربية خلال المدة</span>');
             const copy = `<button type="button" class="copy${c.copiedAt && Date.now() - c.copiedAt < 2000 ? ' done' : ''}" data-copy="${esc(c.serial)}" title="نسخ الكود" aria-label="نسخ الكود"><svg viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h9"/></svg></button>`;
             const copied = c.copiedAt && Date.now() - c.copiedAt < 2000 ? '<span class="copied">تم نسخ الكود</span>' : '';
             return `<div class="${cls}" data-serial="${esc(c.serial)}">${mark}<div class="code">${esc(c.serial)}</div><div class="timer">${timer}</div>${copy}${copied}${sub}</div>`;
         }).join('');
-        const alive = list.some(c => !c.used_by && c.expiresAt > Date.now());
+        const alive = list.some(c => c.usedAt || (!c.used_by && c.expiresAt > Date.now()));
         if (!alive) { clearInterval(ticker); clearInterval(poller); ticker = poller = null; }
     }
     async function pollAll() {
@@ -140,7 +144,7 @@
             if (c.used_by || c.expiresAt <= Date.now()) continue;
             try {
                 const r = await api(`/local/codes/status?serial=${encodeURIComponent(c.serial)}`);
-                if (r && r.used_by) { c.used_by = r.used_by; notify('تم تفعيل عربية بالكود ' + c.serial, 'اتربط بالعربية ' + r.used_by); }
+                if (r && r.used_by) { c.used_by = r.used_by; c.usedAt = Date.now(); notify('تم تفعيل عربية بالكود ' + c.serial, 'اتربط بالعربية ' + r.used_by); }
             } catch (e) { /* next round */ }
         }
         render();
