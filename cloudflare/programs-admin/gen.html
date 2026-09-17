@@ -47,6 +47,18 @@
         .row.dead .timer { color:var(--bad); }
         .row .sub { grid-column:1 / -1; font-size:.9rem; color:var(--muted); }
         .row .vin { grid-column:1 / -1; direction:ltr; font-family:ui-monospace, monospace; word-break:break-all; }
+        .phone-box { grid-column:1 / -1; display:flex; flex-direction:column; gap:7px; padding-top:5px; border-top:1px solid var(--border); }
+        .phone-box label { font-size:.9rem; font-weight:700; }
+        .phone-controls { display:flex; gap:8px; direction:ltr; }
+        .phone-controls input { flex:1; min-width:0; font:inherit; direction:ltr; padding:10px 12px; border-radius:10px; border:1px solid var(--border); background:rgba(0,0,0,.25); color:var(--text); }
+        .phone-controls input:focus { outline:2px solid rgba(245,158,11,.45); border-color:var(--primary); }
+        .phone-save { font:inherit; font-weight:700; border:1px solid rgba(245,158,11,.5); border-radius:10px; padding:8px 14px; color:var(--text); background:rgba(245,158,11,.14); cursor:pointer; }
+        .phone-save:disabled { opacity:.55; cursor:default; }
+        .phone-note { min-height:1.25em; font-size:.82rem; }
+        .phone-note.hint { color:var(--muted); }
+        .phone-note.success { color:var(--ok); }
+        .phone-note.failure, .phone-missing { color:var(--bad); }
+        .phone-missing { font-size:.86rem; font-weight:700; }
         #login { display:flex; flex-direction:column; gap:12px; width:min(92vw, 360px); }
         #login input { font:inherit; font-size:1.1rem; padding:14px; border-radius:14px; border:1px solid var(--border); background:rgba(0,0,0,.25); color:var(--text); text-align:center; }
         .err { color:var(--bad); font-size:.95rem; min-height:1.4em; }
@@ -81,7 +93,7 @@
 (() => {
     const $ = id => document.getElementById(id);
     let TOKEN = null, refreshTimer = null;
-    const codes = new Map();   // serial -> { serial, expiresAt, used_by }
+    const codes = new Map();   // serial -> { serial, expiresAt, used_by, customer_phone, phoneDraft, el }
     let ticker = null, poller = null;
 
     function conn(state, title) { const el = $('conn'); el.className = 'conn ' + state; el.textContent = state === 'muted' ? 'غير متصل' : 'متصل'; el.title = title || ''; }
@@ -123,19 +135,50 @@
     // A bound code has done its job: it leaves the phone screen a few seconds after the check mark, so a
     // code that is now tied to a customer's car is not left sitting on the technician's phone (owner, 2026-09-16).
     const USED_LINGER_MS = 6000;
+    function ensureRow(c) {
+        if (c.el) return c.el;
+        const row = document.createElement('div');
+        row.className = 'row'; row.dataset.serial = c.serial;
+        row.innerHTML = `<span class="mark" data-role="mark"></span><div class="code">${esc(c.serial)}</div><div class="timer" data-role="timer"></div><button type="button" class="copy" data-copy="${esc(c.serial)}" title="نسخ الكود" aria-label="نسخ الكود"><svg viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h9"/></svg></button><span class="copied" data-role="copied" hidden></span><span class="vin" data-role="vin" hidden></span><span class="sub" data-role="sub"></span><div class="phone-box"><label for="phone-${esc(c.serial)}">رقم صاحب السيارة</label><div class="phone-controls"><input id="phone-${esc(c.serial)}" data-phone type="tel" inputmode="tel" dir="ltr" placeholder="رقم هاتف صاحب السيارة"><button type="button" class="phone-save" data-phone-save>حفظ</button></div><div class="phone-note hint" data-role="phone-note">بدون رمز دولة يُحفظ الرقم كرقم قطري ‎+974‎</div><div class="phone-missing" data-role="phone-missing" hidden>لم يُسجَّل رقم هاتف لهذه السيارة</div></div>`;
+        const input = row.querySelector('[data-phone]');
+        input.value = c.phoneDraft || c.customer_phone || '';
+        c.el = row; $('codes').appendChild(row);
+        return row;
+    }
     function render() {
-        for (const c of codes.values()) if (c.usedAt && Date.now() - c.usedAt >= USED_LINGER_MS) codes.delete(c.serial);
+        for (const c of codes.values()) {
+            if (c.usedAt && Date.now() - c.usedAt >= USED_LINGER_MS) {
+                if (c.el) c.el.remove();
+                codes.delete(c.serial);
+            }
+        }
         const list = [...codes.values()];
-        $('codes').innerHTML = list.map(c => {
+        for (const c of list) {
+            const row = ensureRow(c);
             const left = Math.max(0, c.expiresAt - Date.now());
-            const cls = c.used_by ? 'row ok' : (left <= 0 ? 'row dead' : 'row');
-            const mark = c.used_by ? '<span class="mark" style="color:var(--ok)">&#10003;</span>' : (left <= 0 ? '<span class="mark" style="color:var(--bad)">&#10005;</span>' : '<span class="mark">&#8987;</span>');
-            const timer = c.used_by ? 'تم' : (left <= 0 ? 'انتهى' : fmt(left));
-            const sub = c.used_by ? `<span class="vin">${esc(c.used_by)}</span><span class="sub">يختفي خلال ${Math.max(1, Math.ceil((USED_LINGER_MS - (Date.now() - (c.usedAt || Date.now()))) / 1000))} ث</span>` : (left <= 0 ? '<span class="sub">انتهت الصلاحية — أصدر كودًا جديدًا</span>' : '<span class="sub">اكتب الكود في العربية خلال المدة</span>');
-            const copy = `<button type="button" class="copy${c.copiedAt && Date.now() - c.copiedAt < 2000 ? ' done' : ''}" data-copy="${esc(c.serial)}" title="نسخ الكود" aria-label="نسخ الكود"><svg viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h9"/></svg></button>`;
-            const copied = c.copiedAt && Date.now() - c.copiedAt < 2000 ? '<span class="copied">تم نسخ الكود</span>' : '';
-            return `<div class="${cls}" data-serial="${esc(c.serial)}">${mark}<div class="code">${esc(c.serial)}</div><div class="timer">${timer}</div>${copy}${copied}${sub}</div>`;
-        }).join('');
+            row.className = c.used_by ? 'row ok' : (left <= 0 ? 'row dead' : 'row');
+            const mark = row.querySelector('[data-role="mark"]');
+            mark.textContent = c.used_by ? '✓' : (left <= 0 ? '✕' : '⌛');
+            mark.style.color = c.used_by ? 'var(--ok)' : (left <= 0 ? 'var(--bad)' : '');
+            row.querySelector('[data-role="timer"]').textContent = c.used_by ? 'تم' : (left <= 0 ? 'انتهى' : fmt(left));
+            const vin = row.querySelector('[data-role="vin"]');
+            vin.hidden = !c.used_by;
+            vin.textContent = c.used_by ? (c.customer_phone ? `${c.used_by} — ${c.customer_phone}` : c.used_by) : '';
+            row.querySelector('[data-role="sub"]').textContent = c.used_by ? `يختفي خلال ${Math.max(1, Math.ceil((USED_LINGER_MS - (Date.now() - (c.usedAt || Date.now()))) / 1000))} ث` : (left <= 0 ? 'انتهت الصلاحية — أصدر كودًا جديدًا' : 'اكتب الكود في السيارة خلال المدة');
+            const copied = row.querySelector('[data-role="copied"]');
+            const justCopied = c.copiedAt && Date.now() - c.copiedAt < 2000;
+            row.querySelector('[data-copy]').classList.toggle('done', !!justCopied);
+            copied.hidden = !justCopied; copied.textContent = justCopied ? 'تم نسخ الكود' : '';
+            const input = row.querySelector('[data-phone]');
+            if (!c.phoneDirty && document.activeElement !== input && input.value !== (c.customer_phone || '')) input.value = c.customer_phone || '';
+            const note = row.querySelector('[data-role="phone-note"]');
+            if (!c.phoneMessage) {
+                note.className = 'phone-note hint';
+                note.textContent = input.value.trim() ? '' : 'بدون رمز دولة يُحفظ الرقم كرقم قطري ‎+974‎';
+            }
+            row.querySelector('[data-role="phone-missing"]').hidden = !c.used_by || !!c.customer_phone;
+            row.querySelector('[data-phone-save]').disabled = !!c.saving;
+        }
         const alive = list.some(c => c.usedAt || (!c.used_by && c.expiresAt > Date.now()));
         if (!alive) { clearInterval(ticker); clearInterval(poller); ticker = poller = null; }
     }
@@ -144,7 +187,12 @@
             if (c.used_by || c.expiresAt <= Date.now()) continue;
             try {
                 const r = await api(`/local/codes/status?serial=${encodeURIComponent(c.serial)}`);
-                if (r && r.used_by) { c.used_by = r.used_by; c.usedAt = Date.now(); notify('تم تفعيل عربية بالكود ' + c.serial, 'اتربط بالعربية ' + r.used_by); }
+                if (r && r.customer_phone) { c.customer_phone = r.customer_phone; if (!c.phoneDirty) c.phoneDraft = r.customer_phone; }
+                if (r && r.used_by) {
+                    c.used_by = r.used_by; c.usedAt = Date.now();
+                    const phone = r.customer_phone || c.customer_phone;
+                    notify('تم تفعيل سيارة بالكود ' + c.serial, phone ? `ارتبط الكود بالسيارة ${r.used_by} — هاتف صاحبها ${phone}` : 'ارتبط الكود بالسيارة ' + r.used_by);
+                }
             } catch (e) { /* next round */ }
         }
         render();
@@ -155,7 +203,7 @@
         try {
             if ('Notification' in window && Notification.permission === 'default') { try { await Notification.requestPermission(); } catch (e) {} }
             const r = await api('/local/codes/issue', {});
-            codes.set(r.serial, { serial: r.serial, expiresAt: new Date(r.expires_at).getTime(), used_by: null });
+            codes.set(r.serial, { serial: r.serial, expiresAt: new Date(r.expires_at).getTime(), used_by: null, customer_phone: r.customer_phone || null, phoneDraft: r.customer_phone || '' });
             render(); armTimers();
             notify('تم إصدار كود تفعيل ' + r.serial, 'صالح 30 دقيقة');
         } catch (e) { $('err').textContent = e.message || String(e); }
@@ -177,7 +225,44 @@
         if (c) { c.copiedAt = ok ? Date.now() : 0; render(); if (ok) setTimeout(render, 2100); }
         if (!ok) $('err').textContent = 'تعذّر النسخ — اضغط مطوّلاً على الكود وانسخه';
     }
-    $('codes').addEventListener('click', e => { const b = e.target.closest('[data-copy]'); if (b) { e.preventDefault(); copyCode(b.dataset.copy); } });
+    async function savePhone(row) {
+        const c = codes.get(row.dataset.serial); if (!c || c.saving) return;
+        const input = row.querySelector('[data-phone]');
+        if (!c.phoneDirty && input.value === (c.customer_phone || '')) return;
+        const button = row.querySelector('[data-phone-save]');
+        const note = row.querySelector('[data-role="phone-note"]');
+        c.saving = true; button.disabled = true; c.phoneMessage = true;
+        note.className = 'phone-note hint'; note.textContent = 'جارٍ الحفظ…';
+        try {
+            const r = await api('/local/codes/phone', { serial: c.serial, phone: input.value });
+            c.customer_phone = r.customer_phone || null; c.phoneDraft = r.customer_phone || ''; c.phoneDirty = false;
+            input.value = c.phoneDraft;
+            note.className = 'phone-note success';
+            note.textContent = r.customer_phone ? `تم الحفظ — ${r.customer_phone} (${r.country})` : 'تم مسح رقم الهاتف';
+        } catch (e) {
+            c.phoneDraft = input.value; c.phoneDirty = true;
+            note.className = 'phone-note failure'; note.textContent = e.message || String(e);
+        } finally {
+            c.saving = false; button.disabled = false; render();
+        }
+    }
+    $('codes').addEventListener('input', e => {
+        if (!e.target.matches('[data-phone]')) return;
+        const row = e.target.closest('.row'); const c = row && codes.get(row.dataset.serial); if (!c) return;
+        c.phoneDraft = e.target.value; c.phoneDirty = e.target.value !== (c.customer_phone || ''); c.phoneMessage = false;
+        const note = row.querySelector('[data-role="phone-note"]');
+        note.className = 'phone-note hint'; note.textContent = e.target.value.trim() ? '' : 'بدون رمز دولة يُحفظ الرقم كرقم قطري ‎+974‎';
+    });
+    $('codes').addEventListener('keydown', e => {
+        if (e.key === 'Enter' && e.target.matches('[data-phone]')) { e.preventDefault(); savePhone(e.target.closest('.row')); }
+    });
+    $('codes').addEventListener('focusout', e => {
+        if (e.target.matches('[data-phone]')) { const row = e.target.closest('.row'); const c = row && codes.get(row.dataset.serial); if (c && c.phoneDirty) savePhone(row); }
+    });
+    $('codes').addEventListener('click', e => {
+        const copy = e.target.closest('[data-copy]'); if (copy) { e.preventDefault(); copyCode(copy.dataset.copy); return; }
+        const save = e.target.closest('[data-phone-save]'); if (save) { e.preventDefault(); savePhone(save.closest('.row')); }
+    });
     $('login').addEventListener('submit', async e => { e.preventDefault(); $('login-err').textContent = ''; try { await login($('pw').value); $('pw').value = ''; } catch (err) { $('login-err').textContent = err.message; } });
     document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && codes.size) pollAll(); });
     (async () => {

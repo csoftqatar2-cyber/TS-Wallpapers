@@ -6,6 +6,23 @@ Leo, TS G700, TS Lynk & Co and the controller with the secrets injected server-s
 (`npx wrangler deploy` from this folder). Secrets live in Wrangler only — see the header of
 `worker.js` and the comments in `wrangler.toml`.
 
+## ربط رقم هاتف صاحب السيارة
+
+تضيف الهجرة `migrations/20260917_customer_phone.sql` الحقل الاختياري
+`issued_codes.customer_phone` وجدول `car_customers` الذي يحفظ `hw_id` و`phone` بصيغة E.164
+و`serial` و`bound_at` و`updated_at` و`note`. تُطبّق مرة واحدة من هذا المجلد:
+
+```
+npx wrangler d1 execute ts-activation --remote --file migrations/20260917_customer_phone.sql
+```
+
+تقبل `POST /local/codes/issue` رقمًا اختياريًا، ويحفظ `POST /local/codes/phone` الرقم على كود
+موجود. يعيد `GET /local/codes/status` و`GET /local/codes/recent` الرقم مع بيانات الكود. يزامن
+`GET /local/customers` الأكواد المستخدمة ثم يعيد روابط السيارات بأرقام أصحابها، ويتيح
+`POST /local/customers/set` التصحيح اليدوي أو حذف الرابط بإرسال رقم فارغ. جميعها محمية بحارس
+`/local/` الحالي. يُفترض الرمز `+974` للرقم المحلي المكوّن من ثمانية أرقام؛ أما الرقم الذي
+يبدأ برمز دولة فيُحفظ برمزه بعد تحويل الأرقام العربية وإزالة فواصل العرض والتحقق من صيغة E.164.
+
 
 ## Programs with their own activation system — `GET /local/g700/*`, `GET /local/lynk/*`
 

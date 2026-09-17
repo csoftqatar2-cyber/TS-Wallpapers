@@ -51,6 +51,39 @@ const CTRL_RPC_ALLOW = /^thab_admin_(stats|cars|events|gaps|fuel_price_history|v
 const CATALOG_URL = "https://pub-3d6cc5a5671c4be3829a384a375f7b11.r2.dev/catalog/apps.json";
 const LEO_LATEST_URL = "https://pub-fbb386b3923a44879e64296817936d84.r2.dev/latest.json";
 const MAX_BODY = 64 * 1024;
+const PHONE_COUNTRIES = {
+  "974": "قطر", "966": "السعودية", "971": "الإمارات", "973": "البحرين", "965": "الكويت", "968": "عُمان",
+  "20": "مصر", "962": "الأردن", "963": "سوريا", "964": "العراق", "961": "لبنان", "967": "اليمن",
+  "249": "السودان", "970": "فلسطين", "212": "المغرب", "213": "الجزائر", "216": "تونس", "218": "ليبيا",
+  "90": "تركيا", "44": "المملكة المتحدة", "1": "الولايات المتحدة/كندا", "91": "الهند", "92": "باكستان",
+  "880": "بنغلاديش", "977": "نيبال", "94": "سريلانكا", "63": "الفلبين",
+};
+
+function normalizePhone(raw) {
+  let value = String(raw == null ? "" : raw).trim()
+    .replace(/[٠-٩]/g, d => String("٠١٢٣٤٥٦٧٨٩".indexOf(d)))
+    .replace(/[۰-۹]/g, d => String("۰۱۲۳۴۵۶۷۸۹".indexOf(d)))
+    .replace(/[\s\-./()]/g, "");
+  if (value.startsWith("00")) value = `+${value.slice(2)}`;
+  let e164;
+  if (value.startsWith("+")) {
+    if (!/^\+[1-9]\d{6,14}$/.test(value)) return null;
+    e164 = value;
+  } else {
+    if (value.startsWith("0")) value = value.slice(1);
+    if (/^\d{8}$/.test(value)) e164 = `+974${value}`;
+    else if (/^974\d{8}$/.test(value)) e164 = `+${value}`;
+    else return null;
+  }
+  const digits = e164.slice(1);
+  const cc = Object.keys(PHONE_COUNTRIES).sort((a, b) => b.length - a.length).find(code => digits.startsWith(code)) || digits.slice(0, 3);
+  return { e164, cc };
+}
+
+function phoneCountry(phone) {
+  const normalized = normalizePhone(phone);
+  return normalized ? (PHONE_COUNTRIES[normalized.cc] || normalized.cc) : null;
+}
 
 // ---------- store-catalog mirror (POST /catalog/publish) ----------
 // Owner's order 2026-09-09: when ذبذبة خلفيات or TS Link publishes on its own channel, the
@@ -577,6 +610,10 @@ export default {
       }
       // ---- activation code generator (D1 issued_codes) ----
       if (env.DB && req.method === "POST" && p === "/local/codes/issue") {
+        const body = await readJsonBody(req);
+        const hasPhone = body.phone != null && String(body.phone).trim() !== "";
+        const normalized = hasPhone ? normalizePhone(body.phone) : null;
+        if (hasPhone && !normalized) return json(400, { message: "رقم الهاتف غير صالح" });
         // 30 minutes (owner's call 2026-09-14, was 10): the code is typed on a car screen by a
         // customer on the phone with us, and ten minutes ran out too often. Still one car, one use.
         const now = new Date(); const expires = new Date(now.getTime() + 30 * 60_000);
@@ -596,20 +633,134 @@ export default {
         if (!serial) return json(503, { message: "could not mint a unique code" });
         // issued_by = the first 8 chars of the minting device's session id (its label is joined at read time)
         const dev = cookieOf(req, DEV_COOKIE); const by = dev ? dev.slice(0, 8) : "programs-admin";
-        await env.DB.prepare("INSERT INTO issued_codes (serial, issued_at, expires_at, issued_by, note) VALUES (?, ?, ?, ?, ?)")
-          .bind(serial, iso(now), iso(expires), by, "generator").run();
-        return json(200, { serial, issued_at: iso(now), expires_at: iso(expires), issued_by: by });
+        try {
+          await env.DB.prepare("INSERT INTO issued_codes (serial, issued_at, expires_at, issued_by, note, customer_phone) VALUES (?, ?, ?, ?, ?, ?)")
+            .bind(serial, iso(now), iso(expires), by, "generator", normalized && normalized.e164).run();
+        } catch (e) {
+          // Rollout safety: until the one-time phone migration is applied, ordinary code minting
+          // must continue on the old schema. A supplied phone cannot be claimed as saved.
+          if (normalized) return json(503, { message: "ميزة رقم الهاتف غير جاهزة بعد" });
+          await env.DB.prepare("INSERT INTO issued_codes (serial, issued_at, expires_at, issued_by, note) VALUES (?, ?, ?, ?, ?)")
+            .bind(serial, iso(now), iso(expires), by, "generator").run();
+        }
+        return json(200, { serial, issued_at: iso(now), expires_at: iso(expires), issued_by: by, customer_phone: normalized ? normalized.e164 : null });
+      }
+      if (env.DB && req.method === "POST" && p === "/local/codes/phone") {
+        const body = await readJsonBody(req);
+        const serial = String(body.serial || "").trim();
+        if (!/^(\d{6}|578\d{6})$/.test(serial)) return json(400, { message: "كود التفعيل غير صالح" });
+        const code = await env.DB.prepare("SELECT serial, issued_at, used_by, used_at FROM issued_codes WHERE serial = ?").bind(serial).first();
+        if (!code) return json(404, { message: "كود التفعيل غير موجود" });
+        const rawPhone = body.phone == null ? "" : String(body.phone).trim();
+        const normalized = rawPhone ? normalizePhone(rawPhone) : null;
+        if (rawPhone && !normalized) return json(400, { message: "أدخل رقمًا قطريًا من ثمانية أرقام، أو اكتب رمز الدولة مثل ‎+966" });
+        try {
+          await env.DB.prepare("UPDATE issued_codes SET customer_phone = ? WHERE serial = ?").bind(normalized ? normalized.e164 : null, serial).run();
+          if (normalized && code.used_by) {
+            const now = new Date().toISOString();
+            try {
+              await env.DB.prepare(`INSERT INTO car_customers (hw_id, phone, serial, bound_at, updated_at)
+                VALUES (?, ?, ?, ?, ?)
+                ON CONFLICT(hw_id) DO UPDATE SET phone = excluded.phone, serial = excluded.serial,
+                  bound_at = excluded.bound_at, updated_at = excluded.updated_at
+                WHERE excluded.bound_at >= car_customers.bound_at`)
+                .bind(code.used_by, normalized.e164, serial, code.used_at || code.issued_at, now).run();
+            } catch (e) { /* The table may not exist during migration rollout; the code phone is still saved. */ }
+          }
+        } catch (e) {
+          return json(503, { message: "ميزة رقم الهاتف غير جاهزة بعد" });
+        }
+        return json(200, { serial, customer_phone: normalized ? normalized.e164 : null, country: normalized ? phoneCountry(normalized.e164) : null });
       }
       if (env.DB && req.method === "GET" && p === "/local/codes/status") {
         const serial = (url.searchParams.get("serial") || "").trim();
         if (!/^(\d{6}|578\d{6})$/.test(serial)) return json(400, { message: "bad serial" });
-        const row = await env.DB.prepare("SELECT serial, issued_at, expires_at, used_by, used_at FROM issued_codes WHERE serial = ?").bind(serial).first();
+        let row;
+        // Phone data is optional during rollout: every new-column/table read is isolated so an
+        // unapplied migration degrades to no phone data instead of breaking the generator.
+        try {
+          row = await env.DB.prepare("SELECT serial, issued_at, expires_at, used_by, used_at, customer_phone FROM issued_codes WHERE serial = ?").bind(serial).first();
+        } catch (e) {
+          row = await env.DB.prepare("SELECT serial, issued_at, expires_at, used_by, used_at FROM issued_codes WHERE serial = ?").bind(serial).first();
+          if (row) row.customer_phone = null;
+        }
         if (!row) return json(404, { message: "unknown code" });
+        if (row.used_by && row.customer_phone) {
+          try {
+            const now = new Date().toISOString();
+            await env.DB.prepare(`INSERT INTO car_customers (hw_id, phone, serial, bound_at, updated_at)
+              VALUES (?, ?, ?, ?, ?)
+              ON CONFLICT(hw_id) DO UPDATE SET phone = excluded.phone, serial = excluded.serial,
+                bound_at = excluded.bound_at, updated_at = excluded.updated_at
+              WHERE excluded.bound_at > car_customers.bound_at`)
+              .bind(row.used_by, row.customer_phone, row.serial, row.used_at || row.issued_at, now).run();
+          } catch (e) { /* Migration not applied yet: status remains available without phone association. */ }
+        }
         return json(200, row);
       }
       if (env.DB && req.method === "GET" && p === "/local/codes/recent") {
-        const rows = await env.DB.prepare("SELECT ic.serial, ic.issued_at, ic.expires_at, ic.used_by, ic.used_at, ic.issued_by, ds.label AS issued_by_label FROM issued_codes ic LEFT JOIN device_sessions ds ON substr(ds.id, 1, 8) = ic.issued_by ORDER BY ic.issued_at DESC LIMIT 30").all();
+        let rows;
+        try {
+          rows = await env.DB.prepare("SELECT ic.serial, ic.issued_at, ic.expires_at, ic.used_by, ic.used_at, ic.issued_by, ic.customer_phone, ds.label AS issued_by_label FROM issued_codes ic LEFT JOIN device_sessions ds ON substr(ds.id, 1, 8) = ic.issued_by ORDER BY ic.issued_at DESC LIMIT 30").all();
+        } catch (e) {
+          rows = await env.DB.prepare("SELECT ic.serial, ic.issued_at, ic.expires_at, ic.used_by, ic.used_at, ic.issued_by, ds.label AS issued_by_label FROM issued_codes ic LEFT JOIN device_sessions ds ON substr(ds.id, 1, 8) = ic.issued_by ORDER BY ic.issued_at DESC LIMIT 30").all();
+          rows.results = (rows.results || []).map(row => ({ ...row, customer_phone: null }));
+        }
         return json(200, { codes: rows.results || [] });
+      }
+      if (env.DB && req.method === "GET" && p === "/local/customers") {
+        const rawLimit = Number(url.searchParams.get("limit") || 500);
+        const limit = Number.isInteger(rawLimit) ? Math.min(2000, Math.max(1, rawLimit)) : 500;
+        const hw = (url.searchParams.get("hw") || "").trim();
+        const phone = (url.searchParams.get("phone") || "").trim();
+        if (hw && !/^[A-Za-z0-9:_.\-]{1,120}$/.test(hw)) return json(400, { message: "معرّف السيارة غير صالح" });
+        if (phone && !/^\+[1-9]\d{6,14}$/.test(phone)) return json(400, { message: "رقم الهاتف غير صالح" });
+        try {
+          const now = new Date().toISOString();
+          await env.DB.prepare(`INSERT INTO car_customers (hw_id, phone, serial, bound_at, updated_at)
+            SELECT used_by, customer_phone, serial, COALESCE(used_at, issued_at), ?1
+              FROM issued_codes
+             WHERE used_by IS NOT NULL AND customer_phone IS NOT NULL AND customer_phone <> ''
+            ON CONFLICT(hw_id) DO UPDATE SET
+              phone = excluded.phone, serial = excluded.serial, bound_at = excluded.bound_at, updated_at = excluded.updated_at
+            WHERE excluded.bound_at > car_customers.bound_at`).bind(now).run();
+          const clauses = []; const binds = [];
+          if (hw) { clauses.push("hw_id = ?"); binds.push(hw); }
+          if (phone) { clauses.push("phone = ?"); binds.push(phone); }
+          binds.push(limit);
+          const rows = await env.DB.prepare(`SELECT hw_id, phone, serial, bound_at, updated_at, note FROM car_customers${clauses.length ? ` WHERE ${clauses.join(" AND ")}` : ""} ORDER BY bound_at DESC LIMIT ?`).bind(...binds).all();
+          const customers = (rows.results || []).map(row => ({ ...row, country: phoneCountry(row.phone) }));
+          return json(200, { customers, count: customers.length });
+        } catch (e) {
+          // Both the sync and read touch migration-owned objects. Before rollout, answer as an
+          // empty phone directory rather than turning every admin-page load into a 500.
+          return json(200, { customers: [], count: 0 });
+        }
+      }
+      if (env.DB && req.method === "POST" && p === "/local/customers/set") {
+        const body = await readJsonBody(req);
+        const hwId = String(body.hw_id || "").trim();
+        if (!/^[A-Za-z0-9:_.\-]{1,120}$/.test(hwId)) return json(400, { message: "معرّف السيارة غير صالح" });
+        const rawPhone = body.phone == null ? "" : String(body.phone).trim();
+        const normalized = rawPhone ? normalizePhone(rawPhone) : null;
+        if (rawPhone && !normalized) return json(400, { message: "رقم الهاتف غير صالح" });
+        const now = new Date().toISOString();
+        try {
+          if (!normalized) {
+            await env.DB.prepare("DELETE FROM car_customers WHERE hw_id = ?").bind(hwId).run();
+            return json(200, { hw_id: hwId, phone: null, country: null, serial: null, bound_at: null, updated_at: now, note: null, deleted: true });
+          }
+          const note = body.note == null ? null : String(body.note).trim().slice(0, 500) || null;
+          await env.DB.prepare(`INSERT INTO car_customers (hw_id, phone, serial, bound_at, updated_at, note)
+            VALUES (?, ?, NULL, ?, ?, ?)
+            ON CONFLICT(hw_id) DO UPDATE SET phone = excluded.phone, serial = NULL,
+              bound_at = excluded.bound_at, updated_at = excluded.updated_at, note = excluded.note`)
+            .bind(hwId, normalized.e164, now, now, note).run();
+          const row = await env.DB.prepare("SELECT hw_id, phone, serial, bound_at, updated_at, note FROM car_customers WHERE hw_id = ?").bind(hwId).first();
+          return json(200, { ...row, country: phoneCountry(row.phone) });
+        } catch (e) {
+          return json(503, { message: "ميزة رقم الهاتف غير جاهزة بعد" });
+        }
       }
       if (req.method === "POST" && p.startsWith("/local/store/")) {
         const name = p.slice("/local/store/".length);

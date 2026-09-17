@@ -3213,6 +3213,51 @@
         if (!res.ok) { let m = ''; try { m = JSON.parse(txt).message || ''; } catch (e) { m = txt; } throw new Error(m || `HTTP ${res.status}`); }
         return txt ? JSON.parse(txt) : null;
     }
+
+    // ---- customer phone numbers (D1 car_customers) ----
+    // The technician types the customer's number under the freshly minted code on the generator
+    // page; when that code is used, the Worker binds the number to the car's hardware id. The panel
+    // only reads the directory, and lets the owner correct one number by hand.
+    const carPhones = new Map(); let carPhonesAt = 0, carPhonesLoading = null;
+    function carPhoneOf(hw) { return hw ? carPhones.get(canonicalHw(hw)) || null : null; }
+    function carPhonesAvailable() { return LOCAL_PROXY && !!LOCAL_FLAGS.codes; }
+    async function loadCarPhones(force) {
+        if (!carPhonesAvailable()) return;
+        if (!force && Date.now() - carPhonesAt < 60000) return;
+        if (carPhonesLoading) return carPhonesLoading;
+        carPhonesLoading = (async () => {
+            try {
+                const r = await localGet('/local/customers?limit=2000');
+                carPhones.clear();
+                ((r && r.customers) || []).forEach(c => { if (c && c.hw_id) carPhones.set(canonicalHw(c.hw_id), c); });
+                carPhonesAt = Date.now();
+            } catch (e) { /* a missing phone directory never blocks a page */ }
+            finally { carPhonesLoading = null; }
+        })();
+        return carPhonesLoading;
+    }
+    function carPhoneHtml(hw) {
+        if (!carPhonesAvailable()) return '<span class="sub">دليل الأرقام يُقرأ من الموقع فقط</span>';
+        const c = carPhoneOf(hw);
+        const btn = LOCAL_PROXY ? `<button type="button" class="btn sm" data-phone-edit="${esc(hw)}" style="margin-inline-start:8px">${c ? 'تعديل' : 'إضافة'}</button>` : '';
+        if (!c) return `<span class="sub">لم يُسجَّل رقم</span>${btn}`;
+        return `<a class="num" href="tel:${esc(c.phone)}" dir="ltr">${esc(c.phone)}</a>${c.country ? ` <span class="sub">(${esc(c.country)})</span>` : ''}${c.serial ? ` <span class="sub">كود ${esc(c.serial)}</span>` : ''}${btn}`;
+    }
+    document.addEventListener('click', async e => {
+        const b = e.target.closest('[data-phone-edit]'); if (!b || b.disabled) return;
+        e.preventDefault();
+        const hw = b.dataset.phoneEdit, cur = carPhoneOf(hw);
+        const v = await promptDialog({ title: 'رقم هاتف صاحب السيارة', value: cur ? cur.phone : '', placeholder: 'ثمانية أرقام لرقم قطري، أو اكتب رمز الدولة مثل ‎+966' });
+        if (v === null) return;
+        b.disabled = true;
+        try {
+            await localPost('/local/customers/set', { hw_id: hw, phone: String(v).trim() });
+            await loadCarPhones(true);
+            toast('success', String(v).trim() ? 'حُفظ رقم صاحب السيارة' : 'مُسح رقم صاحب السيارة');
+            if (carOpen === hw) renderCarPage(hw);
+        } catch (err) { alertDialog('تعذّر حفظ الرقم', err.message || String(err)); }
+        finally { b.disabled = false; }
+    });
     const isoLike = v => typeof v === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(v);
     const epochLike = (k, v) => typeof v === 'number' && v > 1e12 && /at$|time|seen|date/i.test(k);
     function cellValue(k, v) {
@@ -4381,8 +4426,8 @@
                 const expired = !c.used_by && ts(c.expires_at) < Date.now();
                 const st = c.used_by ? '<span class="badge ok">مستخدم</span>' : expired ? '<span class="badge">منتهٍ</span>' : '<span class="badge warn">صالح</span>';
                 const by = c.issued_by_label ? esc(c.issued_by_label) : (c.issued_by && c.issued_by !== 'programs-admin' ? `<span class="num">${esc(c.issued_by)}</span>` : '<span class="sub">—</span>');
-                return `<tr><td><span class="num">${esc(c.serial)}</span></td><td>${timeCell(c.issued_at)}</td><td>${by}</td><td>${c.used_by ? '<span class="sub">—</span>' : timeCell(c.expires_at)}</td><td>${st}</td><td>${c.used_by ? hwLink(c.used_by) : '<span class="sub">—</span>'}</td></tr>`;
-            }).join('') : '<tr><td colspan="6"><div class="empty">لا أكواد بعد</div></td></tr>';
+                return `<tr><td><span class="num">${esc(c.serial)}</span></td><td>${timeCell(c.issued_at)}</td><td>${by}</td><td>${c.used_by ? '<span class="sub">—</span>' : timeCell(c.expires_at)}</td><td>${st}</td><td>${c.used_by ? hwLink(c.used_by) : '<span class="sub">—</span>'}</td><td>${c.customer_phone ? `<span class="num" dir="ltr">${esc(c.customer_phone)}</span>` : '<span class="sub">—</span>'}</td></tr>`;
+            }).join('') : '<tr><td colspan="7"><div class="empty">لا أكواد بعد</div></td></tr>';
         } catch (e) { setErr('gen-recent', ''); }
     }
     async function renderSessions() {
@@ -5127,7 +5172,7 @@
                 </div>
             </div>
             <h3 class="app-h" style="margin-top:18px;">آخر الأكواد المُصدَرة</h3>
-            <div class="table-wrap"><table style="min-width:640px;"><thead><tr><th>الكود</th><th>أُصدر</th><th>الجهاز المُصدِر</th><th>ينتهي</th><th>الحالة</th><th>السيارة</th></tr></thead><tbody id="gen-recent"><tr><td colspan="5"><div class="empty">—</div></td></tr></tbody></table></div>`;
+            <div class="table-wrap"><table style="min-width:640px;"><thead><tr><th>الكود</th><th>أُصدر</th><th>الجهاز المُصدِر</th><th>ينتهي</th><th>الحالة</th><th>السيارة</th><th>هاتف صاحبها</th></tr></thead><tbody id="gen-recent"><tr><td colspan="5"><div class="empty">—</div></td></tr></tbody></table></div>`;
         panelsHost.appendChild(gen);
         // «الإصدارات المنشورة»: reached from the stat tile only; the one place Back Button still appears.
         const rel = document.createElement('section'); rel.className = 'tab-panel'; rel.id = 'panel-releases'; rel.setAttribute('role', 'tabpanel');
@@ -7112,6 +7157,8 @@
         // A car of a program with its own backend does not read from the shared Supabase loaders at
         // all: it reads its own program's logs and crashes, and nothing else. Firing the shared ones
         // here would spend requests on a VIN that has no row anywhere they look.
+        // The owner's phone for this car comes from the generator's directory; redraw once it lands.
+        loadCarPhones().then(() => { if (carOpen === hw) renderCarPage(hw); });
         const own = ownCarFor(carOpen);
         if (own && own.kind === 'g700') { g700CarLogs(carOpen); g700CarCrashes(carOpen); return; }
         if (own && own.kind === 'lynk') return;
@@ -7258,6 +7305,7 @@
         S.push(carSection('البطاقة', 'fa-id-card', kv([
             ['معرّف السيارة', `<span class="num">${esc(c.hwId || hw)}</span>`],
             ['كود التفعيل', `<span class="num">${esc(c.code || '—')}</span>`],
+            ['هاتف صاحب السيارة', carPhoneHtml(c.hwId || hw)],
             ['الحالة', c.blocked || c.codeBlocked ? 'محظورة' : 'تعمل', true],
             ['الإصدار', `<span class="num">${esc(c.version || '—')}${vcode == null ? '' : ' (' + esc(vcode) + ')'}</span>` + (Number.isFinite(latest) ? ` <span class="sub">أحدث منشور: ${esc(latest)}</span>` : '')],
             ['أول ظهور', first ? esc(fmtDate(first)) : '—'],
@@ -7324,6 +7372,7 @@
         $('car-sections').innerHTML = carSection('البطاقة', 'fa-id-card', kv([
             ['معرّف الجهاز', `<span class="num">${esc(d.id || hw)}</span>`],
             ['كود التفعيل', `<span class="num">${esc(d.code || '—')}</span>`],
+            ['هاتف صاحب السيارة', carPhoneHtml(d.id || hw)],
             ['الحالة', blocked ? 'محظور' : 'يعمل', true],
             ['الإصدار', `<span class="num">${esc(d.version_name || '—')}${vcode == null ? '' : ' (' + esc(vcode) + ')'}</span>` + (Number.isFinite(latest) ? ` <span class="sub">أحدث منشور: ${esc(latest)}</span>` : '')],
             ['تاريخ التفعيل', d.activated_at ? esc(fmtDate(d.activated_at)) : '—'],
@@ -7354,6 +7403,7 @@
             ['الاسم', esc(d.client_name || '—'), true],
             ['نوع السيارة', type ? `${esc(type.label)} <span class="sub">(${esc(type.src)})</span>` : '—', true],
             ['كود التفعيل', esc(d.serial_number || '—')],
+            ['هاتف صاحب السيارة', carPhoneHtml(r ? r.hw : hw)],
             ['وقت التفعيل', esc(fmtDate(d.activated_at))],
             ['أول تسجيل', esc(fmtDate(d.created_at))],
             ['آخر ظهور', esc(fmtDate(r.lastSeen)) + ' <span class="sub">(' + esc(relTime(r.lastSeen)) + ')</span>'],
