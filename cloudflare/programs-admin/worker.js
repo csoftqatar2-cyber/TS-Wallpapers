@@ -9,7 +9,7 @@
  * not the admin uid gets 401 and nothing else — no secret ever leaves this Worker.
  *
  * Secrets (wrangler secret put): STORE_ADMIN_SECRET, TSLINK_ADMIN_TOKEN, LEO_ADMIN_TOKEN,
- * CONTROLLER_ADMIN_SECRET, CATALOG_PUBLISH_SECRET. Vars (wrangler.toml): SUPABASE_URL,
+ * G700_ADMIN_TOKEN, LYNK_ADMIN_TOKEN, CONTROLLER_ADMIN_SECRET, CATALOG_PUBLISH_SECRET, VAPID_PRIVATE_JWK (Web Push, push.mjs; cron every minute). Vars (wrangler.toml): SUPABASE_URL,
  * SUPABASE_ANON, ADMIN_UID, CTRL_TELEMETRY_URL, CTRL_TELEMETRY_ANON.
  *
  * One machine-to-machine route lives outside the Access/admin-session gate: POST /catalog/publish
@@ -22,12 +22,29 @@ import ICON180 from "./icons/icon-180.png";
 import ICON192 from "./icons/icon-192.png";
 import ICON512 from "./icons/icon-512.png";
 import { bumpCatalogRow, readCatalogRow, CatalogRowError } from "./catalog-row.mjs";
+import { SW_SOURCE, handlePushRoute, pushReady, runPushCron } from "./push.mjs";
+import { voiceRouterRoute } from "./voice-router-route.mjs";
+import { handleDiagRoute } from "./diag-admin.mjs";
 
 const RPC_ALLOW = /^store_admin_[a-z0-9_]{1,40}$/u;
 const TSLINK_ADMIN_BASE = "https://tslink-bot.tsdash-qatar.workers.dev/admin/api";
 const TSLINK_GET_ALLOW = /^\/(overview|cars|versions|crashes|crashes\/recent|cars\/[A-Za-z0-9_.:@+-]{1,120})$/u;   // crashes: relay D1 groups (+ recent rows once the relay ships them)
 const LEO_ADMIN_BASE = "https://tsleo-checkin.tsdash-qatar.workers.dev";
 const LEO_GET_ALLOW = /^\/(crashes|cars)$/u;
+// TS G700 (com.tsdash.jetourg700) and TS Lynk & Co (com.carfs.fullscreen) each keep their OWN
+// activation system on their own Worker — nothing of theirs lives in the shared Supabase. The panel
+// reads them the same way it reads TS Link: GET only, allowlisted paths, the admin token injected
+// here and never handed to the page. No write route of either Worker is reachable from here on
+// purpose (block / reissue / mergecars / releasecode / adoptcodes / resetusage stay on their own
+// local admin pages): this tab is a window, not a second hand on the wheel.
+const G700_ADMIN_BASE = "https://tsdash-checkin.tsdash-qatar.workers.dev";
+const G700_GET_ALLOW = /^\/(cars|crashes|codes|unissued|attempts|logs|blockedcodes)$/u;
+const G700_LATEST_URL = "https://pub-b7e6e084a54e46acb74f3dfe7c6533b1.r2.dev/latest.json";
+const LYNK_ADMIN_BASE = "https://ts-lynk-report.tsdash-qatar.workers.dev";
+const LYNK_GET_ALLOW = /^\/devices$/u;
+// The Lynk bucket is public-read (the app itself fetches both files with no key), so these two are
+// mirrored for CORS relief only — the same reason /local/catalog and /local/leo-latest exist.
+const LYNK_PUBLIC_BASE = "https://pub-1c493a648f424eba933a07d3b2371d56.r2.dev";
 // Controller telemetry RPCs the site may call (p_secret injected here). Reads + the owner's voice/fuel
 // settings writes (2026-09-08) + crash reports (thab_admin_crashes / crash_groups, added by the controller chat).
 const CTRL_RPC_ALLOW = /^thab_admin_(stats|cars|events|gaps|fuel_price_history|voice_overlay_history|voice_overlay_publish|voice_overlay_restore|fuel_price_publish|set_note|crashes|crash_groups)$/u;
@@ -212,11 +229,14 @@ async function handleLogin(req, env) {
     const data = await res.json();
     if (data.user && data.user.id !== env.ADMIN_UID) return json(403, { message: "not the admin" });
     if (attemptId != null) await env.DB.prepare("UPDATE login_attempts SET ok = 1 WHERE id = ?").bind(attemptId).run();
-    await securityEvent(env, "login_ok", c, null);
     // Device-bound session: the refresh token stays here; the browser only gets an HttpOnly id.
     const id = randomId();
+    const family = (c.ua.match(/iPhone|iPad|Android|Windows|Macintosh|Linux/) || ["جهاز"])[0];
+    // login_ok = a NEW device session (session refreshes never log one). The detail carries the device
+    // family (push label) and the session prefix, so the panel does not notify a device of its own login.
+    await securityEvent(env, "login_ok", c, `${family} · sid:${id.slice(0, 8)}`);
     await env.DB.prepare("INSERT INTO device_sessions (id, refresh_token, created_at, last_seen, ip, ua, email, label) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
-      .bind(id, data.refresh_token, now, now, c.ip, c.ua, c.email, (c.ua.match(/iPhone|iPad|Android|Windows|Macintosh|Linux/) || ["جهاز"])[0]).run();
+      .bind(id, data.refresh_token, now, now, c.ip, c.ua, c.email, family).run();
     return new Response(JSON.stringify({ access_token: data.access_token, expires_in: data.expires_in || 3600, token_type: "bearer", user: { id: data.user && data.user.id } }),
       { status: 200, headers: { "Content-Type": "application/json; charset=utf-8", "Set-Cookie": setCookie(id, false), ...SEC_HEADERS } });
   }
@@ -360,6 +380,12 @@ export default {
       return new Response(a.body, { status: 200, headers: h });
     }
     if (req.method === "GET" && icons[p]) return new Response(icons[p], { status: 200, headers: { "Content-Type": "image/png", "Cache-Control": "public, max-age=600" } });
+    // Push service worker (push.mjs): nothing secret in it. Placed before the Worker's own Access check so
+    // an Access bypass rule for /sw.js (optional) keeps background updates working with an expired cookie;
+    // without that rule the edge still asks for Access and the browser simply keeps the installed copy.
+    if (req.method === "GET" && p === "/sw.js") {
+      return new Response(SW_SOURCE, { status: 200, headers: { "Content-Type": "application/javascript; charset=utf-8", "Cache-Control": "no-cache", "X-Content-Type-Options": "nosniff", "Service-Worker-Allowed": "/" } });
+    }
     if (req.method === "GET" && p === "/manifest.webmanifest") {
       return new Response(JSON.stringify({ name: "Thabthaba Programs Admin", short_name: "Thabthaba", start_url: "/gen", display: "standalone", background_color: "#211a12", theme_color: "#211a12", dir: "rtl", lang: "ar",
         icons: [{ src: "/icon-192.png?v=3", sizes: "192x192", type: "image/png" }, { src: "/icon-512.png?v=3", sizes: "512x512", type: "image/png" }] }),
@@ -400,7 +426,7 @@ export default {
       return new Response(html, { status: 200, headers: { "Content-Type": "text/html; charset=utf-8", "Content-Security-Policy": csp(n), ...SEC_HEADERS } });
     }
     if (req.method === "GET" && p === "/local/ping") {
-      return json(200, { local: true, remote: true, store: !!env.STORE_ADMIN_SECRET, tslink: !!env.TSLINK_ADMIN_TOKEN, leo: !!env.LEO_ADMIN_TOKEN, controller: !!env.CONTROLLER_ADMIN_SECRET, codes: !!env.DB, guard: !!env.DB, sessions: !!env.DB, writes: !!env.PANEL_WRITE_KEY, catalog: !!(env.CATALOG_PUBLISH_SECRET && env.CATALOG_R2) });
+      return json(200, { local: true, remote: true, store: !!env.STORE_ADMIN_SECRET, tslink: !!env.TSLINK_ADMIN_TOKEN, leo: !!env.LEO_ADMIN_TOKEN, g700: !!env.G700_ADMIN_TOKEN, lynk: !!env.LYNK_ADMIN_TOKEN, controller: !!env.CONTROLLER_ADMIN_SECRET, codes: !!env.DB, guard: !!env.DB, sessions: !!env.DB, writes: !!env.PANEL_WRITE_KEY, catalog: !!(env.CATALOG_PUBLISH_SECRET && env.CATALOG_R2), push: pushReady(env) });
     }
     if (!p.startsWith("/local/")) return json(404, { message: "not found" });
 
@@ -431,6 +457,42 @@ export default {
         models[id] = m ? { name: String(m.name || id), prompt: num(pr.prompt), completion: num(pr.completion), audio: num(pr.audio ?? pr.input_audio), request: num(pr.request) } : null;
       }
       return json(200, { models });
+    }
+
+    // Controller stat tile «رصيد OpenRouter»: the balance left on the account that pays for voice.
+    // Asked of thab-voice over its AdminCredits RPC entrypoint (service binding; no public route
+    // exists), which holds the key and returns numbers only — the key never reaches this Worker.
+    // Only known numeric/enum fields are copied through, and it is cached ~60 s over there.
+    if (req.method === "GET" && p === "/local/openrouter-credits") {
+      if (!env.VOICE_SVC) return json(503, { message: "voice service binding missing", reason: "binding_missing" });
+      let r;
+      try { r = await env.VOICE_SVC.credits(); }
+      catch (e) { console.log("openrouter-credits rpc failed"); return json(502, { message: "voice service unreachable", reason: "rpc_failed" }); }
+      const n = v => (v == null || !Number.isFinite(Number(v))) ? null : Number(v);
+      const s = v => (typeof v === "string" && /^[a-z_]{1,48}$/.test(v)) ? v : null;
+      const out = r && typeof r === "object" ? {
+        ok: r.ok === true, source: s(r.source), reason: s(r.reason),
+        remaining: n(r.remaining), total_credits: n(r.total_credits), total_usage: n(r.total_usage),
+        limit: n(r.limit), limit_remaining: n(r.limit_remaining), key_usage: n(r.key_usage),
+        credits_status: n(r.credits_status), key_status: n(r.key_status),
+        fetched_at: typeof r.fetched_at === "string" ? r.fetched_at.slice(0, 40) : null, cached: r.cached === true,
+      } : { ok: false, reason: "bad_reply" };
+      return json(200, out);
+    }
+
+    // Voice model router «إدارة الموديلات والمفاتيح»: Google keys, per-model limits, thinking flags,
+    // live usage. Talks to thab-voice's AdminRouter RPC entrypoint (service binding; no public route).
+    // The router never returns a key value; api_key only travels browser → here → thab-voice on save.
+    // Per-car Google/OpenRouter usage (GET usage, car_usage) and the Google order (POST set_google_order)
+    // since 2026-09-16. Handler in voice-router-route.mjs (unit-tested there).
+    if (p === "/local/voice-router" || p.startsWith("/local/voice-router/")) {
+      return voiceRouterRoute(req, env, url, p, { json, readJsonBody });
+    }
+
+    // «استعلام عن بُعد» remote diagnostics: read-only probes for live cars. Signs here (DIAG_SIGNING_JWK),
+    // stores/serves through thab-voice's AdminDiag entrypoint (DIAG_SVC). See diag-admin.mjs.
+    if (p === "/local/diag" || p.startsWith("/local/diag/")) {
+      return handleDiagRoute(req, env, { url, json, readJsonBody, actor: clientOf(req).email });
     }
 
     try {
@@ -471,11 +533,17 @@ export default {
         const upstream = await env.UPLOAD_SVC.fetch(new Request("https://ts-wallpapers-upload.tsdash-qatar.workers.dev/", { method: req.method, headers: h, body: req.method === "POST" ? req.body : undefined }));
         return passthrough(upstream);
       }
+      // ---- Web Push: subscribe / unsubscribe / test for this admin device (push.mjs) ----
+      if (p.startsWith("/local/push/")) {
+        return await handlePushRoute(req, env, p, { json, readJsonBody, client: clientOf(req), sessionPrefix: (cookieOf(req, DEV_COOKIE) || "").slice(0, 8) || null });
+      }
       // ---- security: events for the panel's notifications, blocked list, unblock ----
       if (env.DB && req.method === "GET" && p === "/local/security/events") {
         const since = url.searchParams.get("since") || new Date(Date.now() - 86400_000).toISOString();
         const rows = await env.DB.prepare("SELECT id, at, kind, ip, email, detail FROM security_events WHERE at > ? ORDER BY at DESC LIMIT 100").bind(since).all();
-        return json(200, { events: rows.results || [] });
+        const mine = (cookieOf(req, DEV_COOKIE) || "").slice(0, 8);
+        // self: this login_ok created the caller's own device session (the panel skips notifying it).
+        return json(200, { events: (rows.results || []).map(r => ({ ...r, self: !!mine && r.kind === "login_ok" && String(r.detail || "").endsWith(`sid:${mine}`) })) });
       }
       if (env.DB && req.method === "GET" && p === "/local/security/blocked") {
         const rows = await env.DB.prepare("SELECT ip, email, at, expires_at, reason FROM blocked_clients ORDER BY at DESC LIMIT 100").all();
@@ -578,9 +646,36 @@ export default {
         const f = env.LEO_SVC ? env.LEO_SVC.fetch.bind(env.LEO_SVC) : fetch;
         return passthrough(await f(`${LEO_ADMIN_BASE}${sub}${url.search}`, { headers: { "X-Admin-Token": env.LEO_ADMIN_TOKEN }, cache: "no-store" }));
       }
+      // TS G700 — tsdash-checkin (KV). `/latest` is the app's own update manifest on R2 (public,
+      // but no CORS header of its own, so the page cannot read it directly).
+      if (req.method === "GET" && p.startsWith("/local/g700")) {
+        const sub = p.slice("/local/g700".length);
+        if (sub === "/latest") return passthrough(await fetch(`${G700_LATEST_URL}?cb=${Date.now()}`, { cache: "no-store" }));
+        if (!G700_GET_ALLOW.test(sub)) return json(404, { message: "path not allowed" });
+        if (!env.G700_ADMIN_TOKEN) return json(503, { message: "g700 token not configured" });
+        // Worker-to-Worker over the public hostname fails with error 1042 inside one account, so the
+        // service binding is the real path; plain fetch stays as the fallback for a deploy without it.
+        const f = env.G700_SVC ? env.G700_SVC.fetch.bind(env.G700_SVC) : fetch;
+        return passthrough(await f(`${G700_ADMIN_BASE}${sub}${url.search}`, { headers: { "X-Admin-Token": env.G700_ADMIN_TOKEN }, cache: "no-store" }));
+      }
+      // TS Lynk & Co — ts-lynk-report (R2). `/devices` needs the admin token; `/latest` and `/codes`
+      // are the bucket's own public files.
+      if (req.method === "GET" && p.startsWith("/local/lynk")) {
+        const sub = p.slice("/local/lynk".length);
+        if (sub === "/latest") return passthrough(await fetch(`${LYNK_PUBLIC_BASE}/latest.json?cb=${Date.now()}`, { cache: "no-store" }));
+        if (sub === "/codes") return passthrough(await fetch(`${LYNK_PUBLIC_BASE}/activation/codes.json?cb=${Date.now()}`, { cache: "no-store" }));
+        if (!LYNK_GET_ALLOW.test(sub)) return json(404, { message: "path not allowed" });
+        if (!env.LYNK_ADMIN_TOKEN) return json(503, { message: "lynk token not configured" });
+        const f = env.LYNK_SVC ? env.LYNK_SVC.fetch.bind(env.LYNK_SVC) : fetch;
+        return passthrough(await f(`${LYNK_ADMIN_BASE}${sub}${url.search}`, { headers: { "x-ts-admin": env.LYNK_ADMIN_TOKEN }, cache: "no-store" }));
+      }
       return json(404, { message: "not found" });
     } catch (e) {
       return json(400, { message: e && e.message ? e.message : "bad request" });
     }
+  },
+  // Cron Trigger (wrangler.toml [triggers]): push new activations / logins to subscribed devices.
+  async scheduled(event, env, ctx) {
+    ctx.waitUntil(runPushCron(env).then(r => { if (r && (r.sent || r.failed)) console.log(`push cron ${JSON.stringify(r)}`); }).catch(e => console.log(`push cron failed: ${e && e.message}`)));
   },
 };

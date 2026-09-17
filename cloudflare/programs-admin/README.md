@@ -2,9 +2,64 @@
 
 The fleet control panel reachable from a phone: serves `control-panel.html` / `gen.html` behind
 Cloudflare Access + the Supabase admin session, and proxies the admin RPCs of the store, TS Link,
-Leo and the controller with the secrets injected server-side. Deployed with `deploy.cmd`
+Leo, TS G700, TS Lynk & Co and the controller with the secrets injected server-side. Deployed with `deploy.cmd`
 (`npx wrangler deploy` from this folder). Secrets live in Wrangler only — see the header of
 `worker.js` and the comments in `wrangler.toml`.
+
+
+## Programs with their own activation system — `GET /local/g700/*`, `GET /local/lynk/*`
+
+**TS G700** (`com.tsdash.jetourg700`) and **TS Lynk & Co** (`com.carfs.fullscreen`) are not in the
+shared Supabase at all: each sells its own activation codes and keeps its own cars, versions and
+(for G700) crash reports on its own Cloudflare Worker. The panel shows them as ordinary app tabs by
+proxying those two Workers exactly the way it proxies the TS Link relay — **GET only, allow-listed
+paths, admin token injected in this Worker, behind the same admin-session check**. The page never
+receives a token, and no write route of either backend is reachable from here: blocking a car,
+reissuing a code, merging two records and resetting usage stay on each program's own admin page, so
+a slip in this window cannot switch a customer's car off.
+
+| Route | Upstream | Header injected | Notes |
+|---|---|---|---|
+| `GET /local/g700/{cars,crashes,codes,unissued,attempts,logs,blockedcodes}` | `tsdash-checkin` (KV) | `X-Admin-Token: G700_ADMIN_TOKEN` | query string forwarded (`?limit=`, `?hwId=`) |
+| `GET /local/g700/latest` | `pub-b7e6e084….r2.dev/latest.json` | — | public manifest, mirrored for CORS |
+| `GET /local/lynk/devices` | `ts-lynk-report` (R2) | `x-ts-admin: LYNK_ADMIN_TOKEN` | one record per car under `activation/devices/` |
+| `GET /local/lynk/latest`, `GET /local/lynk/codes` | `pub-1c493a64….r2.dev` | — | public files the app itself fetches with no key |
+
+The two header names differ because each upstream Worker reads its own: `tsdash-checkin` checks
+`X-Admin-Token`, `ts-lynk-report` checks `x-ts-admin`. A path off the allow-list answers
+`404 path not allowed`; a missing secret answers `503 {"message":"g700 token not configured"}` (resp.
+`lynk token not configured`), which the page turns into the Arabic «غير متاح» note rather than an
+empty table. `/local/ping` grew the flags `g700` and `lynk` so the page knows before it asks.
+
+Both upstreams live in the same Cloudflare account, where a Worker-to-Worker fetch over the public
+hostname fails with error 1042 — so `wrangler.toml` carries service bindings `G700_SVC`
+(`tsdash-checkin`) and `LYNK_SVC` (`ts-lynk-report`), with a plain `fetch` kept only as a fallback.
+
+### Setting it up once
+
+```
+cd cloudflare/programs-admin
+npx wrangler secret put G700_ADMIN_TOKEN     # = ADMIN_TOKEN of the Worker tsdash-checkin
+npx wrangler secret put LYNK_ADMIN_TOKEN     # = ADMIN_TOKEN of the Worker ts-lynk-report
+npx wrangler deploy                           # picks up the two new service bindings
+```
+
+Nothing new is minted: both values already exist as secrets on those two Workers (set when each was
+deployed — see `TS Dash/Jetour G700/admin/worker/wrangler.toml` and `TS Dash/Lynk and Co/worker/README.md`).
+
+For the local runner (`~/.ts-secrets/_local-dashboard/serve.mjs`, port 8765) the same two routes are
+written up in [serve.local.patch.md](serve.local.patch.md); it reads the tokens from
+`~/.ts-secrets/jetour-g700/admin-token.txt` and `~/.ts-secrets/ts-lynk/admin-token.txt`.
+
+### What the tabs show
+
+Both tabs open on «التليمتري» with the same nine cards as the other programs, computed from their
+own data. Where a backend does not keep a number, the card shows «—» with the reason in its tooltip
+instead of a zero: TS Lynk & Co reports neither app opens nor crashes, and TS G700 counts paid
+service calls (weather / geo / update) per Qatar day rather than screen opens — its two «فتحات»
+cards are therefore labelled «طلبات الخدمات». «التوكنات» and «نظرة عامة» are hidden for both, because
+neither program has a device token or a row in `device_app_seen`. G700 crashes also join the
+fleet-wide «الأعطال» tab (app key `g700`) with the same grouping and «تم الحل» bookkeeping as the rest.
 
 ## Store-catalog mirror — `POST /catalog/publish`
 
