@@ -5052,15 +5052,36 @@
             let sub = await reg.pushManager.getSubscription();
             const oldKey = sub && sub.options && sub.options.applicationServerKey;
             if (sub && oldKey && bytesToB64u(oldKey) !== push.cfg.publicKey) { await sub.unsubscribe(); sub = null; }
-            if (!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64uToBytes(push.cfg.publicKey) });
+            const subscribe = () => reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64uToBytes(push.cfg.publicKey) });
+            if (!sub) {
+                // One retry on a clean slate: a subscription the push service already dropped, or one
+                // left behind by an older key, makes it refuse the new request on some devices.
+                try { sub = await subscribe(); }
+                catch (err) {
+                    const stale = await reg.pushManager.getSubscription();
+                    if (stale) { try { await stale.unsubscribe(); } catch (e2) { /* it is going away either way */ } }
+                    await new Promise(r => setTimeout(r, 800));
+                    sub = await subscribe();
+                }
+            }
             await localPost('/local/push/subscribe', { ...sub.toJSON(), label: pushDeviceLabel() });
             push.sub = sub;
             notifOn = true; try { localStorage.setItem('notif:on', '1'); } catch (e) {}
             updateNotificationToggle();
             toast('success', 'تم تفعيل الإشعارات على هذا الجهاز');
-        } catch (e) { push.note = 'تعذّر التفعيل: ' + errMsg(e); }
+        } catch (e) { push.note = 'تعذّر التفعيل: ' + pushErrorHint(e); }
         finally { push.busy = false; renderPush(); }
     });
+    // «Registration failed - push service error» is the browser's own message: that request never
+    // reaches our server, it fails between the browser and its push service (Google's service for
+    // Chrome and Edge). Nothing here can fix it, so the note says what actually helps.
+    function pushErrorHint(e) {
+        const m = errMsg(e);
+        if (/push service|Registration failed|AbortError|NotAllowedError/i.test(m)) {
+            return m + ' — هذا خطأ بين المتصفح وخدمة الإشعارات نفسها، ولم يصل الطلب إلى خادمنا. جرّب بالترتيب: شبكة أخرى من غير VPN أو وكيل، ثم تفعيل «استخدام خدمات Google للإشعارات» إن كان المتصفح Brave أو غيره من متصفحات Chromium، ثم مسح بيانات الموقع وإعادة المحاولة. وعلى الآيفون يلزم إضافة الموقع إلى الشاشة الرئيسية أولًا.';
+        }
+        return m;
+    }
     $('push-disable').addEventListener('click', async () => {
         if (push.busy || !push.sub) return;
         push.busy = true; push.note = ''; renderPush();
