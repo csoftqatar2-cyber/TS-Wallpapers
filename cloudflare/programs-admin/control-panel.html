@@ -239,8 +239,8 @@
         /* Controller cars table: voice numbers are buttons that open the per-day chart. */
         th.th-help { cursor: help; }
         th.th-help .th-sub { display: block; font-weight: 400; font-size: .7rem; opacity: .8; }
-        /* Controller cars table: click a header to sort by it, Windows-Explorer style. */
-        th.th-sortable { cursor: pointer; user-select: none; }
+        /* Any table: click a header to sort by it, Windows-Explorer style. */
+        th.th-sortable { cursor: pointer; user-select: none; touch-action: manipulation; }
         th.th-sortable:hover { color: var(--text-main); }
         th.th-sortable:focus-visible { outline: 2px solid var(--primary); outline-offset: -2px; }
         th.th-sortable .th-sort { color: var(--primary); font-size: .72rem; margin-inline-start: 4px; }
@@ -1812,9 +1812,10 @@
     }
     function timeCell(v) {
         if (!v) return '<span class="sub">—</span>';
-        return `<span class="sub" title="${esc(fmtDate(v))}">${esc(relTime(v))}</span>`;
+        // data-sort carries the real instant so header sorting orders «منذ ساعتين» against «منذ شهر».
+        return `<span class="sub" data-sort="${ts(v)}" title="${esc(fmtDate(v))}">${esc(relTime(v))}</span>`;
     }
-    function num(n) { return `<span class="num">${esc(n == null ? '—' : n)}</span>`; }
+    function num(n) { const raw = n == null ? '' : String(n).replace(/,/g, '').trim(); const key = raw !== '' && isFinite(Number(raw)) ? ` data-sort="${esc(Number(raw))}"` : ''; return `<span class="num"${key}>${esc(n == null ? '—' : n)}</span>`; }
     function nEn(v) { return (Number(v) || 0).toLocaleString('en-US'); }
     function modeLabel(m) { return m ? (MODE_LABELS[String(m).toLowerCase()] || m) : '—'; }
     // The car's type, best source first: what the controller / TS Leo Dash read from the head unit
@@ -1973,8 +1974,9 @@
         leoCrashes: [], leoCrashesLoaded: false,
         // TS G700 / TS Lynk & Co: their own backends, read GET-only through the Worker proxy.
         g700Cars: [], g700Codes: [], g700Unissued: [], g700BlockedCodes: [], g700Attempts: [],
-        g700Crashes: [], g700Latest: null, g700Loaded: false, g700Err: '',
-        lynkDevices: [], lynkCodes: null, lynkLatest: null, lynkLoaded: false, lynkErr: '',
+        g700Crashes: [], g700Latest: null, g700Loaded: false, g700Loading: false, g700Err: '',
+        g700Logs: [],       // fleet-wide warn/error events, newest first (/logs?limit=1000)
+        lynkDevices: [], lynkCodes: null, lynkLatest: null, lynkLoaded: false, lynkLoading: false, lynkErr: '',
         ctl: null, ctlLoaded: false,
         errors: {},         // section -> message
         merged: [],         // unified rows
@@ -2260,6 +2262,7 @@
         updateCrashCounts();
         if ($('cnt-tokens')) $('cnt-tokens').textContent = state.tokens.length;
         renderGlobalError();
+        scheduleTableSortInit();
     }
 
     // ---------- الإحصائيات ----------
@@ -3231,6 +3234,198 @@
         const a = e.target.closest('a.hw-link'); if (!a) return;
         e.preventDefault(); openCar(a.dataset.hw || '');
     });
+    // ---------- header sorting for every table on the page («زي الويندوز», owner 2026-09-17) ----------
+    // One engine, one look, one keyboard behaviour: click any header → first click puts the biggest /
+    // newest first (أ→ي for a text column), second click the other way, third click restores the order
+    // the renderer produced. State is per table and survives a reload.
+    //   · tables that page through listControls sort their rows array BEFORE paging — object rows by
+    //     their column key (genericTable), rendered <tr> rows by the clicked cell;
+    //   · tables built inline in a template literal never reach listControls, so the same headers sort
+    //     their <tbody> in place instead;
+    //   · a <th data-nosort> (or <table data-nosort>) is left alone, and so is every header that owns a
+    //     finer sort of its own (data-ctl-sort, and the provider buttons).
+    const TABLE_SORT_STORE = 'table.sort.v1';
+    const tableSort = new Map();                 // table key → { col, dir }
+    const sortRedraw = new WeakMap();            // tbody → the listControls draw() that re-pages it
+    const domSortBase = new WeakMap();           // tbody → the row order its own renderer produced
+    const domSortDone = new WeakMap();           // tbody → the order already applied, so a rescan is free
+    try {
+        const stored = JSON.parse(localStorage.getItem(TABLE_SORT_STORE) || '{}');
+        Object.keys(stored).forEach(k => { const v = stored[k]; if (v && Number.isFinite(Number(v.col))) tableSort.set(k, { col: Number(v.col), dir: v.dir === 'asc' ? 'asc' : 'desc' }); });
+    } catch (e) { /* a corrupt preference never blocks the page */ }
+    function tableSortSave() { try { localStorage.setItem(TABLE_SORT_STORE, JSON.stringify(Object.fromEntries(tableSort))); } catch (e) {} }
+    const SORT_BLANK = /^(?:—|–|-|…|لا يوجد|غير متاح|بانتظار)?$/;
+    // «1,234» و«$0.23» و«0.84 QR» و«45%» أرقام؛ ما عداها نص.
+    function sortNumber(text) {
+        const t = String(text)
+            .replace(/[\u200e\u200f\u061c\u202a-\u202e]/g, '')
+            .replace(/[\u0660-\u0669]/g, d => String(d.charCodeAt(0) - 0x0660))
+            .replace(/[,\u066c\s]/g, '')
+            .replace(/^\$/, '').replace(/(?:%|QR|ر\.?ق)$/i, '')
+            .trim();
+        return /^[+-]?(?:\d+\.?\d*|\.\d+)$/.test(t) && Number.isFinite(Number(t)) ? Number(t) : null;
+    }
+    function sortCellValue(td) {
+        if (!td) return null;
+        const holder = td.hasAttribute('data-sort') ? td : td.querySelector('[data-sort]');
+        if (holder) {
+            const raw = holder.getAttribute('data-sort');
+            if (raw == null || raw === '') return null;
+            const n = sortNumber(raw);
+            return n != null ? n : raw;
+        }
+        const text = (td.textContent || '').replace(/\s+/g, ' ').trim();
+        if (SORT_BLANK.test(text)) return null;
+        const n = sortNumber(text);
+        return n != null ? n : text;
+    }
+    function sortFieldValue(v) {
+        if (v == null || v === '') return null;
+        if (typeof v === 'number') return Number.isFinite(v) ? v : null;
+        if (typeof v === 'boolean') return v ? 1 : 0;
+        if (typeof v === 'object') return JSON.stringify(v);
+        const t = String(v).trim();
+        if (SORT_BLANK.test(t)) return null;
+        return isoLike(t) ? ts(t) : t;         // localeCompare({numeric}) already puts «1.10» after «1.9»
+    }
+    function sortCmp(a, b, dir) {
+        if (a == null || b == null) return a == null && b == null ? 0 : (a == null ? 1 : -1);   // «—» آخرًا في الاتجاهين
+        const s = dir === 'asc' ? 1 : -1;
+        if (typeof a === 'number' && typeof b === 'number') return s * (a < b ? -1 : a > b ? 1 : 0);
+        return s * String(a).localeCompare(String(b), 'ar', { numeric: true, sensitivity: 'base' });
+    }
+    // Stable: equal values keep the order the renderer produced, so «the default order» is always recoverable.
+    function sortRowsFor(key, rows, ctx) {
+        const st = tableSort.get(key);
+        if (!st || !Array.isArray(rows) || rows.length < 2) return rows;
+        const keys = ctx && ctx.keys, by = ctx && ctx.by;
+        if (keys && !keys[st.col]) return rows;
+        const value = by ? row => sortFieldValue(by(row, st.col))
+            : keys ? row => (row && typeof row === 'object' && !Array.isArray(row)) ? sortFieldValue(row[keys[st.col]]) : null
+            : row => { const tr = Array.isArray(row) ? row[0] : row; return tr && tr.cells ? sortCellValue(tr.cells[st.col]) : null; };
+        const mapped = rows.map((row, i) => ({ row, i, v: value(row) }));
+        // In a column of numbers a stray label («لا يبلّغ بعد») means «no value», not a name to sort by: keep it with the «—».
+        let nums = 0, words = 0;
+        mapped.forEach(x => { if (x.v == null) return; if (typeof x.v === 'number') nums++; else words++; });
+        if (nums && nums >= (nums + words) * 0.6) mapped.forEach(x => { if (x.v != null && typeof x.v !== 'number') x.v = null; });
+        return mapped.sort((a, b) => sortCmp(a.v, b.v, st.dir) || a.i - b.i).map(x => x.row);
+    }
+    function sortHeadRow(table) { const h = table && table.tHead; return h && h.rows.length ? h.rows[h.rows.length - 1] : null; }
+    // A column of numbers or dates starts biggest/newest first; a text column starts أ→ي.
+    function sortColIsNumeric(body, col) {
+        if (!body || !body.rows) return false;
+        let seen = 0, nums = 0;
+        for (let i = 0; i < body.rows.length && seen < 24; i++) {
+            const tr = body.rows[i];
+            if (!tr.cells || tr.cells.length <= col) continue;
+            const v = sortCellValue(tr.cells[col]);
+            if (v == null) continue;
+            seen++; if (typeof v === 'number') nums++;
+        }
+        return seen > 0 && nums >= seen * 0.6;
+    }
+    function markSortHeaders(table, key) {
+        if (!table || table.hasAttribute('data-nosort')) return false;
+        const row = sortHeadRow(table);
+        if (!row || row.cells.length < 2) return false;        // a single-column table has nothing to sort by
+        const st = tableSort.get(key);
+        let marked = 0;
+        [...row.cells].forEach((th, i) => {
+            if (th.hasAttribute('data-ctl-sort') || th.hasAttribute('data-nosort')) return;
+            marked++;
+            th.classList.add('th-sortable');
+            th.dataset.sortCol = String(i);
+            th.dataset.sortKey = key;
+            if (!th.hasAttribute('role')) th.setAttribute('role', 'button');
+            if (!th.hasAttribute('tabindex')) th.setAttribute('tabindex', '0');
+            const on = !!st && st.col === i;
+            th.setAttribute('aria-sort', on ? (st.dir === 'desc' ? 'descending' : 'ascending') : 'none');
+            const old = th.querySelector(':scope > .th-sort'); if (old) old.remove();
+            if (on) {
+                const mark = document.createElement('span');
+                mark.className = 'th-sort'; mark.setAttribute('aria-hidden', 'true');
+                mark.textContent = st.dir === 'desc' ? '▼' : '▲';
+                const handle = th.querySelector(':scope > .column-resize-handle');
+                if (handle) th.insertBefore(mark, handle); else th.appendChild(mark);
+            }
+        });
+        if (marked) table.dataset.sortKey = key;
+        return marked > 0;
+    }
+    function domSortKey(table) {
+        const body = table.tBodies[0], id = table.id || (body && body.id) || '';
+        if (id) return 'dom:' + id;
+        const row = sortHeadRow(table);
+        return 'dom:' + (row ? [...row.cells].map(c => c.textContent.trim()).join('|').slice(0, 160) : '');
+    }
+    // A table that carries grouping rows of its own (a colspan banner between sections) keeps that grouping:
+    // reordering would tear the sections apart, so its headers stay plain.
+    function domSortGrouped(body) {
+        const rows = body ? [...body.rows] : [];
+        return rows.length > 1 && rows.some(tr => !tr.classList.contains('detail-row') && [...tr.cells].some(c => c.colSpan > 1));
+    }
+    function domSortApply(table, key) {
+        const body = table.tBodies[0]; if (!body || domSortGrouped(body)) return;
+        const now = [...body.rows];
+        let base = domSortBase.get(body);
+        if (!base || base.length !== now.length || !base.every(tr => tr.parentElement === body)) { base = now; domSortBase.set(body, base); domSortDone.delete(body); }
+        const st = tableSort.get(key);
+        const sig = key + '|' + (st ? st.col + '|' + st.dir : '-') + '|' + base.length;
+        if (domSortDone.get(body) === sig) return;
+        domSortDone.set(body, sig);
+        const groups = [];
+        base.forEach(tr => { if (tr.classList.contains('detail-row') && groups.length) groups[groups.length - 1].push(tr); else groups.push([tr]); });
+        const flat = [];
+        sortRowsFor(key, groups, null).forEach(g => g.forEach(tr => flat.push(tr)));
+        if (flat.some((tr, i) => body.rows[i] !== tr)) body.replaceChildren(...flat);
+    }
+    let sortScanQueued = false;
+    function scheduleTableSortInit() {
+        if (sortScanQueued) return;
+        sortScanQueued = true;
+        setTimeout(() => { sortScanQueued = false; try { initTableSort(); } catch (e) { /* a header never breaks a render */ } }, 0);
+    }
+    function initTableSort() {
+        document.querySelectorAll('table').forEach(table => {
+            const body = table.tBodies[0];
+            if (!body || sortRedraw.has(body)) return;         // listControls marks and re-pages those itself
+            if (domSortGrouped(body)) return;
+            const key = domSortKey(table);
+            if (!markSortHeaders(table, key)) return;
+            if (tableSort.has(key)) domSortApply(table, key);
+        });
+    }
+    function tableSortRefresh(table, key) {
+        const body = table.tBodies[0], redraw = body && sortRedraw.get(body);
+        if (redraw) redraw();
+        else { if (body) domSortDone.delete(body); domSortApply(table, key); }
+        markSortHeaders(table, key);
+    }
+    function tableSortSet(th) {
+        const table = th.closest('table'), key = th.dataset.sortKey, col = Number(th.dataset.sortCol);
+        if (!table || !key || !Number.isFinite(col)) return;
+        const primary = sortColIsNumeric(table.tBodies[0], col) ? 'desc' : 'asc';
+        const cur = tableSort.get(key);
+        if (!cur || cur.col !== col) tableSort.set(key, { col, dir: primary });
+        else if (cur.dir === primary) tableSort.set(key, { col, dir: primary === 'desc' ? 'asc' : 'desc' });
+        else tableSort.delete(key);                            // third click: back to the renderer's order
+        tableSortSave();
+        tableSortRefresh(table, key);
+    }
+    document.addEventListener('click', e => {
+        const th = e.target.closest && e.target.closest('th[data-sort-col]');
+        if (!th || e.target.closest('button, a, input, select, label, .column-resize-handle')) return;
+        e.preventDefault(); tableSortSet(th);
+    });
+    document.addEventListener('keydown', e => {
+        if (e.key !== 'Enter' && e.key !== ' ' && e.key !== 'Spacebar') return;
+        const th = e.target.closest && e.target.closest('th[data-sort-col]');
+        if (!th || e.target !== th) return;
+        e.preventDefault(); tableSortSet(th);
+    });
+    // Popups, tab switches and <details> render tables no render function tells us about.
+    document.addEventListener('click', scheduleTableSortInit, true);
+
     // Generic table renderer for shapes verified on one bench car only: every scalar key becomes a column.
     // Shared pagination state survives refreshes; DOM adapters preserve existing listeners.
     const listStates = new Map();
@@ -3243,7 +3438,7 @@
         saved.page = Math.max(1, Math.min(pages, Number(saved.page) || 1));
         return { rows: filtered.slice((saved.page - 1) * size, saved.page * size), pages, count: filtered.length };
     }
-    function listControls({ hostId, rows, render, searchText, pageSize = 50, key = hostId, search = true, inside = false }) {
+    function listControls({ hostId, rows, render, searchText, pageSize = 50, key = hostId, search = true, inside = false, sortKeys = null, sortBy = null }) {
         const host = typeof hostId === 'string' ? document.getElementById(hostId) : hostId;
         if (!host) return;
         if (!listStates.has(key)) listStates.set(key, { page: 1, query: '' });
@@ -3260,19 +3455,33 @@
         }
         const input = strip.querySelector('input');
         if (input) input.value = saved.query;
+        const sortCtx = sortBy ? { by: sortBy } : sortKeys ? { keys: sortKeys } : null;
         const draw = () => {
-            const page = listPage(rows, search ? saved : { page: saved.page, query: '' }, searchText, pageSize);
+            const page = listPage(sortRowsFor(key, rows, sortCtx), search ? saved : { page: saved.page, query: '' }, searchText, pageSize);
             saved.page = Math.min(saved.page, page.pages);
             strip.querySelector('[data-page]').textContent = `صفحة ${saved.page} من ${page.pages}`;
             strip.querySelector('[data-count]').textContent = `${page.count} صف`;
             strip.querySelector('[data-prev]').disabled = saved.page <= 1;
             strip.querySelector('[data-next]').disabled = saved.page >= page.pages;
+            // A three-row table needs neither a search box nor a pager: the strip hides itself while the
+            // whole list fits on one page, nothing is typed in it, and it is not the field being used.
+            strip.style.display = (page.pages <= 1 && page.count <= 10 && !saved.query && document.activeElement !== input) ? 'none' : 'flex';
             render(page.rows);
         };
         if (input) input.oninput = () => { saved.query = input.value; saved.page = 1; draw(); };
         strip.querySelector('[data-prev]').onclick = () => { saved.page--; draw(); };
         strip.querySelector('[data-next]').onclick = () => { saved.page++; draw(); };
+        // Header sorting: object rows need an accessor (sortKeys/sortBy); already-rendered <tr> rows sort
+        // by the clicked cell on their own. A tbody with neither (the glossary draft editor) stays
+        // unsortable, but still claims its table so the DOM fallback cannot sort one page of it instead.
+        if (table) {
+            const first = Array.isArray(rows) && rows.length ? rows[0] : null;
+            const domRows = !!(first && (first.nodeType === 1 || (Array.isArray(first) && first[0] && first[0].nodeType === 1)));
+            sortRedraw.set(host, draw);
+            if (sortCtx || domRows) markSortHeaders(table, key);
+        }
         draw();
+        scheduleTableSortInit();
     }
     // Read the complete rendered source when app views clone an already paged list.
     function fullListNodes(host) {
@@ -3362,7 +3571,7 @@
         const keys = []; list.forEach(r => Object.keys(r || {}).forEach(k => { if (!keys.includes(k)) keys.push(k); }));
         const shown = keys.filter(k => !(opts.hide || []).includes(k)).slice(0, opts.max || 14);
         head.innerHTML = `<tr>${shown.map(k => opts.th ? opts.th(k) : `<th>${esc((opts.labels || {})[k] || k)}</th>`).join('')}</tr>`;
-        listControls({ hostId: bodyId, key: bodyId, rows: list, pageSize: opts.limit || 50, searchText: opts.searchText,
+        listControls({ hostId: bodyId, key: bodyId, rows: list, pageSize: opts.limit || 50, searchText: opts.searchText, sortKeys: shown,
             render: page => { body.innerHTML = page.length ? page.map(r => `<tr>${shown.map(k => `<td>${opts.cell ? opts.cell(k, r[k], r) : cellValue(k, r[k])}</td>`).join('')}</tr>`).join('') : `<tr><td colspan="${shown.length || 1}"><div class="empty">${esc(opts.empty || 'لا بيانات')}</div></td></tr>`; if (opts.afterRender) { try { opts.afterRender(page); } catch (e) { /* a display hook never breaks the table */ } } }
         });
     }
@@ -3465,8 +3674,8 @@
     const lynkAvailable = () => LOCAL_PROXY && !!LOCAL_FLAGS.lynk;
 
     async function loadG700() {
-        state.g700Loaded = true;
-        if (!g700Available()) { state.g700Err = G700_MISSING; renderG700(); renderAppTelemetry(); return; }
+        state.g700Loading = true;
+        if (!g700Available()) { state.g700Loaded = true; state.g700Err = G700_MISSING; renderG700(); renderAppTelemetry(); return; }
         state.g700Err = '';
         const jobs = [
             ['cars', '/local/g700/cars', v => v.cars || (Array.isArray(v) ? v : []), 'g700Cars', []],
@@ -3475,6 +3684,9 @@
             ['blockedcodes', '/local/g700/blockedcodes', v => v.codes || [], 'g700BlockedCodes', []],
             ['attempts', '/local/g700/attempts', v => v.attempts || [], 'g700Attempts', []],
             ['crashes', '/local/g700/crashes?limit=200', v => v.crashes || [], 'g700Crashes', []],
+            // Fleet-wide warn/error events: what «تحذيرات البرنامج» in the cars table is made of, and the
+            // only way the owner can see WHAT those big numbers are without opening one car at a time.
+            ['logs', '/local/g700/logs?limit=1000', v => v.events || [], 'g700Logs', []],
             ['latest', '/local/g700/latest', v => v || null, 'g700Latest', null],
         ];
         const r = await Promise.allSettled(jobs.map(j => localGet(j[1])));
@@ -3484,15 +3696,15 @@
             if (res.status === 'fulfilled') { try { state[field] = pick(res.value || {}); } catch (e) { state[field] = fallback; errs.push(name + ': ' + errMsg(e)); } }
             else { state[field] = fallback; errs.push(name + ': ' + errMsg(res.reason)); }
         });
-        state.g700Err = errs.join(' · ');
+        state.g700Err = errs.join(' · '); state.g700Loaded = true;
         // The fleet «الإصدارات» table was drawn before latest.json existed here, and the crash views
         // before this program's reports did — both are redrawn, not left one load behind.
         renderG700(); renderVersions(); refreshCrashViews();
     }
 
     async function loadLynk() {
-        state.lynkLoaded = true;
-        if (!lynkAvailable()) { state.lynkErr = LYNK_MISSING; renderLynk(); renderAppTelemetry(); return; }
+        state.lynkLoading = true;
+        if (!lynkAvailable()) { state.lynkLoaded = true; state.lynkErr = LYNK_MISSING; renderLynk(); renderAppTelemetry(); return; }
         state.lynkErr = '';
         const jobs = [
             ['devices', '/local/lynk/devices', v => v.devices || (Array.isArray(v) ? v : []), 'lynkDevices', []],
@@ -3506,7 +3718,7 @@
             if (res.status === 'fulfilled') { try { state[field] = pick(res.value || {}); } catch (e) { state[field] = fallback; errs.push(name + ': ' + errMsg(e)); } }
             else { state[field] = fallback; errs.push(name + ': ' + errMsg(res.reason)); }
         });
-        state.lynkErr = errs.join(' · ');
+        state.lynkErr = errs.join(' · '); state.lynkLoaded = true;
         // renderAppViews, not just renderLynk: «الإصدارات» and the fleet release list were already
         // drawn (empty) by the first load, and latest.json only arrived now.
         renderLynk(); renderVersions(); renderAppViews();
@@ -3518,9 +3730,11 @@
     // Most G700 / Lynk cars were never activated through the shared system, so they have no `devices`
     // row and never will. hwLink's «غير معروف في devices» note is right on the fleet pages and pure
     // noise here: link the few that ARE known, print the rest plainly.
+    // Every id printed on these two tabs belongs to a car of THIS program, so it opens that program's
+    // own page (renderCarPageContent routes by lookup order: G700 → Lynk → the shared devices page).
     function ownHwCell(hw) {
         if (!hw) return '<span class="sub">—</span>';
-        return wallpaperCar(hw) ? hwLink(hw) : `<span class="num">${esc(hw)}</span>`;
+        return `<a href="#" class="hw-link num" data-hw="${esc(hw)}" title="فتح صفحة السيارة">${esc(hw)}</a>`;
     }
     function g700Rows() {
         const day = d => /^\d{4}-\d{2}-\d{2}$/.test(String(d || '')) ? d + 'T00:00:00Z' : '';
@@ -3543,27 +3757,225 @@
             raw: d,
         }));
     }
-    // G700 counts paid service calls per Qatar day (weather / geo / update) — not app opens. The
-    // window is the same arithmetic the rest of the page uses, so the numbers line up with it.
-    function g700Requests(days, now = Date.now()) {
-        const from = qatarDay(1 - days, now), out = { weather: 0, geo: 0, update: 0, total: 0 };
-        for (const c of state.g700Cars || []) {
-            for (const [d, u] of Object.entries(c.usage || {})) {
-                if (!/^\d{4}-\d{2}-\d{2}$/.test(d) || d < from) continue;
-                out.weather += Number(u.weather) || 0; out.geo += Number(u.geo) || 0; out.update += Number(u.update) || 0;
+    // ---------- «استهلاك الـ API»: the paid calls, counted per Qatar day ----------
+    //
+    // What ONE «طلب طقس» is — read out of the app, not guessed (Jetour G700 repo,
+    // app/.../WeatherFeed.java + CheckIn.java):
+    //   • WeatherFeed runs inside StripOverlayService — the always-on strip on the car's screen —
+    //     and asks api.weatherapi.com for `current.json` every 15 minutes while the car has network
+    //     (failures back off from 20 s up to 30 min, so a car with no signal does NOT spin the meter).
+    //   • The counter is bumped on the line AFTER `getResponseCode()`, which is the call that really
+    //     opens the socket. So one count = one HTTP request that reached WeatherAPI and spent quota,
+    //     whatever status came back; a request that never left the car is never counted.
+    //   • «تحديد الموقع» is the Nominatim reverse-geocode made beside the forecast, only when the
+    //     Arabic place name has to be resolved. «فحص التحديث» is the read of the program's own
+    //     latest.json, counted after the bucket answered.
+    //   • The car keeps 14 days of its own counters and posts the whole window every 2 hours; the
+    //     server MERGES them per car instead of replacing, so its history runs further back than 14
+    //     days — «منذ البداية» is that merged history, cut only where the panel's reset button cut it.
+    // No price is printed anywhere here on purpose: the provider's tariff is not in this repo, and a
+    // made-up rate on a paid resource is worse than no rate.
+    const G700_API_KINDS = [
+        ['weather', 'الطقس', 'fa-cloud-sun'],
+        ['geo', 'تحديد الموقع', 'fa-location-dot'],
+        ['update', 'فحص التحديث', 'fa-cloud-arrow-down'],
+    ];
+    const G700_KIND_HELP = {
+        weather: 'نداء واحد لـ WeatherAPI من شريط الشاشة الدائم في البرنامج: كل خمس عشرة دقيقة ما دامت هناك شبكة، ويُحسب بعد وصول الرد فعلًا — فالمحاولة بلا شبكة لا تُحسب.',
+        geo: 'ترجمة إحداثيات السيارة إلى اسم مكان عربي عبر Nominatim، بجانب طلب الطقس وحين يحتاج الاسم إلى تحديث.',
+        update: 'قراءة ملف latest.json على قناة البرنامج للبحث عن إصدار أحدث.',
+    };
+    // The merged per-day map of one car, or of every car when `cars` is left out.
+    function g700UsageDays(cars) {
+        const by = new Map();
+        for (const c of cars || state.g700Cars || []) {
+            for (const [d, u] of Object.entries((c && c.usage) || {})) {
+                if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) continue;
+                const x = by.get(d) || { day: d, weather: 0, geo: 0, update: 0, total: 0 };
+                x.weather += Number(u.weather) || 0; x.geo += Number(u.geo) || 0; x.update += Number(u.update) || 0;
+                x.total = x.weather + x.geo + x.update; by.set(d, x);
             }
+        }
+        return [...by.values()].sort((a, b) => a.day.localeCompare(b.day));
+    }
+    // days = null → every day the server still holds («منذ البداية»).
+    function g700ApiTotals(days, cars, now = Date.now()) {
+        const from = days ? qatarDay(1 - days, now) : '';
+        const out = { weather: 0, geo: 0, update: 0, total: 0, first: '', last: '', nDays: 0 };
+        for (const d of g700UsageDays(cars)) {
+            if (from && d.day < from) continue;
+            if (!out.first) out.first = d.day;
+            out.last = d.day; out.nDays++;
+            out.weather += d.weather; out.geo += d.geo; out.update += d.update;
         }
         out.total = out.weather + out.geo + out.update;
         return out;
     }
-    function carRequests(car, days, now = Date.now()) {
-        const from = qatarDay(1 - days, now); let total = 0;
+    function carUsage(car, kind, days, now = Date.now()) {
+        const from = days ? qatarDay(1 - days, now) : ''; let t = 0;
         for (const [d, u] of Object.entries((car && car.usage) || {})) {
-            if (!/^\d{4}-\d{2}-\d{2}$/.test(d) || d < from) continue;
-            total += (Number(u.weather) || 0) + (Number(u.geo) || 0) + (Number(u.update) || 0);
+            if (!/^\d{4}-\d{2}-\d{2}$/.test(d) || (from && d < from)) continue;
+            t += kind === 'total' ? (Number(u.weather) || 0) + (Number(u.geo) || 0) + (Number(u.update) || 0) : Number(u[kind]) || 0;
         }
-        return total;
+        return t;
     }
+    function carRequests(car, days, now = Date.now()) { return carUsage(car, 'total', days, now); }
+    function g700Requests(days, now = Date.now()) { return g700ApiTotals(days, null, now); }
+    // A dense day axis: an absent day is a real zero, and a gap in the bars would read as "no data".
+    function g700FillDays(cars, days, now = Date.now()) {
+        const by = new Map(g700UsageDays(cars).map(r => [r.day, r]));
+        const out = [];
+        for (let i = days - 1; i >= 0; i--) { const k = qatarDay(-i, now); out.push(by.get(k) || { day: k, weather: 0, geo: 0, update: 0, total: 0 }); }
+        return out;
+    }
+    // The newest day the panel's own reset button cut from, if anybody ever pressed it. Said out loud
+    // in the tooltip, because «منذ البداية» after a reset is not the same sentence as before one.
+    function g700ResetFrom() {
+        let f = '';
+        for (const c of state.g700Cars || []) { const v = String((c && c.usageFrom) || ''); if (v > f) f = v; }
+        return f;
+    }
+    function g700TopWeather(limit = 10, now = Date.now()) {
+        return (state.g700Cars || []).map(c => ({
+            hw: String(c.hwId || ''), code: String(c.code || ''),
+            w7: carUsage(c, 'weather', 7, now), w30: carUsage(c, 'weather', 30, now),
+        })).filter(x => x.w30 > 0).sort((a, b) => b.w30 - a.w30 || b.w7 - a.w7).slice(0, limit);
+    }
+    // «…» not «0»: on the first open of the tab the request is still in flight, and a zero on a paid
+    // resource reads as «nothing was spent» when the truth is «nobody has answered yet».
+    const G700_WAIT = '<span class="sub">…</span>';
+    function g700Num(v) { return state.g700Loaded ? (g700Available() ? `<span class="num">${esc(nEn(v))}</span>` : '<span class="sub">—</span>') : G700_WAIT; }
+    /**
+     * The «استهلاك الـ API» card. Same card, two homes: the whole program (telemetry sub-tab and the
+     * top of «السيارات والأكواد») and one car (its own page), so the owner reads the paid resource
+     * the same way wherever he is standing.
+     */
+    function g700ApiCardHtml(opts) {
+        const o = opts || {}, now = Date.now(), cars = o.cars || null, one = !!o.cars;
+        const t1 = g700ApiTotals(1, cars, now), t7 = g700ApiTotals(7, cars, now),
+              t30 = g700ApiTotals(30, cars, now), all = g700ApiTotals(null, cars, now);
+        const reset = g700ResetFrom();
+        const span = all.first
+            ? `الخادم يدمج ما ترسله كل سيارة ولا يستبدله، فتاريخه أطول من الأربعة عشر يومًا التي تحملها السيارة نفسها. أقدم يوم متاح: ${all.first}، وعدد الأيام المحفوظة ${nEn(all.nDays)}.`
+            : 'لا أيام محفوظة بعد.';
+        const allHelp = span + (reset ? ` وقد جرى تصفير العدّاد، فالحساب يبدأ من ${reset}.` : '');
+        const tiles = [
+            ['طلبات الطقس اليوم', t1.weather, 'fa-cloud-sun', 'blue', `يوم ${qatarDay(0, now)} بتقويم قطر. ${G700_KIND_HELP.weather}`],
+            ['طلبات الطقس آخر 7 أيام', t7.weather, 'fa-calendar-week', 'cyan', 'مجموع طلبات الطقس خلال آخر سبعة أيام بتقويم قطر.'],
+            ['طلبات الطقس آخر 30 يوم', t30.weather, 'fa-calendar-days', 'orange', 'مجموع طلبات الطقس خلال آخر ثلاثين يومًا بتقويم قطر.'],
+            ['طلبات الطقس منذ البداية', all.weather, 'fa-infinity', 'purple', allHelp],
+        ].map(t => tile(t[0], g700Num(t[1]), t[2], t[3], t[4])).join('');
+        const small = `<div class="table-wrap"><table style="min-width:420px"><thead><tr><th>الخدمة</th><th>اليوم</th><th>7 أيام</th><th>30 يومًا</th><th>منذ البداية</th></tr></thead><tbody>${
+            G700_API_KINDS.map(k => `<tr title="${esc(G700_KIND_HELP[k[0]] || '')}"><td><i class="fa-solid ${esc(k[2])}"></i> ${esc(k[1])}</td><td>${g700Num(t1[k[0]])}</td><td>${g700Num(t7[k[0]])}</td><td>${g700Num(t30[k[0]])}</td><td>${g700Num(all[k[0]])}</td></tr>`).join('')
+        }</tbody></table></div>`;
+        const days = state.g700Loaded ? g700FillDays(cars, 30, now) : [];
+        const chart = (key, title, label) => `<div class="chart-box"><h5>${esc(title)}</h5>${days.length ? dayBars(days, key, label) : `<div class="empty">${state.g700Loaded ? 'لا بيانات' : 'جارٍ التحميل…'}</div>`}</div>`;
+        const charts = `<div class="chart-duo">${chart('weather', 'طلبات الطقس في اليوم (30 يومًا)', 'طلب طقس')}${chart('geo', 'طلبات تحديد الموقع في اليوم (30 يومًا)', 'طلب موقع')}</div>`;
+        let top = '';
+        if (!one) {
+            const rows = state.g700Loaded ? g700TopWeather(10, now) : [];
+            top = `<div class="sub-card wide"><h4><i class="fa-solid fa-ranking-star"></i> أكثر السيارات استهلاكًا للطقس (30 يومًا)</h4><div class="table-wrap"><table style="min-width:520px"><thead><tr><th>السيارة</th><th>الكود</th><th>طلبات 7 أيام</th><th>طلبات 30 يومًا</th><th>المتوسط اليومي</th></tr></thead><tbody>${
+                rows.length ? rows.map(r => `<tr><td>${g700HwCell(r.hw)}</td><td><span class="num">${esc(r.code || '—')}</span></td><td>${num(nEn(r.w7))}</td><td>${num(nEn(r.w30))}</td><td>${num((r.w30 / 30).toFixed(1))}</td></tr>`).join('')
+                    : `<tr><td colspan="5"><div class="empty">${esc(state.g700Loaded ? (g700Available() ? 'لا استهلاك مسجَّل' : G700_MISSING) : 'جارٍ التحميل…')}</div></td></tr>`
+            }</tbody></table></div></div>`;
+        }
+        const head = one ? '' : '<h3><i class="fa-solid fa-gauge-high"></i> استهلاك الـ API</h3>';
+        return `<section class="panel-card" style="margin-bottom:14px">${head}
+            <p class="note" style="margin-bottom:12px">«طلب الطقس» هو نداء واحد وصل إلى مزوّد الطقس (WeatherAPI) من شريط الشاشة الدائم في البرنامج؛ الشريط يطلب الطقس كل خمس عشرة دقيقة ما دامت هناك شبكة، ويُحسب النداء بعد وصول الرد فعلًا، فالمحاولة بلا شبكة لا تُحسب. هذه هي الخدمة المدفوعة، والعدد هنا عدد النداءات لا التكلفة — <b>السعر يُحدَّد من مزوّد الطقس</b>.</p>
+            <div class="stats-grid" style="margin-bottom:14px">${tiles}</div>
+            <div class="sub-grid">
+                <div class="sub-card wide"><h4><i class="fa-solid fa-list-check"></i> بقية الخدمات</h4>${small}<p class="note" style="margin-top:8px">«تحديد الموقع» يُطلب بجانب الطقس لترجمة الإحداثيات إلى اسم مكان، و«فحص التحديث» قراءة ملف الإصدارات على قناة البرنامج.</p></div>
+                <div class="sub-card wide"><h4><i class="fa-solid fa-chart-column"></i> الرسوم اليومية</h4>${charts}</div>
+                ${top}
+            </div>
+            <p class="note" style="margin-top:10px">${esc(allHelp)}</p>
+        </section>`;
+    }
+    // A car link that works for a program whose cars are usually absent from the shared `devices`
+    // table: the id always opens THIS program's page (renderCarPageContent routes by lookup order).
+    function g700HwCell(hw) {
+        if (!hw) return '<span class="sub">—</span>';
+        return `<a href="#" class="hw-link num" data-hw="${esc(hw)}" title="فتح صفحة السيارة">${esc(hw)}</a>`;
+    }
+
+    // ---------- «تحذيرات البرنامج» — what `car.problems` actually counts ----------
+    // `/log` is the batch of NON-fatal warn/error events the app posts on its next launch with network;
+    // the Worker adds `kept.length` to `car.problems` and stamps `lastProblemAt`. So the big number in
+    // the cars table is an all-time count of STORED messages — not crashes, and not occurrences: the app
+    // collapses a message repeating inside its window and reports the extra ones as `repeats`, so one
+    // stored entry can stand for several occurrences. Both numbers are shown, and they differ on purpose.
+    function g700LogGroups(events) {
+        const by = new Map();
+        for (const e of events || []) {
+            const tag = String(e.tag || ''), msg = String(e.msg || ''), key = tag + ' ' + msg;
+            const g = by.get(key) || { tag, msg, level: 'warn', entries: 0, times: 0, first: '', last: '', cars: new Set(), sample: '' };
+            g.entries++; g.times += 1 + Math.max(0, Number(e.repeats) || 0);
+            if (String(e.level) === 'error') g.level = 'error';
+            const at = String(e.at || e.receivedAt || '');
+            if (at && (!g.first || at < g.first)) g.first = at;
+            if (at && (!g.last || at > g.last)) g.last = at;
+            if (e.hwId) g.cars.add(String(e.hwId));
+            if (!g.sample && e.error) g.sample = String(e.error);
+            by.set(key, g);
+        }
+        return [...by.values()].sort((a, b) => b.times - a.times || b.entries - a.entries);
+    }
+    function g700LogLevelBadge(level) {
+        return level === 'error' ? '<span class="badge bad">خطأ</span>' : '<span class="badge warn">تحذير</span>';
+    }
+    function g700LogGroupsTable(groups, opts) {
+        const o = opts || {};
+        if (!groups.length) return `<div class="empty">${esc(o.empty || 'لا تحذيرات')}</div>`;
+        return `<div class="table-wrap"><table style="min-width:${o.cars ? 640 : 540}px"><thead><tr><th>المستوى</th><th>القسم</th><th>الرسالة</th><th>المرات</th>${o.cars ? '<th>سيارات</th>' : ''}<th>أول ظهور</th><th>آخر ظهور</th></tr></thead><tbody>${
+            groups.map(g => `<tr><td>${g700LogLevelBadge(g.level)}</td><td><span class="num">${esc(g.tag || '—')}</span></td><td title="${esc(g.sample || '')}">${esc(g.msg || '—')}</td><td>${num(nEn(g.times))}${g.times !== g.entries ? `<span class="sub">${esc(nEn(g.entries))} رسالة محفوظة</span>` : ''}</td>${o.cars ? `<td>${num(nEn(g.cars.size))}</td>` : ''}<td>${timeCell(g.first)}</td><td>${timeCell(g.last)}</td></tr>`).join('')
+        }</tbody></table></div>`;
+    }
+    function g700LogRawHtml(events) {
+        if (!events.length) return '';
+        const lines = events.slice(0, 120).map(e => `${e.at || e.receivedAt || '—'}  [${e.level || 'warn'}] ${e.tag || ''}: ${e.msg || ''}${e.repeats ? ` (+${e.repeats} مكرر)` : ''}${e.error ? '\n    ' + e.error : ''}`).join('\n');
+        return `<details style="margin-top:10px"><summary>آخر ${esc(nEn(Math.min(120, events.length)))} رسالة كما وصلت</summary><pre class="report">${esc(lines)}</pre></details>`;
+    }
+    const G700_LOG_NOTE = 'هذه رسائل تحذير وخطأ غير قاتلة أبلغ عنها البرنامج بنفسه (مثل تعذّر جلب الطقس أو تحديد الموقع) — ليست أعطالًا ولا إغلاقًا للبرنامج. يحفظها الخادم تسعين يومًا، والعدد في جدول السيارات يعدّ كل ما وصل منذ البداية.';
+    const g700LogCache = new Map();
+    function g700LogsFor(hwId) {
+        const key = String(hwId || '');
+        if (!g700LogCache.has(key)) {
+            const q = key ? '?hwId=' + encodeURIComponent(key) + '&limit=300' : '?limit=1000';
+            g700LogCache.set(key, localGet('/local/g700/logs' + q).then(v => (v && v.events) || []));
+        }
+        return g700LogCache.get(key);
+    }
+    /** The dialog behind the clickable «تحذيرات البرنامج» number. Top layer, so it also opens over the car page. */
+    async function openG700Logs(hwId) {
+        const title = 'تحذيرات البرنامج — ' + (hwId || 'كل السيارات');
+        const build = (events, err) => {
+            if (err) return `<div class="note" style="color:#fca5a5;text-align:start">${esc(errMsg(err))}</div>`;
+            const groups = g700LogGroups(events);
+            const errs = groups.filter(g => g.level === 'error').reduce((a, g) => a + g.entries, 0);
+            return `<div class="note" style="text-align:start;margin-bottom:10px">${esc(G700_LOG_NOTE)}</div>`
+                + `<div class="car-chips"><span class="badge">رسائل محفوظة: <span class="num">${esc(nEn(events.length))}</span></span><span class="badge">أنواع: <span class="num">${esc(nEn(groups.length))}</span></span><span class="badge ${errs ? 'bad' : 'ok'}">أخطاء: <span class="num">${esc(nEn(errs))}</span></span></div>`
+                + g700LogGroupsTable(groups, { empty: 'لا تحذيرات مسجَّلة لهذه السيارة' })
+                + g700LogRawHtml(events);
+        };
+        if (hasSwal()) {
+            Swal.fire({
+                title, html: '<div id="g700-logs-root"><div class="empty">جارٍ تحميل التحذيرات…</div></div>', width: 'min(920px, 96vw)',
+                background: '#1c160e', color: '#fff', confirmButtonText: 'إغلاق', confirmButtonColor: '#ff9a3d',
+                didOpen: () => {
+                    g700LogsFor(hwId).then(ev => { const r = document.getElementById('g700-logs-root'); if (r) r.innerHTML = build(ev); })
+                        .catch(e => { g700LogCache.delete(String(hwId || '')); const r = document.getElementById('g700-logs-root'); if (r) r.innerHTML = build(null, e); });
+                },
+            });
+            return;
+        }
+        let html;
+        try { html = build(await g700LogsFor(hwId)); } catch (e) { g700LogCache.delete(String(hwId || '')); html = build(null, e); }
+        await themedFallbackDialog({ title, html, confirmText: 'إغلاق', cancel: false, wide: true });
+    }
+    document.addEventListener('click', e => {
+        const b = e.target.closest('[data-g700-logs]'); if (!b) return;
+        e.preventDefault(); openG700Logs(b.dataset.g700Logs);
+    });
 
     // ---------- «السيارات والأكواد» — TS G700 ----------
     function renderG700() {
@@ -3580,20 +3992,26 @@
             ${notice}
             <p class="note" style="margin-bottom:12px">تفعيل TS G700 مستقل تمامًا عن تفعيل بقية البرامج: أكواده تبدأ بـ <span class="num">5006</span> وتُدار في خادمه الخاص. هذه النافذة للقراءة فقط — الحظر وإعادة الإصدار والدمج تبقى في لوحة البرنامج نفسه.</p>
             <div class="stats-grid" style="margin-bottom:14px">
-                ${tile('السيارات', `<span class="num">${esc(nEn(rows.length))}</span>`, 'fa-car', 'blue', 'كل سيارة سجّلت حضورها في خادم G700')}
-                ${tile('أكواد مسجَّلة', `<span class="num">${esc(nEn(codes.length))}</span>`, 'fa-key', 'cyan', 'أكواد لها مالك مسجَّل في الخادم')}
-                ${tile('أكواد على أكثر من سيارة', `<span class="num">${esc(nEn(shared))}</span>`, 'fa-clone', shared ? 'yellow' : 'green', 'كود واحد تحمله أكثر من سيارة — علامة تُراجَع باليد، لا حظر يقع')}
-                ${tile('أكواد غير مباعة', `<span class="num">${esc(nEn(unissued.length))}</span>`, 'fa-triangle-exclamation', unissued.length ? 'red' : 'green', 'كود يعمل على سيارة وليس من الأكواد المُصدَرة')}
-                ${tile('أكواد محظورة', `<span class="num">${esc(nEn(blockedCodes.length))}</span>`, 'fa-ban', 'red', 'أكواد أوقفها المالك من لوحة البرنامج')}
-                ${tile('على إصدار أقدم', behind == null ? '<span class="sub">—</span>' : `<span class="num">${esc(nEn(behind))}</span>`, 'fa-arrow-down', 'orange', 'سيارات إصدارها أقل من أحدث إصدار منشور')}
+                ${tile('السيارات', g700Num(rows.length), 'fa-car', 'blue', 'كل سيارة سجّلت حضورها في خادم G700')}
+                ${tile('أكواد مسجَّلة', g700Num(codes.length), 'fa-key', 'cyan', 'أكواد لها مالك مسجَّل في الخادم')}
+                ${tile('أكواد على أكثر من سيارة', g700Num(shared), 'fa-clone', shared ? 'yellow' : 'green', 'كود واحد تحمله أكثر من سيارة — علامة تُراجَع باليد، لا حظر يقع')}
+                ${tile('أكواد غير مباعة', g700Num(unissued.length), 'fa-triangle-exclamation', unissued.length ? 'red' : 'green', 'كود يعمل على سيارة وليس من الأكواد المُصدَرة')}
+                ${tile('أكواد محظورة', g700Num(blockedCodes.length), 'fa-ban', 'red', 'أكواد أوقفها المالك من لوحة البرنامج')}
+                ${tile('على إصدار أقدم', !state.g700Loaded ? G700_WAIT : behind == null ? '<span class="sub">—</span>' : `<span class="num">${esc(nEn(behind))}</span>`, 'fa-arrow-down', 'orange', 'سيارات إصدارها أقل من أحدث إصدار منشور')}
             </div>
+            ${g700ApiCardHtml()}
             <section class="panel-card">
                 <h3><i class="fa-solid fa-car"></i> السيارات</h3>
-                <div class="table-wrap"><table style="min-width:1150px;"><thead><tr>
+                <div class="table-wrap"><table style="min-width:1250px;"><thead><tr>
                     <th>معرّف السيارة</th><th>الكود</th><th>الحالة</th><th>الإصدار</th><th>آخر ظهور</th><th>آخر فتح</th>
-                    <th>طلبات 7 أيام</th><th>طلبات 30 يومًا</th><th>أعطال ومشاكل</th><th>أول ظهور</th>
+                    <th title="نداءات الطقس خلال آخر سبعة أيام بتقويم قطر">الطقس 7 أيام</th>
+                    <th title="نداءات الطقس خلال آخر ثلاثين يومًا بتقويم قطر — هذه هي الخدمة المدفوعة">الطقس 30 يومًا</th>
+                    <th title="نداءات تحديد الموقع خلال آخر ثلاثين يومًا؛ «فحص التحديث» في تلميح الخانة">موقع 30 يومًا</th>
+                    <th title="تقارير إغلاق البرنامج التي وصلت من هذه السيارة">الأعطال</th>
+                    <th title="رسائل تحذير وخطأ غير قاتلة أبلغها البرنامج منذ البداية — مثل فشل الطقس أو الموقع؛ ليست أعطالًا. اضغط الرقم لقراءتها.">تحذيرات البرنامج</th>
+                    <th>أول ظهور</th>
                 </tr></thead><tbody id="g700-cars-body"></tbody></table></div>
-                <p class="note">«الطلبات» هي نداءات الخدمات المدفوعة (الطقس والموقع والتحديث) بتقويم قطر، لا عدد فتحات البرنامج.</p>
+                <p class="note">أعمدة الطلبات هي نداءات الخدمات المدفوعة بتقويم قطر، لا عدد فتحات البرنامج؛ و«فحص التحديث» في تلميح كل خانة. «تحذيرات البرنامج» ${esc(G700_LOG_NOTE)}</p>
             </section>
             <section class="panel-card">
                 <h3><i class="fa-solid fa-key"></i> الأكواد</h3>
@@ -3608,6 +4026,9 @@
                 </tr></thead><tbody id="g700-att-body"></tbody></table></div>
                 <p class="note">عشر محاولات خاطئة متتالية تُقفل الجهاز في خادم البرنامج نفسه؛ ما دون ذلك علامة تُنظر لا أكثر.</p>
             </section>`;
+        // «فحص التحديث» lives only here, by the owner's request: it is not a paid call, and a column
+        // for it would push the three that matter off the first screen.
+        const usageTip = c => `فحص التحديث: 30 يومًا ${nEn(carUsage(c, 'update', 30))} · 7 أيام ${nEn(carUsage(c, 'update', 7))} · منذ البداية ${nEn(carUsage(c, 'update', null))}\nالطقس منذ البداية: ${nEn(carUsage(c, 'weather', null))} · الموقع منذ البداية: ${nEn(carUsage(c, 'geo', null))}`;
         const carState = r => r.blocked || r.codeBlocked
             ? `<span class="badge bad">${r.codeBlocked && !r.raw.blocked ? 'كوده محظور' : 'محظورة'}</span>`
             : r.codeShared ? '<span class="badge warn">كود مكرر</span>' : '<span class="badge ok">تعمل</span>';
@@ -3617,10 +4038,13 @@
             <td>${carState(r)}</td>
             <td><span class="cell-ver">${esc(r.version || '—')}${r.vcode == null ? '' : ` (${esc(r.vcode)})`}</span></td>
             <td>${timeCell(r.last)}</td><td>${timeCell(r.lastOpen)}</td>
-            <td>${num(nEn(carRequests(r.raw, 7)))}</td><td>${num(nEn(carRequests(r.raw, 30)))}</td>
-            <td>${r.crashes || r.problems ? `<span class="badge ${r.crashes ? 'bad' : 'warn'}">أعطال: ${esc(nEn(r.crashes))} · مشاكل: ${esc(nEn(r.problems))}</span>` : '<span class="sub">—</span>'}</td>
+            <td title="${esc(usageTip(r.raw))}">${num(nEn(carUsage(r.raw, 'weather', 7)))}</td>
+            <td title="${esc(usageTip(r.raw))}">${num(nEn(carUsage(r.raw, 'weather', 30)))}</td>
+            <td title="${esc(usageTip(r.raw))}">${num(nEn(carUsage(r.raw, 'geo', 30)))}</td>
+            <td>${r.crashes ? `<span class="badge bad">${esc(nEn(r.crashes))}</span>${r.raw.lastCrashAt ? `<span class="sub">آخر عطل: ${esc(fmtDate(r.raw.lastCrashAt))}</span>` : ''}` : '<span class="sub">—</span>'}</td>
+            <td>${r.problems ? `<button type="button" class="btn sm" data-g700-logs="${esc(r.hw)}" title="اقرأ هذه التحذيرات">${esc(nEn(r.problems))}</button>${r.raw.lastProblemAt ? `<span class="sub">آخر تحذير: ${esc(fmtDate(r.raw.lastProblemAt))}</span>` : ''}` : '<span class="sub">—</span>'}</td>
             <td>${timeCell(r.first)}</td>
-        </tr>`).join('') : `<tr><td colspan="10"><div class="empty">${esc(g700Available() ? 'لا سيارات' : G700_MISSING)}</div></td></tr>`;
+        </tr>`).join('') : `<tr><td colspan="12"><div class="empty">${esc(!state.g700Loaded ? 'جارٍ التحميل…' : g700Available() ? 'لا سيارات' : G700_MISSING)}</div></td></tr>`;
         const blockedSet = new Set(blockedCodes.map(c => String((c && (c.code || c.id)) || c)));
         const unissuedSet = new Set(unissued.map(u => String(u.code || '')));
         $('g700-codes-body').innerHTML = codes.length ? [...codes].sort((a, b) => (b.shared - a.shared) || String(a.code).localeCompare(String(b.code))).map(c => `<tr>
@@ -3629,14 +4053,14 @@
             <td>${num(nEn((c.cars || []).length))}</td>
             <td>${timeCell(c.claimedAt)}</td>
             <td>${blockedSet.has(String(c.code)) ? '<span class="badge bad">محظور</span> ' : ''}${unissuedSet.has(String(c.code)) ? '<span class="badge warn">غير مباع</span> ' : ''}${c.shared ? '<span class="badge warn">على أكثر من سيارة</span>' : (!blockedSet.has(String(c.code)) && !unissuedSet.has(String(c.code)) ? '<span class="badge ok">سليم</span>' : '')}</td>
-        </tr>`).join('') : `<tr><td colspan="5"><div class="empty">${esc(g700Available() ? 'لا أكواد مسجَّلة' : G700_MISSING)}</div></td></tr>`;
+        </tr>`).join('') : `<tr><td colspan="5"><div class="empty">${esc(!state.g700Loaded ? 'جارٍ التحميل…' : g700Available() ? 'لا أكواد مسجَّلة' : G700_MISSING)}</div></td></tr>`;
         $('g700-att-body').innerHTML = attempts.length ? attempts.map(a => `<tr>
             <td>${ownHwCell(a.hwId)}</td>
             <td>${num(nEn(a.tries))}</td>
             <td><span class="num" style="font-size:.74rem;word-break:break-all">${esc((a.codes || []).slice(-8).join('، ') || '—')}</span></td>
             <td>${timeCell(a.firstAt)}</td><td>${timeCell(a.lastAt)}</td>
             <td>${a.blocked ? '<span class="badge bad">مقفل</span>' : Number(a.tries) >= 7 ? '<span class="badge warn">قريب من القفل</span>' : '<span class="badge">تحت المتابعة</span>'}</td>
-        </tr>`).join('') : `<tr><td colspan="6"><div class="empty">${esc(g700Available() ? 'لا محاولات خاطئة' : G700_MISSING)}</div></td></tr>`;
+        </tr>`).join('') : `<tr><td colspan="6"><div class="empty">${esc(!state.g700Loaded ? 'جارٍ التحميل…' : g700Available() ? 'لا محاولات خاطئة' : G700_MISSING)}</div></td></tr>`;
         pageRendered('g700-cars-body'); pageRendered('g700-codes-body'); pageRendered('g700-att-body');
     }
 
@@ -3654,7 +4078,7 @@
             ${notice}
             <p class="note" style="margin-bottom:12px">تفعيل TS Lynk & Co مستقل كذلك: أكواده تبدأ بـ <span class="num">5006</span> (وأكواد <span class="num">6006</span> القديمة ما زالت صالحة)، وقائمة الأكواد والمحظورين ملف على مساحة البرنامج نفسها. هذه النافذة للقراءة فقط.</p>
             <div class="stats-grid" style="margin-bottom:14px">
-                ${tile('الأجهزة', `<span class="num">${esc(nEn(rows.length))}</span>`, 'fa-car', 'blue', 'كل جهاز أرسل نبضة إلى خادم Lynk & Co')}
+                ${tile('الأجهزة', state.lynkLoaded ? `<span class="num">${esc(nEn(rows.length))}</span>` : G700_WAIT, 'fa-car', 'blue', 'كل جهاز أرسل نبضة إلى خادم Lynk & Co')}
                 ${tile('أكواد صالحة', codes ? `<span class="num">${esc(nEn(codes.length))}</span>` : '<span class="sub">—</span>', 'fa-key', 'cyan', codes ? 'من ملف activation/codes.json' : 'تعذّرت قراءة ملف الأكواد')}
                 ${tile('أجهزة محظورة', blocked ? `<span class="num">${esc(nEn(blocked.length))}</span>` : '<span class="sub">—</span>', 'fa-ban', blocked && blocked.length ? 'red' : 'green', 'قائمة المنع في ملف الأكواد نفسه')}
                 ${tile('على إصدار أقدم', behind == null ? '<span class="sub">—</span>' : `<span class="num">${esc(nEn(behind))}</span>`, 'fa-arrow-down', 'orange', 'أجهزة إصدارها أقل من أحدث إصدار منشور')}
@@ -3673,7 +4097,7 @@
             <td><span class="cell-ver">${esc(r.version || '—')}${r.vcode == null ? '' : ` (${esc(r.vcode)})`}</span></td>
             <td>${timeCell(r.first)}</td><td>${timeCell(r.last)}</td>
             <td>${num(nEn(r.reports))}</td>
-        </tr>`).join('') : `<tr><td colspan="7"><div class="empty">${esc(lynkAvailable() ? 'لا أجهزة' : LYNK_MISSING)}</div></td></tr>`;
+        </tr>`).join('') : `<tr><td colspan="7"><div class="empty">${esc(!state.lynkLoaded ? 'جارٍ التحميل…' : lynkAvailable() ? 'لا أجهزة' : LYNK_MISSING)}</div></td></tr>`;
         pageRendered('lynk-cars-body');
     }
 
@@ -3742,7 +4166,7 @@
         } });
     }
     /* CAR_COMMANDS:BEGIN — generated by Thabthaba Dashboard/tools/export_panel_commands.py */
-    const CAR_COMMANDS = {"version":"2.30.2 (167)","aliases":{"l5_ui6":"l5_2026_ui6"},"cars":{"l5_ui5":{"label":"LEOPARD 5 ULTRA · 2026 · UI5","measured":true,"groups":[["المكيف",[["حرارة السائق","measured"],["حرارة الراكب","measured"],["سرعة المروحة","measured"],["وضع تلقائي","measured"],["إعادة ضبط التكييف","measured"],["تشغيل التكييف","measured"],["إيقاف التكييف","measured"],["إيقاف مزيل الضباب الأمامي","measured"],["تشغيل مزيل الضباب الأمامي","measured"],["إيقاف مزيل الضباب الخلفي","measured"],["تشغيل مزيل الضباب الخلفي","measured"],["هواء خارجي","measured"],["وضع يدوي","measured"],["إيقاف أقصى تبريد","measured"],["تشغيل أقصى تبريد","measured"],["إزالة الضباب","measured"],["هواء للوجه","measured"],["وجه وأقدام","measured"],["هواء للقدمين","measured"],["أقدام وإزالة ضباب","measured"],["إيقاف التنظيف السريع","measured"],["تشغيل التنظيف السريع","measured"],["إيقاف قفل الأطفال","measured"],["تشغيل قفل الأطفال","measured"],["قفل الخلف","measured"],["فتح قفل الخلف","measured"],["تدوير داخلي","measured"],["حرارة موحّدة","measured"],["حرارة منفصلة","measured"],["إيقاف تهوية المقصورة","measured"],["تشغيل تهوية المقصورة","measured"],["المروحة 1","measured"],["المروحة 3","measured"],["المروحة 5","measured"],["المروحة 7","measured"],["إيقاف المروحة","measured"]]],["الكراسي",[["تهوية السائق","measured"],["تدفئة السائق","measured"],["تهوية الراكب","measured"],["تدفئة الراكب","measured"],["تهوية المقعد الخلفي الأيسر","measured"],["تدفئة المقعد الخلفي الأيسر","measured"],["تهوية المقعد الخلفي الأيمن","measured"],["تدفئة المقعد الخلفي الأيمن","measured"],["مساج السائق","measured"],["مساج الراكب","measured"]]],["النوافذ",[["نافذة السائق","measured"],["نافذة الراكب","measured"],["النافذة الخلفية اليسرى","measured"],["النافذة الخلفية اليمنى","measured"]]],["السقف والستارة",[["تهوية السقف","measured"],["غلق السقف","measured"],["وضع الراحة للسقف","measured"],["نصف السقف","measured"],["فتح السقف","measured"],["إيقاف السقف","measured"],["غلق الستارة","measured"],["نصف الستارة","measured"],["فتح الستارة","measured"],["إيقاف الستارة","measured"],["غلق فتحة السقف","measured"],["نصف فتحة السقف","measured"],["فتح فتحة السقف","measured"],["تهوية فتحة السقف","measured"],["غلق حاجب الشمس","measured"],["فتح حاجب الشمس","measured"],["لمبات القراءة","measured"]]],["المرايات",[["طي وفتح المرايات","measured"]]],["القيادة والتعليق",[["ارتفاع السيارة","measured"],["قفل الدفرنس","measured"],["أوضاع الطرق","measured"],["Auto Hold","measured"],["وظائف أوضاع الطرق","measured"],["نظام التعليق","inherited"],["وضع القيادة","measured"]]],["الطاقة والدفع",[["تبديل EV / HEV","measured"]]],["الإضاءة الداخلية",[["لون الإضاءة الداخلية","measured"],["تغيير ألوان الإضاءة تلقائيًا","measured"],["سطوع الإضاءة الداخلية","measured"]]],["الإضاءة الخارجية",[["الإضاءة الخارجية","measured"]]],["الثلاجة",[["الثلاجة","measured"]]],["الصوت",[["صوت النظام","measured"],["صوت الملاحة","measured"]]]]},"l5_navi_ui5":{"label":"LEOPARD 5 NAVI · UI5","measured":true,"groups":[["المكيف",[["حرارة السائق","measured"],["حرارة الراكب","measured"],["سرعة المروحة","measured"],["وضع تلقائي","measured"],["تشغيل التكييف","measured"],["إيقاف التكييف","measured"],["إيقاف مزيل الضباب الأمامي","measured"],["تشغيل مزيل الضباب الأمامي","measured"],["إيقاف مزيل الضباب الخلفي","measured"],["تشغيل مزيل الضباب الخلفي","measured"],["هواء خارجي","measured"],["وضع يدوي","measured"],["إيقاف أقصى تبريد","measured"],["تشغيل أقصى تبريد","measured"],["إزالة الضباب","measured"],["هواء للوجه","measured"],["وجه وأقدام","measured"],["هواء للقدمين","measured"],["أقدام وإزالة ضباب","measured"],["إيقاف التنظيف السريع","measured"],["تشغيل التنظيف السريع","measured"],["تدوير داخلي","measured"],["حرارة موحّدة","measured"],["حرارة منفصلة","measured"],["إيقاف تهوية المقصورة","measured"],["تشغيل تهوية المقصورة","measured"],["المروحة 1","measured"],["المروحة 3","measured"],["المروحة 5","measured"],["المروحة 7","measured"]]],["الكراسي",[["تهوية السائق","measured"],["تدفئة السائق","measured"],["تهوية الراكب","measured"],["تدفئة الراكب","measured"],["تدفئة المقعد الخلفي الأيسر","measured"],["تدفئة المقعد الخلفي الأيمن","measured"],["مساج السائق","measured"],["مساج الراكب","measured"]]],["النوافذ",[["نافذة السائق","measured"],["نافذة الراكب","measured"],["النافذة الخلفية اليسرى","measured"],["النافذة الخلفية اليمنى","measured"]]],["السقف والستارة",[["تهوية السقف","measured"],["غلق السقف","measured"],["وضع الراحة للسقف","measured"],["نصف السقف","measured"],["فتح السقف","measured"],["إيقاف السقف","measured"],["غلق الستارة","measured"],["نصف الستارة","measured"],["فتح الستارة","measured"],["إيقاف الستارة","measured"],["غلق فتحة السقف","measured"],["نصف فتحة السقف","measured"],["فتح فتحة السقف","measured"],["تهوية فتحة السقف","measured"],["غلق حاجب الشمس","measured"],["فتح حاجب الشمس","measured"],["لمبات القراءة","measured"]]],["المرايات",[["طي وفتح المرايات","measured"]]],["القيادة والتعليق",[["وضع القيادة","inherited"]]],["الطاقة والدفع",[["تبديل EV / HEV","ignored"]]],["الإضاءة الداخلية",[["لون الإضاءة الداخلية","measured"],["تغيير ألوان الإضاءة تلقائيًا","measured"],["سطوع الإضاءة الداخلية","measured"]]],["الصوت",[["صوت النظام","measured"],["صوت الملاحة","measured"]]]]},"l5_2026_ui6":{"label":"LEOPARD 5 ULTRA · 2026 · UI6","measured":true,"groups":[["المكيف",[["حرارة السائق","measured"],["حرارة الراكب","measured"],["سرعة المروحة","measured"],["وضع تلقائي","measured"],["إعادة ضبط التكييف","measured"],["تشغيل التكييف","measured"],["إيقاف التكييف","measured"],["إيقاف مزيل الضباب الأمامي","measured"],["تشغيل مزيل الضباب الأمامي","measured"],["إيقاف مزيل الضباب الخلفي","measured"],["تشغيل مزيل الضباب الخلفي","measured"],["هواء خارجي","measured"],["وضع يدوي","measured"],["إيقاف أقصى تبريد","measured"],["تشغيل أقصى تبريد","measured"],["إزالة الضباب","measured"],["هواء للوجه","measured"],["وجه وأقدام","measured"],["هواء للقدمين","measured"],["أقدام وإزالة ضباب","measured"],["إيقاف التنظيف السريع","measured"],["تشغيل التنظيف السريع","measured"],["إيقاف قفل الأطفال","measured"],["تشغيل قفل الأطفال","measured"],["قفل الخلف","measured"],["فتح قفل الخلف","measured"],["تدوير داخلي","measured"],["حرارة موحّدة","measured"],["حرارة منفصلة","measured"],["إيقاف تهوية المقصورة","measured"],["تشغيل تهوية المقصورة","measured"],["المروحة 1","measured"],["المروحة 3","measured"],["المروحة 5","measured"],["المروحة 7","measured"],["إيقاف المروحة","measured"],["تدفئة المقود","measured"]]],["الكراسي",[["تهوية السائق","measured"],["تدفئة السائق","measured"],["تهوية الراكب","measured"],["تدفئة الراكب","measured"],["تهوية المقعد الخلفي الأيسر","measured"],["تدفئة المقعد الخلفي الأيسر","measured"],["تهوية المقعد الخلفي الأيمن","measured"],["تدفئة المقعد الخلفي الأيمن","measured"],["مساج السائق","measured"],["مساج الراكب","measured"]]],["النوافذ",[["نافذة السائق","measured"],["نافذة الراكب","measured"],["النافذة الخلفية اليسرى","measured"],["النافذة الخلفية اليمنى","measured"]]],["السقف والستارة",[["تهوية السقف","measured"],["غلق السقف","measured"],["وضع الراحة للسقف","measured"],["نصف السقف","measured"],["فتح السقف","measured"],["إيقاف السقف","measured"],["غلق الستارة","measured"],["نصف الستارة","measured"],["فتح الستارة","measured"],["إيقاف الستارة","measured"],["غلق فتحة السقف","measured"],["نصف فتحة السقف","measured"],["فتح فتحة السقف","measured"],["تهوية فتحة السقف","measured"],["غلق حاجب الشمس","measured"],["فتح حاجب الشمس","measured"],["لمبات القراءة","measured"]]],["المرايات",[["طي وفتح المرايات","measured"]]],["القيادة والتعليق",[["ارتفاع السيارة","measured"],["قفل الدفرنس","measured"],["أوضاع الطرق","measured"],["Auto Hold","measured"],["وظائف أوضاع الطرق","measured"],["نظام التعليق","inherited"],["وضع القيادة","inherited"]]],["الطاقة والدفع",[["نسبة الحفظ","measured"],["تبديل EV / HEV","measured"],["وضع حفظ الشحن","measured"],["وضع التوفير الأقصى","measured"]]],["الإضاءة الداخلية",[["لون الإضاءة الداخلية","measured"],["تغيير ألوان الإضاءة تلقائيًا","measured"],["سطوع الإضاءة الداخلية","measured"]]],["الإضاءة الخارجية",[["الإضاءة الخارجية","measured"]]],["الثلاجة",[["الثلاجة","measured"]]],["الصوت",[["صوت النظام","measured"],["صوت الملاحة","measured"]]]]},"l5_2025_ui6":{"label":"LEOPARD 5 ULTRA · 2025 · UI6","measured":true,"groups":[["المكيف",[["حرارة السائق","measured"],["حرارة الراكب","measured"],["سرعة المروحة","measured"],["إيقاف التنظيف الآلي","measured"],["تشغيل التنظيف الآلي","measured"],["وضع تلقائي","measured"],["إعادة ضبط التكييف","measured"],["تشغيل التكييف","measured"],["إيقاف التكييف","measured"],["إيقاف مزيل الضباب الأمامي","measured"],["تشغيل مزيل الضباب الأمامي","measured"],["إيقاف مزيل الضباب الخلفي","measured"],["تشغيل مزيل الضباب الخلفي","measured"],["هواء خارجي","measured"],["وضع يدوي","measured"],["إيقاف أقصى تبريد","measured"],["تشغيل أقصى تبريد","measured"],["إزالة الضباب","measured"],["هواء للوجه","measured"],["وجه وأقدام","measured"],["هواء للقدمين","measured"],["أقدام وإزالة ضباب","measured"],["إيقاف التنظيف السريع","measured"],["تشغيل التنظيف السريع","measured"],["إيقاف قفل الأطفال","measured"],["تشغيل قفل الأطفال","measured"],["قفل الخلف","measured"],["فتح قفل الخلف","measured"],["تدوير داخلي","measured"],["حرارة موحّدة","measured"],["حرارة منفصلة","measured"],["تدفئة بالوقود","measured"],["تدفئة كهربائية","measured"],["المروحة 1","measured"],["المروحة 3","measured"],["المروحة 5","measured"],["المروحة 7","measured"],["إيقاف المروحة","measured"]]],["الكراسي",[["تهوية السائق","measured"],["تدفئة السائق","measured"],["تهوية الراكب","measured"],["تدفئة الراكب","measured"],["تدفئة المقعد الخلفي الأيسر","measured"],["تدفئة المقعد الخلفي الأيمن","measured"],["مساج السائق","measured"],["مساج الراكب","measured"]]],["النوافذ",[["نافذة السائق","measured"],["نافذة الراكب","measured"],["النافذة الخلفية اليسرى","measured"],["النافذة الخلفية اليمنى","measured"]]],["السقف والستارة",[["تهوية السقف","measured"],["غلق السقف","measured"],["وضع الراحة للسقف","measured"],["نصف السقف","measured"],["فتح السقف","measured"],["إيقاف السقف","measured"],["غلق الستارة","measured"],["نصف الستارة","measured"],["فتح الستارة","measured"],["إيقاف الستارة","measured"],["غلق فتحة السقف","measured"],["نصف فتحة السقف","measured"],["فتح فتحة السقف","measured"],["تهوية فتحة السقف","measured"],["غلق حاجب الشمس","measured"],["فتح حاجب الشمس","measured"],["لمبات القراءة","measured"]]],["المرايات",[["طي وفتح المرايات","measured"]]],["القيادة والتعليق",[["وضع القيادة","inherited"]]],["الطاقة والدفع",[["تبديل EV / HEV","inherited"]]],["الإضاءة الداخلية",[["لون الإضاءة الداخلية","measured"],["تغيير ألوان الإضاءة تلقائيًا","measured"],["سطوع الإضاءة الداخلية","measured"]]],["الصوت",[["صوت النظام","measured"],["صوت الملاحة","measured"]]]]},"l7_ui6":{"label":"LEOPARD 7 · UI6","measured":true,"groups":[["القيادة والتعليق",[["وضع القيادة","inherited"]]]]},"l7_2025_ui5":{"label":"LEOPARD 7 · 2025 · UI5","measured":true,"groups":[["المكيف",[["حرارة السائق","measured"],["حرارة الراكب","measured"],["سرعة المروحة","measured"],["حرارة الخلف","ignored"],["إيقاف التنظيف الآلي","inherited"],["تشغيل التنظيف الآلي","inherited"],["وضع تلقائي","inherited"],["إعادة ضبط التكييف","inherited"],["تشغيل التكييف","measured"],["إيقاف التكييف","measured"],["إيقاف مزيل الضباب الأمامي","inherited"],["تشغيل مزيل الضباب الأمامي","inherited"],["إيقاف مزيل الضباب الخلفي","inherited"],["تشغيل مزيل الضباب الخلفي","inherited"],["هواء خارجي","inherited"],["وضع يدوي","inherited"],["إيقاف أقصى تبريد","inherited"],["تشغيل أقصى تبريد","inherited"],["إزالة الضباب","inherited"],["هواء للوجه","inherited"],["وجه وأقدام","inherited"],["هواء للقدمين","inherited"],["أقدام وإزالة ضباب","inherited"],["إيقاف التنظيف السريع","inherited"],["تشغيل التنظيف السريع","inherited"],["إيقاف التكييف الخلفي","inherited"],["تشغيل التكييف الخلفي","inherited"],["الوضع التلقائي للخلف","inherited"],["إيقاف قفل الأطفال","inherited"],["تشغيل قفل الأطفال","inherited"],["قفل الخلف","inherited"],["الوضع اليدوي للخلف","inherited"],["هواء للوجه بالخلف","inherited"],["هواء للأقدام بالخلف","inherited"],["فتح قفل الخلف","inherited"],["إيقاف المروحة الخلفية","inherited"],["المروحة الخلفية 3","inherited"],["المروحة الخلفية 7","inherited"],["تدوير داخلي","inherited"],["حرارة موحّدة","measured"],["حرارة منفصلة","measured"],["إيقاف تهوية المقصورة","inherited"],["تشغيل تهوية المقصورة","inherited"],["تدفئة بالوقود","inherited"],["تدفئة كهربائية","inherited"],["المروحة 1","inherited"],["المروحة 3","inherited"],["المروحة 5","inherited"],["المروحة 7","inherited"],["إيقاف المروحة","inherited"],["تدفئة المقود","measured"]]],["الكراسي",[["تهوية السائق","measured"],["تدفئة السائق","measured"],["تهوية الراكب","measured"],["تدفئة الراكب","measured"],["تهوية المقعد الخلفي الأيسر","measured"],["تدفئة المقعد الخلفي الأيسر","measured"],["تهوية المقعد الخلفي الأيمن","measured"],["تدفئة المقعد الخلفي الأيمن","measured"],["مساج السائق","measured"],["مساج الراكب","measured"]]],["النوافذ",[["نافذة السائق","measured"],["نافذة الراكب","measured"],["النافذة الخلفية اليسرى","measured"],["النافذة الخلفية اليمنى","measured"]]],["السقف والستارة",[["تهوية السقف","measured"],["غلق السقف","measured"],["وضع الراحة للسقف","inherited"],["نصف السقف","inherited"],["فتح السقف","inherited"],["إيقاف السقف","inherited"],["غلق الستارة","measured"],["نصف الستارة","measured"],["فتح الستارة","inherited"],["إيقاف الستارة","inherited"],["غلق فتحة السقف","inherited"],["نصف فتحة السقف","inherited"],["فتح فتحة السقف","inherited"],["تهوية فتحة السقف","inherited"],["غلق حاجب الشمس","inherited"],["فتح حاجب الشمس","inherited"],["لمبات القراءة","measured"]]],["المرايات",[["طي وفتح المرايات","measured"]]],["القيادة والتعليق",[["قفل الدفرنس","ignored"],["أوضاع الطرق","measured"],["Auto Hold","measured"],["نظام التعليق","measured"],["وضع القيادة","measured"]]],["الطاقة والدفع",[["نسبة الحفظ","measured"],["تبديل EV / HEV","measured"],["وضع حفظ الشحن","measured"]]],["الإضاءة الداخلية",[["لون الإضاءة الداخلية","measured"],["تغيير ألوان الإضاءة تلقائيًا","inherited"],["سطوع الإضاءة الداخلية","measured"]]],["الإضاءة الخارجية",[["الإضاءة الخارجية","measured"]]],["الثلاجة",[["الثلاجة","measured"]]],["الصوت",[["صوت النظام","measured"],["صوت الملاحة","measured"]]]]},"l8_2025_ui5":{"label":"LEOPARD 8 · 2025 · UI5","measured":true,"groups":[["المكيف",[["حرارة السائق","measured"],["حرارة الراكب","measured"],["سرعة المروحة","measured"],["حرارة الخلف","measured"],["إيقاف التنظيف الآلي","measured"],["تشغيل التنظيف الآلي","measured"],["وضع تلقائي","measured"],["إعادة ضبط التكييف","measured"],["تشغيل التكييف","measured"],["إيقاف التكييف","measured"],["إيقاف مزيل الضباب الأمامي","measured"],["تشغيل مزيل الضباب الأمامي","measured"],["إيقاف مزيل الضباب الخلفي","measured"],["تشغيل مزيل الضباب الخلفي","measured"],["هواء خارجي","measured"],["وضع يدوي","measured"],["إيقاف أقصى تبريد","measured"],["تشغيل أقصى تبريد","measured"],["إزالة الضباب","measured"],["هواء للوجه","measured"],["وجه وأقدام","measured"],["هواء للقدمين","measured"],["أقدام وإزالة ضباب","measured"],["إيقاف التنظيف السريع","measured"],["تشغيل التنظيف السريع","measured"],["إيقاف التكييف الخلفي","measured"],["تشغيل التكييف الخلفي","measured"],["الوضع التلقائي للخلف","measured"],["إيقاف قفل الأطفال","measured"],["تشغيل قفل الأطفال","measured"],["قفل الخلف","measured"],["الوضع اليدوي للخلف","measured"],["هواء للوجه بالخلف","measured"],["هواء للأقدام بالخلف","measured"],["فتح قفل الخلف","measured"],["إيقاف المروحة الخلفية","measured"],["المروحة الخلفية 3","measured"],["المروحة الخلفية 7","measured"],["تدوير داخلي","measured"],["حرارة موحّدة","measured"],["حرارة منفصلة","measured"],["إيقاف تهوية المقصورة","measured"],["تشغيل تهوية المقصورة","measured"],["تدفئة بالوقود","measured"],["تدفئة كهربائية","measured"],["المروحة 1","measured"],["المروحة 3","measured"],["المروحة 5","measured"],["المروحة 7","measured"],["إيقاف المروحة","measured"]]],["الكراسي",[["تهوية السائق","measured"],["تدفئة السائق","measured"],["تهوية الراكب","measured"],["تدفئة الراكب","measured"],["تهوية المقعد الخلفي الأيسر","measured"],["تدفئة المقعد الخلفي الأيسر","measured"],["تهوية المقعد الخلفي الأيمن","measured"],["تدفئة المقعد الخلفي الأيمن","measured"],["مساج السائق","measured"],["مساج الراكب","measured"]]],["النوافذ",[["نافذة السائق","measured"],["نافذة الراكب","measured"],["النافذة الخلفية اليسرى","measured"],["النافذة الخلفية اليمنى","measured"]]],["السقف والستارة",[["تهوية السقف","measured"],["غلق السقف","measured"],["وضع الراحة للسقف","measured"],["نصف السقف","measured"],["فتح السقف","measured"],["إيقاف السقف","measured"],["غلق الستارة","measured"],["نصف الستارة","measured"],["فتح الستارة","measured"],["إيقاف الستارة","measured"],["غلق فتحة السقف","measured"],["نصف فتحة السقف","measured"],["فتح فتحة السقف","measured"],["تهوية فتحة السقف","measured"],["غلق حاجب الشمس","measured"],["فتح حاجب الشمس","measured"],["لمبات القراءة","measured"]]],["المرايات",[["طي وفتح المرايات","measured"]]],["القيادة والتعليق",[["ارتفاع السيارة","measured"],["قفل الدفرنس","measured"],["أوضاع الطرق","measured"],["Auto Hold","demo"],["وظائف أوضاع الطرق","measured"],["نظام التعليق","inherited"],["وضع القيادة","measured"]]],["الطاقة والدفع",[["تبديل EV / HEV","measured"]]],["الإضاءة الداخلية",[["لون الإضاءة الداخلية","measured"],["تغيير ألوان الإضاءة تلقائيًا","measured"],["سطوع الإضاءة الداخلية","measured"]]],["الإضاءة الخارجية",[["الإضاءة الخارجية","measured"]]],["الثلاجة",[["الثلاجة","measured"]]],["الصوت",[["صوت النظام","measured"],["صوت الملاحة","measured"]]]]},"l8_2025_ui6":{"label":"LEOPARD 8 · 2025 · UI6","measured":false,"groups":[["القيادة والتعليق",[["وضع القيادة","inherited"]]]]},"l8_2026_ui5":{"label":"LEOPARD 8 · 2026 · UI5","measured":false,"groups":[["القيادة والتعليق",[["وضع القيادة","inherited"]]]]},"l8_2026_ui6":{"label":"LEOPARD 8 · 2026 · UI6","measured":true,"groups":[["المكيف",[["حرارة السائق","measured"],["حرارة الراكب","measured"],["سرعة المروحة","measured"],["حرارة الخلف","measured"],["المروحة الخلفية","measured"],["وضع تلقائي","measured"],["إعادة ضبط التكييف","ignored"],["تشغيل التكييف","measured"],["إيقاف التكييف","measured"],["إيقاف مزيل الضباب الأمامي","measured"],["تشغيل مزيل الضباب الأمامي","measured"],["إيقاف مزيل الضباب الخلفي","measured"],["تشغيل مزيل الضباب الخلفي","measured"],["هواء خارجي","measured"],["وضع يدوي","measured"],["إيقاف أقصى تبريد","measured"],["تشغيل أقصى تبريد","measured"],["إزالة الضباب","measured"],["هواء للوجه","measured"],["وجه وأقدام","measured"],["هواء للقدمين","measured"],["أقدام وإزالة ضباب","measured"],["إيقاف التنظيف السريع","measured"],["تشغيل التنظيف السريع","measured"],["إيقاف التكييف الخلفي","measured"],["تشغيل التكييف الخلفي","measured"],["الوضع التلقائي للخلف","measured"],["إيقاف قفل الأطفال","measured"],["تشغيل قفل الأطفال","measured"],["قفل الخلف","ignored"],["الوضع اليدوي للخلف","measured"],["هواء للوجه بالخلف","measured"],["هواء للأقدام بالخلف","measured"],["فتح قفل الخلف","ignored"],["المروحة الخلفية 3","measured"],["المروحة الخلفية 7","measured"],["تدوير داخلي","measured"],["حرارة موحّدة","measured"],["حرارة منفصلة","measured"],["إيقاف تهوية المقصورة","measured"],["تشغيل تهوية المقصورة","measured"],["المروحة 1","measured"],["المروحة 3","measured"],["المروحة 5","measured"],["المروحة 7","measured"],["تدفئة المقود","measured"]]],["الكراسي",[["تهوية السائق","measured"],["تدفئة السائق","measured"],["تهوية الراكب","measured"],["تدفئة الراكب","measured"],["تهوية المقعد الخلفي الأيسر","measured"],["تدفئة المقعد الخلفي الأيسر","measured"],["تهوية المقعد الخلفي الأيمن","measured"],["تدفئة المقعد الخلفي الأيمن","measured"],["مساج السائق","measured"],["مساج الراكب","measured"]]],["النوافذ",[["نافذة السائق","measured"],["نافذة الراكب","measured"],["النافذة الخلفية اليسرى","measured"],["النافذة الخلفية اليمنى","measured"]]],["السقف والستارة",[["تهوية السقف","measured"],["غلق السقف","measured"],["وضع الراحة للسقف","measured"],["نصف السقف","measured"],["فتح السقف","measured"],["إيقاف السقف","measured"],["غلق الستارة","measured"],["نصف الستارة","measured"],["فتح الستارة","measured"],["إيقاف الستارة","measured"],["غلق فتحة السقف","measured"],["نصف فتحة السقف","measured"],["فتح فتحة السقف","measured"],["تهوية فتحة السقف","measured"],["غلق حاجب الشمس","measured"],["فتح حاجب الشمس","measured"],["لمبات القراءة","measured"]]],["المرايات",[["طي وفتح المرايات","measured"]]],["القيادة والتعليق",[["ارتفاع السيارة","measured"],["قفل الدفرنس","measured"],["أوضاع الطرق","measured"],["Auto Hold","measured"],["وظائف أوضاع الطرق","measured"],["نظام التعليق","measured"],["وضع القيادة","measured"]]],["الطاقة والدفع",[["نسبة الحفظ","measured"],["تبديل EV / HEV","measured"],["وضع حفظ الشحن","measured"],["وضع التوفير الأقصى","measured"]]],["الإضاءة الداخلية",[["لون الإضاءة الداخلية","measured"],["تغيير ألوان الإضاءة تلقائيًا","measured"],["سطوع الإضاءة الداخلية","measured"]]],["الإضاءة الخارجية",[["الإضاءة الخارجية","measured"]]],["الثلاجة",[["الثلاجة","measured"]]],["الصوت",[["صوت النظام","measured"],["صوت الملاحة","measured"]]]]},"l8":{"label":"LEOPARD 8 · 2026 · UI5","measured":false,"groups":[["القيادة والتعليق",[["وضع القيادة","inherited"]]]]},"denza_b5":{"label":"DENZA B5","measured":true,"groups":[]},"ti7":{"label":"TI 7","measured":true,"groups":[]}}};
+    const CAR_COMMANDS = {"version":"2.30.11 (176)","aliases":{"l5_ui6":"l5_2026_ui6"},"cars":{"l5_ui5":{"label":"LEOPARD 5 ULTRA · 2026 · UI5","measured":true,"groups":[["المكيف",[["حرارة السائق","measured"],["حرارة الراكب","measured"],["سرعة المروحة","measured"],["وضع تلقائي","measured"],["إعادة ضبط التكييف","measured"],["تشغيل التكييف","measured"],["إيقاف التكييف","measured"],["إيقاف مزيل الضباب الأمامي","measured"],["تشغيل مزيل الضباب الأمامي","measured"],["إيقاف مزيل الضباب الخلفي","measured"],["تشغيل مزيل الضباب الخلفي","measured"],["هواء خارجي","measured"],["وضع يدوي","measured"],["إيقاف أقصى تبريد","measured"],["تشغيل أقصى تبريد","measured"],["إزالة الضباب","measured"],["هواء للوجه","measured"],["وجه وأقدام","measured"],["هواء للقدمين","measured"],["أقدام وإزالة ضباب","measured"],["إيقاف التنظيف السريع","measured"],["تشغيل التنظيف السريع","measured"],["إيقاف قفل الأطفال","measured"],["تشغيل قفل الأطفال","measured"],["قفل الخلف","measured"],["فتح قفل الخلف","measured"],["تدوير داخلي","measured"],["حرارة موحّدة","measured"],["حرارة منفصلة","measured"],["إيقاف تهوية المقصورة","measured"],["تشغيل تهوية المقصورة","measured"],["المروحة 1","measured"],["المروحة 3","measured"],["المروحة 5","measured"],["المروحة 7","measured"],["إيقاف المروحة","measured"]]],["الكراسي",[["تهوية السائق","measured"],["تدفئة السائق","measured"],["تهوية الراكب","measured"],["تدفئة الراكب","measured"],["تهوية المقعد الخلفي الأيسر","measured"],["تدفئة المقعد الخلفي الأيسر","measured"],["تهوية المقعد الخلفي الأيمن","measured"],["تدفئة المقعد الخلفي الأيمن","measured"],["مساج السائق","measured"],["مساج الراكب","measured"]]],["النوافذ",[["نافذة السائق","measured"],["نافذة الراكب","measured"],["النافذة الخلفية اليسرى","measured"],["النافذة الخلفية اليمنى","measured"]]],["السقف والستارة",[["تهوية السقف","measured"],["غلق السقف","measured"],["وضع الراحة للسقف","measured"],["نصف السقف","measured"],["فتح السقف","measured"],["إيقاف السقف","measured"],["غلق الستارة","measured"],["نصف الستارة","measured"],["فتح الستارة","measured"],["إيقاف الستارة","measured"],["غلق فتحة السقف","measured"],["نصف فتحة السقف","measured"],["فتح فتحة السقف","measured"],["تهوية فتحة السقف","measured"],["غلق حاجب الشمس","measured"],["فتح حاجب الشمس","measured"],["لمبات القراءة","measured"]]],["المرايات",[["طي وفتح المرايات","measured"]]],["القيادة والتعليق",[["ارتفاع السيارة","measured"],["قفل الدفرنس","measured"],["أوضاع الطرق","measured"],["Auto Hold","measured"],["وظائف أوضاع الطرق","measured"],["نظام التعليق","inherited"],["وضع القيادة","measured"]]],["الطاقة والدفع",[["تبديل EV / HEV","measured"]]],["الإضاءة الداخلية",[["لون الإضاءة الداخلية","measured"],["تغيير ألوان الإضاءة تلقائيًا","measured"],["سطوع الإضاءة الداخلية","measured"]]],["الإضاءة الخارجية",[["الإضاءة الخارجية","measured"]]],["الثلاجة",[["الثلاجة","measured"]]],["الصوت",[["صوت النظام","measured"],["صوت الملاحة","measured"]]]]},"l5_navi_ui5":{"label":"LEOPARD 5 NAVI · UI5","measured":true,"groups":[["المكيف",[["حرارة السائق","measured"],["حرارة الراكب","measured"],["سرعة المروحة","measured"],["وضع تلقائي","measured"],["تشغيل التكييف","measured"],["إيقاف التكييف","measured"],["إيقاف مزيل الضباب الأمامي","measured"],["تشغيل مزيل الضباب الأمامي","measured"],["إيقاف مزيل الضباب الخلفي","measured"],["تشغيل مزيل الضباب الخلفي","measured"],["هواء خارجي","measured"],["وضع يدوي","measured"],["إيقاف أقصى تبريد","measured"],["تشغيل أقصى تبريد","measured"],["إزالة الضباب","measured"],["هواء للوجه","measured"],["وجه وأقدام","measured"],["هواء للقدمين","measured"],["أقدام وإزالة ضباب","measured"],["إيقاف التنظيف السريع","measured"],["تشغيل التنظيف السريع","measured"],["تدوير داخلي","measured"],["حرارة موحّدة","measured"],["حرارة منفصلة","measured"],["إيقاف تهوية المقصورة","measured"],["تشغيل تهوية المقصورة","measured"],["المروحة 1","measured"],["المروحة 3","measured"],["المروحة 5","measured"],["المروحة 7","measured"]]],["الكراسي",[["تهوية السائق","measured"],["تدفئة السائق","measured"],["تهوية الراكب","measured"],["تدفئة الراكب","measured"],["تدفئة المقعد الخلفي الأيسر","measured"],["تدفئة المقعد الخلفي الأيمن","measured"],["مساج السائق","measured"],["مساج الراكب","measured"]]],["النوافذ",[["نافذة السائق","measured"],["نافذة الراكب","measured"],["النافذة الخلفية اليسرى","measured"],["النافذة الخلفية اليمنى","measured"]]],["السقف والستارة",[["تهوية السقف","measured"],["غلق السقف","measured"],["وضع الراحة للسقف","measured"],["نصف السقف","measured"],["فتح السقف","measured"],["إيقاف السقف","measured"],["غلق الستارة","measured"],["نصف الستارة","measured"],["فتح الستارة","measured"],["إيقاف الستارة","measured"],["غلق فتحة السقف","measured"],["نصف فتحة السقف","measured"],["فتح فتحة السقف","measured"],["تهوية فتحة السقف","measured"],["غلق حاجب الشمس","measured"],["فتح حاجب الشمس","measured"],["لمبات القراءة","measured"]]],["المرايات",[["طي وفتح المرايات","measured"]]],["القيادة والتعليق",[["وضع القيادة","inherited"]]],["الطاقة والدفع",[["تبديل EV / HEV","ignored"]]],["الإضاءة الداخلية",[["لون الإضاءة الداخلية","measured"],["تغيير ألوان الإضاءة تلقائيًا","measured"],["سطوع الإضاءة الداخلية","measured"]]],["الصوت",[["صوت النظام","measured"],["صوت الملاحة","measured"]]]]},"l5_2026_ui6":{"label":"LEOPARD 5 ULTRA · 2026 · UI6","measured":true,"groups":[["المكيف",[["حرارة السائق","measured"],["حرارة الراكب","measured"],["سرعة المروحة","measured"],["وضع تلقائي","measured"],["إعادة ضبط التكييف","measured"],["تشغيل التكييف","measured"],["إيقاف التكييف","measured"],["إيقاف مزيل الضباب الأمامي","measured"],["تشغيل مزيل الضباب الأمامي","measured"],["إيقاف مزيل الضباب الخلفي","measured"],["تشغيل مزيل الضباب الخلفي","measured"],["هواء خارجي","measured"],["وضع يدوي","measured"],["إيقاف أقصى تبريد","measured"],["تشغيل أقصى تبريد","measured"],["إزالة الضباب","measured"],["هواء للوجه","measured"],["وجه وأقدام","measured"],["هواء للقدمين","measured"],["أقدام وإزالة ضباب","measured"],["إيقاف التنظيف السريع","measured"],["تشغيل التنظيف السريع","measured"],["إيقاف قفل الأطفال","measured"],["تشغيل قفل الأطفال","measured"],["قفل الخلف","measured"],["فتح قفل الخلف","measured"],["تدوير داخلي","measured"],["حرارة موحّدة","measured"],["حرارة منفصلة","measured"],["إيقاف تهوية المقصورة","measured"],["تشغيل تهوية المقصورة","measured"],["المروحة 1","measured"],["المروحة 3","measured"],["المروحة 5","measured"],["المروحة 7","measured"],["إيقاف المروحة","measured"],["تدفئة المقود","measured"]]],["الكراسي",[["تهوية السائق","measured"],["تدفئة السائق","measured"],["تهوية الراكب","measured"],["تدفئة الراكب","measured"],["تهوية المقعد الخلفي الأيسر","measured"],["تدفئة المقعد الخلفي الأيسر","measured"],["تهوية المقعد الخلفي الأيمن","measured"],["تدفئة المقعد الخلفي الأيمن","measured"],["مساج السائق","measured"],["مساج الراكب","measured"]]],["النوافذ",[["نافذة السائق","measured"],["نافذة الراكب","measured"],["النافذة الخلفية اليسرى","measured"],["النافذة الخلفية اليمنى","measured"]]],["السقف والستارة",[["تهوية السقف","measured"],["غلق السقف","measured"],["وضع الراحة للسقف","measured"],["نصف السقف","measured"],["فتح السقف","measured"],["إيقاف السقف","measured"],["غلق الستارة","measured"],["نصف الستارة","measured"],["فتح الستارة","measured"],["إيقاف الستارة","measured"],["غلق فتحة السقف","measured"],["نصف فتحة السقف","measured"],["فتح فتحة السقف","measured"],["تهوية فتحة السقف","measured"],["غلق حاجب الشمس","measured"],["فتح حاجب الشمس","measured"],["لمبات القراءة","measured"]]],["المرايات",[["طي وفتح المرايات","measured"]]],["القيادة والتعليق",[["ارتفاع السيارة","measured"],["قفل الدفرنس","measured"],["أوضاع الطرق","measured"],["Auto Hold","measured"],["وظائف أوضاع الطرق","measured"],["نظام التعليق","inherited"],["وضع القيادة","inherited"]]],["الطاقة والدفع",[["نسبة الحفظ","measured"],["تبديل EV / HEV","measured"],["وضع حفظ الشحن","measured"],["وضع التوفير الأقصى","measured"]]],["الإضاءة الداخلية",[["لون الإضاءة الداخلية","measured"],["تغيير ألوان الإضاءة تلقائيًا","measured"],["سطوع الإضاءة الداخلية","measured"]]],["الإضاءة الخارجية",[["الإضاءة الخارجية","measured"]]],["الثلاجة",[["الثلاجة","measured"]]],["الصوت",[["صوت النظام","measured"],["صوت الملاحة","measured"]]]]},"l5_2025_ui6":{"label":"LEOPARD 5 ULTRA · 2025 · UI6","measured":true,"groups":[["المكيف",[["حرارة السائق","measured"],["حرارة الراكب","measured"],["سرعة المروحة","measured"],["إيقاف التنظيف الآلي","measured"],["تشغيل التنظيف الآلي","measured"],["وضع تلقائي","measured"],["إعادة ضبط التكييف","measured"],["تشغيل التكييف","measured"],["إيقاف التكييف","measured"],["إيقاف مزيل الضباب الأمامي","measured"],["تشغيل مزيل الضباب الأمامي","measured"],["إيقاف مزيل الضباب الخلفي","measured"],["تشغيل مزيل الضباب الخلفي","measured"],["هواء خارجي","measured"],["وضع يدوي","measured"],["إيقاف أقصى تبريد","measured"],["تشغيل أقصى تبريد","measured"],["إزالة الضباب","measured"],["هواء للوجه","measured"],["وجه وأقدام","measured"],["هواء للقدمين","measured"],["أقدام وإزالة ضباب","measured"],["إيقاف التنظيف السريع","measured"],["تشغيل التنظيف السريع","measured"],["إيقاف قفل الأطفال","measured"],["تشغيل قفل الأطفال","measured"],["قفل الخلف","measured"],["فتح قفل الخلف","measured"],["تدوير داخلي","measured"],["حرارة موحّدة","measured"],["حرارة منفصلة","measured"],["تدفئة بالوقود","measured"],["تدفئة كهربائية","measured"],["المروحة 1","measured"],["المروحة 3","measured"],["المروحة 5","measured"],["المروحة 7","measured"],["إيقاف المروحة","measured"]]],["الكراسي",[["تهوية السائق","measured"],["تدفئة السائق","measured"],["تهوية الراكب","measured"],["تدفئة الراكب","measured"],["تدفئة المقعد الخلفي الأيسر","measured"],["تدفئة المقعد الخلفي الأيمن","measured"],["مساج السائق","measured"],["مساج الراكب","measured"]]],["النوافذ",[["نافذة السائق","measured"],["نافذة الراكب","measured"],["النافذة الخلفية اليسرى","measured"],["النافذة الخلفية اليمنى","measured"]]],["السقف والستارة",[["تهوية السقف","measured"],["غلق السقف","measured"],["وضع الراحة للسقف","measured"],["نصف السقف","measured"],["فتح السقف","measured"],["إيقاف السقف","measured"],["غلق الستارة","measured"],["نصف الستارة","measured"],["فتح الستارة","measured"],["إيقاف الستارة","measured"],["غلق فتحة السقف","measured"],["نصف فتحة السقف","measured"],["فتح فتحة السقف","measured"],["تهوية فتحة السقف","measured"],["غلق حاجب الشمس","measured"],["فتح حاجب الشمس","measured"],["لمبات القراءة","measured"]]],["المرايات",[["طي وفتح المرايات","measured"]]],["القيادة والتعليق",[["وضع القيادة","inherited"]]],["الطاقة والدفع",[["تبديل EV / HEV","inherited"]]],["الإضاءة الداخلية",[["لون الإضاءة الداخلية","measured"],["تغيير ألوان الإضاءة تلقائيًا","measured"],["سطوع الإضاءة الداخلية","measured"]]],["الصوت",[["صوت النظام","measured"],["صوت الملاحة","measured"]]]]},"l7_ui6":{"label":"LEOPARD 7 · UI6","measured":true,"groups":[["القيادة والتعليق",[["وضع القيادة","inherited"]]]]},"l7_2025_ui5":{"label":"LEOPARD 7 · 2025 · UI5","measured":true,"groups":[["المكيف",[["حرارة السائق","measured"],["حرارة الراكب","measured"],["سرعة المروحة","measured"],["حرارة الخلف","ignored"],["إيقاف التنظيف الآلي","inherited"],["تشغيل التنظيف الآلي","inherited"],["وضع تلقائي","inherited"],["إعادة ضبط التكييف","inherited"],["تشغيل التكييف","measured"],["إيقاف التكييف","measured"],["إيقاف مزيل الضباب الأمامي","inherited"],["تشغيل مزيل الضباب الأمامي","inherited"],["إيقاف مزيل الضباب الخلفي","inherited"],["تشغيل مزيل الضباب الخلفي","inherited"],["هواء خارجي","inherited"],["وضع يدوي","inherited"],["إيقاف أقصى تبريد","inherited"],["تشغيل أقصى تبريد","inherited"],["إزالة الضباب","inherited"],["هواء للوجه","inherited"],["وجه وأقدام","inherited"],["هواء للقدمين","inherited"],["أقدام وإزالة ضباب","inherited"],["إيقاف التنظيف السريع","inherited"],["تشغيل التنظيف السريع","inherited"],["إيقاف التكييف الخلفي","inherited"],["تشغيل التكييف الخلفي","inherited"],["الوضع التلقائي للخلف","inherited"],["إيقاف قفل الأطفال","inherited"],["تشغيل قفل الأطفال","inherited"],["قفل الخلف","inherited"],["الوضع اليدوي للخلف","inherited"],["هواء للوجه بالخلف","inherited"],["هواء للأقدام بالخلف","inherited"],["فتح قفل الخلف","inherited"],["إيقاف المروحة الخلفية","inherited"],["المروحة الخلفية 3","inherited"],["المروحة الخلفية 7","inherited"],["تدوير داخلي","inherited"],["حرارة موحّدة","measured"],["حرارة منفصلة","measured"],["إيقاف تهوية المقصورة","inherited"],["تشغيل تهوية المقصورة","inherited"],["تدفئة بالوقود","inherited"],["تدفئة كهربائية","inherited"],["المروحة 1","inherited"],["المروحة 3","inherited"],["المروحة 5","inherited"],["المروحة 7","inherited"],["إيقاف المروحة","inherited"],["تدفئة المقود","measured"]]],["الكراسي",[["تهوية السائق","measured"],["تدفئة السائق","measured"],["تهوية الراكب","measured"],["تدفئة الراكب","measured"],["تهوية المقعد الخلفي الأيسر","measured"],["تدفئة المقعد الخلفي الأيسر","measured"],["تهوية المقعد الخلفي الأيمن","measured"],["تدفئة المقعد الخلفي الأيمن","measured"],["مساج السائق","measured"],["مساج الراكب","measured"]]],["النوافذ",[["نافذة السائق","measured"],["نافذة الراكب","measured"],["النافذة الخلفية اليسرى","measured"],["النافذة الخلفية اليمنى","measured"]]],["السقف والستارة",[["تهوية السقف","measured"],["غلق السقف","measured"],["وضع الراحة للسقف","inherited"],["نصف السقف","inherited"],["فتح السقف","inherited"],["إيقاف السقف","inherited"],["غلق الستارة","measured"],["نصف الستارة","measured"],["فتح الستارة","inherited"],["إيقاف الستارة","inherited"],["غلق فتحة السقف","inherited"],["نصف فتحة السقف","inherited"],["فتح فتحة السقف","inherited"],["تهوية فتحة السقف","inherited"],["غلق حاجب الشمس","inherited"],["فتح حاجب الشمس","inherited"],["لمبات القراءة","measured"]]],["المرايات",[["طي وفتح المرايات","measured"]]],["القيادة والتعليق",[["قفل الدفرنس","ignored"],["أوضاع الطرق","measured"],["Auto Hold","measured"],["نظام التعليق","measured"],["وضع القيادة","measured"]]],["الطاقة والدفع",[["نسبة الحفظ","measured"],["تبديل EV / HEV","measured"],["وضع حفظ الشحن","measured"]]],["الإضاءة الداخلية",[["لون الإضاءة الداخلية","measured"],["تغيير ألوان الإضاءة تلقائيًا","inherited"],["سطوع الإضاءة الداخلية","measured"]]],["الإضاءة الخارجية",[["الإضاءة الخارجية","measured"]]],["الثلاجة",[["الثلاجة","measured"]]],["الصوت",[["صوت النظام","measured"],["صوت الملاحة","measured"]]]]},"l8_2025_ui5":{"label":"LEOPARD 8 · 2025 · UI5","measured":true,"groups":[["المكيف",[["حرارة السائق","measured"],["حرارة الراكب","measured"],["سرعة المروحة","measured"],["حرارة الخلف","measured"],["إيقاف التنظيف الآلي","measured"],["تشغيل التنظيف الآلي","measured"],["وضع تلقائي","measured"],["إعادة ضبط التكييف","measured"],["تشغيل التكييف","measured"],["إيقاف التكييف","measured"],["إيقاف مزيل الضباب الأمامي","measured"],["تشغيل مزيل الضباب الأمامي","measured"],["إيقاف مزيل الضباب الخلفي","measured"],["تشغيل مزيل الضباب الخلفي","measured"],["هواء خارجي","measured"],["وضع يدوي","measured"],["إيقاف أقصى تبريد","measured"],["تشغيل أقصى تبريد","measured"],["إزالة الضباب","measured"],["هواء للوجه","measured"],["وجه وأقدام","measured"],["هواء للقدمين","measured"],["أقدام وإزالة ضباب","measured"],["إيقاف التنظيف السريع","measured"],["تشغيل التنظيف السريع","measured"],["إيقاف التكييف الخلفي","measured"],["تشغيل التكييف الخلفي","measured"],["الوضع التلقائي للخلف","measured"],["إيقاف قفل الأطفال","measured"],["تشغيل قفل الأطفال","measured"],["قفل الخلف","measured"],["الوضع اليدوي للخلف","measured"],["هواء للوجه بالخلف","measured"],["هواء للأقدام بالخلف","measured"],["فتح قفل الخلف","measured"],["إيقاف المروحة الخلفية","measured"],["المروحة الخلفية 3","measured"],["المروحة الخلفية 7","measured"],["تدوير داخلي","measured"],["حرارة موحّدة","measured"],["حرارة منفصلة","measured"],["إيقاف تهوية المقصورة","measured"],["تشغيل تهوية المقصورة","measured"],["تدفئة بالوقود","measured"],["تدفئة كهربائية","measured"],["المروحة 1","measured"],["المروحة 3","measured"],["المروحة 5","measured"],["المروحة 7","measured"],["إيقاف المروحة","measured"]]],["الكراسي",[["تهوية السائق","measured"],["تدفئة السائق","measured"],["تهوية الراكب","measured"],["تدفئة الراكب","measured"],["تهوية المقعد الخلفي الأيسر","measured"],["تدفئة المقعد الخلفي الأيسر","measured"],["تهوية المقعد الخلفي الأيمن","measured"],["تدفئة المقعد الخلفي الأيمن","measured"],["مساج السائق","measured"],["مساج الراكب","measured"]]],["النوافذ",[["نافذة السائق","measured"],["نافذة الراكب","measured"],["النافذة الخلفية اليسرى","measured"],["النافذة الخلفية اليمنى","measured"]]],["السقف والستارة",[["تهوية السقف","measured"],["غلق السقف","measured"],["وضع الراحة للسقف","measured"],["نصف السقف","measured"],["فتح السقف","measured"],["إيقاف السقف","measured"],["غلق الستارة","measured"],["نصف الستارة","measured"],["فتح الستارة","measured"],["إيقاف الستارة","measured"],["غلق فتحة السقف","measured"],["نصف فتحة السقف","measured"],["فتح فتحة السقف","measured"],["تهوية فتحة السقف","measured"],["غلق حاجب الشمس","measured"],["فتح حاجب الشمس","measured"],["لمبات القراءة","measured"]]],["المرايات",[["طي وفتح المرايات","measured"]]],["القيادة والتعليق",[["ارتفاع السيارة","measured"],["قفل الدفرنس","measured"],["أوضاع الطرق","measured"],["Auto Hold","demo"],["وظائف أوضاع الطرق","measured"],["نظام التعليق","inherited"],["وضع القيادة","measured"]]],["الطاقة والدفع",[["تبديل EV / HEV","measured"]]],["الإضاءة الداخلية",[["لون الإضاءة الداخلية","measured"],["تغيير ألوان الإضاءة تلقائيًا","measured"],["سطوع الإضاءة الداخلية","measured"]]],["الإضاءة الخارجية",[["الإضاءة الخارجية","measured"]]],["الثلاجة",[["الثلاجة","measured"]]],["الصوت",[["صوت النظام","measured"],["صوت الملاحة","measured"]]]]},"l8_2025_ui6":{"label":"LEOPARD 8 · 2025 · UI6","measured":false,"groups":[["المكيف",[["حرارة السائق","measured"],["حرارة الراكب","measured"],["سرعة المروحة","measured"],["حرارة الخلف","measured"],["إيقاف التنظيف الآلي","inherited"],["تشغيل التنظيف الآلي","inherited"],["وضع تلقائي","measured"],["إعادة ضبط التكييف","inherited"],["تشغيل التكييف","measured"],["إيقاف التكييف","measured"],["إيقاف مزيل الضباب الأمامي","measured"],["تشغيل مزيل الضباب الأمامي","measured"],["إيقاف مزيل الضباب الخلفي","measured"],["تشغيل مزيل الضباب الخلفي","measured"],["هواء خارجي","inherited"],["وضع يدوي","measured"],["إيقاف أقصى تبريد","measured"],["تشغيل أقصى تبريد","measured"],["إزالة الضباب","measured"],["هواء للوجه","measured"],["وجه وأقدام","measured"],["هواء للقدمين","measured"],["أقدام وإزالة ضباب","measured"],["إيقاف التنظيف السريع","inherited"],["تشغيل التنظيف السريع","inherited"],["إيقاف التكييف الخلفي","measured"],["تشغيل التكييف الخلفي","measured"],["الوضع التلقائي للخلف","measured"],["إيقاف قفل الأطفال","measured"],["تشغيل قفل الأطفال","measured"],["قفل الخلف","ignored"],["الوضع اليدوي للخلف","measured"],["هواء للوجه بالخلف","measured"],["هواء للأقدام بالخلف","measured"],["فتح قفل الخلف","ignored"],["إيقاف المروحة الخلفية","measured"],["المروحة الخلفية 3","measured"],["المروحة الخلفية 7","measured"],["تدوير داخلي","inherited"],["حرارة موحّدة","measured"],["حرارة منفصلة","measured"],["إيقاف تهوية المقصورة","measured"],["تشغيل تهوية المقصورة","measured"],["المروحة 1","measured"],["المروحة 3","measured"],["المروحة 5","measured"],["المروحة 7","measured"],["إيقاف المروحة","measured"]]],["الكراسي",[["تهوية السائق","measured"],["تدفئة السائق","measured"],["تهوية الراكب","measured"],["تدفئة الراكب","measured"],["تهوية المقعد الخلفي الأيسر","measured"],["تدفئة المقعد الخلفي الأيسر","measured"],["تهوية المقعد الخلفي الأيمن","measured"],["تدفئة المقعد الخلفي الأيمن","measured"],["مساج السائق","measured"],["مساج الراكب","measured"]]],["النوافذ",[["نافذة السائق","measured"],["نافذة الراكب","measured"],["النافذة الخلفية اليسرى","measured"],["النافذة الخلفية اليمنى","measured"]]],["السقف والستارة",[["تهوية السقف","inherited"],["غلق السقف","measured"],["وضع الراحة للسقف","inherited"],["نصف السقف","measured"],["فتح السقف","measured"],["إيقاف السقف","inherited"],["غلق الستارة","measured"],["نصف الستارة","measured"],["فتح الستارة","measured"],["إيقاف الستارة","inherited"],["غلق فتحة السقف","measured"],["نصف فتحة السقف","inherited"],["فتح فتحة السقف","measured"],["تهوية فتحة السقف","inherited"],["غلق حاجب الشمس","measured"],["فتح حاجب الشمس","measured"],["لمبات القراءة","measured"]]],["المرايات",[["طي وفتح المرايات","measured"]]],["القيادة والتعليق",[["ارتفاع السيارة","inherited"],["قفل الدفرنس","measured"],["أوضاع الطرق","measured"],["Auto Hold","demo"],["وظائف أوضاع الطرق","measured"],["نظام التعليق","measured"],["وضع القيادة","measured"]]],["الطاقة والدفع",[["تبديل EV / HEV","measured"]]],["الإضاءة الداخلية",[["لون الإضاءة الداخلية","inherited"],["تغيير ألوان الإضاءة تلقائيًا","measured"],["سطوع الإضاءة الداخلية","inherited"]]],["الإضاءة الخارجية",[["الإضاءة الخارجية","measured"]]],["الثلاجة",[["الثلاجة","measured"]]],["الصوت",[["صوت النظام","measured"],["صوت الملاحة","measured"]]]]},"l8_2026_ui5":{"label":"LEOPARD 8 · 2026 · UI5","measured":false,"groups":[["القيادة والتعليق",[["وضع القيادة","inherited"]]]]},"l8_2026_ui6":{"label":"LEOPARD 8 · 2026 · UI6","measured":true,"groups":[["المكيف",[["حرارة السائق","measured"],["حرارة الراكب","measured"],["سرعة المروحة","measured"],["حرارة الخلف","measured"],["المروحة الخلفية","measured"],["وضع تلقائي","measured"],["إعادة ضبط التكييف","ignored"],["تشغيل التكييف","measured"],["إيقاف التكييف","measured"],["إيقاف مزيل الضباب الأمامي","measured"],["تشغيل مزيل الضباب الأمامي","measured"],["إيقاف مزيل الضباب الخلفي","measured"],["تشغيل مزيل الضباب الخلفي","measured"],["هواء خارجي","measured"],["وضع يدوي","measured"],["إيقاف أقصى تبريد","measured"],["تشغيل أقصى تبريد","measured"],["إزالة الضباب","measured"],["هواء للوجه","measured"],["وجه وأقدام","measured"],["هواء للقدمين","measured"],["أقدام وإزالة ضباب","measured"],["إيقاف التنظيف السريع","measured"],["تشغيل التنظيف السريع","measured"],["إيقاف التكييف الخلفي","measured"],["تشغيل التكييف الخلفي","measured"],["الوضع التلقائي للخلف","measured"],["إيقاف قفل الأطفال","measured"],["تشغيل قفل الأطفال","measured"],["قفل الخلف","ignored"],["الوضع اليدوي للخلف","measured"],["هواء للوجه بالخلف","measured"],["هواء للأقدام بالخلف","measured"],["فتح قفل الخلف","ignored"],["المروحة الخلفية 3","measured"],["المروحة الخلفية 7","measured"],["تدوير داخلي","measured"],["حرارة موحّدة","measured"],["حرارة منفصلة","measured"],["إيقاف تهوية المقصورة","measured"],["تشغيل تهوية المقصورة","measured"],["المروحة 1","measured"],["المروحة 3","measured"],["المروحة 5","measured"],["المروحة 7","measured"],["تدفئة المقود","measured"]]],["الكراسي",[["تهوية السائق","measured"],["تدفئة السائق","measured"],["تهوية الراكب","measured"],["تدفئة الراكب","measured"],["تهوية المقعد الخلفي الأيسر","measured"],["تدفئة المقعد الخلفي الأيسر","measured"],["تهوية المقعد الخلفي الأيمن","measured"],["تدفئة المقعد الخلفي الأيمن","measured"],["مساج السائق","measured"],["مساج الراكب","measured"]]],["النوافذ",[["نافذة السائق","measured"],["نافذة الراكب","measured"],["النافذة الخلفية اليسرى","measured"],["النافذة الخلفية اليمنى","measured"]]],["السقف والستارة",[["تهوية السقف","measured"],["غلق السقف","measured"],["وضع الراحة للسقف","measured"],["نصف السقف","measured"],["فتح السقف","measured"],["إيقاف السقف","measured"],["غلق الستارة","measured"],["نصف الستارة","measured"],["فتح الستارة","measured"],["إيقاف الستارة","measured"],["غلق فتحة السقف","measured"],["نصف فتحة السقف","measured"],["فتح فتحة السقف","measured"],["تهوية فتحة السقف","measured"],["غلق حاجب الشمس","measured"],["فتح حاجب الشمس","measured"],["لمبات القراءة","measured"]]],["المرايات",[["طي وفتح المرايات","measured"]]],["القيادة والتعليق",[["ارتفاع السيارة","measured"],["قفل الدفرنس","measured"],["أوضاع الطرق","measured"],["Auto Hold","measured"],["وظائف أوضاع الطرق","measured"],["نظام التعليق","measured"],["وضع القيادة","measured"]]],["الطاقة والدفع",[["نسبة الحفظ","measured"],["تبديل EV / HEV","measured"],["وضع حفظ الشحن","measured"],["وضع التوفير الأقصى","measured"]]],["الإضاءة الداخلية",[["لون الإضاءة الداخلية","measured"],["تغيير ألوان الإضاءة تلقائيًا","measured"],["سطوع الإضاءة الداخلية","measured"]]],["الإضاءة الخارجية",[["الإضاءة الخارجية","measured"]]],["الثلاجة",[["الثلاجة","measured"]]],["الصوت",[["صوت النظام","measured"],["صوت الملاحة","measured"]]]]},"l8":{"label":"LEOPARD 8 · 2026 · UI5","measured":false,"groups":[["القيادة والتعليق",[["وضع القيادة","inherited"]]]]},"denza_b5":{"label":"DENZA B5","measured":true,"groups":[]},"ti7":{"label":"TI 7","measured":true,"groups":[]}}};
     /* CAR_COMMANDS:END */
     // «أوامر كل نوع سيارة»: which chip is open survives the background re-render of this card.
     let carCmdSel = '';
@@ -4005,8 +4429,11 @@
         if (name === 'tslink' && !state.tslinkLoaded) loadTslink();
         if ((name === 'controller' || name === 'crashes') && !state.ctlLoaded) loadController();
         if ((name === 'crashes' || name === 'leo') && !state.leoCrashesLoaded) loadLeoCrashes();
-        if (name === 'g700' && !state.g700Loaded) loadG700();
-        if (name === 'lynk' && !state.lynkLoaded) loadLynk();
+        // `*Loading` is the «already asked» guard, not `*Loaded`: the latter now means «the data
+        // has arrived», so the tiles can show «…» instead of a fabricated 0 while the request is in
+        // flight. Guarding on it would re-fire the whole fetch on every switch back to the tab.
+        if (name === 'g700' && !state.g700Loading) loadG700();
+        if (name === 'lynk' && !state.lynkLoading) loadLynk();
         if (name === 'generator') { $('gen-unavailable').hidden = genAvailable(); if (genAvailable()) genRecent(); }
         if (name === 'wallpapers' && subState.wallpapers === 'library') { loadWallpapers(); refreshTargetScopeUi(); renderVersionSummary(); }
     }
@@ -4065,6 +4492,11 @@
                 $('login-secret').closest('.form-group').hidden = true;
                 updateSecretLabel();
                 if (SESSION_TOKEN) loadAll();
+                // A #car= link opened before this answer came back could not know whether the id
+                // belongs to TS G700 or TS Lynk & Co: reading either backend needs this proxy. Now
+                // that it is here, ask the page to resolve that car again — otherwise a link to a
+                // G700 car always lands on the shared page and says «سيارة غير مسجّلة».
+                if (carOpen) openCar(carOpen, carView);
             }
         } catch (e) { /* opened as a plain file or served by something else: manual secret path stays */ }
     }
@@ -4674,7 +5106,9 @@
             subState[app.key] = subs[0].key;
             // common sub-panels: scaffolding filled by renderAppViews()
             if ($(`sub-${app.key}-overview`)) $(`sub-${app.key}-overview`).innerHTML = `<h3 class="app-h">استخدام ${esc(app.label)}</h3><div class="table-wrap"><table class="usage-clone" style="min-width:1250px;"><thead>${$('usage-table').tHead.innerHTML}</thead><tbody id="usage-body-${app.key}"><tr><td colspan="14"><div class="empty">بانتظار تحميل البيانات…</div></td></tr></tbody></table></div><p class="note" style="margin-top:8px">${app.key === 'backbutton' ? 'يُعرض الإصدار فقط بقرار المالك.' : 'المصدر مبيّن في العمود الأخير؛ الأيام حسب Asia/Qatar.'}</p>`;
-            if (app.key !== 'controller' && $(`sub-${app.key}-telemetry`)) $(`sub-${app.key}-telemetry`).innerHTML = `<h3 class="app-h">تليمتري ${esc(app.label)}</h3><p class="note" id="apptel-cov-${app.key}" style="margin-bottom:12px">بانتظار تحميل البيانات…</p><div class="stats-grid" id="apptel-${app.key}"></div>`;
+            // G700 gets two extra hosts: the paid-API card FIRST (the owner reads this tab for the
+            // weather bill before anything else) and the fleet-wide warnings card under the tiles.
+            if (app.key !== 'controller' && $(`sub-${app.key}-telemetry`)) $(`sub-${app.key}-telemetry`).innerHTML = `<h3 class="app-h">تليمتري ${esc(app.label)}</h3>${app.key === 'g700' ? '<div id="g700-api-tel"></div>' : ''}<p class="note" id="apptel-cov-${app.key}" style="margin-bottom:12px">بانتظار تحميل البيانات…</p><div class="stats-grid" id="apptel-${app.key}"></div>${app.key === 'g700' ? '<div id="g700-warn-tel" style="margin-top:14px"></div>' : ''}`;
             if ($(`sub-${app.key}-versions`)) $(`sub-${app.key}-versions`).innerHTML = `<h3 class="app-h">إصدارات ${esc(app.label)}</h3><div id="appver-${app.key}"></div>`;
             if ($(`sub-${app.key}-crashes`)) $(`sub-${app.key}-crashes`).innerHTML = `<h3 class="app-h">أعطال ${esc(app.label)}</h3><div id="appcrash-${app.key}"></div>`;
             if ($(`sub-${app.key}-tokens`)) $(`sub-${app.key}-tokens`).innerHTML = `<h3 class="app-h">توكنات ${esc(app.label)}</h3><div class="table-wrap"><table style="min-width:700px;"><thead>${$('adopt-table').tHead.innerHTML}</thead><tbody id="adopt-body-${app.key}"></tbody></table></div><h4 class="app-h" style="margin-top:14px;font-size:.9rem;color:var(--text-muted)">التوكنات الصادرة</h4><div class="table-wrap"><table style="min-width:700px;"><thead>${$('tok-table').tHead.innerHTML}</thead><tbody id="tok-body-${app.key}"></tbody></table></div>`;
@@ -4809,6 +5243,9 @@
         for (const key of Object.keys(OWN_TEL)) {
             const host = $('apptel-' + key); if (!host) continue;
             const meta = OWN_TEL[key], ok = meta.available(), rows = meta.rows();
+            // Until the backend has answered every tile shows «…». A 0 here is a statement — «no car
+            // reported, nothing was spent» — and on the first open of the tab it was never true.
+            const done = key === 'g700' ? state.g700Loaded : state.lynkLoaded;
             const within = d => rows.filter(r => ts(r.last) > 0 && ts(r.last) >= now - d * DAY).length;
             const registered = rows.length, a7 = within(7), a30 = within(30);
             const idle = rows.filter(r => ts(r.last) > 0 && now - ts(r.last) > 30 * DAY).length;
@@ -4820,9 +5257,12 @@
             const onLatest = Number.isFinite(vCode) ? rows.filter(r => r.vcode === vCode).length : null;
             let crashes7 = null;
             if (key === 'g700') { try { crashes7 = crashGroups(allCrashReports().filter(c => c.app === 'g700')).filter(g => !g.resolved).flatMap(g => g.reports).filter(c => ts(c.at) >= now - 7 * DAY).length; } catch (e) { crashes7 = null; } }
+            // Weather first in the tooltip: it is the paid one, and «الخدمات» summed together is what
+            // hid it from the owner in the first place. The card above these tiles is the real answer.
             const req24 = key === 'g700' ? g700Requests(1, now) : null, req30 = key === 'g700' ? g700Requests(30, now) : null;
-            const n = v => `<span class="num">${esc(nEn(v))}</span>`;
-            const dash = '<span class="sub">—</span>';
+            const wait = '<span class="sub">…</span>';
+            const n = v => done ? `<span class="num">${esc(nEn(v))}</span>` : wait;
+            const dash = done ? '<span class="sub">—</span>' : wait;
             host.innerHTML = [
                 telTile(key, 'السيارات المسجّلة', ok ? n(registered) : dash, 'fa-car', 'blue', ok ? `كل سيارة في خادم ${meta.label} الخاص` : meta.missing(), 'cars'),
                 telTile(key, 'نشطة آخر 7 أيام', ok ? n(a7) : dash, 'fa-bolt', 'green', ok ? 'سيارات بلّغت عن نفسها خلال آخر سبعة أيام' : meta.missing(), 'cars'),
@@ -4836,17 +5276,37 @@
                     ? telTile(key, 'طلبات الخدمات آخر 30 يوم', ok ? n(req30.total) : dash, 'fa-chart-line', 'orange', ok ? `الطقس ${nEn(req30.weather)} · الموقع ${nEn(req30.geo)} · التحديث ${nEn(req30.update)} بتقويم قطر` : meta.missing())
                     : telTile(key, 'فتحات آخر 30 يوم', dash, 'fa-chart-line', 'orange', 'البرنامج لا يبلّغ الفتحات'),
                 key === 'g700'
-                    ? telTile(key, 'أعطال آخر 7 أيام', crashes7 == null ? dash : n(crashes7), 'fa-bug', 'red', ok ? 'تقارير أعطال مفتوحة ظهرت خلال آخر سبعة أيام' : meta.missing(), 'crashes')
+                    ? telTile(key, 'أعطال آخر 7 أيام', !done ? wait : crashes7 == null ? dash : n(crashes7), 'fa-bug', 'red', ok ? 'تقارير أعطال مفتوحة ظهرت خلال آخر سبعة أيام' : meta.missing(), 'crashes')
                     : telTile(key, 'أعطال آخر 7 أيام', dash, 'fa-bug', 'red', 'لا تبليغ أعطال في هذا البرنامج'),
-                telTile(key, 'أحدث إصدار', vText
+                telTile(key, 'أحدث إصدار', done && vText
                     ? `<span class="num" style="font-size:1.05rem">${esc(vText)}</span>${onLatest == null ? '' : `<span class="sub" style="display:block;font-size:.72rem;font-family:var(--font-family);direction:rtl;letter-spacing:normal">عليه <span class="n">${esc(nEn(onLatest))}</span> سيارة</span>`}`
                     : dash, 'fa-tag', 'cyan', vText ? 'المصدر: latest.json على قناة البرنامج نفسه' : 'تعذّرت قراءة latest.json', 'versions'),
             ].join('');
             const cov = $('apptel-cov-' + key);
-            if (cov) cov.textContent = ok
+            if (cov) cov.textContent = !done ? 'جارٍ تحميل بيانات البرنامج من خادمه الخاص…' : ok
                 ? `${nEn(registered)} سيارة في خادم ${meta.label} الخاص به؛ تفعيله مستقل عن تفعيل بقية البرامج، فلا يظهر في «الأجهزة».`
                 : meta.missing();
         }
+        renderG700Telemetry();
+    }
+    /**
+     * The two G700-only cards in its telemetry sub-tab: the paid-API card at the top, and
+     * «أكثر التحذيرات شيوعًا» — the card that answers «إيه مشاكل الإعدادات الكبيرة دي؟» for the whole
+     * program at once, instead of one car at a time.
+     */
+    function renderG700Telemetry() {
+        const api = $('g700-api-tel'); if (api) api.innerHTML = g700ApiCardHtml();
+        const host = $('g700-warn-tel'); if (!host) return;
+        const events = state.g700Logs || [], groups = g700LogGroups(events);
+        const body = !state.g700Loaded ? '<div class="empty">جارٍ التحميل…</div>'
+            : !g700Available() ? `<div class="empty">${esc(G700_MISSING)}</div>`
+            : g700LogGroupsTable(groups, { cars: true, empty: 'لا تحذيرات في آخر تسعين يومًا' });
+        host.innerHTML = `<section class="panel-card">
+            <h3><i class="fa-solid fa-triangle-exclamation"></i> أكثر التحذيرات شيوعًا (90 يومًا)</h3>
+            <p class="note" style="margin-bottom:12px">${esc(G700_LOG_NOTE)} الخادم يعيد هنا آخر ألف رسالة من كل السيارات، مجموعةً بالقسم والنص.</p>
+            ${body}
+            ${state.g700Loaded && groups.length ? g700LogRawHtml(events) : ''}
+        </section>`;
     }
     function renderAppViews() {
         renderAppViewsContent();
@@ -4943,7 +5403,7 @@
     //  Controller stat tiles: what each number is (hover for the explanation), money in USD + QAR
     // =====================================================================
     const USD_QAR = 3.64;
-    function moneyHtml(v) { const usd = Number(v) || 0; return `<span class="money"><span>$${usd.toFixed(2)}</span><span>${(usd * USD_QAR).toFixed(2)} QR</span></span>`; }
+    function moneyHtml(v) { const usd = Number(v) || 0; return `<span class="money" data-sort="${usd}"><span>$${usd.toFixed(2)}</span><span>${(usd * USD_QAR).toFixed(2)} QR</span></span>`; }
     // =====================================================================
     //  Per-car voice log (thab_admin_events, kind = 'voice') — ONE loader shared by the controller cars table
     //  («أوامر اتحسبت فلوس»), the daily-chart popup and the car page «الأوامر الصوتية».
@@ -5285,7 +5745,7 @@
             const short = sk.endsWith('_cost') ? 'تكلفة' : sk.endsWith('_n') ? 'أوامر' : sk === 'share' ? 'نسبة' : sk === 'g_p50' ? 'Google' : 'OpenRouter';
             return `<button type="button" class="vps-sort${on ? ' on' : ''}" data-vps-sort="${sk}" aria-pressed="${on}" title="ترتيب حسب ${esc(VPS_SORTS[sk][0])}">${esc(short)} ${arrow}</button>`;
         }).join('');
-        return `<th class="th-help" title="${esc(h[2])}">${esc(h[0])}${h[1] ? `<span class="th-sub">${esc(h[1])}</span>` : ''}<span class="vps-sorts">${btns}</span></th>`;
+        return `<th class="th-help" data-nosort title="${esc(h[2])}">${esc(h[0])}${h[1] ? `<span class="th-sub">${esc(h[1])}</span>` : ''}<span class="vps-sorts">${btns}</span></th>`;
     }
     function vpsCell(k, r) {
         const vin = vinOf(r);
@@ -6618,7 +7078,7 @@
     // =====================================================================
     //  Per-car page: everything we know about one car, keyed by its hardware id / VIN
     // =====================================================================
-    let carOpen = null; const carCache = { voice: new Map(), tslink: new Map(), crashes: new Map() };
+    let carOpen = null; const carCache = { voice: new Map(), tslink: new Map(), crashes: new Map(), g700logs: new Map(), g700crashes: new Map() };
     function carVin(hw) { const r = carRow(hw); return vinOfHw(hw) || (r?.aliases || []).map(vinOfHw).find(Boolean) || ''; }
     function carCrashReports(hw) {
         const r = carRow(hw), ids = [hw, ...(r?.aliases || [])].map(id => canonicalHw(id) || String(id).toLowerCase());
@@ -6640,14 +7100,29 @@
     // The car view is a popup: one dialog reused by every car link on the site. Opening a second car
     // only re-renders its body, and the hash keeps carrying the car so a refresh reopens the popup.
     const carDialog = $('car-dialog');
-    function openCar(hw) {
+    function openCar(hw, view) {
         if (!hw) return;
+        carView = view === 'shared' ? 'shared' : '';
         const r = carRow(hw); carOpen = r ? r.hw : hw;
         document.body.classList.add('car-open');
         if (location.hash !== '#car=' + encodeURIComponent(carOpen)) history.pushState(null, '', '#car=' + encodeURIComponent(carOpen));
         if (!carDialog.open) carDialog.showModal();
         const scroller = carDialog.querySelector('.car-body'); if (scroller) scroller.scrollTop = 0;
         renderCarPage(carOpen);
+        // A car of a program with its own backend does not read from the shared Supabase loaders at
+        // all: it reads its own program's logs and crashes, and nothing else. Firing the shared ones
+        // here would spend requests on a VIN that has no row anywhere they look.
+        const own = ownCarFor(carOpen);
+        if (own && own.kind === 'g700') { g700CarLogs(carOpen); g700CarCrashes(carOpen); return; }
+        if (own && own.kind === 'lynk') return;
+        // Deep link (#car=…) straight into a car of one of those programs: their lists may not be
+        // loaded yet, so ask for them and reopen — the page then becomes that program's page by
+        // itself. Only for an id the shared table does not know: a car that HAS a devices row is
+        // already on the right page, and loading two more backends to confirm that is wasted work.
+        if (!r && !carView) {
+            if (!state.g700Loading && g700Available()) loadG700().then(() => carOpen === hw && openCar(hw));
+            else if (!state.lynkLoading && lynkAvailable()) loadLynk().then(() => carOpen === hw && openCar(hw));
+        }
         if (LOCAL_PROXY && LOCAL_FLAGS.controller && !state.ctlLoaded) loadController().then(() => carOpen && renderCarPage(carOpen));
         if (LOCAL_PROXY && !state.tslinkLoaded) loadTslink().then(() => { if (carOpen) { renderCarPage(carOpen); loadCarTslink(carOpen); } });
         if (!state.leoCrashesLoaded) loadLeoCrashes().then(() => carOpen && renderCarPage(carOpen));
@@ -6655,7 +7130,7 @@
         loadCarVoice(carOpen); loadCarTslink(carOpen); loadCarCrashes(carOpen);
     }
     function closeCar() {
-        carOpen = null; document.body.classList.remove('car-open');
+        carOpen = null; carView = ''; document.body.classList.remove('car-open');
         if (carDialog.open) carDialog.close();   // fires 'close'; carOpen is already null so it stops here
         if (/^#car=/.test(location.hash)) history.pushState(null, '', location.pathname + location.search);
     }
@@ -6663,7 +7138,16 @@
     carDialog.addEventListener('close', () => { if (carOpen) closeCar(); });   // Esc and the browser's own close
     carDialog.addEventListener('click', e => { if (e.target === carDialog) closeCar(); });   // click on the scrim
     $('car-copy').addEventListener('click', () => copyText(location.origin + location.pathname + '#car=' + encodeURIComponent(carOpen || '')));
-    $('car-refresh').addEventListener('click', () => { if (!carOpen) return; carCache.voice.delete(carOpen); carCache.tslink.delete(carOpen); carCache.crashes.delete(carOpen); loadCarVoice(carOpen); loadCarTslink(carOpen); loadCarCrashes(carOpen); if (SESSION_TOKEN) loadAll(); });
+    $('car-refresh').addEventListener('click', () => {
+        if (!carOpen) return;
+        const own = ownCarFor(carOpen);
+        if (own && own.kind === 'g700') {
+            carCache.g700logs.delete(carOpen); carCache.g700crashes.delete(carOpen); g700LogCache.delete(String(carOpen));
+            g700CarLogs(carOpen); g700CarCrashes(carOpen);
+        }
+        if (own) { state.g700Loading = false; state.lynkLoading = false; if (own.kind === 'g700') loadG700(); else loadLynk(); return; }
+        carCache.voice.delete(carOpen); carCache.tslink.delete(carOpen); carCache.crashes.delete(carOpen); loadCarVoice(carOpen); loadCarTslink(carOpen); loadCarCrashes(carOpen); if (SESSION_TOKEN) loadAll();
+    });
     window.addEventListener('popstate', () => { const m = /^#car=(.+)$/.exec(location.hash); if (m) openCar(decodeURIComponent(m[1])); else if (carOpen) closeCar(); });
 
     async function loadCarVoice(hw) {
@@ -6708,6 +7192,148 @@
         }).join('');
         return `<div class="daybars${days.length > 24 ? ' dense' : ''}" role="img" aria-label="${esc(label)} بالأيام"><div class="daybars-cap">الأعلى: <span class="num">${esc(fmt ? fmt(max) : max)}</span></div><div class="daybars-row" style="--n:${days.length}">${cells}</div></div>`;
     }
+    // ---------- car pages for the programs with their own backend ----------
+    // The shared car page is built out of the Supabase `devices` row and knows nothing about a G700
+    // or a Lynk & Co car — most of which have no `devices` row at all and never will. So the id
+    // routes by lookup order: G700 → Lynk & Co → the shared page. `carView === 'shared'` is the
+    // manual override behind «صفحة السيارة في بقية البرامج», for a car that really does exist in both.
+    function g700CarByHw(hw) {
+        const id = String(hw || '').toLowerCase(); if (!id) return null;
+        return (state.g700Cars || []).find(c => String(c.hwId || '').toLowerCase() === id
+            || (c.alsoKnownAs || []).some(a => String(a).toLowerCase() === id)) || null;
+    }
+    function lynkCarByHw(hw) {
+        const id = String(hw || '').toLowerCase(); if (!id) return null;
+        return (state.lynkDevices || []).find(d => String(d.id || '').toLowerCase() === id) || null;
+    }
+    let carView = '';
+    function ownCarFor(hw) {
+        if (carView === 'shared') return null;
+        const g = g700CarByHw(hw); if (g) return { kind: 'g700', car: g };
+        const l = lynkCarByHw(hw); if (l) return { kind: 'lynk', car: l };
+        return null;
+    }
+    function g700CarLogs(hw) {
+        if (carCache.g700logs.has(hw)) return;
+        carCache.g700logs.set(hw, { loading: true });
+        g700LogsFor(hw).then(ev => carCache.g700logs.set(hw, { rows: ev }))
+            .catch(e => { g700LogCache.delete(String(hw)); carCache.g700logs.set(hw, { error: errMsg(e) }); })
+            .finally(() => { if (carOpen === hw) renderCarPage(hw); });
+    }
+    function g700CarCrashes(hw) {
+        if (carCache.g700crashes.has(hw)) return;
+        carCache.g700crashes.set(hw, { loading: true });
+        localGet('/local/g700/crashes?hwId=' + encodeURIComponent(hw) + '&limit=50')
+            .then(v => carCache.g700crashes.set(hw, { rows: (v && v.crashes) || [] }))
+            .catch(e => carCache.g700crashes.set(hw, { error: errMsg(e) }))
+            .finally(() => { if (carOpen === hw) renderCarPage(hw); });
+    }
+    function otherProgramsBtn(hw) {
+        return wallpaperCar(hw)
+            ? `<button class="btn sm" type="button" data-car-view="shared" data-hw="${esc(hw)}"><i class="fa-solid fa-right-left"></i> صفحة السيارة في بقية البرامج</button>`
+            : '<span class="sub">هذه السيارة غير مسجّلة في جدول الأجهزة المشترك، فلا صفحة لها في بقية البرامج.</span>';
+    }
+    document.addEventListener('click', e => {
+        const b = e.target.closest('[data-car-view]'); if (!b) return;
+        e.preventDefault(); openCar(b.dataset.hw || '', b.dataset.carView);
+    });
+
+    function renderG700CarPage(hw, c) {
+        const latest = state.g700Latest ? Number(state.g700Latest.versionCode) : NaN;
+        const vcode = Number(c.versionCode) > 0 ? Number(c.versionCode) : null;
+        const day = d => /^\d{4}-\d{2}-\d{2}$/.test(String(d || '')) ? d + 'T00:00:00Z' : '';
+        const first = Number(c.activatedAt) > 0 ? new Date(Number(c.activatedAt)).toISOString() : day(c.firstSeen);
+        const last = c.lastSeenAt || day(c.lastSeen);
+        const lastOpen = Number(c.lastOpenAt) > 0 ? new Date(Number(c.lastOpenAt)).toISOString() : '';
+        $('car-title').textContent = 'TS G700 · ' + (c.code || c.hwId || 'سيارة');
+        $('car-hw').textContent = c.hwId || hw;
+        const verBadge = vcode == null || !Number.isFinite(latest) ? ''
+            : vcode >= latest ? '<span class="badge ok">أحدث إصدار</span>' : '<span class="badge warn">على إصدار أقدم</span>';
+        $('car-badges').innerHTML = (c.blocked || c.codeBlocked
+            ? `<span class="badge bad">${c.codeBlocked && !c.blocked ? 'كوده محظور' : 'محظورة'}</span>`
+            : c.codeShared ? '<span class="badge warn">كود مكرر</span>' : '<span class="badge ok">تعمل</span>')
+            + verBadge + '<span class="badge info">خادم TS G700</span>';
+
+        const S = []; let warnSection = '', crashSection = '';
+        S.push(carSection('البطاقة', 'fa-id-card', kv([
+            ['معرّف السيارة', `<span class="num">${esc(c.hwId || hw)}</span>`],
+            ['كود التفعيل', `<span class="num">${esc(c.code || '—')}</span>`],
+            ['الحالة', c.blocked || c.codeBlocked ? 'محظورة' : 'تعمل', true],
+            ['الإصدار', `<span class="num">${esc(c.version || '—')}${vcode == null ? '' : ' (' + esc(vcode) + ')'}</span>` + (Number.isFinite(latest) ? ` <span class="sub">أحدث منشور: ${esc(latest)}</span>` : '')],
+            ['أول ظهور', first ? esc(fmtDate(first)) : '—'],
+            ['آخر ظهور', last ? esc(fmtDate(last)) + ' <span class="sub">(' + esc(relTime(last)) + ')</span>' : '—'],
+            ['آخر فتح للبرنامج', lastOpen ? esc(fmtDate(lastOpen)) : '—'],
+            ['عدد الفتحات', esc(nEn(c.opens || 0))],
+            ['عدد التقارير', esc(nEn(c.checkins || 0))],
+            ['آخر تحذير', c.lastProblemAt ? esc(fmtDate(c.lastProblemAt)) : '—'],
+            ['آخر عطل', c.lastCrashAt ? esc(fmtDate(c.lastCrashAt)) : '—'],
+            ['أسماء أخرى', (c.alsoKnownAs || []).length ? (c.alsoKnownAs || []).map(esc).join('<br>') : '—'],
+        ]) + `<div class="toolbar" style="margin-top:10px">${otherProgramsBtn(c.hwId || hw)}</div>
+            <p class="note" style="margin-top:8px">هذه النافذة للقراءة فقط: الحظر وإعادة إصدار الكود والدمج تبقى في لوحة TS G700 نفسها.</p>`));
+
+        {
+            const v = carCache.g700logs.get(hw);
+            const body = !v || v.loading ? '<div class="empty">جارٍ التحميل…</div>'
+                : v.error ? `<div class="note" style="color:#fca5a5">${esc(v.error)}</div>`
+                : `<p class="note" style="margin-bottom:10px">${esc(G700_LOG_NOTE)}</p>`
+                    + g700LogGroupsTable(g700LogGroups(v.rows), { empty: 'لا تحذيرات مسجَّلة لهذه السيارة' })
+                    + g700LogRawHtml(v.rows);
+            warnSection = carSection(`التحذيرات (${nEn(c.problems || 0)} منذ البداية)`, 'fa-triangle-exclamation', body, true);
+        }
+        {
+            const v = carCache.g700crashes.get(hw);
+            const rows = (v && v.rows) || [];
+            const body = !v || v.loading ? '<div class="empty">جارٍ التحميل…</div>'
+                : v.error ? `<div class="note" style="color:#fca5a5">${esc(v.error)}</div>`
+                : rows.length ? rows.map(x => `<details class="sub-card" style="margin-bottom:8px"><summary>${esc(fmtDate(x.receivedAt))} · <span class="num">${esc(x.version || '—')}${x.versionCode ? ' (' + esc(x.versionCode) + ')' : ''}</span> · ${esc(x.file || 'report')}</summary><pre class="report">${esc(String(x.report || '').slice(0, 20000))}</pre></details>`).join('')
+                : '<div class="empty">لا أعطال مسجَّلة لهذه السيارة</div>';
+            crashSection = carSection(`الأعطال (${nEn(c.crashes || 0)})`, 'fa-bug', body, true);
+        }
+        {
+            const holders = (state.g700Codes || []).find(x => String(x.code) === String(c.code || ''));
+            const blocked = (state.g700BlockedCodes || []).some(b => String((b && (b.code || b.id)) || b) === String(c.code || ''));
+            const unissued = (state.g700Unissued || []).some(u => String(u.code || '') === String(c.code || ''));
+            const att = (state.g700Attempts || []).filter(a => String(a.hwId || '').toLowerCase() === String(c.hwId || hw).toLowerCase());
+            const body = kv([
+                ['الكود', `<span class="num">${esc(c.code || '—')}</span>`],
+                ['المالك المسجَّل', c.codeOwner ? `<span class="num">${esc(c.codeOwner)}</span>${c.codeShared ? ' <span class="badge warn">ليس هذه السيارة</span>' : ''}` : '—'],
+                ['عدد حامليه', holders ? esc(nEn((holders.cars || []).length)) : '—'],
+                ['محظور', blocked ? 'نعم' : 'لا', true],
+                ['من الأكواد المُصدَرة', unissued ? 'لا — كود غير مباع' : 'نعم', true],
+                ['معفاة من قاعدة «كود لسيارة»', c.grandfathered ? 'نعم' : 'لا', true],
+                ['كود جديد بانتظار الوصول', c.pendingCode ? `<span class="num">${esc(c.pendingCode)}</span>` : '—'],
+            ]) + (att.length ? `<div class="table-wrap" style="margin-top:10px"><table style="min-width:420px"><thead><tr><th>المحاولات</th><th>الأكواد المجرَّبة</th><th>أول محاولة</th><th>آخر محاولة</th><th>الحالة</th></tr></thead><tbody>${
+                att.map(a => `<tr><td>${num(nEn(a.tries))}</td><td><span class="num" style="font-size:.74rem;word-break:break-all">${esc((a.codes || []).slice(-8).join('، ') || '—')}</span></td><td>${timeCell(a.firstAt)}</td><td>${timeCell(a.lastAt)}</td><td>${a.blocked ? '<span class="badge bad">مقفل</span>' : Number(a.tries) >= 7 ? '<span class="badge warn">قريب من القفل</span>' : '<span class="badge">تحت المتابعة</span>'}</td></tr>`).join('')
+            }</tbody></table></div>` : '<p class="note" style="margin-top:8px">لا محاولات أكواد خاطئة مسجَّلة على هذا المعرّف.</p>');
+            S.push(carSection('الكود', 'fa-key', body));
+        }
+        S.push(carSection('استهلاك الـ API', 'fa-gauge-high', g700ApiCardHtml({ cars: [c] }), true));
+        S.push(warnSection); S.push(crashSection);
+        $('car-sections').innerHTML = S.join('');
+    }
+
+    function renderLynkCarPage(hw, d) {
+        const latest = state.lynkLatest ? Number(state.lynkLatest.version_code) : NaN;
+        const vcode = Number(d.version_code) > 0 ? Number(d.version_code) : null;
+        const blocked = !!(state.lynkCodes && Array.isArray(state.lynkCodes.blocked) && state.lynkCodes.blocked.includes(String(d.id || '')));
+        $('car-title').textContent = 'TS Lynk & Co · ' + (d.code || d.id || 'جهاز');
+        $('car-hw').textContent = d.id || hw;
+        $('car-badges').innerHTML = (blocked ? '<span class="badge bad">محظور</span>' : '<span class="badge ok">يعمل</span>')
+            + (vcode == null || !Number.isFinite(latest) ? '' : vcode >= latest ? '<span class="badge ok">أحدث إصدار</span>' : '<span class="badge warn">على إصدار أقدم</span>')
+            + '<span class="badge info">خادم TS Lynk &amp; Co</span>';
+        $('car-sections').innerHTML = carSection('البطاقة', 'fa-id-card', kv([
+            ['معرّف الجهاز', `<span class="num">${esc(d.id || hw)}</span>`],
+            ['كود التفعيل', `<span class="num">${esc(d.code || '—')}</span>`],
+            ['الحالة', blocked ? 'محظور' : 'يعمل', true],
+            ['الإصدار', `<span class="num">${esc(d.version_name || '—')}${vcode == null ? '' : ' (' + esc(vcode) + ')'}</span>` + (Number.isFinite(latest) ? ` <span class="sub">أحدث منشور: ${esc(latest)}</span>` : '')],
+            ['تاريخ التفعيل', d.activated_at ? esc(fmtDate(d.activated_at)) : '—'],
+            ['آخر ظهور', d.last_seen ? esc(fmtDate(d.last_seen)) + ' <span class="sub">(' + esc(relTime(d.last_seen)) + ')</span>' : '—'],
+            ['عدد النبضات', esc(nEn(d.reports || 0))],
+        ]) + `<div class="toolbar" style="margin-top:10px">${otherProgramsBtn(d.id || hw)}</div>
+            <p class="note" style="margin-top:8px">المعرّف <span class="num">VIN-</span> رقم هيكل السيارة، و<span class="num">DEV-</span> معرّف الجهاز حين لا يُقرأ رقم الهيكل. «النبضات» عدد المرات التي فُتح فيها البرنامج وبلّغ عن نفسه منذ أول تفعيل.</p>`, true)
+            + carSection('التحذيرات والأعطال', 'fa-circle-info', '<div class="empty">خدمة TS Lynk &amp; Co تسجّل الحضور والتفعيل فقط — لا ترفع تحذيرات ولا تقارير أعطال، فلا شيء هنا يُقرأ.</div>', true)
+            + carSection('استهلاك الـ API', 'fa-gauge-high', '<div class="empty">البرنامج لا ينادي خدمات مدفوعة ولا يعدّها، بخلاف TS G700.</div>', true);
+    }
     function carSection(title, icon, body, wide) { return `<div class="car-section${wide ? ' wide' : ''}"><h3><i class="fa-solid ${icon}"></i>${esc(title)}</h3>${body}</div>`; }
     function renderCarPage(hw) {
         renderCarPageContent(hw);
@@ -6716,6 +7342,8 @@
         renderCrashView('car-crash-groups', carCrashReports(hw), carVin(hw) ? cached?.loading ? 'جارٍ تحميل أعطال ذبذبة داشبورد…' : cached?.unavailable ? 'تبليغ الأعطال لم يصل بعد للسيارات (ينتظر تشغيل الهجرة ونشر إصدار)' : controllerCrashNotice() : '');
     }
     function renderCarPageContent(hw) {
+        const own = ownCarFor(hw);
+        if (own) { (own.kind === 'g700' ? renderG700CarPage : renderLynkCarPage)(hw, own.car); return; }
         const r = carRow(hw); const d = r && r.dev; const vin = vinOfHw(hw) || (r ? r.aliases.map(vinOfHw).find(Boolean) : '') || '';
         const type = r ? carType(r) : null;
         $('car-title').textContent = r ? (r.name || r.serial || 'سيارة بدون اسم') + (type ? ' · ' + type.label : '') : 'سيارة غير مسجّلة';
@@ -6802,10 +7430,19 @@
             if (c || t) S.push(carSection('TS Link', 'fa-link', !t || t.loading ? '<div class="empty">جارٍ التحميل…</div>' : t.error ? `<div class="note" style="color:#fca5a5">${esc(t.error)}</div>` : tslDetailHtml(t.detail), true));
         }
         S.push(carSection('الأعطال', 'fa-bug', '<div id="car-crash-groups"></div>', true));
+        // The way back: this id belongs to a program with its own page, and we are only here because
+        // the owner asked for the shared one. Without this the button is a one-way door.
+        const back = g700CarByHw(hw) ? ['g700', 'TS G700'] : lynkCarByHw(hw) ? ['lynk', 'TS Lynk & Co'] : null;
+        if (back) S.unshift(carSection('برنامج آخر لهذه السيارة', 'fa-right-left', `<p class="note">لهذه السيارة صفحة في <b>${esc(back[1])}</b> فيها استهلاك الـ API وتحذيرات البرنامج وأعطاله.</p><div class="toolbar" style="margin-top:8px"><button class="btn sm" type="button" data-car-view="own" data-hw="${esc(hw)}"><i class="fa-solid fa-right-left"></i> فتح صفحة ${esc(back[1])}</button></div>`));
         $('car-sections').innerHTML = S.join('');
         $('car-sections').querySelectorAll('[data-act]').forEach(el => el.addEventListener('click', onRowAction));
     }
-    { const m = /^#car=(.+)$/.exec(location.hash); if (m) openCar(decodeURIComponent(m[1])); }
+    // Deferred by one turn on purpose: opening the car reads `wpCarIndex`, declared with `let`
+    // further down this same script, so calling it here threw «Cannot access 'wpCarIndex' before
+    // initialization» and a page opened straight from a #car= link showed no car at all. A later
+    // hash change worked (the script had finished by then), which is why it read as «only the deep
+    // link is broken». The timeout lets the whole script finish first.
+    setTimeout(() => { const m = /^#car=(.+)$/.exec(location.hash); if (m) openCar(decodeURIComponent(m[1])); }, 0);
 
     const wantsGen = location.pathname.replace(/\/+$/, '') === '/gen' || location.hash === '#gen' || new URLSearchParams(location.search).has('gen');
     switchTab(wantsGen ? 'generator' : 'devices');
