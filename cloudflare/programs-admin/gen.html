@@ -134,7 +134,7 @@
     // (check mark + the car id) or expires. The button is always available for the next code.
     // A bound code has done its job: it leaves the phone screen a few seconds after the check mark, so a
     // code that is now tied to a customer's car is not left sitting on the technician's phone (owner, 2026-09-16).
-    const USED_LINGER_MS = 6000;
+    const USED_LINGER_MS = 6000, EXPIRED_LINGER_MS = 6000;
     function ensureRow(c) {
         if (c.el) return c.el;
         const row = document.createElement('div');
@@ -147,7 +147,9 @@
     }
     function render() {
         for (const c of codes.values()) {
-            if (c.usedAt && Date.now() - c.usedAt >= USED_LINGER_MS) {
+            if (!c.used_by && c.expiresAt <= Date.now() && !c.expiredAt) c.expiredAt = Date.now();
+            if ((c.usedAt && Date.now() - c.usedAt >= USED_LINGER_MS) ||
+                (c.expiredAt && Date.now() - c.expiredAt >= EXPIRED_LINGER_MS)) {
                 if (c.el) c.el.remove();
                 codes.delete(c.serial);
             }
@@ -164,7 +166,7 @@
             const vin = row.querySelector('[data-role="vin"]');
             vin.hidden = !c.used_by;
             vin.textContent = c.used_by ? (c.customer_phone ? `${c.used_by} — ${c.customer_phone}` : c.used_by) : '';
-            row.querySelector('[data-role="sub"]').textContent = c.used_by ? `يختفي خلال ${Math.max(1, Math.ceil((USED_LINGER_MS - (Date.now() - (c.usedAt || Date.now()))) / 1000))} ث` : (left <= 0 ? 'انتهت الصلاحية — أصدر كودًا جديدًا' : 'اكتب الكود في السيارة خلال المدة');
+            row.querySelector('[data-role="sub"]').textContent = c.used_by ? `يختفي خلال ${Math.max(1, Math.ceil((USED_LINGER_MS - (Date.now() - (c.usedAt || Date.now()))) / 1000))} ث` : (left <= 0 ? `يختفي خلال ${Math.max(1, Math.ceil((EXPIRED_LINGER_MS - (Date.now() - (c.expiredAt || Date.now()))) / 1000))} ث` : 'اكتب الكود في السيارة خلال المدة');
             const copied = row.querySelector('[data-role="copied"]');
             const justCopied = c.copiedAt && Date.now() - c.copiedAt < 2000;
             row.querySelector('[data-copy]').classList.toggle('done', !!justCopied);
@@ -179,7 +181,7 @@
             row.querySelector('[data-role="phone-missing"]').hidden = !c.used_by || !!c.customer_phone;
             row.querySelector('[data-phone-save]').disabled = !!c.saving;
         }
-        const alive = list.some(c => c.usedAt || (!c.used_by && c.expiresAt > Date.now()));
+        const alive = list.some(c => c.usedAt || c.expiredAt || (!c.used_by && c.expiresAt > Date.now()));
         if (!alive) { clearInterval(ticker); clearInterval(poller); ticker = poller = null; }
     }
     async function pollAll() {
