@@ -107,6 +107,10 @@ const CATALOG_PUBLISH_APK_HOSTS = [
 const CATALOG_KEY = "catalog/apps.json";
 const CATALOG_APK_PREFIX = "apks/";                 // stable key the store installs from: apks/<packageName>.apk
 const CATALOG_MAX_APK = 100 * 1024 * 1024;         // both apps are 5–10 MB; anything near this is not one of them
+const STORE_CATALOG_MAX_APK = 95 * 1024 * 1024;
+const STORE_CATALOG_MAX_ICON = 2 * 1024 * 1024;
+const STORE_CATALOG_MAX_JSON = 5 * 1024 * 1024;
+const STORE_CATALOG_PACKAGE_RE = /^[A-Za-z][A-Za-z0-9_]*(\.[A-Za-z0-9_]+)+$/u;
 const VERSION_NAME_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,31}$/u;
 
 const SEC_HEADERS = {
@@ -319,6 +323,117 @@ async function passthrough(upstream) {
   return new Response(text, { status: upstream.status, headers: { "Content-Type": upstream.headers.get("content-type") || "application/json; charset=utf-8", ...SEC_HEADERS } });
 }
 
+// ---------- protected store catalog editor (/local/store-catalog/*) ----------
+// These helpers deliberately use the R2 binding only. No R2 credential, signature or bucket secret
+// crosses the admin-session boundary into the browser.
+function sameKeys(a, b) {
+  const aa = Object.keys(a).sort(), bb = Object.keys(b).sort();
+  return aa.length === bb.length && aa.every((key, i) => key === bb[i]);
+}
+function validateStoreCatalogText(nextText, currentText) {
+  let next, current;
+  try { next = JSON.parse(nextText); } catch (e) { throw new Error("الكتالوج الجديد ليس JSON صالحًا"); }
+  try { current = JSON.parse(currentText); } catch (e) { throw new Error("تعذّرت قراءة الكتالوج الحالي"); }
+  if (!next || typeof next !== "object" || Array.isArray(next) || !current || typeof current !== "object" || Array.isArray(current)) throw new Error("بنية الكتالوج العليا غير صالحة");
+  if (!sameKeys(next, current)) throw new Error("لا يجوز إضافة مفاتيح عليا أو حذفها من الكتالوج");
+  if (!Array.isArray(next.apps)) throw new Error("يجب أن يحتوي الكتالوج على مصفوفة apps");
+  const seen = new Set();
+  next.apps.forEach((app, i) => {
+    const pkg = app && typeof app === "object" && !Array.isArray(app) ? String(app.packageName || "").trim() : "";
+    if (!pkg) throw new Error(`التطبيق رقم ${i + 1} بلا packageName`);
+    if (seen.has(pkg)) throw new Error(`packageName مكرر: ${pkg}`);
+    seen.add(pkg);
+  });
+  return next;
+}
+function r2Etag(obj) { return String((obj && obj.etag) || "").replace(/^\"|\"$/g, ""); }
+async function rawBody(req, max, tooLargeMessage) {
+  const declared = Number(req.headers.get("content-length") || 0);
+  if (Number.isFinite(declared) && declared > max) throw new RangeError(tooLargeMessage);
+  const bytes = await req.arrayBuffer();
+  if (bytes.byteLength > max) throw new RangeError(tooLargeMessage);
+  return bytes;
+}
+async function handleStoreCatalogRoute(req, env, url, p) {
+  if (!env.CATALOG_R2) return json(503, { message: "إدارة الكتالوج غير مهيأة على هذا الخادم" });
+  const base = "/local/store-catalog/";
+  const op = p.slice(base.length);
+  if (op === "catalog" && req.method === "GET") {
+    const obj = await env.CATALOG_R2.get(CATALOG_KEY);
+    if (!obj) return json(404, { message: "ملف الكتالوج غير موجود" });
+    return json(200, { etag: r2Etag(obj), text: await obj.text() });
+  }
+  if (op === "catalog" && req.method === "PUT") {
+    let body;
+    try {
+      const bytes = await rawBody(req, STORE_CATALOG_MAX_JSON, "ملف الكتالوج أكبر من الحد المسموح");
+      body = JSON.parse(new TextDecoder().decode(bytes));
+    } catch (e) { return json(e instanceof RangeError ? 413 : 400, { message: e.message || "طلب غير صالح" }); }
+    if (!body || typeof body !== "object" || Array.isArray(body) || typeof body.text !== "string" || typeof body.etag !== "string") return json(400, { message: "يلزم إرسال text وetag" });
+    const current = await env.CATALOG_R2.get(CATALOG_KEY);
+    if (!current) return json(404, { message: "ملف الكتالوج غير موجود" });
+    const currentEtag = r2Etag(current), sentEtag = body.etag.replace(/^\"|\"$/g, "");
+    if (!sentEtag || sentEtag !== currentEtag) return json(409, { message: "تغيّر الكتالوج منذ تحميله. أعد تحميله قبل النشر.", etag: currentEtag });
+    const currentText = await current.text();
+    try { validateStoreCatalogText(body.text, currentText); }
+    catch (e) { return json(422, { message: e.message }); }
+    const stamp = new Date().toISOString();
+    const backupKey = `catalog/backups/apps-${stamp}.json`;
+    await env.CATALOG_R2.put(backupKey, currentText, { httpMetadata: { contentType: "application/json", cacheControl: "no-cache, max-age=0" } });
+    const written = await env.CATALOG_R2.put(CATALOG_KEY, body.text, {
+      onlyIf: { etagMatches: currentEtag },
+      httpMetadata: { contentType: "application/json", cacheControl: "no-cache, max-age=0" },
+    });
+    if (!written) return json(409, { message: "تغيّر الكتالوج أثناء النشر. لم يُستبدل الملف." });
+    return json(200, { ok: true, etag: r2Etag(written), backupKey });
+  }
+  if (op === "apk" && req.method === "PUT") {
+    const pkg = String(url.searchParams.get("pkg") || "");
+    if (!STORE_CATALOG_PACKAGE_RE.test(pkg)) return json(400, { message: "اسم الحزمة غير صالح" });
+    let bytes;
+    try { bytes = await rawBody(req, STORE_CATALOG_MAX_APK, "الملف أكبر من 95 ميجابايت. استخدم أداة مزامنة Cars installer للملفات الضخمة."); }
+    catch (e) { return json(413, { message: e.message }); }
+    const head = new Uint8Array(bytes, 0, Math.min(4, bytes.byteLength));
+    if (head.length < 4 || head[0] !== 0x50 || head[1] !== 0x4b || head[2] !== 0x03 || head[3] !== 0x04) return json(422, { message: "الملف المرفوع ليس APK صالحًا" });
+    const sha256hex = hex(await crypto.subtle.digest("SHA-256", bytes));
+    const key = `${CATALOG_APK_PREFIX}${pkg}.apk`;
+    const out = await env.CATALOG_R2.put(key, bytes, {
+      httpMetadata: { contentType: "application/vnd.android.package-archive", cacheControl: "no-cache, max-age=0" },
+      customMetadata: { sha256: sha256hex }, sha256: sha256hex,
+    });
+    return json(200, { ok: true, key, sizeBytes: bytes.byteLength, sha256: sha256hex, etag: r2Etag(out) });
+  }
+  if (op === "icon" && req.method === "PUT") {
+    const pkg = String(url.searchParams.get("pkg") || "");
+    if (!STORE_CATALOG_PACKAGE_RE.test(pkg)) return json(400, { message: "اسم الحزمة غير صالح" });
+    let bytes;
+    try { bytes = await rawBody(req, STORE_CATALOG_MAX_ICON, "الأيقونة أكبر من 2 ميجابايت" ); }
+    catch (e) { return json(413, { message: e.message }); }
+    const u = new Uint8Array(bytes);
+    const png = u.length >= 8 && u[0] === 0x89 && u[1] === 0x50 && u[2] === 0x4e && u[3] === 0x47;
+    const webp = u.length >= 12 && String.fromCharCode(...u.slice(0, 4)) === "RIFF" && String.fromCharCode(...u.slice(8, 12)) === "WEBP";
+    if (!png && !webp) return json(422, { message: "الأيقونة يجب أن تكون PNG أو WebP" });
+    const key = `icons/${pkg}.png`;
+    const out = await env.CATALOG_R2.put(key, bytes, { httpMetadata: { contentType: png ? "image/png" : "image/webp", cacheControl: "no-cache, max-age=0" } });
+    return json(200, { ok: true, key, sizeBytes: bytes.byteLength, etag: r2Etag(out) });
+  }
+  if (op === "store-apk" && req.method === "PUT") {
+    let bytes;
+    try { bytes = await rawBody(req, STORE_CATALOG_MAX_APK, "الملف أكبر من 95 ميجابايت. استخدم أداة مزامنة Cars installer للملفات الضخمة."); }
+    catch (e) { return json(413, { message: e.message }); }
+    const head = new Uint8Array(bytes, 0, Math.min(4, bytes.byteLength));
+    if (head.length < 4 || head[0] !== 0x50 || head[1] !== 0x4b || head[2] !== 0x03 || head[3] !== 0x04) return json(422, { message: "الملف المرفوع ليس APK صالحًا" });
+    const sha256hex = hex(await crypto.subtle.digest("SHA-256", bytes));
+    const key = "store/thabthaba-store.apk";
+    const out = await env.CATALOG_R2.put(key, bytes, {
+      httpMetadata: { contentType: "application/vnd.android.package-archive", cacheControl: "no-cache, max-age=0" },
+      customMetadata: { sha256: sha256hex }, sha256: sha256hex,
+    });
+    return json(200, { ok: true, key, sizeBytes: bytes.byteLength, sha256: sha256hex, etag: r2Etag(out) });
+  }
+  return new Response(JSON.stringify({ message: "المسار غير موجود" }), { status: 404, headers: { "Content-Type": "application/json; charset=utf-8", ...SEC_HEADERS } });
+}
+
 // ---------- POST /catalog/publish: mirror a release into the store catalog ----------
 // Constant-time bearer check: both sides are hashed first so the comparison runs over equal-length
 // buffers and the loop never exits early — the token's length and prefix stay unobservable.
@@ -465,7 +580,7 @@ export default {
       return new Response(html, { status: 200, headers: { "Content-Type": "text/html; charset=utf-8", "Content-Security-Policy": csp(n), ...SEC_HEADERS } });
     }
     if (req.method === "GET" && p === "/local/ping") {
-      return json(200, { local: true, remote: true, store: !!env.STORE_ADMIN_SECRET, tslink: !!env.TSLINK_ADMIN_TOKEN, leo: !!env.LEO_ADMIN_TOKEN, g700: !!env.G700_ADMIN_TOKEN, lynk: !!env.LYNK_ADMIN_TOKEN, controller: !!env.CONTROLLER_ADMIN_SECRET, codes: !!env.DB, guard: !!env.DB, sessions: !!env.DB, writes: !!env.PANEL_WRITE_KEY, catalog: !!(env.CATALOG_PUBLISH_SECRET && env.CATALOG_R2), push: pushReady(env) });
+      return json(200, { local: true, remote: true, store: !!env.STORE_ADMIN_SECRET, tslink: !!env.TSLINK_ADMIN_TOKEN, leo: !!env.LEO_ADMIN_TOKEN, g700: !!env.G700_ADMIN_TOKEN, lynk: !!env.LYNK_ADMIN_TOKEN, controller: !!env.CONTROLLER_ADMIN_SECRET, codes: !!env.DB, guard: !!env.DB, sessions: !!env.DB, writes: !!env.PANEL_WRITE_KEY, catalog: !!(env.CATALOG_PUBLISH_SECRET && env.CATALOG_R2), storeCatalog: !!env.CATALOG_R2, push: pushReady(env) });
     }
     if (!p.startsWith("/local/")) return json(404, { message: "not found" });
 
@@ -475,6 +590,13 @@ export default {
 
     // Everything below injects a secret: admin session required, verified server-side.
     if (!(await isAdmin(req, env))) return json(401, { message: "admin session required" });
+
+    // Full catalog and binary management. This stays below both Cloudflare Access and the
+    // Supabase-admin-session guard; the browser never receives an R2 credential.
+    if (p.startsWith("/local/store-catalog/")) {
+      try { return await handleStoreCatalogRoute(req, env, url, p); }
+      catch (e) { console.log(`store catalog failed: ${e && e.message}`); return json(500, { message: "تعذّرت إدارة الكتالوج" }); }
+    }
 
     // Voice cost calculator: public OpenRouter list prices for the models the owner configured
     // (primary + fallbacks). No key is sent; the page's CSP cannot reach openrouter.ai itself.
