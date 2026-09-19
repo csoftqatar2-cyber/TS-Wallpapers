@@ -1127,7 +1127,7 @@
                 <div class="chips" id="dev-chips"></div>
                 <div class="chips" id="dev-type-chips" style="margin-top:-4px"></div>
                 <div class="table-wrap">
-                    <table id="dev-table" class="device-columns" data-column-widths="56,216,110,130,96,88,112,112,140,112,104,112,96,180,104">
+                    <table id="dev-table" class="device-columns" data-column-widths="56,216,110,130,96,88,112,112,140,112,104,112,96,120,120,180,104">
                         <thead>
                             <tr>
                                 <th style="width:28px"></th>
@@ -1143,6 +1143,8 @@
                                 <th>TS Link</th>
                                 <th>الكونترولر</th>
                                 <th>Leo</th>
+                                <th>TS G700</th>
+                                <th>TS Lynk & Co</th>
                                 <th>التوكنات</th>
                                 <th>أعطال 7 أيام</th>
                             </tr>
@@ -1787,8 +1789,8 @@
         apply();
         return api;
     }
-    makeResizableTable($('dev-table'), 'colw:dev-table:v3');
-    $('dev-reset-columns').addEventListener('click', () => makeResizableTable($('dev-table'), 'colw:dev-table:v3').reset());
+    makeResizableTable($('dev-table'), 'colw:dev-table:g7');
+    $('dev-reset-columns').addEventListener('click', () => makeResizableTable($('dev-table'), 'colw:dev-table:g7').reset());
     function esc(s) {
         return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
     }
@@ -2480,12 +2482,14 @@
     }
     function renderDevices() {
         renderDevicesContent();
-        pageRendered('dev-body', 'dev-body:v3', false);
-        makeResizableTable($('dev-table'), 'colw:dev-table:v3');
+        pageRendered('dev-body', 'dev-body:g7', false);
+        makeResizableTable($('dev-table'), 'colw:dev-table:g7');
     }
     function renderDevicesContent() {
         if (carOpen) renderCarPage(carOpen);
         if (LOCAL_PROXY && LOCAL_FLAGS.controller && !state.ctlLoaded) loadController().then(renderDevices);   // car types come from the controller first
+        if (g700Available() && !state.g700Loaded && !state.g700Loading) loadG700().then(renderDevices, () => {});
+        if (lynkAvailable() && !state.lynkLoaded && !state.lynkLoading) loadLynk().then(renderDevices, () => {});
         if (carPhonesAvailable() && !carPhonesLoading && Date.now() - carPhonesAt >= 60000) loadCarPhones().then(renderDevices);
         const errs = [];
         if (state.errors.devices) errs.push(`devices: ${state.errors.devices}`);
@@ -2508,9 +2512,10 @@
         $('dev-count-note').textContent = `${list.length} من ${state.merged.length}`;
         const body = $('dev-body');
         if (!list.length) {
-            body.innerHTML = `<tr><td colspan="15"><div class="empty"><i class="fa-solid fa-inbox"></i>${state.merged.length ? 'لا نتائج مطابقة' : (state.errors.devices ? 'تعذّر تحميل الأجهزة' : 'لا أجهزة')}</div></td></tr>`;
+            body.innerHTML = `<tr><td colspan="17"><div class="empty"><i class="fa-solid fa-inbox"></i>${state.merged.length ? 'لا نتائج مطابقة' : (state.errors.devices ? 'تعذّر تحميل الأجهزة' : 'لا أجهزة')}</div></td></tr>`;
             return;
         }
+        buildDeviceProgramMaps();
         body.innerHTML = list.map(deviceRowHtml).join('');
         body.querySelectorAll('[data-act]').forEach(el => el.addEventListener('click', onRowAction));
         for (const hw of state.expanded) {
@@ -2543,6 +2548,89 @@
             const conf = Number(t.enroll_conflicts) || 0;
             return `<span class="badge ${conf > 0 ? 'bad' : 'info'}" title="${esc(t.app_id)} · صدر ${esc(fmtDate(t.token_issued_at))}${conf ? ` · ${conf} تعارض` : ''}">${esc(appLabel(t.app_id))} <span class="num">v${esc(t.token_version)}</span>${conf ? ` <i class="fa-solid fa-triangle-exclamation"></i>` : ''}</span>`;
         }).join('');
+    }
+    let g700DevMap = new Map(), lynkDevMap = new Map();
+    let devMapsG700Src = null, devMapsLynkSrc = null;
+    function buildDeviceProgramMaps() {
+        g700DevMap = new Map();
+        lynkDevMap = new Map();
+        const day = d => /^\d{4}-\d{2}-\d{2}$/.test(String(d || '')) ? d + 'T00:00:00Z' : '';
+        const carTime = c => ts(c.lastSeenAt || day(c.lastSeen)) || 0;
+        for (const c of (state.g700Cars || [])) {
+            if (!c) continue;
+            const ids = [c.hwId, ...(Array.isArray(c.alsoKnownAs) ? c.alsoKnownAs : [])];
+            for (const raw of ids) {
+                if (!raw) continue;
+                const cKey = canonicalHw(raw);
+                const lKey = String(raw).trim().toLowerCase();
+                if (cKey && (!g700DevMap.has(cKey) || carTime(c) > carTime(g700DevMap.get(cKey)))) g700DevMap.set(cKey, c);
+                if (lKey && (!g700DevMap.has(lKey) || carTime(c) > carTime(g700DevMap.get(lKey)))) g700DevMap.set(lKey, c);
+            }
+        }
+        const lynkTime = d => ts(d.last_seen) || 0;
+        for (const d of (state.lynkDevices || [])) {
+            if (!d || !d.id) continue;
+            const cKey = canonicalHw(d.id);
+            const lKey = String(d.id).trim().toLowerCase();
+            if (cKey && (!lynkDevMap.has(cKey) || lynkTime(d) > lynkTime(lynkDevMap.get(cKey)))) lynkDevMap.set(cKey, d);
+            if (lKey && (!lynkDevMap.has(lKey) || lynkTime(d) > lynkTime(lynkDevMap.get(lKey)))) lynkDevMap.set(lKey, d);
+        }
+        devMapsG700Src = state.g700Cars;
+        devMapsLynkSrc = state.lynkDevices;
+    }
+    function ensureDeviceProgramMaps() {
+        if (devMapsG700Src !== state.g700Cars || devMapsLynkSrc !== state.lynkDevices) {
+            buildDeviceProgramMaps();
+        }
+    }
+    function findG700ForDev(r) {
+        if (!r) return null;
+        ensureDeviceProgramMaps();
+        const candidates = typeof r === 'string' ? [r] : [r.hw, ...(Array.isArray(r.aliases) ? r.aliases : [])];
+        for (const id of candidates) {
+            if (!id) continue;
+            const cKey = canonicalHw(id);
+            const lKey = String(id).trim().toLowerCase();
+            if (cKey && g700DevMap.has(cKey)) return g700DevMap.get(cKey);
+            if (lKey && g700DevMap.has(lKey)) return g700DevMap.get(lKey);
+        }
+        return null;
+    }
+    function findLynkForDev(r) {
+        if (!r) return null;
+        ensureDeviceProgramMaps();
+        const candidates = typeof r === 'string' ? [r] : [r.hw, ...(Array.isArray(r.aliases) ? r.aliases : [])];
+        for (const id of candidates) {
+            if (!id) continue;
+            const cKey = canonicalHw(id);
+            const lKey = String(id).trim().toLowerCase();
+            if (cKey && lynkDevMap.has(cKey)) return lynkDevMap.get(cKey);
+            if (lKey && lynkDevMap.has(lKey)) return lynkDevMap.get(lKey);
+        }
+        return null;
+    }
+    function g700Cell(r) {
+        if (state.g700Loading || (g700Available() && !state.g700Loaded)) return '<span class="sub">…</span>';
+        const c = findG700ForDev(r);
+        if (!c) return '<span class="sub">—</span>';
+        const ver = c.version || '—';
+        const vcode = Number(c.versionCode) > 0 ? Number(c.versionCode) : null;
+        const latest = state.g700Latest ? Number(state.g700Latest.versionCode) : NaN;
+        const isOld = vcode != null && Number.isFinite(latest) && vcode < latest;
+        const day = d => /^\d{4}-\d{2}-\d{2}$/.test(String(d || '')) ? d + 'T00:00:00Z' : '';
+        const last = c.lastSeenAt || day(c.lastSeen);
+        return `<span class="cell-ver">${esc(ver)}${vcode != null ? ` (${esc(vcode)})` : ''}</span>${isOld ? ' <span class="badge warn">أقدم</span>' : ''}${timeCell(last)}`;
+    }
+    function lynkCell(r) {
+        if (state.lynkLoading || (lynkAvailable() && !state.lynkLoaded)) return '<span class="sub">…</span>';
+        const d = findLynkForDev(r);
+        if (!d) return '<span class="sub">—</span>';
+        const ver = d.version_name || '—';
+        const vcode = Number(d.version_code) > 0 ? Number(d.version_code) : null;
+        const latest = state.lynkLatest ? Number(state.lynkLatest.version_code) : NaN;
+        const isOld = vcode != null && Number.isFinite(latest) && vcode < latest;
+        const last = d.last_seen || '';
+        return `<span class="cell-ver">${esc(ver)}${vcode != null ? ` (${esc(vcode)})` : ''}</span>${isOld ? ' <span class="badge warn">أقدم</span>' : ''}${timeCell(last)}`;
     }
     function deviceRowHtml(r) {
         const st = r.status; const d = r.dev;
@@ -2582,10 +2670,12 @@
                 <td>${appCell(r, 'tslink')}</td>
                 <td>${appCell(r, 'controller')}</td>
                 <td>${appCell(r, 'leo')}</td>
+                <td>${g700Cell(r)}</td>
+                <td>${lynkCell(r)}</td>
                 <td>${tokensCell(r)}${r.dev && r.dev.enroll_conflicts ? `<span class="sub" style="color:#fca5a5">تعارضات الجهاز: ${num(r.dev.enroll_conflicts)}</span>` : ''}</td>
                 <td>${r.crashes7 ? `<span class="badge bad"><span class="num">${r.crashes7}</span></span>` : '<span class="num sub">0</span>'}</td>
             </tr>
-            <tr class="detail-row" data-detail="${esc(r.hw)}" ${open ? '' : 'hidden'}><td colspan="15"><div class="detail-body">…</div></td></tr>`;
+            <tr class="detail-row" data-detail="${esc(r.hw)}" ${open ? '' : 'hidden'}><td colspan="17"><div class="detail-body">…</div></td></tr>`;
     }
     async function onRowAction(e) {
         const el = e.currentTarget; const act = el.dataset.act; const hw = el.dataset.hw;
@@ -3673,7 +3763,7 @@
                 host.replaceChildren(...fixed, ...(strip ? [strip] : []), ...page.flat());
                 if (!page.length) {
                     if (!rows.length && empty.length) host.append(...empty);
-                    else { const el = document.createElement(host.tagName === 'TBODY' ? 'tr' : 'div'); el.innerHTML = host.tagName === 'TBODY' ? `<td colspan="${host.id === 'dev-body' ? 15 : 20}"><div class="empty">لا نتائج مطابقة</div></td>` : '<div class="empty">لا نتائج مطابقة</div>'; host.append(el); }
+                    else { const el = document.createElement(host.tagName === 'TBODY' ? 'tr' : 'div'); el.innerHTML = host.tagName === 'TBODY' ? `<td colspan="${host.id === 'dev-body' ? 17 : 20}"><div class="empty">لا نتائج مطابقة</div></td>` : '<div class="empty">لا نتائج مطابقة</div>'; host.append(el); }
                 }
                 renderedLists.set(host, { nodes, visible: [...host.children] });
             }
@@ -7562,9 +7652,29 @@
         if (r) {
             const ctlCar = vin && state.ctl && Array.isArray(state.ctl.cars) ? state.ctl.cars.find(c => String(vinOf(c)).toLowerCase() === vin.toLowerCase()) : null;
             const tsl = tslinkCarFor(hw);
-            const app = (label, key, extra) => { const sn = r.seen[key]; const v = sn ? `${esc(sn.app_version || '—')}${sn.app_version_code != null ? ` (${esc(sn.app_version_code)})` : ''}` : (key === 'wallpapers' && d && d.app_version ? `${esc(d.app_version)} (${esc(d.app_version_code)})` : (key === 'store' && r.store ? esc(r.store.version || '—') : null)); const seen = sn ? sn.last_seen : (key === 'wallpapers' && d ? d.last_seen_at : key === 'store' && r.store ? r.store.last_seen : null);
-                return `<div class="car-app"><b>${esc(label)}</b><span class="ver">${v || '<span class="sub">لم يظهر</span>'}</span>${seen ? timeCell(seen) : ''}${extra || ''}</div>`; };
-            S.push(carSection('البرامج وإصداراتها', 'fa-layer-group', `<div class="car-apps">${app('ذبذبة خلفيات', 'wallpapers')}${app('ذبذبة ستور', 'store')}${app('TS Back Button', 'backbutton')}${app('TS Link', 'tslink', tsl ? `<span class="sub">${esc(tsl.carLabel || tsl.label || '')}</span>` : '')}${app('ذبذبة داشبورد', 'controller', ctlCar ? `<span class="sub">تليمتري: ${esc(ctlCar.version_name || '—')} (${esc(ctlCar.version_code != null ? ctlCar.version_code : '—')}) · تشغيلات ${esc(ctlCar.runs != null ? ctlCar.runs : '—')}</span><span class="sub" title="نسخة قاموس اللهجة التي كانت على السيارة عند آخر تشغيل (تُجلب كل 6 ساعات وتُبلَّغ عند الإقلاع فقط)">القاموس عند آخر تشغيل: ${overlayCell(ctlCar)}</span>` : '')}${app('TS Leo Dash', 'leo')}</div>`));
+            const app = (label, key, extra) => {
+                let v = null, seen = null;
+                if (key === 'g700') {
+                    const g = findG700ForDev(r);
+                    if (g) {
+                        const day = d => /^\d{4}-\d{2}-\d{2}$/.test(String(d || '')) ? d + 'T00:00:00Z' : '';
+                        v = `${esc(g.version || '—')}${g.versionCode != null ? ` (${esc(g.versionCode)})` : ''}`;
+                        seen = g.lastSeenAt || day(g.lastSeen);
+                    }
+                } else if (key === 'lynk') {
+                    const l = findLynkForDev(r);
+                    if (l) {
+                        v = `${esc(l.version_name || '—')}${l.version_code != null ? ` (${esc(l.version_code)})` : ''}`;
+                        seen = l.last_seen || null;
+                    }
+                } else {
+                    const sn = r.seen[key];
+                    v = sn ? `${esc(sn.app_version || '—')}${sn.app_version_code != null ? ` (${esc(sn.app_version_code)})` : ''}` : (key === 'wallpapers' && d && d.app_version ? `${esc(d.app_version)} (${esc(d.app_version_code)})` : (key === 'store' && r.store ? esc(r.store.version || '—') : null));
+                    seen = sn ? sn.last_seen : (key === 'wallpapers' && d ? d.last_seen_at : key === 'store' && r.store ? r.store.last_seen : null);
+                }
+                return `<div class="car-app"><b>${esc(label)}</b><span class="ver">${v || '<span class="sub">لم يظهر</span>'}</span>${seen ? timeCell(seen) : ''}${extra || ''}</div>`;
+            };
+            S.push(carSection('البرامج وإصداراتها', 'fa-layer-group', `<div class="car-apps">${app('ذبذبة خلفيات', 'wallpapers')}${app('ذبذبة ستور', 'store')}${app('TS Back Button', 'backbutton')}${app('TS Link', 'tslink', tsl ? `<span class="sub">${esc(tsl.carLabel || tsl.label || '')}</span>` : '')}${app('ذبذبة داشبورد', 'controller', ctlCar ? `<span class="sub">تليمتري: ${esc(ctlCar.version_name || '—')} (${esc(ctlCar.version_code != null ? ctlCar.version_code : '—')}) · تشغيلات ${esc(ctlCar.runs != null ? ctlCar.runs : '—')}</span><span class="sub" title="نسخة قاموس اللهجة التي كانت على السيارة عند آخر تشغيل (تُجلب كل 6 ساعات وتُبلَّغ عند الإقلاع فقط)">القاموس عند آخر تشغيل: ${overlayCell(ctlCar)}</span>` : '')}${app('TS Leo Dash', 'leo')}${app('TS G700', 'g700')}${app('TS Lynk & Co', 'lynk')}</div>`));
         }
         {
             const v = carCache.voice.get(hw);
