@@ -683,6 +683,17 @@
         .stat-extra .n { font-family: var(--mono); direction: ltr; unicode-bidi: isolate; }
         .car-type { display: block; font-weight: 600; }
         .car-type + .sub { display: block; }
+        .car-type-cell { display: flex; align-items: center; gap: 8px; }
+        .car-logo {
+            height: 24px; width: auto; max-width: 48px; object-fit: contain;
+            background: #f5eee4; padding: 2px 5px; border-radius: 6px;
+            box-shadow: 0 1px 2px rgba(0,0,0,.25); flex-shrink: 0;
+        }
+        .chip-car-logo {
+            height: 16px; width: auto; max-width: 32px; object-fit: contain;
+            background: #f5eee4; padding: 1px 4px; border-radius: 4px;
+            flex-shrink: 0; pointer-events: none; vertical-align: middle;
+        }
         pre.report { direction: ltr; text-align: left; white-space: pre-wrap; overflow-wrap: anywhere; font-family: var(--mono); font-size: .74rem; background: rgba(0,0,0,.25); padding: 10px; border-radius: 10px; max-width: 100%; max-height: 360px; overflow: auto; }
         #controller-settings { display: grid; gap: 14px; margin-top: 16px; }
         #controller-settings fieldset { display: grid; gap: 12px; min-width: 0; }
@@ -860,7 +871,7 @@
             width: max-content !important; min-width: 0 !important; max-width: none !important; table-layout: auto;
         }
         table.column-measure th, table.column-measure td,
-        table.column-measure td :is(.name, .hw, .sub, .cell-ver, .car-type, .badge) {
+        table.column-measure td :is(.name, .hw, .sub, .cell-ver, .car-type, .car-type-cell, .car-logo, .badge) {
             width: auto !important; max-width: none !important; white-space: nowrap !important; overflow: visible !important;
         }
         table.column-measure .actions { flex-wrap: nowrap !important; max-width: none !important; }
@@ -1832,7 +1843,73 @@
         if (r.dev && r.dev.mode) return { label: modeLabel(r.dev.mode) + (r.dev.mode_secondary ? ' + شاشة الراكب: ' + modeLabel(r.dev.mode_secondary) : ''), src: 'ذبذبة خلفيات' };
         return null;
     }
-    function carTypeCell(r) { const t = carType(r); return t ? `<span class="car-type">${esc(t.label)}</span><span class="sub" title="المصدر">${esc(t.src)}</span>` : '<span class="sub">—</span>'; }
+    const CAR_LOGOS = {
+        leopard:  { src: '/cars/leopard.png',  brand: 'Leopard' },
+        gwm:      { src: '/cars/gwm.png',      brand: 'GWM' },
+        denza:    { src: '/cars/denza.png',    brand: 'Denza' },
+        jetour:   { src: '/cars/jetour.png',   brand: 'Jetour' },
+        lynkco:   { src: '/cars/lynkco.png',   brand: 'Lynk & Co' },
+        byd:      { src: '/cars/byd.png',      brand: 'BYD' },
+        ti7:      { src: '/cars/ti7.svg',      brand: 'Ti7' },
+        '212':    { src: '/cars/212.svg',      brand: '212' },
+        dongfeng: { src: '/cars/dongfeng.png', brand: 'Dongfeng' },
+        iacaur:   { src: '/cars/iacaur.png',   brand: 'iCar' },
+    };
+    const CAR_PREFIX_MAP = [
+        ['leopard', 'leopard'],
+        ['fse', 'leopard'],
+        ['l5', 'leopard'],
+        ['l7', 'leopard'],
+        ['l8', 'leopard'],
+        ['l9', 'leopard'],
+        ['tank', 'gwm'],
+        ['haval', 'gwm'],
+        ['gwm', 'gwm'],
+        ['denza', 'denza'],
+        ['jetour', 'jetour'],
+        ['g700', 'jetour'],
+        ['lynk', 'lynkco'],
+        ['byd', 'byd'],
+        ['shark', 'byd'],
+        ['ti7', 'ti7'],
+        ['ti_7', 'ti7'],
+        ['ti 7', 'ti7'],
+        ['china_212', '212'],
+        ['212', '212'],
+        ['dong_feng', 'dongfeng'],
+        ['dongfeng', 'dongfeng'],
+        ['iacaur', 'iacaur'],
+        ['icaur', 'iacaur'],
+        ['icar', 'iacaur'],
+        ['ليوبارد', 'leopard'],
+        ['لينك', 'lynkco'],
+        ['جيتور', 'jetour'],
+        ['تانك', 'gwm'],
+        ['هافال', 'gwm'],
+        ['دينزا', 'denza'],
+        ['دونغ', 'dongfeng'],
+        ['ايكار', 'iacaur'],
+        ['آيكار', 'iacaur'],
+        ['بي واي دي', 'byd'],
+    ];
+    function carLogoFor(label, mode) {
+        const find = str => {
+            const s = String(str || '').trim().toLowerCase();
+            if (!s) return null;
+            for (const [pfx, key] of CAR_PREFIX_MAP) {
+                if (s === pfx || s.startsWith(pfx)) return CAR_LOGOS[key] || null;
+            }
+            return null;
+        };
+        return find(label) || find(mode) || null;
+    }
+    function carTypeCell(r) {
+        const t = carType(r);
+        if (!t) return '<span class="sub">—</span>';
+        const logo = carLogoFor(t.label, r && r.dev && r.dev.mode);
+        const img = logo ? `<img class="car-logo" src="${esc(logo.src)}" alt="" title="${esc(logo.brand)}" loading="lazy" decoding="async">` : '';
+        return `<div class="car-type-cell" data-sort="${esc(t.label)}">${img}<div><span class="car-type">${esc(t.label)}</span><span class="sub" title="المصدر">${esc(t.src)}</span></div></div>`;
+    }
     function appLabel(id) { return APP_ID_LABELS[id] || id || '?'; }
     function errMsg(e) { return (e && e.message) ? e.message : String(e); }
     function setErr(id, e) {
@@ -2394,7 +2471,11 @@
         const total = rows.reduce((s, x) => s + x.n, 0);
         $('dev-type-chips').innerHTML = `<span class="note" style="align-self:center;margin-inline-end:4px"><i class="fa-solid fa-car"></i> نوع السيارة (من ذبذبة ستور):</span>`
             + `<button class="chip ${!state.carType ? 'active' : ''}" data-ctype="" type="button">كل الأنواع <span class="n">${total}</span></button>`
-            + rows.map(x => `<button class="chip ${state.carType.toLowerCase() === x.label.toLowerCase() ? 'active' : ''}" data-ctype="${esc(x.label)}" type="button">${esc(x.label)} <span class="n">${x.n}</span></button>`).join('');
+            + rows.map(x => {
+                const lg = carLogoFor(x.label);
+                const img = lg ? `<img class="chip-car-logo" src="${esc(lg.src)}" alt="" title="${esc(lg.brand)}" loading="lazy" decoding="async">` : '';
+                return `<button class="chip ${state.carType.toLowerCase() === x.label.toLowerCase() ? 'active' : ''}" data-ctype="${esc(x.label)}" type="button">${img}${esc(x.label)} <span class="n">${x.n}</span></button>`;
+            }).join('');
         $('dev-type-chips').querySelectorAll('.chip').forEach(el => el.addEventListener('click', () => { state.carType = el.dataset.ctype; renderDevices(); }));
     }
     function renderDevices() {

@@ -447,6 +447,12 @@ export default {
       }
     } catch (e) { return json(503, { message: "guard unavailable" }); }
     if (blocked) return new Response("blocked", { status: 403, headers: { "Content-Type": "text/plain; charset=utf-8", ...SEC_HEADERS } });
+    if (req.method === "GET" && p.startsWith("/cars/") && env.ASSETS) {
+      const a = await env.ASSETS.fetch(new Request(url.origin + p, { method: "GET" }));
+      if (a.status !== 200) return a;
+      const h = new Headers(a.headers); h.set("Cache-Control", "public, max-age=86400"); h.set("X-Content-Type-Options", "nosniff");
+      return new Response(a.body, { status: 200, headers: h });
+    }
     if (p.startsWith("/local/") && limited(clientOf(req).ip)) return json(429, { message: "slow down" });
     if (req.method === "POST" && p === "/local/auth/login") return handleLogin(req, env);
     if (req.method === "POST" && p === "/local/auth/session") return handleSession(req, env);
