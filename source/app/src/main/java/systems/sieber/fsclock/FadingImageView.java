@@ -7,6 +7,7 @@ import android.graphics.Paint;
 import android.graphics.PorterDuff;
 import android.graphics.PorterDuffXfermode;
 import android.graphics.Shader;
+import android.graphics.drawable.Drawable;
 import android.util.AttributeSet;
 
 import androidx.appcompat.widget.AppCompatImageView;
@@ -45,28 +46,45 @@ public class FadingImageView extends AppCompatImageView {
     @Override
     protected void onDraw(Canvas canvas) {
         int w = getWidth(), h = getHeight();
-        if(mFade <= 0 || w <= 0 || h <= 0) {
+        int save = -1;
+        try {
+            if(mFade <= 0 || w <= 0 || h <= 0) {
+                super.onDraw(canvas);
+                return;
+            }
+
+            // The xfermode has to act on the image alone, so it needs its own layer — applied
+            // straight to the canvas it would eat whatever was drawn underneath as well.
+            save = canvas.saveLayer(0, 0, w, h, null);
             super.onDraw(canvas);
-            return;
+
+            float band = bandWidth(w);
+            buildShaders(w);
+
+            mPaint.setXfermode(DST_OUT);
+            mPaint.setShader(mLeft);
+            canvas.drawRect(0, 0, band, h, mPaint);
+            mPaint.setShader(mRight);
+            canvas.drawRect(w - band, 0, w, h, mPaint);
+        } catch(RuntimeException e) {
+            // 2026-09-19, last resort: "Canvas: trying to draw too large bitmap" (or a recycled
+            // one) thrown here kills the app, and the car reopens on the same wallpaper — a crash
+            // loop. WallpaperView caps the decode, so this should never fire; if something still
+            // slips through, drop the picture and show black rather than take the app down.
+            final Drawable d = getDrawable();
+            CrashReporter.breadcrumb("bitmap too large, image dropped ("
+                    + (d == null ? "?" : d.getIntrinsicWidth() + "x" + d.getIntrinsicHeight())
+                    + "): " + e);
+            // Not inline: changing the drawable from inside onDraw re-enters invalidate/layout.
+            // Only if it is still the same one — the slideshow may have moved on meanwhile.
+            post(new Runnable() {
+                @Override public void run() { if(getDrawable() == d) setImageDrawable(null); }
+            });
+        } finally {
+            mPaint.setShader(null);
+            mPaint.setXfermode(null);
+            if(save >= 0) canvas.restoreToCount(save);
         }
-
-        // The xfermode has to act on the image alone, so it needs its own layer — applied
-        // straight to the canvas it would eat whatever was drawn underneath as well.
-        int save = canvas.saveLayer(0, 0, w, h, null);
-        super.onDraw(canvas);
-
-        float band = bandWidth(w);
-        buildShaders(w);
-
-        mPaint.setXfermode(DST_OUT);
-        mPaint.setShader(mLeft);
-        canvas.drawRect(0, 0, band, h, mPaint);
-        mPaint.setShader(mRight);
-        canvas.drawRect(w - band, 0, w, h, mPaint);
-        mPaint.setShader(null);
-        mPaint.setXfermode(null);
-
-        canvas.restoreToCount(save);
     }
 
     /** At 100 the two bands meet in the middle, so the image is gone entirely. */

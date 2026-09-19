@@ -1103,7 +1103,9 @@ public class FsClockView extends FrameLayout {
         File img = sc.getStorage(StorageControl.FILENAME_BACKGROUND_IMAGE);
         if(img.exists()) {
             try {
-                Bitmap myBitmap = BitmapFactory.decodeFile(img.getAbsolutePath());
+                // Sampled down: a full-size phone photo here is the same "too large bitmap"
+                // crash WallpaperView guards against, on every launch.
+                Bitmap myBitmap = decodeCapped(img.getAbsolutePath());
                 mBackgroundImage.setImageBitmap(myBitmap);
                 if(mSharedPref.getBoolean("back-stretch", false)) {
                     mBackgroundImage.setScaleType(ImageView.ScaleType.FIT_XY);
@@ -1186,7 +1188,7 @@ public class FsClockView extends FrameLayout {
         img = sc.getStorage(StorageControl.FILENAME_CLOCK_FACE);
         if(img.exists()) {
             try {
-                Bitmap myBitmap = BitmapFactory.decodeFile(img.getAbsolutePath());
+                Bitmap myBitmap = decodeCapped(img.getAbsolutePath());
                 mClockFace.setImageBitmap(myBitmap);
             } catch(Exception ignored) {
                 Toast.makeText(getContext(), "Image corrupted or too large", Toast.LENGTH_SHORT).show();
@@ -1200,7 +1202,7 @@ public class FsClockView extends FrameLayout {
         img = sc.getStorage(StorageControl.FILENAME_HOURS_HAND);
         if(img.exists()) {
             try {
-                Bitmap myBitmap = BitmapFactory.decodeFile(img.getAbsolutePath());
+                Bitmap myBitmap = decodeCapped(img.getAbsolutePath());
                 mHoursHand.setImageBitmap(myBitmap);
             } catch(Exception ignored) {
                 Toast.makeText(getContext(), "Image corrupted or too large", Toast.LENGTH_SHORT).show();
@@ -1214,7 +1216,7 @@ public class FsClockView extends FrameLayout {
         img = sc.getStorage(StorageControl.FILENAME_MINUTES_HAND);
         if(img.exists()) {
             try {
-                Bitmap myBitmap = BitmapFactory.decodeFile(img.getAbsolutePath());
+                Bitmap myBitmap = decodeCapped(img.getAbsolutePath());
                 mMinutesHand.setImageBitmap(myBitmap);
             } catch(Exception ignored) {
                 Toast.makeText(getContext(), "Image corrupted or too large", Toast.LENGTH_SHORT).show();
@@ -1228,7 +1230,7 @@ public class FsClockView extends FrameLayout {
         img = sc.getStorage(StorageControl.FILENAME_SECONDS_HAND);
         if(img.exists()) {
             try {
-                Bitmap myBitmap = BitmapFactory.decodeFile(img.getAbsolutePath());
+                Bitmap myBitmap = decodeCapped(img.getAbsolutePath());
                 mSecondsHand.setImageBitmap(myBitmap);
             } catch(Exception ignored) {
                 Toast.makeText(getContext(), "Image corrupted or too large", Toast.LENGTH_SHORT).show();
@@ -1238,6 +1240,24 @@ public class FsClockView extends FrameLayout {
             if(gi != null && gi.mGraphicResourceId != null)
                 mSecondsHand.setImageResource(gi.mGraphicResourceId);
         }
+    }
+
+    /**
+     * A user image file for a plain ImageView, sampled so its longest side stays within
+     * {@link WallpaperView#maxDecodeSide} — BitmapFactory otherwise decodes every pixel, and a
+     * phone photo past ~25 MP is a bitmap the render thread refuses to draw.
+     */
+    private Bitmap decodeCapped(String path) {
+        BitmapFactory.Options probe = new BitmapFactory.Options();
+        probe.inJustDecodeBounds = true;
+        BitmapFactory.decodeFile(path, probe);
+        int longest = Math.max(probe.outWidth, probe.outHeight);
+        int cap = WallpaperView.maxDecodeSide(getContext(), getWidth(), getHeight());
+        int sample = 1;
+        while(longest / sample > cap) sample *= 2;
+        BitmapFactory.Options o = new BitmapFactory.Options();
+        o.inSampleSize = sample;
+        return BitmapFactory.decodeFile(path, o);
     }
 
     private final SensorEventListener mTempListener = new SensorEventListener() {

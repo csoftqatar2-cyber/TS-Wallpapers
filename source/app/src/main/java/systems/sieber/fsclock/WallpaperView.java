@@ -24,6 +24,7 @@ import androidx.annotation.Nullable;
 import com.bumptech.glide.Glide;
 import com.bumptech.glide.load.DataSource;
 import com.bumptech.glide.load.engine.GlideException;
+import com.bumptech.glide.load.resource.bitmap.DownsampleStrategy;
 import com.bumptech.glide.request.RequestListener;
 import com.bumptech.glide.request.target.Target;
 
@@ -49,6 +50,10 @@ public class WallpaperView extends FrameLayout {
      * on a bad clip instead of just showing it a beat late.
      */
     private static final int VIDEO_READY_TIMEOUT_MS = 900;
+
+    /** Bounds for {@link #maxDecodeSide}. */
+    private static final int MIN_DECODE_SIDE = 2048;
+    private static final int MAX_DECODE_SIDE = 4096;
 
     private class Slot {
         FrameLayout root;
@@ -281,8 +286,18 @@ public class WallpaperView extends FrameLayout {
             // Glide animates GIFs automatically and handles network + disk caching.
             // No .centerCrop() here: we keep the full image and crop/pan it ourselves
             // with a matrix so the wallpaper can be repositioned in FSE mode.
+            //
+            // 2026-09-19: but the pixels are capped. A 28 MP phone photo decoded whole is a
+            // 113 MB bitmap, past what the render thread will draw ("Canvas: trying to draw too
+            // large bitmap"), and since the car reopens on the same wallpaper it crashed on
+            // every launch. CENTER_INSIDE only ever shrinks, so the aspect ratio — all the matrix
+            // and the saved focal point care about — is unchanged, and contentW/contentH below
+            // still come from the drawable actually decoded.
+            int cap = maxDecodeSide();
             Glide.with(getContext().getApplicationContext())
                     .load(model)
+                    .downsample(DownsampleStrategy.CENTER_INSIDE)
+                    .override(cap, cap)
                     .listener(new RequestListener<Drawable>() {
                         @Override
                         public boolean onLoadFailed(@Nullable GlideException e, Object model,
@@ -358,6 +373,24 @@ public class WallpaperView extends FrameLayout {
         float overflow = scaled - view;
         if(overflow <= 0f) return (view - scaled) / 2f;
         return -overflow * clamp01(focal);
+    }
+
+    /**
+     * Longest side, in pixels, a wallpaper image is decoded at on this screen.
+     *
+     * Twice the screen so a zoom or an FSE pan still has real pixels to show, never below
+     * {@link #MIN_DECODE_SIDE} (small screens still get a sharp picture) and never above
+     * {@link #MAX_DECODE_SIDE}: 4096 x 4096 ARGB is 64 MB, safely under the ~100 MB the render
+     * thread refuses to draw.
+     */
+    static int maxDecodeSide(Context c, int viewW, int viewH) {
+        android.util.DisplayMetrics dm = c.getResources().getDisplayMetrics();
+        int longest = Math.max(Math.max(dm.widthPixels, dm.heightPixels), Math.max(viewW, viewH));
+        return Math.min(MAX_DECODE_SIDE, Math.max(MIN_DECODE_SIDE, 2 * longest));
+    }
+
+    private int maxDecodeSide() {
+        return maxDecodeSide(getContext(), getWidth(), getHeight());
     }
 
     /** Pull pixels out of whatever Glide handed us, for the blurred backdrop. */
