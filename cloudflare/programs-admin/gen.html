@@ -49,6 +49,8 @@
         .row .vin { grid-column:1 / -1; direction:ltr; font-family:ui-monospace, monospace; word-break:break-all; }
         .phone-box { grid-column:1 / -1; display:flex; flex-direction:column; gap:7px; padding-top:5px; border-top:1px solid var(--border); }
         .phone-box label { font-size:.9rem; font-weight:700; }
+        .phone-summary { display:flex; align-items:center; justify-content:space-between; gap:8px; }
+        .phone-edit { font:inherit; font-size:.78rem; color:var(--accent); background:none; border:0; padding:6px 8px; cursor:pointer; }
         .phone-controls { display:flex; gap:8px; direction:ltr; }
         .phone-controls input { flex:1; min-width:0; font:inherit; direction:ltr; padding:10px 12px; border-radius:10px; border:1px solid var(--border); background:rgba(0,0,0,.25); color:var(--text); }
         .phone-controls input:focus { outline:2px solid rgba(245,158,11,.45); border-color:var(--primary); }
@@ -59,6 +61,19 @@
         .phone-note.success { color:var(--ok); }
         .phone-note.failure, .phone-missing { color:var(--bad); }
         .phone-missing { font-size:.86rem; font-weight:700; }
+        .issue-step { padding:18px; border:1px solid rgba(245,158,11,.35); border-radius:18px; background:var(--panel); box-shadow:0 18px 46px rgba(0,0,0,.35); text-align:start; }
+        .issue-step h2 { margin:0 0 12px; font-size:1.2rem; }
+        .issue-step input { width:100%; min-height:56px; font:inherit; font-size:1.2rem; direction:ltr; padding:12px 14px; border-radius:12px; border:1px solid var(--border); background:rgba(0,0,0,.25); color:var(--text); }
+        .issue-step .hint { margin:8px 0; color:var(--muted); font-size:.84rem; }
+        .issue-actions { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:12px; }
+        .issue-actions .btn { min-width:0; min-height:54px; padding:12px 10px; font-size:1rem; border-radius:12px; }
+        .cancel { display:block; margin:10px auto 0; padding:8px 14px; border:0; background:none; color:var(--muted); font:inherit; cursor:pointer; }
+        .unbound { margin-top:8px; border:1px solid var(--border); border-radius:14px; background:rgba(0,0,0,.16); text-align:start; }
+        .unbound summary { padding:13px 14px; cursor:pointer; font-weight:800; }
+        .unbound-list { padding:0 14px 8px; }
+        .unbound-item { display:grid; grid-template-columns:1fr auto; gap:3px 10px; padding:10px 0; border-top:1px solid var(--border); }
+        .unbound-item a { color:var(--accent); direction:ltr; text-align:start; }
+        .unbound-item .meta { grid-column:1 / -1; color:var(--muted); font-size:.82rem; }
         #login { display:flex; flex-direction:column; gap:12px; width:min(92vw, 360px); }
         #login input { font:inherit; font-size:1.1rem; padding:14px; border-radius:14px; border:1px solid var(--border); background:rgba(0,0,0,.25); color:var(--text); text-align:center; }
         .err { color:var(--bad); font-size:.95rem; min-height:1.4em; }
@@ -84,15 +99,27 @@
         </form>
         <div id="app" hidden style="width:min(96vw, 520px);display:flex;flex-direction:column;gap:14px;align-items:stretch;">
             <div id="codes"></div>
+            <form id="issue-step" class="issue-step" hidden>
+                <h2>رقم صاحب السيارة</h2>
+                <input id="issue-phone" type="tel" inputmode="tel" dir="ltr" autocomplete="tel" placeholder="رقم الهاتف" required>
+                <div class="hint">بدون رمز دولة يُحفظ الرقم كرقم قطري ‎+974‎</div>
+                <div class="err" id="issue-err"></div>
+                <div class="issue-actions">
+                    <button class="btn" id="issue-submit" type="submit">إصدار الكود</button>
+                    <button class="btn secondary" id="issue-skip" type="button">تخطٍّ</button>
+                </div>
+                <button class="cancel" id="issue-cancel" type="button">إلغاء</button>
+            </form>
             <button class="btn" id="gen" type="button">إصدار كود تفعيل</button>
             <div class="err" id="err"></div>
+            <details class="unbound" id="unbound"><summary id="unbound-summary">أرقام غير مربوطة (0)</summary><div class="unbound-list" id="unbound-list"><div class="phone-note hint">لا توجد أرقام.</div></div></details>
         </div>
         <div class="err" id="boot-err"></div>
     </main>
 <script>
 (() => {
     const $ = id => document.getElementById(id);
-    let TOKEN = null, refreshTimer = null;
+    let TOKEN = null, refreshTimer = null, sessionReady = false;
     const codes = new Map();   // serial -> { serial, expiresAt, used_by, customer_phone, phoneDraft, el }
     let ticker = null, poller = null;
 
@@ -107,6 +134,7 @@
         TOKEN = d.access_token;
         clearTimeout(refreshTimer); refreshTimer = setTimeout(refreshSession, Math.max(60, (d.expires_in || 3600) - 120) * 1000);
         $('login').hidden = true; $('app').hidden = false; conn('ok', 'متصل');
+        if (!sessionReady) { sessionReady = true; restoreRecent(); loadUnbound(); }
     }
     async function refreshSession() {
         try {
@@ -134,12 +162,12 @@
     // (check mark + the car id) or expires. The button is always available for the next code.
     // A bound code has done its job: it leaves the phone screen a few seconds after the check mark, so a
     // code that is now tied to a customer's car is not left sitting on the technician's phone (owner, 2026-09-16).
-    const USED_LINGER_MS = 6000, EXPIRED_LINGER_MS = 6000;
+    const USED_LINGER_MS = 6000, EXPIRED_LINGER_MS = 6000, UNBOUND_USED_LINGER_MS = 30 * 60_000;
     function ensureRow(c) {
         if (c.el) return c.el;
         const row = document.createElement('div');
         row.className = 'row'; row.dataset.serial = c.serial;
-        row.innerHTML = `<span class="mark" data-role="mark"></span><div class="code">${esc(c.serial)}</div><div class="timer" data-role="timer"></div><button type="button" class="copy" data-copy="${esc(c.serial)}" title="نسخ الكود" aria-label="نسخ الكود"><svg viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h9"/></svg></button><span class="copied" data-role="copied" hidden></span><span class="vin" data-role="vin" hidden></span><span class="sub" data-role="sub"></span><div class="phone-box"><label for="phone-${esc(c.serial)}">رقم صاحب السيارة</label><div class="phone-controls"><input id="phone-${esc(c.serial)}" data-phone type="tel" inputmode="tel" dir="ltr" placeholder="رقم هاتف صاحب السيارة"><button type="button" class="phone-save" data-phone-save>حفظ</button></div><div class="phone-note hint" data-role="phone-note">بدون رمز دولة يُحفظ الرقم كرقم قطري ‎+974‎</div><div class="phone-missing" data-role="phone-missing" hidden>لم يُسجَّل رقم هاتف لهذه السيارة</div></div>`;
+        row.innerHTML = `<span class="mark" data-role="mark"></span><div class="code">${esc(c.serial)}</div><div class="timer" data-role="timer"></div><button type="button" class="copy" data-copy="${esc(c.serial)}" title="نسخ الكود" aria-label="نسخ الكود"><svg viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h9"/></svg></button><span class="copied" data-role="copied" hidden></span><span class="vin" data-role="vin" hidden></span><span class="sub" data-role="sub"></span><div class="phone-box"><div class="phone-summary" data-role="phone-summary" hidden><span>رقم صاحب السيارة: <b dir="ltr" data-role="phone-value"></b></span><button type="button" class="phone-edit" data-phone-edit>تعديل</button></div><div class="phone-controls" data-role="phone-controls"><input id="phone-${esc(c.serial)}" data-phone type="tel" inputmode="tel" dir="ltr" placeholder="رقم هاتف صاحب السيارة"><button type="button" class="phone-save" data-phone-save>حفظ</button></div><div class="phone-note hint" data-role="phone-note">بدون رمز دولة يُحفظ الرقم كرقم قطري ‎+974‎</div><div class="phone-missing" data-role="phone-missing" hidden>لم يُسجَّل رقم هاتف لهذه السيارة</div></div>`;
         const input = row.querySelector('[data-phone]');
         input.value = c.phoneDraft || c.customer_phone || '';
         c.el = row; $('codes').appendChild(row);
@@ -148,8 +176,9 @@
     function render() {
         for (const c of codes.values()) {
             if (!c.used_by && c.expiresAt <= Date.now() && !c.expiredAt) c.expiredAt = Date.now();
-            if ((c.usedAt && Date.now() - c.usedAt >= USED_LINGER_MS) ||
-                (c.expiredAt && Date.now() - c.expiredAt >= EXPIRED_LINGER_MS)) {
+            if (c.expiredAt && !c.unboundRefreshed) { c.unboundRefreshed = true; loadUnbound(); }
+            const usedLimit = c.customer_phone ? USED_LINGER_MS : UNBOUND_USED_LINGER_MS;
+            if ((c.usedAt && Date.now() - c.usedAt >= usedLimit) || (c.expiredAt && Date.now() - c.expiredAt >= EXPIRED_LINGER_MS)) {
                 if (c.el) c.el.remove();
                 codes.delete(c.serial);
             }
@@ -166,7 +195,8 @@
             const vin = row.querySelector('[data-role="vin"]');
             vin.hidden = !c.used_by;
             vin.textContent = c.used_by ? (c.customer_phone ? `${c.used_by} — ${c.customer_phone}` : c.used_by) : '';
-            row.querySelector('[data-role="sub"]').textContent = c.used_by ? `يختفي خلال ${Math.max(1, Math.ceil((USED_LINGER_MS - (Date.now() - (c.usedAt || Date.now()))) / 1000))} ث` : (left <= 0 ? `يختفي خلال ${Math.max(1, Math.ceil((EXPIRED_LINGER_MS - (Date.now() - (c.expiredAt || Date.now()))) / 1000))} ث` : 'اكتب الكود في السيارة خلال المدة');
+            const usedLeft = Math.max(0, (c.customer_phone ? USED_LINGER_MS : UNBOUND_USED_LINGER_MS) - (Date.now() - (c.usedAt || Date.now())));
+            row.querySelector('[data-role="sub"]').textContent = c.used_by ? (c.customer_phone ? `${c.boundMessage ? 'تم ربط الرقم بالسيارة — ' : ''}يختفي خلال ${Math.max(1, Math.ceil(usedLeft / 1000))} ث` : `يختفي خلال ${fmt(usedLeft)}`) : (left <= 0 ? `يختفي خلال ${Math.max(1, Math.ceil((EXPIRED_LINGER_MS - (Date.now() - (c.expiredAt || Date.now()))) / 1000))} ث` : 'اكتب الكود في السيارة خلال المدة');
             const copied = row.querySelector('[data-role="copied"]');
             const justCopied = c.copiedAt && Date.now() - c.copiedAt < 2000;
             row.querySelector('[data-copy]').classList.toggle('done', !!justCopied);
@@ -174,6 +204,11 @@
             const input = row.querySelector('[data-phone]');
             if (!c.phoneDirty && document.activeElement !== input && input.value !== (c.customer_phone || '')) input.value = c.customer_phone || '';
             const note = row.querySelector('[data-role="phone-note"]');
+            const summary = row.querySelector('[data-role="phone-summary"]');
+            const controls = row.querySelector('[data-role="phone-controls"]');
+            summary.hidden = !c.customer_phone || !!c.editPhone;
+            controls.hidden = !!c.customer_phone && !c.editPhone;
+            row.querySelector('[data-role="phone-value"]').textContent = c.customer_phone || '';
             if (!c.phoneMessage) {
                 note.className = 'phone-note hint';
                 note.textContent = input.value.trim() ? '' : 'بدون رمز دولة يُحفظ الرقم كرقم قطري ‎+974‎';
@@ -181,17 +216,21 @@
             row.querySelector('[data-role="phone-missing"]').hidden = !c.used_by || !!c.customer_phone;
             row.querySelector('[data-phone-save]').disabled = !!c.saving;
         }
-        const alive = list.some(c => c.usedAt || c.expiredAt || (!c.used_by && c.expiresAt > Date.now()));
+        const alive = list.some(c => (c.usedAt && Date.now() - c.usedAt < (c.customer_phone ? USED_LINGER_MS : UNBOUND_USED_LINGER_MS)) || c.expiredAt || (!c.used_by && c.expiresAt > Date.now()));
         if (!alive) { clearInterval(ticker); clearInterval(poller); ticker = poller = null; }
     }
     async function pollAll() {
         for (const c of codes.values()) {
-            if (c.used_by || c.expiresAt <= Date.now()) continue;
+            if ((c.used_by && c.customer_phone) || (!c.used_by && c.expiresAt <= Date.now())) continue;
             try {
                 const r = await api(`/local/codes/status?serial=${encodeURIComponent(c.serial)}`);
-                if (r && r.customer_phone) { c.customer_phone = r.customer_phone; if (!c.phoneDirty) c.phoneDraft = r.customer_phone; }
-                if (r && r.used_by) {
-                    c.used_by = r.used_by; c.usedAt = Date.now();
+                if (r && r.customer_phone) {
+                    const newlyBound = c.used_by && !c.customer_phone;
+                    c.customer_phone = r.customer_phone; if (!c.phoneDirty) c.phoneDraft = r.customer_phone;
+                    if (newlyBound) { c.usedAt = Date.now(); c.boundMessage = true; c.editPhone = false; }
+                }
+                if (r && r.used_by && !c.used_by) {
+                    c.used_by = r.used_by; c.usedAt = new Date(r.used_at || Date.now()).getTime();
                     const phone = r.customer_phone || c.customer_phone;
                     notify('تم تفعيل سيارة بالكود ' + c.serial, phone ? `ارتبط الكود بالسيارة ${r.used_by} — هاتف صاحبها ${phone}` : 'ارتبط الكود بالسيارة ' + r.used_by);
                 }
@@ -200,18 +239,61 @@
         render();
     }
     function armTimers() { if (!ticker) ticker = setInterval(render, 1000); if (!poller) poller = setInterval(pollAll, 4000); }
-    async function issue() {
-        const b = $('gen'); b.disabled = true; $('err').textContent = '';
+    async function restoreRecent() {
         try {
+            const r = await api('/local/codes/recent');
+            const cutoff = Date.now() - 30 * 60_000;
+            for (const row of (r && r.codes) || []) {
+                const issuedAt = new Date(row.issued_at).getTime();
+                const expiresAt = new Date(row.expires_at).getTime();
+                const usedAt = row.used_at ? new Date(row.used_at).getTime() : 0;
+                const restoreUnused = !row.used_by && issuedAt >= cutoff && expiresAt > Date.now();
+                const restoreUsedWithoutPhone = !!row.used_by && !row.customer_phone && usedAt >= cutoff;
+                if ((!restoreUnused && !restoreUsedWithoutPhone) || codes.has(row.serial)) continue;
+                codes.set(row.serial, { serial: row.serial, expiresAt, used_by: row.used_by || null, usedAt, customer_phone: row.customer_phone || null, phoneDraft: row.customer_phone || '', editPhone: !row.customer_phone });
+            }
+            render(); if (codes.size) { armTimers(); pollAll(); }
+        } catch (e) { $('err').textContent = e.message || String(e); }
+    }
+    function relativeExpired(v) {
+        const ms = Math.max(0, Date.now() - new Date(v).getTime());
+        const mins = Math.floor(ms / 60000);
+        if (mins < 1) return 'انتهى الآن';
+        if (mins < 60) return `انتهى منذ ${mins} د`;
+        const hours = Math.floor(mins / 60);
+        if (hours < 24) return `انتهى منذ ${hours} س`;
+        return `انتهى منذ ${Math.floor(hours / 24)} ي`;
+    }
+    async function loadUnbound() {
+        if (!TOKEN) return;
+        try {
+            const r = await api('/local/customers/unbound?limit=100');
+            const items = (r && r.items) || [];
+            $('unbound-summary').textContent = `أرقام غير مربوطة (${Number(r && r.count) || 0})`;
+            $('unbound-list').innerHTML = items.length ? items.map(item => `<div class="unbound-item"><a href="tel:${esc(item.phone)}" dir="ltr">${esc(item.phone)}</a><span class="code" style="font-size:.95rem;letter-spacing:.08em">${esc(item.serial || '—')}</span><span class="meta">${esc(item.country || '')} · ${esc(relativeExpired(item.expired_at))}</span></div>`).join('') : '<div class="phone-note hint">لا توجد أرقام.</div>';
+        } catch (e) {
+            $('unbound-list').innerHTML = `<div class="phone-note failure">${esc(e.message || String(e))}</div>`;
+        }
+    }
+    function openIssueStep() { $('issue-step').hidden = false; $('gen').hidden = true; $('issue-err').textContent = ''; $('issue-phone').value = ''; setTimeout(() => $('issue-phone').focus(), 0); }
+    function closeIssueStep() { $('issue-step').hidden = true; $('gen').hidden = false; $('issue-err').textContent = ''; }
+    async function issue(phone, skipped) {
+        const buttons = [$('issue-submit'), $('issue-skip'), $('issue-cancel')]; buttons.forEach(b => b.disabled = true); $('issue-err').textContent = '';
+        try {
+            if (!skipped && !phone) throw new Error('أدخل رقم الهاتف أو اختر «تخطٍّ»');
             if ('Notification' in window && Notification.permission === 'default') { try { await Notification.requestPermission(); } catch (e) {} }
-            const r = await api('/local/codes/issue', {});
-            codes.set(r.serial, { serial: r.serial, expiresAt: new Date(r.expires_at).getTime(), used_by: null, customer_phone: r.customer_phone || null, phoneDraft: r.customer_phone || '' });
+            const r = await api('/local/codes/issue', skipped ? {} : { phone });
+            codes.set(r.serial, { serial: r.serial, expiresAt: new Date(r.expires_at).getTime(), used_by: null, customer_phone: r.customer_phone || null, phoneDraft: r.customer_phone || '', editPhone: !r.customer_phone });
+            closeIssueStep();
             render(); armTimers();
             notify('تم إصدار كود تفعيل ' + r.serial, 'صالح 30 دقيقة');
-        } catch (e) { $('err').textContent = e.message || String(e); }
-        finally { b.disabled = false; }
+        } catch (e) { $('issue-err').textContent = e.message || String(e); }
+        finally { buttons.forEach(b => b.disabled = false); }
     }
-    $('gen').addEventListener('click', issue);
+    $('gen').addEventListener('click', openIssueStep);
+    $('issue-step').addEventListener('submit', e => { e.preventDefault(); issue($('issue-phone').value.trim(), false); });
+    $('issue-skip').addEventListener('click', () => issue('', true));
+    $('issue-cancel').addEventListener('click', closeIssueStep);
     // Copy = the button beside the code (tapping the number itself still selects it). Clipboard API
     // first; the execCommand fallback covers older WebViews and the odd browser that refuses it.
     async function copyCode(serial) {
@@ -238,6 +320,8 @@
         try {
             const r = await api('/local/codes/phone', { serial: c.serial, phone: input.value });
             c.customer_phone = r.customer_phone || null; c.phoneDraft = r.customer_phone || ''; c.phoneDirty = false;
+            c.editPhone = !c.customer_phone;
+            if (c.used_by && c.customer_phone) { c.usedAt = Date.now(); c.boundMessage = true; }
             input.value = c.phoneDraft;
             note.className = 'phone-note success';
             note.textContent = r.customer_phone ? `تم الحفظ — ${r.customer_phone} (${r.country})` : 'تم مسح رقم الهاتف';
@@ -263,10 +347,12 @@
     });
     $('codes').addEventListener('click', e => {
         const copy = e.target.closest('[data-copy]'); if (copy) { e.preventDefault(); copyCode(copy.dataset.copy); return; }
+        const edit = e.target.closest('[data-phone-edit]');
+        if (edit) { e.preventDefault(); const row = edit.closest('.row'); const c = row && codes.get(row.dataset.serial); if (c) { c.editPhone = true; render(); setTimeout(() => row.querySelector('[data-phone]').focus(), 0); } return; }
         const save = e.target.closest('[data-phone-save]'); if (save) { e.preventDefault(); savePhone(save.closest('.row')); }
     });
     $('login').addEventListener('submit', async e => { e.preventDefault(); $('login-err').textContent = ''; try { await login($('pw').value); $('pw').value = ''; } catch (err) { $('login-err').textContent = err.message; } });
-    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && codes.size) pollAll(); });
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') { if (codes.size) pollAll(); loadUnbound(); } });
     (async () => {
         try { if (!(await refreshSession())) { $('login').hidden = false; $('app').hidden = true; conn('muted'); } }
         catch (e) { $('boot-err').textContent = 'خطأ في التحميل: ' + (e.message || e); $('login').hidden = false; }

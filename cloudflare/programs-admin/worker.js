@@ -85,6 +85,23 @@ function phoneCountry(phone) {
   return normalized ? (PHONE_COUNTRIES[normalized.cc] || normalized.cc) : null;
 }
 
+async function sweepUnboundPhones(env, nowIso) {
+  try {
+    await env.DB.prepare(`INSERT INTO unbound_phones (phone, serial, issued_at, expired_at, issued_by, note)
+      SELECT ic.customer_phone, ic.serial, ic.issued_at, ic.expires_at, ic.issued_by,
+             'انتهت صلاحية الكود قبل استخدامه'
+        FROM issued_codes ic
+       WHERE ic.used_by IS NULL
+         AND ic.expires_at < ?1
+         AND ic.customer_phone IS NOT NULL
+         AND ic.customer_phone <> ''
+         AND NOT EXISTS (SELECT 1 FROM unbound_phones up WHERE up.serial = ic.serial)`)
+      .bind(nowIso).run();
+  } catch (e) {
+    // Rollout safety: minting must keep working until the new table exists.
+  }
+}
+
 // ---------- store-catalog mirror (POST /catalog/publish) ----------
 // Owner's order 2026-09-09: when ذبذبة خلفيات or TS Link publishes on its own channel, the
 // THABTHABA STORE catalog must show the new build as an update by itself. The apps that may be
@@ -746,6 +763,7 @@ export default {
         // customer on the phone with us, and ten minutes ran out too often. Still one car, one use.
         const now = new Date(); const expires = new Date(now.getTime() + 30 * 60_000);
         // Owner's rule: an expired, never-used code goes back to the pool so it can be minted again later.
+        await sweepUnboundPhones(env, now.toISOString());
         await env.DB.prepare("DELETE FROM issued_codes WHERE used_by IS NULL AND expires_at < ?").bind(now.toISOString()).run();
         const iso = d => d.toISOString();
         let serial = null;
@@ -863,6 +881,60 @@ export default {
           // Both the sync and read touch migration-owned objects. Before rollout, answer as an
           // empty phone directory rather than turning every admin-page load into a 500.
           return json(200, { customers: [], count: 0 });
+        }
+      }
+      if (env.DB && req.method === "GET" && p === "/local/customers/unbound") {
+        const rawLimit = Number(url.searchParams.get("limit") || 100);
+        const limit = Number.isInteger(rawLimit) ? Math.min(500, Math.max(1, rawLimit)) : 100;
+        const now = new Date().toISOString();
+        await sweepUnboundPhones(env, now);
+        try {
+          const [rows, total] = await Promise.all([
+            env.DB.prepare(`SELECT id, phone, serial, issued_at, expired_at, issued_by
+              FROM unbound_phones
+              WHERE dismissed_at IS NULL AND linked_at IS NULL
+              ORDER BY expired_at DESC, id DESC LIMIT ?`).bind(limit).all(),
+            env.DB.prepare("SELECT COUNT(*) AS n FROM unbound_phones WHERE dismissed_at IS NULL AND linked_at IS NULL").first(),
+          ]);
+          const items = (rows.results || []).map(row => ({ ...row, country: phoneCountry(row.phone) }));
+          return json(200, { items, count: Number(total && total.n) || 0 });
+        } catch (e) {
+          return json(200, { items: [], count: 0 });
+        }
+      }
+      if (env.DB && req.method === "POST" && p === "/local/customers/unbound/dismiss") {
+        const body = await readJsonBody(req); const id = Number(body.id);
+        if (!Number.isSafeInteger(id) || id < 1) return json(400, { message: "معرّف الرقم غير صالح" });
+        try {
+          const result = await env.DB.prepare("UPDATE unbound_phones SET dismissed_at = ? WHERE id = ? AND dismissed_at IS NULL AND linked_at IS NULL")
+            .bind(new Date().toISOString(), id).run();
+          if (!result.meta || !result.meta.changes) return json(404, { message: "الرقم غير موجود" });
+          return json(200, { ok: true, id });
+        } catch (e) {
+          return json(503, { message: "قائمة الأرقام غير المربوطة غير جاهزة بعد" });
+        }
+      }
+      if (env.DB && req.method === "POST" && p === "/local/customers/unbound/link") {
+        const body = await readJsonBody(req); const id = Number(body.id); const hwId = String(body.hw_id || "").trim();
+        if (!Number.isSafeInteger(id) || id < 1) return json(400, { message: "معرّف الرقم غير صالح" });
+        if (!/^[A-Za-z0-9:_.\-]{1,120}$/.test(hwId)) return json(400, { message: "معرّف السيارة غير صالح" });
+        try {
+          const item = await env.DB.prepare("SELECT id, phone, serial, expired_at FROM unbound_phones WHERE id = ? AND dismissed_at IS NULL AND linked_at IS NULL").bind(id).first();
+          if (!item) return json(404, { message: "الرقم غير موجود" });
+          const now = new Date().toISOString();
+          const note = "رُبط يدويًا من قائمة الأرقام غير المربوطة";
+          await env.DB.batch([
+            env.DB.prepare(`INSERT INTO car_customers (hw_id, phone, serial, bound_at, updated_at, note)
+              VALUES (?, ?, ?, ?, ?, ?)
+              ON CONFLICT(hw_id) DO UPDATE SET phone = excluded.phone, serial = excluded.serial,
+                bound_at = excluded.bound_at, updated_at = excluded.updated_at, note = excluded.note`)
+              .bind(hwId, item.phone, item.serial, now, now, note),
+            env.DB.prepare("UPDATE unbound_phones SET linked_hw = ?, linked_at = ? WHERE id = ? AND dismissed_at IS NULL AND linked_at IS NULL")
+              .bind(hwId, now, id),
+          ]);
+          return json(200, { ok: true, id, hw_id: hwId, phone: item.phone, country: phoneCountry(item.phone) });
+        } catch (e) {
+          return json(503, { message: "تعذّر ربط الرقم بالسيارة" });
         }
       }
       if (env.DB && req.method === "POST" && p === "/local/customers/set") {
