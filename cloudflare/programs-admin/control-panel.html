@@ -848,7 +848,7 @@
             padding: 2px 5px; gap: 3px; line-height: 1.35;
         }
         .device-columns > tbody > tr:not(.detail-row) > td > .actions {
-            display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px;
+            display: flex; min-width: 0; max-width: 100%; flex-wrap: wrap; gap: 4px; margin-top: 6px;
         }
         .device-columns > tbody > tr:not(.detail-row) > td > .actions > .btn {
             min-width: 0; min-height: 30px; padding: 3px 4px; font-size: .76rem;
@@ -863,7 +863,7 @@
         table.column-measure td :is(.name, .hw, .sub, .cell-ver, .car-type, .badge) {
             width: auto !important; max-width: none !important; white-space: nowrap !important; overflow: visible !important;
         }
-        table.column-measure .actions { grid-template-columns: repeat(2, max-content) !important; }
+        table.column-measure .actions { flex-wrap: nowrap !important; max-width: none !important; }
         /* ---------- Voice router popup (models order, Google keys, limits, routing, before/after) ---------- */
         .vr-dialog { margin: auto; width: min(1100px, calc(100% - 24px)); max-width: calc(100% - 24px); height: min(90vh, 940px); max-height: 90vh; padding: 0; background: #1c160e; color: var(--text-main); border: 1px solid var(--panel-border-hover); border-radius: 18px; overflow: hidden; }
         .vr-dialog[open] { display: flex; flex-direction: column; }
@@ -1116,13 +1116,13 @@
                 <div class="chips" id="dev-chips"></div>
                 <div class="chips" id="dev-type-chips" style="margin-top:-4px"></div>
                 <div class="table-wrap">
-                    <table id="dev-table" class="device-columns" data-column-widths="56,184,110,130,96,88,112,112,140,112,104,112,96,180,104,132">
+                    <table id="dev-table" class="device-columns" data-column-widths="56,216,110,130,96,88,112,112,140,112,104,112,96,180,104">
                         <thead>
                             <tr>
                                 <th style="width:28px"></th>
                                 <th>الجهاز</th>
                                 <th>وقت التفعيل</th>
-                                <th>هاتف صاحبها</th>
+                                <th>الهاتف</th>
                                 <th>الحالة</th>
                                 <th>المحاولات</th>
                                 <th>نوع السيارة</th>
@@ -1134,7 +1134,6 @@
                                 <th>Leo</th>
                                 <th>التوكنات</th>
                                 <th>أعطال 7 أيام</th>
-                                <th>إجراءات</th>
                             </tr>
                         </thead>
                         <tbody id="dev-body"></tbody>
@@ -1777,8 +1776,8 @@
         apply();
         return api;
     }
-    makeResizableTable($('dev-table'), 'colw:dev-table:v2');
-    $('dev-reset-columns').addEventListener('click', () => makeResizableTable($('dev-table'), 'colw:dev-table:v2').reset());
+    makeResizableTable($('dev-table'), 'colw:dev-table:v3');
+    $('dev-reset-columns').addEventListener('click', () => makeResizableTable($('dev-table'), 'colw:dev-table:v3').reset());
     function esc(s) {
         return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
     }
@@ -2400,8 +2399,8 @@
     }
     function renderDevices() {
         renderDevicesContent();
-        pageRendered('dev-body', 'dev-body:v2', false);
-        makeResizableTable($('dev-table'), 'colw:dev-table:v2');
+        pageRendered('dev-body', 'dev-body:v3', false);
+        makeResizableTable($('dev-table'), 'colw:dev-table:v3');
     }
     function renderDevicesContent() {
         if (carOpen) renderCarPage(carOpen);
@@ -2428,7 +2427,7 @@
         $('dev-count-note').textContent = `${list.length} من ${state.merged.length}`;
         const body = $('dev-body');
         if (!list.length) {
-            body.innerHTML = `<tr><td colspan="16"><div class="empty"><i class="fa-solid fa-inbox"></i>${state.merged.length ? 'لا نتائج مطابقة' : (state.errors.devices ? 'تعذّر تحميل الأجهزة' : 'لا أجهزة')}</div></td></tr>`;
+            body.innerHTML = `<tr><td colspan="15"><div class="empty"><i class="fa-solid fa-inbox"></i>${state.merged.length ? 'لا نتائج مطابقة' : (state.errors.devices ? 'تعذّر تحميل الأجهزة' : 'لا أجهزة')}</div></td></tr>`;
             return;
         }
         body.innerHTML = list.map(deviceRowHtml).join('');
@@ -2482,6 +2481,14 @@
                     ${r.name && r.serial ? `<span class="sub num">${esc(r.serial)}</span>` : (!r.serial ? '<span class="sub">بدون كود</span>' : '')}
                     <span class="hw">${esc(r.hw)}</span>
                     ${r.aliases.length ? `<span class="sub"><i class="fa-solid fa-link"></i> ${r.aliases.length} معرّف قديم</span>` : ''}
+                    <div class="actions">
+                        ${st.blockedAny
+                            ? `<button class="btn sm success" data-act="unblock" data-hw="${esc(r.hw)}" title="فك الحظر عن كل التطبيقات">✅ فك</button>`
+                            : `<button class="btn sm danger" data-act="block" data-hw="${esc(r.hw)}" title="حظر كل التطبيقات">🚫 حظر</button>`}
+                        <button class="btn sm icon-only" data-act="rename" data-hw="${esc(r.hw)}" title="تسمية">✏️</button>
+                        <button class="btn sm icon-only" data-act="page" data-hw="${esc(r.hw)}" title="صفحة السيارة">📄</button>
+                        <button class="btn sm icon-only" data-act="copy" data-hw="${esc(r.hw)}" title="نسخ المعرّف">📋</button>
+                    </div>
                 </td>
                 <td>${r.activatedAt ? timeCell(r.activatedAt) : '<span class="sub">—</span>'}</td>
                 <td>${devPhoneCell(r)}</td>
@@ -2496,18 +2503,8 @@
                 <td>${appCell(r, 'leo')}</td>
                 <td>${tokensCell(r)}${r.dev && r.dev.enroll_conflicts ? `<span class="sub" style="color:#fca5a5">تعارضات الجهاز: ${num(r.dev.enroll_conflicts)}</span>` : ''}</td>
                 <td>${r.crashes7 ? `<span class="badge bad"><span class="num">${r.crashes7}</span></span>` : '<span class="num sub">0</span>'}</td>
-                <td>
-                    <div class="actions">
-                        ${st.blockedAny
-                            ? `<button class="btn sm success" data-act="unblock" data-hw="${esc(r.hw)}" title="فك الحظر عن كل التطبيقات">✅ فك</button>`
-                            : `<button class="btn sm danger" data-act="block" data-hw="${esc(r.hw)}" title="حظر كل التطبيقات">🚫 حظر</button>`}
-                        <button class="btn sm icon-only" data-act="rename" data-hw="${esc(r.hw)}" title="تسمية">✏️</button>
-                        <button class="btn sm icon-only" data-act="page" data-hw="${esc(r.hw)}" title="صفحة السيارة">📄</button>
-                        <button class="btn sm icon-only" data-act="copy" data-hw="${esc(r.hw)}" title="نسخ المعرّف">📋</button>
-                    </div>
-                </td>
             </tr>
-            <tr class="detail-row" data-detail="${esc(r.hw)}" ${open ? '' : 'hidden'}><td colspan="16"><div class="detail-body">…</div></td></tr>`;
+            <tr class="detail-row" data-detail="${esc(r.hw)}" ${open ? '' : 'hidden'}><td colspan="15"><div class="detail-body">…</div></td></tr>`;
     }
     async function onRowAction(e) {
         const el = e.currentTarget; const act = el.dataset.act; const hw = el.dataset.hw;
@@ -3595,7 +3592,7 @@
                 host.replaceChildren(...fixed, ...(strip ? [strip] : []), ...page.flat());
                 if (!page.length) {
                     if (!rows.length && empty.length) host.append(...empty);
-                    else { const el = document.createElement(host.tagName === 'TBODY' ? 'tr' : 'div'); el.innerHTML = host.tagName === 'TBODY' ? `<td colspan="${host.id === 'dev-body' ? 16 : 20}"><div class="empty">لا نتائج مطابقة</div></td>` : '<div class="empty">لا نتائج مطابقة</div>'; host.append(el); }
+                    else { const el = document.createElement(host.tagName === 'TBODY' ? 'tr' : 'div'); el.innerHTML = host.tagName === 'TBODY' ? `<td colspan="${host.id === 'dev-body' ? 15 : 20}"><div class="empty">لا نتائج مطابقة</div></td>` : '<div class="empty">لا نتائج مطابقة</div>'; host.append(el); }
                 }
                 renderedLists.set(host, { nodes, visible: [...host.children] });
             }
@@ -5209,7 +5206,7 @@
                 </div>
             </div>
             <h3 class="app-h" style="margin-top:18px;">آخر الأكواد المُصدَرة</h3>
-            <div class="table-wrap"><table style="min-width:640px;"><thead><tr><th>الكود</th><th>أُصدر</th><th>الجهاز المُصدِر</th><th>ينتهي</th><th>الحالة</th><th>السيارة</th><th>هاتف صاحبها</th></tr></thead><tbody id="gen-recent"><tr><td colspan="5"><div class="empty">—</div></td></tr></tbody></table></div>`;
+            <div class="table-wrap"><table style="min-width:640px;"><thead><tr><th>الكود</th><th>أُصدر</th><th>الجهاز المُصدِر</th><th>ينتهي</th><th>الحالة</th><th>السيارة</th><th>الهاتف</th></tr></thead><tbody id="gen-recent"><tr><td colspan="5"><div class="empty">—</div></td></tr></tbody></table></div>`;
         panelsHost.appendChild(gen);
         // «الإصدارات المنشورة»: reached from the stat tile only; the one place Back Button still appears.
         const rel = document.createElement('section'); rel.className = 'tab-panel'; rel.id = 'panel-releases'; rel.setAttribute('role', 'tabpanel');
