@@ -22,11 +22,13 @@ import org.json.JSONObject;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileInputStream;
+import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * Self-update mechanism for the side-loaded (non-Play-Store) build.
@@ -165,15 +167,10 @@ public class UpdateManager {
             target.delete();
         }
 
-        DownloadManager dm = (DownloadManager) mActivity.getSystemService(Context.DOWNLOAD_SERVICE);
-        if(dm == null) {
-            Toast.makeText(mActivity, R.string.update_failed, Toast.LENGTH_LONG).show();
-            return;
-        }
-
         // 2026-09-03: only our own https hosts may hand this car an APK. CI and the
         // dashboard publish to the R2 bucket; older app_versions rows may still point at
         // Supabase storage, so both hosts stay allowed. A refusal here cannot false-positive.
+        // Checked before either download path, so the direct fallback below is held to it too.
         Uri apkUri = Uri.parse(apkUrl);
         String apkHost = apkUri.getHost() == null ? "" : apkUri.getHost().toLowerCase();
         boolean hostOk = apkHost.equals("pub-3108628f0bc04bb4a97214eb7732e284.r2.dev")
@@ -184,13 +181,31 @@ public class UpdateManager {
             Toast.makeText(mActivity, R.string.update_failed, Toast.LENGTH_LONG).show();
             return;
         }
+
+        DownloadManager dm = (DownloadManager) mActivity.getSystemService(Context.DOWNLOAD_SERVICE);
+        if(dm == null) {
+            CrashReporter.breadcrumb("update: DownloadManager unavailable (no service)");
+            directDownload(apkUri);
+            return;
+        }
         DownloadManager.Request req = new DownloadManager.Request(apkUri);
         req.setTitle(mActivity.getString(R.string.app_name));
         req.setDescription(mActivity.getString(R.string.update_downloading));
         req.setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED);
         req.setDestinationInExternalFilesDir(mActivity, "apk", "update.apk");
         req.setMimeType("application/vnd.android.package-archive");
-        final long downloadId = dm.enqueue(req);
+        final long downloadId;
+        try {
+            downloadId = dm.enqueue(req);
+        } catch(RuntimeException e) {
+            // 2026-09-13: DesaySV head units (Jetour, Android 11) ship without the downloads
+            // provider. getSystemService still returns a DownloadManager, and enqueue() then
+            // throws "Unknown URL content://downloads/my_downloads" — the fleet's most common
+            // crash, and it hit the one button those cars have for updating themselves.
+            CrashReporter.breadcrumb("update: DownloadManager unavailable — " + e);
+            directDownload(apkUri);
+            return;
+        }
 
         BroadcastReceiver receiver = new BroadcastReceiver() {
             @Override
@@ -210,6 +225,90 @@ public class UpdateManager {
         } else {
             mActivity.registerReceiver(receiver, filter);
         }
+    }
+
+    /** Set while {@link #directDownload} runs; static because every screen has its own manager. */
+    private static final AtomicBoolean sDirectDownloading = new AtomicBoolean(false);
+
+    /**
+     * Fetch the APK ourselves when the system download service is missing, then install it the
+     * same way. Only ever reached with a URL that already passed the host check above.
+     *
+     * Redirects are not followed, so a download can never leave the allowed host; an R2 or
+     * Supabase public URL answers 200 directly. The body is written to a ".part" file and only
+     * renamed once it is complete, so a dropped connection can never be mistaken for an APK.
+     */
+    private void directDownload(final Uri apkUri) {
+        // A second tap while the first download runs would write the same ".part" file from
+        // two threads; the first download simply carries on and installs when it is done.
+        if(!sDirectDownloading.compareAndSet(false, true)) {
+            CrashReporter.breadcrumb("update: direct download already running");
+            return;
+        }
+        File dir = mActivity.getExternalFilesDir("apk");
+        if(dir == null) dir = new File(mActivity.getFilesDir(), "apk");
+        final File target = new File(dir, "update.apk");
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                boolean ok = false;
+                HttpURLConnection conn = null;
+                File part = new File(target.getPath() + ".part");
+                try {
+                    File parent = target.getParentFile();
+                    //noinspection ResultOfMethodCallIgnored
+                    if(parent != null) parent.mkdirs();
+                    conn = (HttpURLConnection) new URL(apkUri.toString()).openConnection();
+                    conn.setInstanceFollowRedirects(false);
+                    conn.setConnectTimeout(15000);
+                    conn.setReadTimeout(30000);
+                    int status = conn.getResponseCode();
+                    if(status != 200) {
+                        CrashReporter.breadcrumb("update: direct download HTTP " + status);
+                    } else {
+                        long expected = -1;
+                        try { expected = Long.parseLong(conn.getHeaderField("Content-Length")); }
+                        catch(Exception ignored) { }
+                        try(InputStream in = conn.getInputStream();
+                            OutputStream out = new FileOutputStream(part)) {
+                            byte[] buf = new byte[65536];
+                            int n;
+                            while((n = in.read(buf)) > 0) out.write(buf, 0, n);
+                        }
+                        if(expected > 0 && part.length() != expected) {
+                            CrashReporter.breadcrumb("update: direct download truncated "
+                                    + part.length() + "/" + expected);
+                        } else {
+                            //noinspection ResultOfMethodCallIgnored
+                            target.delete();
+                            ok = part.renameTo(target);
+                        }
+                    }
+                } catch(Throwable e) {
+                    // Throwable, not Exception: an Error escaping this thread would close the app.
+                    CrashReporter.breadcrumb("update: direct download failed — " + e);
+                } finally {
+                    if(conn != null) conn.disconnect();
+                    //noinspection ResultOfMethodCallIgnored
+                    part.delete();
+                    sDirectDownloading.set(false);
+                }
+                final boolean done = ok;
+                mActivity.runOnUiThread(new Runnable() {
+                    @Override
+                    public void run() {
+                        try {
+                            if(done) install(target);
+                            else Toast.makeText(mActivity, R.string.update_failed, Toast.LENGTH_LONG).show();
+                        } catch(Throwable t) {
+                            // The owner may have left the screen during a long download; an
+                            // update that cannot start must still never close the app.
+                            CrashReporter.breadcrumb("update: install after direct download failed — " + t);
+                        }
+                    }
+                });
+            }
+        }).start();
     }
 
     /** Broadcast action the PackageInstaller session reports its result to. */
@@ -334,16 +433,18 @@ public class UpdateManager {
     private void legacyInstall(File file) {
         Intent intent = new Intent(Intent.ACTION_VIEW);
         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-        Uri uri;
-        if(Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-            uri = FileProvider.getUriForFile(mActivity,
-                    mActivity.getPackageName() + ".fileprovider", file);
-            intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
-        } else {
-            uri = Uri.fromFile(file);
-        }
-        intent.setDataAndType(uri, "application/vnd.android.package-archive");
         try {
+            Uri uri;
+            if(Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                // Throws for a file outside file_paths.xml — the direct download's internal
+                // fallback dir is one — so it sits inside the same catch as the launch.
+                uri = FileProvider.getUriForFile(mActivity,
+                        mActivity.getPackageName() + ".fileprovider", file);
+                intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            } else {
+                uri = Uri.fromFile(file);
+            }
+            intent.setDataAndType(uri, "application/vnd.android.package-archive");
             mActivity.startActivity(intent);
         } catch(Exception e) {
             Toast.makeText(mActivity, R.string.update_failed, Toast.LENGTH_LONG).show();
