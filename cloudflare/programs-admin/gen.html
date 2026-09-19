@@ -68,12 +68,6 @@
         .issue-actions { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:12px; }
         .issue-actions .btn { min-width:0; min-height:54px; padding:12px 10px; font-size:1rem; border-radius:12px; }
         .cancel { display:block; margin:10px auto 0; padding:8px 14px; border:0; background:none; color:var(--muted); font:inherit; cursor:pointer; }
-        .unbound { margin-top:8px; border:1px solid var(--border); border-radius:14px; background:rgba(0,0,0,.16); text-align:start; }
-        .unbound summary { padding:13px 14px; cursor:pointer; font-weight:800; }
-        .unbound-list { padding:0 14px 8px; }
-        .unbound-item { display:grid; grid-template-columns:1fr auto; gap:3px 10px; padding:10px 0; border-top:1px solid var(--border); }
-        .unbound-item a { color:var(--accent); direction:ltr; text-align:start; }
-        .unbound-item .meta { grid-column:1 / -1; color:var(--muted); font-size:.82rem; }
         #login { display:flex; flex-direction:column; gap:12px; width:min(92vw, 360px); }
         #login input { font:inherit; font-size:1.1rem; padding:14px; border-radius:14px; border:1px solid var(--border); background:rgba(0,0,0,.25); color:var(--text); text-align:center; }
         .err { color:var(--bad); font-size:.95rem; min-height:1.4em; }
@@ -112,7 +106,6 @@
             </form>
             <button class="btn" id="gen" type="button">إصدار كود تفعيل</button>
             <div class="err" id="err"></div>
-            <details class="unbound" id="unbound"><summary id="unbound-summary">أرقام غير مربوطة (0)</summary><div class="unbound-list" id="unbound-list"><div class="phone-note hint">لا توجد أرقام.</div></div></details>
         </div>
         <div class="err" id="boot-err"></div>
     </main>
@@ -134,7 +127,7 @@
         TOKEN = d.access_token;
         clearTimeout(refreshTimer); refreshTimer = setTimeout(refreshSession, Math.max(60, (d.expires_in || 3600) - 120) * 1000);
         $('login').hidden = true; $('app').hidden = false; conn('ok', 'متصل');
-        if (!sessionReady) { sessionReady = true; restoreRecent(); loadUnbound(); }
+        if (!sessionReady) { sessionReady = true; restoreRecent(); }
     }
     async function refreshSession() {
         try {
@@ -176,7 +169,6 @@
     function render() {
         for (const c of codes.values()) {
             if (!c.used_by && c.expiresAt <= Date.now() && !c.expiredAt) c.expiredAt = Date.now();
-            if (c.expiredAt && !c.unboundRefreshed) { c.unboundRefreshed = true; loadUnbound(); }
             const usedLimit = c.customer_phone ? USED_LINGER_MS : UNBOUND_USED_LINGER_MS;
             if ((c.usedAt && Date.now() - c.usedAt >= usedLimit) || (c.expiredAt && Date.now() - c.expiredAt >= EXPIRED_LINGER_MS)) {
                 if (c.el) c.el.remove();
@@ -255,26 +247,6 @@
             render(); if (codes.size) { armTimers(); pollAll(); }
         } catch (e) { $('err').textContent = e.message || String(e); }
     }
-    function relativeExpired(v) {
-        const ms = Math.max(0, Date.now() - new Date(v).getTime());
-        const mins = Math.floor(ms / 60000);
-        if (mins < 1) return 'انتهى الآن';
-        if (mins < 60) return `انتهى منذ ${mins} د`;
-        const hours = Math.floor(mins / 60);
-        if (hours < 24) return `انتهى منذ ${hours} س`;
-        return `انتهى منذ ${Math.floor(hours / 24)} ي`;
-    }
-    async function loadUnbound() {
-        if (!TOKEN) return;
-        try {
-            const r = await api('/local/customers/unbound?limit=100');
-            const items = (r && r.items) || [];
-            $('unbound-summary').textContent = `أرقام غير مربوطة (${Number(r && r.count) || 0})`;
-            $('unbound-list').innerHTML = items.length ? items.map(item => `<div class="unbound-item"><a href="tel:${esc(item.phone)}" dir="ltr">${esc(item.phone)}</a><span class="code" style="font-size:.95rem;letter-spacing:.08em">${esc(item.serial || '—')}</span><span class="meta">${esc(item.country || '')} · ${esc(relativeExpired(item.expired_at))}</span></div>`).join('') : '<div class="phone-note hint">لا توجد أرقام.</div>';
-        } catch (e) {
-            $('unbound-list').innerHTML = `<div class="phone-note failure">${esc(e.message || String(e))}</div>`;
-        }
-    }
     function openIssueStep() { $('issue-step').hidden = false; $('gen').hidden = true; $('issue-err').textContent = ''; $('issue-phone').value = ''; setTimeout(() => $('issue-phone').focus(), 0); }
     function closeIssueStep() { $('issue-step').hidden = true; $('gen').hidden = false; $('issue-err').textContent = ''; }
     async function issue(phone, skipped) {
@@ -352,7 +324,7 @@
         const save = e.target.closest('[data-phone-save]'); if (save) { e.preventDefault(); savePhone(save.closest('.row')); }
     });
     $('login').addEventListener('submit', async e => { e.preventDefault(); $('login-err').textContent = ''; try { await login($('pw').value); $('pw').value = ''; } catch (err) { $('login-err').textContent = err.message; } });
-    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') { if (codes.size) pollAll(); loadUnbound(); } });
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && codes.size) pollAll(); });
     (async () => {
         try { if (!(await refreshSession())) { $('login').hidden = false; $('app').hidden = true; conn('muted'); } }
         catch (e) { $('boot-err').textContent = 'خطأ في التحميل: ' + (e.message || e); $('login').hidden = false; }
