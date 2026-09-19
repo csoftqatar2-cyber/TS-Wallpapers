@@ -5946,26 +5946,47 @@
         const served = ft.google.ok + ft.openrouter.ok;
         return `Google ${vpsPct(ft.share_google)} (<span class="n">${esc(intEn(ft.google.ok))}</span>) · OpenRouter ${vpsPct(ft.share_openrouter)} (<span class="n">${esc(intEn(ft.openrouter.ok))}</span>)${ft.none.n ? ` · بدون مزوّد <span class="n">${esc(intEn(ft.none.n))}</span>` : ''} · من <span class="n">${esc(intEn(served))}</span> أمر ناجح`;
     }
+    // The home tile counts the same rolling 24 hours as «أوامر صوتية آخر 24 ساعة» beside it (owner,
+    // 2026-09-19: both tiles cover one window). The router keeps day totals only, so the split is summed
+    // from the recent requests of each car whose last request falls inside the window — a handful of cars.
+    const vps24 = { at: 0, p: null, data: null };
+    function vps24Get() {
+        if (!vps.fleet || !LOCAL_PROXY || !SESSION_TOKEN) return null;
+        if (vps24.p || Date.now() - vps24.at < 60000) return vps24.data;
+        const since = Date.now() - 86400000, epoch = sessionEpoch;
+        const cars = (vps.fleet.cars || []).filter(c => ts(c.last_at) >= since);
+        vps24.p = Promise.all(cars.map(c => vrGetJson(`/local/voice-router/car_usage?car=${encodeURIComponent(String(c.vin || c.car))}&days=2&recent=500`).catch(() => null)))
+            .then(list => {
+                if (epoch !== sessionEpoch) return;
+                const d = { google: 0, openrouter: 0, capped: false };
+                list.forEach(j => {
+                    const rows = (j && Array.isArray(j.recent)) ? j.recent : [];
+                    rows.forEach(r => { if (ts(r.at) < since || r.status !== 'ok') return; if (r.provider === 'google') d.google++; else if (r.provider === 'openrouter') d.openrouter++; });
+                    if (rows.length >= 500 && Math.min(...rows.map(r => ts(r.at))) >= since) d.capped = true;
+                });
+                vps24.data = d;
+            })
+            .finally(() => { vps24.at = Date.now(); vps24.p = null; if (document.getElementById('home-vps')) { try { renderStats(); } catch (e) {} } });
+        return vps24.data;
+    }
     function vpsHomeItem() {
         vpsFleetGet(false);
         const wait = '<span class="hs-wait">…</span>';
-        const ft = vps.fleet && vps.fleet.fleet_today;
         let value = wait, sub = '';
         if (vps.fleet) {
-            if (!ft || !(ft.google.ok + ft.openrouter.ok)) {
-                // «اليوم» here is the Qatar day since midnight, while the tile beside it counts a rolling
-                // 24 hours — so late-evening commands show there and not here. Say so, and show yesterday's
-                // split instead of a bare dash (owner asked why 13 commands meant «no commands today»).
-                value = '<span class="n">—</span>'; sub = 'لا أوامر منذ منتصف الليل (بتوقيت قطر)';
-                const y = (vps.fleet.series || []).find(x => x && x.day === qatarDay(-1));
-                const okOf = p => y && y[p] ? Number(y[p].ok != null ? y[p].ok : y[p].n) || 0 : 0;
-                const g = okOf('google'), o = okOf('openrouter');
-                if (g + o) sub += ` · أمس: Google ${esc(Math.round(g * 100 / (g + o)))}% (<span class="n">${esc(intEn(g))}</span> / <span class="n">${esc(intEn(o))}</span> أمر)`;
+            const d = vps24Get();
+            if (d) {
+                const n = d.google + d.openrouter, plus = d.capped ? '+' : '';
+                if (!n) { value = '<span class="n">—</span>'; sub = 'لا أوامر ناجحة في آخر 24 ساعة'; }
+                else {
+                    const g = Math.round(d.google * 100 / n);
+                    value = `<span class="n">Google ${esc(g)}%</span>`;
+                    sub = `OpenRouter <span class="n">${esc(100 - g)}%</span> · <span class="n">${esc(intEn(d.google))}${plus}</span> / <span class="n">${esc(intEn(d.openrouter))}${plus}</span> أمر`;
+                }
             }
-            else { value = `<span class="n">Google ${esc(ft.share_google.toFixed(0))}%</span>`; sub = `OpenRouter ${vpsPct(ft.share_openrouter)} · <span class="n">${esc(intEn(ft.google.ok))}</span> / <span class="n">${esc(intEn(ft.openrouter.ok))}</span> أمر`; }
         } else if (vps.unavailable || vps.fleetErr) { value = '<span class="hs-na">غير متاح</span>'; }
-        return { attrs: 'data-tab="controller" data-sub="telemetry" id="home-vps"', ic: 'fa-code-branch', c: 'blue', label: 'Google / OpenRouter اليوم', value, sub,
-            title: 'نسبة الأوامر الناجحة التي خدمها Google مقابل OpenRouter منذ منتصف الليل بتوقيت قطر، من سجل موجّه الصوت. خانة «آخر 24 ساعة» بجانبها نافذة متحركة، فقد تعدّ أوامر مساء أمس ولا تعدّها هذه.' };
+        return { attrs: 'data-tab="controller" data-sub="telemetry" id="home-vps"', ic: 'fa-code-branch', c: 'blue', label: 'Google / OpenRouter آخر 24 ساعة', value, sub,
+            title: 'نسبة الأوامر الناجحة التي خدمها Google مقابل OpenRouter خلال آخر 24 ساعة، من سجل موجّه الصوت — النافذة نفسها التي تعدّها خانة «أوامر صوتية آخر 24 ساعة»' };
     }
     function vpsFleetTablesHtml() {
         vpsFleetGet(false);
