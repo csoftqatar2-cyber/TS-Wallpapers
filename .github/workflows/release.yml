@@ -103,6 +103,11 @@ jobs:
       - name: Set up Android SDK
         if: steps.gate.outputs.publish == 'true'
         uses: android-actions/setup-android@v3
+        with:
+          # The action's default list includes the legacy "tools" package, which Google's
+          # repository no longer serves — sdkmanager exits 1 on it (2026-09-19). Gradle
+          # fetches the platform itself from the licences this step accepts.
+          packages: platform-tools
 
       - name: Decode signing keystore
         if: steps.gate.outputs.publish == 'true'
