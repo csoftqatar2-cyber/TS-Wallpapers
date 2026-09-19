@@ -25,6 +25,8 @@ import { bumpCatalogRow, readCatalogRow, CatalogRowError } from "./catalog-row.m
 import { SW_SOURCE, handlePushRoute, pushReady, runPushCron } from "./push.mjs";
 import { voiceRouterRoute } from "./voice-router-route.mjs";
 import { handleDiagRoute } from "./diag-admin.mjs";
+import { validateStoreCatalogText } from "./store-catalog.mjs";
+import { normalizePhone, phoneCountry } from "./phone.mjs";
 
 const RPC_ALLOW = /^store_admin_[a-z0-9_]{1,40}$/u;
 const TSLINK_ADMIN_BASE = "https://tslink-bot.tsdash-qatar.workers.dev/admin/api";
@@ -51,40 +53,6 @@ const CTRL_RPC_ALLOW = /^thab_admin_(stats|cars|events|gaps|fuel_price_history|v
 const CATALOG_URL = "https://pub-3d6cc5a5671c4be3829a384a375f7b11.r2.dev/catalog/apps.json";
 const LEO_LATEST_URL = "https://pub-fbb386b3923a44879e64296817936d84.r2.dev/latest.json";
 const MAX_BODY = 64 * 1024;
-const PHONE_COUNTRIES = {
-  "974": "قطر", "966": "السعودية", "971": "الإمارات", "973": "البحرين", "965": "الكويت", "968": "عُمان",
-  "20": "مصر", "962": "الأردن", "963": "سوريا", "964": "العراق", "961": "لبنان", "967": "اليمن",
-  "249": "السودان", "970": "فلسطين", "212": "المغرب", "213": "الجزائر", "216": "تونس", "218": "ليبيا",
-  "90": "تركيا", "44": "المملكة المتحدة", "1": "الولايات المتحدة/كندا", "91": "الهند", "92": "باكستان",
-  "880": "بنغلاديش", "977": "نيبال", "94": "سريلانكا", "63": "الفلبين",
-};
-
-function normalizePhone(raw) {
-  let value = String(raw == null ? "" : raw).trim()
-    .replace(/[٠-٩]/g, d => String("٠١٢٣٤٥٦٧٨٩".indexOf(d)))
-    .replace(/[۰-۹]/g, d => String("۰۱۲۳۴۵۶۷۸۹".indexOf(d)))
-    .replace(/[\s\-./()]/g, "");
-  if (value.startsWith("00")) value = `+${value.slice(2)}`;
-  let e164;
-  if (value.startsWith("+")) {
-    if (!/^\+[1-9]\d{6,14}$/.test(value)) return null;
-    e164 = value;
-  } else {
-    if (value.startsWith("0")) value = value.slice(1);
-    if (/^\d{8}$/.test(value)) e164 = `+974${value}`;
-    else if (/^974\d{8}$/.test(value)) e164 = `+${value}`;
-    else return null;
-  }
-  const digits = e164.slice(1);
-  const cc = Object.keys(PHONE_COUNTRIES).sort((a, b) => b.length - a.length).find(code => digits.startsWith(code)) || digits.slice(0, 3);
-  return { e164, cc };
-}
-
-function phoneCountry(phone) {
-  const normalized = normalizePhone(phone);
-  return normalized ? (PHONE_COUNTRIES[normalized.cc] || normalized.cc) : null;
-}
-
 async function sweepUnboundPhones(env, nowIso) {
   try {
     await env.DB.prepare(`INSERT INTO unbound_phones (phone, serial, issued_at, expired_at, issued_by, note)
@@ -343,26 +311,6 @@ async function passthrough(upstream) {
 // ---------- protected store catalog editor (/local/store-catalog/*) ----------
 // These helpers deliberately use the R2 binding only. No R2 credential, signature or bucket secret
 // crosses the admin-session boundary into the browser.
-function sameKeys(a, b) {
-  const aa = Object.keys(a).sort(), bb = Object.keys(b).sort();
-  return aa.length === bb.length && aa.every((key, i) => key === bb[i]);
-}
-function validateStoreCatalogText(nextText, currentText) {
-  let next, current;
-  try { next = JSON.parse(nextText); } catch (e) { throw new Error("الكتالوج الجديد ليس JSON صالحًا"); }
-  try { current = JSON.parse(currentText); } catch (e) { throw new Error("تعذّرت قراءة الكتالوج الحالي"); }
-  if (!next || typeof next !== "object" || Array.isArray(next) || !current || typeof current !== "object" || Array.isArray(current)) throw new Error("بنية الكتالوج العليا غير صالحة");
-  if (!sameKeys(next, current)) throw new Error("لا يجوز إضافة مفاتيح عليا أو حذفها من الكتالوج");
-  if (!Array.isArray(next.apps)) throw new Error("يجب أن يحتوي الكتالوج على مصفوفة apps");
-  const seen = new Set();
-  next.apps.forEach((app, i) => {
-    const pkg = app && typeof app === "object" && !Array.isArray(app) ? String(app.packageName || "").trim() : "";
-    if (!pkg) throw new Error(`التطبيق رقم ${i + 1} بلا packageName`);
-    if (seen.has(pkg)) throw new Error(`packageName مكرر: ${pkg}`);
-    seen.add(pkg);
-  });
-  return next;
-}
 function r2Etag(obj) { return String((obj && obj.etag) || "").replace(/^\"|\"$/g, ""); }
 async function rawBody(req, max, tooLargeMessage) {
   const declared = Number(req.headers.get("content-length") || 0);
