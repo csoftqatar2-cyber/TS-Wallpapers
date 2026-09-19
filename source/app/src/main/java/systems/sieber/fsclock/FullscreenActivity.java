@@ -282,10 +282,54 @@ public class FullscreenActivity extends AppCompatActivity {
                     });
             mContentView.setClickable(true);
             mContentView.setOnTouchListener(new View.OnTouchListener() {
+                // True between the second finger landing and the first finger lifting, in
+                // adjust mode only.
+                private boolean mPinching = false;
+
                 @Override
                 public boolean onTouch(View v, MotionEvent event) {
+                    // Adjust mode: two fingers zoom the wallpaper. Measured from the pointers
+                    // directly rather than with ScaleGestureDetector, for the reason given in
+                    // FitPreviewView: its minimum span comes from the panel's self-reported dpi,
+                    // and on head units that report a wild one the pinch never begins at all.
+                    switch(event.getActionMasked()) {
+                        case MotionEvent.ACTION_POINTER_DOWN:
+                            mPinching = event.getPointerCount() >= 2
+                                    && mContentView.beginPinchWallpaper(
+                                            midX(event), midY(event), span(event));
+                            break;
+                        case MotionEvent.ACTION_MOVE:
+                            if(mPinching) {
+                                // Not handed to the gesture detector: its two-finger scroll
+                                // would pan the picture a second time on top of the pinch.
+                                if(event.getPointerCount() >= 2) {
+                                    mContentView.pinchWallpaper(midX(event), midY(event), span(event));
+                                }
+                                return true;
+                            }
+                            break;
+                        case MotionEvent.ACTION_POINTER_UP:
+                        case MotionEvent.ACTION_UP:
+                        case MotionEvent.ACTION_CANCEL:
+                            if(mPinching) {
+                                mPinching = false;
+                                mContentView.endPinchWallpaper();
+                            }
+                            break;
+                    }
+                    // Everything else still reaches the detector. The pointer down/up events
+                    // matter: it re-anchors its scroll on the finger left behind, so going back
+                    // to one finger after a pinch pans on from there instead of jumping, and the
+                    // second finger cancels the long press and the tap — lifting after a pinch
+                    // does not count as the tap that saves and leaves adjust mode.
                     return gestureDetector.onTouchEvent(event);
                 }
+
+                private float span(MotionEvent e) {
+                    return (float) Math.hypot(e.getX(1) - e.getX(0), e.getY(1) - e.getY(0));
+                }
+                private float midX(MotionEvent e) { return (e.getX(0) + e.getX(1)) / 2f; }
+                private float midY(MotionEvent e) { return (e.getY(0) + e.getY(1)) / 2f; }
             });
         }
 

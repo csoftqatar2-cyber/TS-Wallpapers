@@ -70,12 +70,20 @@ public class WallpaperView extends FrameLayout {
         float focalY = 0.5f;
         FitSettings fit;            // how this wallpaper is fitted; null until the item loads
         Bitmap sharp;               // decoded frame, kept so the backdrop can be rebuilt
+        boolean zoomChanged;        // pinched in adjust mode since it loaded; fit needs saving
+        int backdropMode = -1;      // mode the visible backdrop was built for; -1 = none built
     }
 
     private Slot mSlotA;
     private Slot mSlotB;
     private Slot mFront;
     private WallpaperRepo mRepo;
+
+    // Adjust-mode pinch, anchored when the second finger lands (see beginPinchFront).
+    private Slot mPinchSlot;
+    private int mPinchGen;
+    private float mPinchSpan0, mPinchZoom0;
+    private float mPinchU, mPinchV;   // image point under the fingers, 0..1 of the scaled image
 
     public WallpaperView(Context c, AttributeSet attrs) {
         super(c, attrs);
@@ -236,6 +244,8 @@ public class WallpaperView extends FrameLayout {
         slot.item = item;
         slot.contentW = slot.contentH = 0;
         slot.sharp = null;
+        slot.zoomChanged = false;
+        slot.backdropMode = -1;
         slot.backdrop.setVisibility(GONE);
         slot.backdrop.setImageDrawable(null);
         // How this wallpaper is fitted. Unlike the focal point this applies whether or not FSE
@@ -432,16 +442,23 @@ public class WallpaperView extends FrameLayout {
      * same property and the bars would flicker on every switch.
      */
     private void applyBackdrop(Slot slot, int mode) {
-        slot.backdrop.setColorFilter(null);
-        slot.backdrop.setImageDrawable(null);
-
         // Not just the fit modes: a zoomed-out or faded image also stops covering the screen, and
         // without something behind it the gap would show the outgoing wallpaper mid-crossfade.
-        if(slot.fit == null || !slot.fit.needsBackdrop(mode)) {
+        boolean needed = slot.fit != null && slot.fit.needsBackdrop(mode);
+        // The backdrop depends on the image and the mode only, never on zoom or focal point, so
+        // a drag or a pinch — which re-lay the image on every finger move — must not re-blur it
+        // each time: a full-screen blur per MotionEvent is what would make the gesture stutter.
+        if(needed && slot.backdropMode == mode && slot.backdrop.getVisibility() == VISIBLE) return;
+
+        slot.backdrop.setColorFilter(null);
+        slot.backdrop.setImageDrawable(null);
+        slot.backdropMode = -1;
+        if(!needed) {
             slot.backdrop.setVisibility(GONE);
             return;
         }
         slot.backdrop.setVisibility(VISIBLE);
+        slot.backdropMode = mode;
 
         // Only BLUR gets a blurred backdrop — it is that mode's entire feature.
         //
@@ -462,22 +479,31 @@ public class WallpaperView extends FrameLayout {
 
     /** Overflow (scaled content size minus view size) in view pixels, per axis. */
     private float[] overflow(Slot slot) {
-        float vw = getWidth(), vh = getHeight();
-        if(slot.contentW <= 0 || slot.contentH <= 0 || vw <= 0 || vh <= 0) return new float[]{0f, 0f};
         FitSettings fit = slot.fit != null ? slot.fit : new FitSettings();
-        float zoom = FitSettings.clampZoom(fit.zoom);
-        // Must pick the same base scale — and the same rotated dimensions — applyImageMatrix()
-        // did, or the pan disagrees with what is on screen: it used max unconditionally, so in a
-        // fit mode it reported an overflow that offset() then ignored — the drag did nothing but
-        // still wrote a focal point.
+        float[] size = scaledSize(slot, FitSettings.clampZoom(fit.zoom));
+        if(size == null) return new float[]{0f, 0f};
+        return new float[]{ size[0] - getWidth(), size[1] - getHeight() };
+    }
+
+    /**
+     * On-screen size of the (rotated) image at the given zoom, or null while unknown.
+     *
+     * Must pick the same base scale — and the same rotated dimensions — applyImageMatrix() did,
+     * or the pan disagrees with what is on screen: it once used max unconditionally, so in a fit
+     * mode it reported an overflow that offset() then ignored — the drag did nothing but still
+     * wrote a focal point.
+     */
+    private float[] scaledSize(Slot slot, float zoom) {
+        float vw = getWidth(), vh = getHeight();
+        if(slot.contentW <= 0 || slot.contentH <= 0 || vw <= 0 || vh <= 0) return null;
+        FitSettings fit = slot.fit != null ? slot.fit : new FitSettings();
         int mode = resolvedMode(slot, (int) vw, (int) vh);
         float ew = fit.effectiveW(slot.contentW, slot.contentH);
         float eh = fit.effectiveH(slot.contentW, slot.contentH);
         float base = FitSettings.isFitMode(mode)
                 ? Math.min(vw / ew, vh / eh)
                 : Math.max(vw / ew, vh / eh);
-        float scale = base * zoom;
-        return new float[]{ ew * scale - vw, eh * scale - vh };
+        return new float[]{ ew * base * zoom, eh * base * zoom };
     }
 
     private void reapply(Slot slot) {
@@ -499,11 +525,79 @@ public class WallpaperView extends FrameLayout {
         reapply(s);
     }
 
-    /** Persist the front wallpaper's current position so it reopens the same way. */
-    public void saveFrontFocal() {
+    /**
+     * Start a two-finger zoom on the front wallpaper. Coordinates are in this view's pixels.
+     *
+     * The image point under the midpoint of the fingers is remembered here, once, and every
+     * later move puts that same point back under the (possibly moved) midpoint — so the picture
+     * grows around the fingers instead of around its centre, and sliding both fingers pans it.
+     * Anchoring on the start rather than chaining frame to frame is what keeps rounding and
+     * clamping at an edge from drifting the picture away over a long pinch.
+     *
+     * Images only: the video layout ignores the fit zoom entirely (see applyVideoScale), so a
+     * pinch on a clip is a no-op rather than a zoom that would be forgotten on the next frame.
+     *
+     * @return false when there is nothing to zoom (no image loaded yet, or a video).
+     */
+    public boolean beginPinchFront(float midX, float midY, float span) {
+        mPinchSlot = null;
+        Slot s = mFront;
+        if(s == null || s.item == null || s.item.isVideo() || span <= 0f) return false;
+        if(s.fit == null) s.fit = new FitSettings();
+        float zoom = FitSettings.clampZoom(s.fit.zoom);
+        float[] size = scaledSize(s, zoom);
+        if(size == null) return false;
+        float left = offset(size[0], getWidth(), s.focalX);
+        float top = offset(size[1], getHeight(), s.focalY);
+        mPinchU = (midX - left) / size[0];
+        mPinchV = (midY - top) / size[1];
+        mPinchSpan0 = span;
+        mPinchZoom0 = zoom;
+        mPinchSlot = s;
+        mPinchGen = s.gen;
+        return true;
+    }
+
+    /** Follow the fingers: zoom by the span ratio, then pan so the anchored point stays put. */
+    public void pinchFront(float midX, float midY, float span) {
+        Slot s = mPinchSlot;
+        // the slideshow can move on underneath a pinch; never zoom the picture that replaced it
+        if(s == null || s != mFront || s.gen != mPinchGen || span <= 0f) return;
+        float zoom = FitSettings.clampZoom(mPinchZoom0 * span / mPinchSpan0);
+        float[] size = scaledSize(s, zoom);
+        if(size == null) return;
+        if(zoom != s.fit.zoom) {
+            s.fit.zoom = zoom;
+            s.zoomChanged = true;
+        }
+        // Invert offset(): the left edge that puts (u, v) under the fingers, as a focal point.
+        // Content that no longer overflows is centred by offset() whatever the focal says, so
+        // the focal is left alone there and picks up again once the image is larger than the view.
+        float ox = size[0] - getWidth(), oy = size[1] - getHeight();
+        if(ox > 0) s.focalX = clamp01(-(midX - mPinchU * size[0]) / ox);
+        if(oy > 0) s.focalY = clamp01(-(midY - mPinchV * size[1]) / oy);
+        reapply(s);
+    }
+
+    public void endPinchFront() {
+        mPinchSlot = null;
+    }
+
+    /**
+     * Persist the front wallpaper's current position — and its zoom, when a pinch changed it —
+     * so it reopens the same way. The zoom lives in the wallpaper's FitSettings, the same value
+     * the fit editor's zoom slider writes, so the two stay one setting rather than stacking.
+     */
+    public void saveFrontFraming() {
         Slot s = mFront;
         if(s == null || s.item == null || mRepo == null) return;
         mRepo.setFocal(s.item.url, s.focalX, s.focalY);
+        // Only when actually pinched: writing an untouched fit would turn a wallpaper that
+        // follows the defaults into one with a frozen copy of them.
+        if(s.zoomChanged && s.fit != null) {
+            mRepo.setFit(s.item.url, s.fit);
+            s.zoomChanged = false;
+        }
     }
 
     private static float clamp01(float v) {

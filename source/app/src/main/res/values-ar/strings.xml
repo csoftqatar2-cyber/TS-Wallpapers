@@ -301,7 +301,7 @@
     <string name="mode_confirm_button">تأكيد ومتابعة</string>
 
     <!-- FSE wallpaper "adjust position" mode toasts (FsClockView.java). -->
-    <string name="wallpaper_adjust_mode_hint">وضع تحريك الصورة: اسحب لضبط مكان الصورة، ثم اضغط للحفظ</string>
+    <string name="wallpaper_adjust_mode_hint">وضع ضبط الصورة: اسحب لتحريك الصورة، واستخدم إصبعين للتكبير والتصغير، ثم اضغط للحفظ</string>
     <string name="wallpaper_position_saved">تم حفظ مكان الصورة</string>
 
     <!-- Fit Editor: how an imported image is fitted to the very wide screen. -->

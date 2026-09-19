@@ -1764,11 +1764,14 @@ public class FsClockView extends FrameLayout {
         Toast.makeText(getContext(), R.string.wallpaper_adjust_mode_hint, Toast.LENGTH_LONG).show();
     }
 
-    /** Save the current wallpaper position and leave adjust mode. */
+    /** Save the current wallpaper position (and pinch zoom) and leave adjust mode. */
     public void exitAdjustModeAndSave() {
         if(!mAdjustMode) return;
         mAdjustMode = false;
-        if(mWallpaper != null) mWallpaper.saveFrontFocal();
+        if(mWallpaper != null) {
+            mWallpaper.endPinchFront();
+            mWallpaper.saveFrontFraming();
+        }
         setClockHidden(false);
         Toast.makeText(getContext(), R.string.wallpaper_position_saved, Toast.LENGTH_SHORT).show();
     }
@@ -1776,6 +1779,34 @@ public class FsClockView extends FrameLayout {
     /** Move the current wallpaper by a finger delta while in adjust mode. */
     public void panWallpaper(float dx, float dy) {
         if(mAdjustMode && mWallpaper != null) mWallpaper.panFront(dx, dy);
+    }
+
+    /**
+     * Two-finger zoom while in adjust mode. x/y are this view's coordinates (the touch listener
+     * sits on this view), converted here to the wallpaper layer's, which FSE may have resized.
+     * @return false when nothing can be zoomed, so the caller can fall back to its normal handling.
+     */
+    public boolean beginPinchWallpaper(float x, float y, float span) {
+        if(!mAdjustMode || mWallpaper == null) return false;
+        float[] p = toWallpaper(x, y);
+        return mWallpaper.beginPinchFront(p[0], p[1], span);
+    }
+
+    public void pinchWallpaper(float x, float y, float span) {
+        if(!mAdjustMode || mWallpaper == null) return;
+        float[] p = toWallpaper(x, y);
+        mWallpaper.pinchFront(p[0], p[1], span);
+    }
+
+    public void endPinchWallpaper() {
+        if(mWallpaper != null) mWallpaper.endPinchFront();
+    }
+
+    private float[] toWallpaper(float x, float y) {
+        int[] me = new int[2], wp = new int[2];
+        getLocationOnScreen(me);
+        mWallpaper.getLocationOnScreen(wp);
+        return new float[]{ x - (wp[0] - me[0]), y - (wp[1] - me[1]) };
     }
 
     /** Position/size the clock overlay according to the user settings. */

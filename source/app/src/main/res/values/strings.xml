@@ -514,7 +514,7 @@ Roboto Font Copyright (c) Christian Robertson. Licensed under the Apache License
     <string name="mode_confirm_button">Confirm and continue</string>
 
     <!-- FSE wallpaper "adjust position" mode toasts (FsClockView.java). -->
-    <string name="wallpaper_adjust_mode_hint">Adjust image position: drag to reposition, then tap to save</string>
+    <string name="wallpaper_adjust_mode_hint">Adjust image: drag to reposition, pinch with two fingers to zoom, then tap to save</string>
     <string name="wallpaper_position_saved">Image position saved</string>
     <string name="nav_clock">Clock</string>
     <string name="leopard_change">Change</string>
