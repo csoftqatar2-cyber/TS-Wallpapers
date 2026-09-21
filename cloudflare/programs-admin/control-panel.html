@@ -1037,7 +1037,9 @@
     <div class="orb orb-2"></div>
 
     <!-- ============ Login ============ -->
-    <div id="login-overlay">
+    <!-- Starts hidden: boot() shows it only when the stored session cannot be resumed, so a
+         signed-in owner never sees the password form flash for the seconds the check takes. -->
+    <div id="login-overlay" hidden>
         <form class="login-box" id="login-form" autocomplete="off">
             <h2><i class="fa-solid fa-shield-halved"></i> Thabthaba Programs Admin</h2>
             <div class="who">admin@tswallpapers.app</div>
