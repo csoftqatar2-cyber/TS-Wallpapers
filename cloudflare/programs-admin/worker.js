@@ -10,7 +10,8 @@
  *
  * Secrets (wrangler secret put): STORE_ADMIN_SECRET, TSLINK_ADMIN_TOKEN, LEO_ADMIN_TOKEN,
  * G700_ADMIN_TOKEN, LYNK_ADMIN_TOKEN, CONTROLLER_ADMIN_SECRET, CATALOG_PUBLISH_SECRET, VAPID_PRIVATE_JWK (Web Push, push.mjs; cron every minute). Vars (wrangler.toml): SUPABASE_URL,
- * SUPABASE_ANON, ADMIN_UID, CTRL_TELEMETRY_URL, CTRL_TELEMETRY_ANON.
+ * SUPABASE_ANON, ADMIN_UID, CTRL_TELEMETRY_URL, CTRL_TELEMETRY_ANON, CTRL_SOURCE, TELEMETRY_BRIDGE, CTRL_MIRROR_CONFIG
+ * (controller telemetry on Cloudflare, telemetry-admin.mjs).
  *
  * One machine-to-machine route lives outside the Access/admin-session gate: POST /catalog/publish
  * (bearer CATALOG_PUBLISH_SECRET). The release CI of ذبذبة خلفيات / TS Link calls it after its own
@@ -27,6 +28,7 @@ import { voiceRouterRoute } from "./voice-router-route.mjs";
 import { handleDiagRoute } from "./diag-admin.mjs";
 import { validateStoreCatalogText } from "./store-catalog.mjs";
 import { normalizePhone, phoneCountry } from "./phone.mjs";
+import { controllerRoute, telemetryRoute, runTelemetryBridge, ctrlOnCloudflare } from "./telemetry-admin.mjs";
 
 const RPC_ALLOW = /^store_admin_[a-z0-9_]{1,40}$/u;
 const TSLINK_ADMIN_BASE = "https://tslink-bot.tsdash-qatar.workers.dev/admin/api";
@@ -47,9 +49,9 @@ const LYNK_GET_ALLOW = /^\/devices$/u;
 // The Lynk bucket is public-read (the app itself fetches both files with no key), so these two are
 // mirrored for CORS relief only — the same reason /local/catalog and /local/leo-latest exist.
 const LYNK_PUBLIC_BASE = "https://pub-1c493a648f424eba933a07d3b2371d56.r2.dev";
-// Controller telemetry RPCs the site may call (p_secret injected here). Reads + the owner's voice/fuel
-// settings writes (2026-09-08) + crash reports (thab_admin_crashes / crash_groups, added by the controller chat).
-const CTRL_RPC_ALLOW = /^thab_admin_(stats|cars|events|gaps|fuel_price_history|voice_overlay_history|voice_overlay_publish|voice_overlay_restore|fuel_price_publish|set_note|crashes|crash_groups)$/u;
+// Controller telemetry RPCs the site may call (reads + the owner's voice/fuel settings writes + crash
+// reports): the allow-list, the Cloudflare/Supabase switch and the bridge for not-yet-updated cars
+// live in telemetry-admin.mjs since the 2026-09-21 move to Cloudflare.
 const CATALOG_URL = "https://pub-3d6cc5a5671c4be3829a384a375f7b11.r2.dev/catalog/apps.json";
 const LEO_LATEST_URL = "https://pub-fbb386b3923a44879e64296817936d84.r2.dev/latest.json";
 const MAX_BODY = 64 * 1024;
@@ -545,7 +547,7 @@ export default {
       return new Response(html, { status: 200, headers: { "Content-Type": "text/html; charset=utf-8", "Content-Security-Policy": csp(n), ...SEC_HEADERS } });
     }
     if (req.method === "GET" && p === "/local/ping") {
-      return json(200, { local: true, remote: true, store: !!env.STORE_ADMIN_SECRET, tslink: !!env.TSLINK_ADMIN_TOKEN, leo: !!env.LEO_ADMIN_TOKEN, g700: !!env.G700_ADMIN_TOKEN, lynk: !!env.LYNK_ADMIN_TOKEN, controller: !!env.CONTROLLER_ADMIN_SECRET, codes: !!env.DB, guard: !!env.DB, sessions: !!env.DB, writes: !!env.PANEL_WRITE_KEY, catalog: !!(env.CATALOG_PUBLISH_SECRET && env.CATALOG_R2), storeCatalog: !!env.CATALOG_R2, push: pushReady(env) });
+      return json(200, { local: true, remote: true, store: !!env.STORE_ADMIN_SECRET, tslink: !!env.TSLINK_ADMIN_TOKEN, leo: !!env.LEO_ADMIN_TOKEN, g700: !!env.G700_ADMIN_TOKEN, lynk: !!env.LYNK_ADMIN_TOKEN, tank: !!env.TANK, controller: ctrlOnCloudflare(env) || !!env.CONTROLLER_ADMIN_SECRET, ctrlSource: ctrlOnCloudflare(env) ? "cloudflare" : "supabase", usage: !!env.USAGE, trips: !!env.TRIPS_SVC, codes: !!env.DB, guard: !!env.DB, sessions: !!env.DB, writes: !!env.PANEL_WRITE_KEY, catalog: !!(env.CATALOG_PUBLISH_SECRET && env.CATALOG_R2), storeCatalog: !!env.CATALOG_R2, push: pushReady(env) });
     }
     if (!p.startsWith("/local/")) return json(404, { message: "not found" });
 
@@ -619,6 +621,40 @@ export default {
     // stores/serves through thab-voice's AdminDiag entrypoint (DIAG_SVC). See diag-admin.mjs.
     if (p === "/local/diag" || p.startsWith("/local/diag/")) {
       return handleDiagRoute(req, env, { url, json, readJsonBody, actor: clientOf(req).email });
+    }
+
+    // Controller records on Cloudflare: Quran/adhkar/prayer usage (AdminUsage) and trips/charges/refuels
+    // (AdminTrips). See telemetry-admin.mjs. AppLog downloads are /local/diag/applog* (diag-admin.mjs).
+    if (/^\/local\/(usage|trips)(\/|$)/u.test(p)) {
+      return (await telemetryRoute(req, env, url, { json, readJsonBody })) || json(404, { message: "not found" });
+    }
+
+    // TS Tank activation admin proxy: talks to thab-voice's AdminTank RPC entrypoint.
+    // The D1 and code space live there; this Worker only allow-lists method names and sanity-checks args.
+    if (req.method === "POST" && p.startsWith("/local/tank/")) {
+      if (!env.TANK) return json(503, { message: "tank binding not configured" });
+      const method = p.slice("/local/tank/".length);
+      const TANK_METHODS = ["codes", "generate", "revoke_code", "devices", "unban", "reset_attempts", "ban", "audit"];
+      if (!TANK_METHODS.includes(method)) return json(404, { message: "not found" });
+      let body;
+      try { body = await readJsonBody(req); }
+      catch (e) { return json(400, { message: "bad request" }); }
+      const okArgs = (() => {
+        if (!body || typeof body !== "object" || Array.isArray(body)) return false;
+        if (body.count != null && (!Number.isInteger(body.count) || body.count < 1 || body.count > 999)) return false;
+        if (body.code != null && !/^[0-9]{6}$/.test(String(body.code))) return false;
+        if (body.hw != null && !/^[A-Za-z0-9._:-]{4,64}$/u.test(String(body.hw))) return false;
+        if (body.limit != null && (!Number.isInteger(body.limit) || body.limit < 1)) return false;
+        return true;
+      })();
+      if (!okArgs) return json(400, { message: "bad request" });
+      try {
+        const result = await env.TANK[method](body);
+        return json(200, result || {});
+      } catch (e) {
+        console.log(`tank rpc failed: ${e && e.message}`);
+        return json(502, { message: "tank unavailable" });
+      }
     }
 
     try {
@@ -921,14 +957,8 @@ export default {
         }));
       }
       if (req.method === "POST" && p.startsWith("/local/controller/")) {
-        const name = p.slice("/local/controller/".length);
-        if (!CTRL_RPC_ALLOW.test(name)) return json(404, { message: "rpc not allowed" });
-        if (!env.CONTROLLER_ADMIN_SECRET) return json(503, { message: "controller secret not configured" });
-        const body = await readJsonBody(req); delete body.p_secret;
-        return passthrough(await fetch(`${env.CTRL_TELEMETRY_URL}/rest/v1/rpc/${name}`, {
-          method: "POST", headers: { "Content-Type": "application/json", apikey: env.CTRL_TELEMETRY_ANON, Authorization: `Bearer ${env.CTRL_TELEMETRY_ANON}` },
-          body: JSON.stringify({ p_secret: env.CONTROLLER_ADMIN_SECRET, ...body }),
-        }));
+        // thab-voice's AdminTelemetry (D1) by default; the old Supabase proxy when CTRL_SOURCE = "supabase".
+        return await controllerRoute(req, env, p.slice("/local/controller/".length), { json, readJsonBody, passthrough });
       }
       if (req.method === "GET" && p.startsWith("/local/tslink")) {
         const sub = p.slice("/local/tslink".length) || "/overview";
@@ -976,5 +1006,7 @@ export default {
   // Cron Trigger (wrangler.toml [triggers]): push new activations / logins to subscribed devices.
   async scheduled(event, env, ctx) {
     ctx.waitUntil(runPushCron(env).then(r => { if (r && (r.sent || r.failed)) console.log(`push cron ${JSON.stringify(r)}`); }).catch(e => console.log(`push cron failed: ${e && e.message}`)));
+    // Same tick: new rows that cars <= 2.30.15 still post to Supabase -> D1 (telemetry-admin.mjs). Counts only in the log.
+    ctx.waitUntil(runTelemetryBridge(env, event.scheduledTime).then(r => { if (r && (r.events || r.cars || r.crashes)) console.log(`telemetry bridge ${JSON.stringify(r)}`); }).catch(e => console.log(`telemetry bridge failed: ${e && e.message}`)));
   },
 };
