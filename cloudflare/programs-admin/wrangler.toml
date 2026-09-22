@@ -34,8 +34,16 @@ CTRL_TELEMETRY_ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFz
 # Web Push (push.mjs): the VAPID public key browsers subscribe with. Its private half is the secret
 # VAPID_PRIVATE_JWK (set 2026-09-15). Rotating means a new pair AND every device re-enabling push.
 VAPID_PUBLIC_KEY = "BGfn3g2fC27vpHvw1H45aKiv0oKyWCDto_YDjLjs9hSralcMevK4VOQTyXe7g77cxBCqNIQrYiHAHtnh_K3ZRNc"
+# Controller telemetry source: "cloudflare" (thab-voice AdminTelemetry) or "supabase" (the old proxy — the
+# one-line rollback). TELEMETRY_BRIDGE "on" pulls rows that cars <= 2.30.15 still post to Supabase into D1 every
+# minute; set "off" once no car below 2.30.16 remains. CTRL_MIRROR_CONFIG "on" also publishes the fuel price and
+# glossary to Supabase, because those old cars read their config from there.
+CTRL_SOURCE = "cloudflare"
+TELEMETRY_BRIDGE = "off"
+CTRL_MIRROR_CONFIG = "off"
 
-# Every minute: new activations (D1 devices_audit) and new site logins (security_events) → Web Push.
+# Every minute: new activations (D1 devices_audit) and new site logins (security_events) → Web Push, and the
+# controller telemetry bridge from Supabase (telemetry-admin.mjs runTelemetryBridge).
 [triggers]
 crons = ["* * * * *"]
 
@@ -94,6 +102,13 @@ binding = "VOICE_ROUTER_SVC"
 service = "thab-voice"
 entrypoint = "AdminRouter"
 
+# TS Tank activation backend (com.thabthaba.tstank). Reached over a service binding to thab-voice's
+# AdminTank RPC entrypoint; the D1 and code space live in that Worker, not here.
+[[services]]
+binding = "TANK"
+service = "thab-voice"
+entrypoint = "AdminTank"
+
 # Remote diagnostics «استعلام عن بُعد» — thab-voice's AdminDiag RPC entrypoint (no public route). Reached
 # only behind isAdmin() at /local/diag*. The request-signing PRIVATE key is the secret DIAG_SIGNING_JWK of
 # THIS Worker (ECDSA P-256 JWK, kid k1); thab-voice holds only the public half.
@@ -101,3 +116,23 @@ entrypoint = "AdminRouter"
 binding = "DIAG_SVC"
 service = "thab-voice"
 entrypoint = "AdminDiag"
+
+# Controller telemetry on Cloudflare (2026-09-21, telemetry-admin.mjs). The records old cars sent to Supabase
+# (events, cars, crashes, config) now live in thab-voice's D1 `thab-telemetry` and are read through its
+# AdminTelemetry entrypoint — method = the old thab_admin_* RPC name without the prefix, same args, same JSON.
+[[services]]
+binding = "TELEMETRY_SVC"
+service = "thab-voice"
+entrypoint = "AdminTelemetry"
+
+# Quran / adhkar / reminders / prayer usage per car (thab-voice worker/src/usage.js, UsageHub).
+[[services]]
+binding = "USAGE"
+service = "thab-voice"
+entrypoint = "AdminUsage"
+
+# Trips, charges and refuels per car (summaries only, no GPS points) — thab-voice's AdminTrips.
+[[services]]
+binding = "TRIPS_SVC"
+service = "thab-voice"
+entrypoint = "AdminTrips"
