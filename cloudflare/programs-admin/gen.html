@@ -95,7 +95,7 @@
             <div id="codes"></div>
             <form id="issue-step" class="issue-step" hidden>
                 <h2>رقم صاحب السيارة</h2>
-                <input id="issue-phone" type="tel" inputmode="tel" dir="ltr" autocomplete="tel" placeholder="رقم الهاتف" required>
+                <input id="issue-phone" type="tel" inputmode="tel" lang="en" dir="ltr" autocomplete="tel" placeholder="رقم الهاتف" required>
                 <div class="hint">بدون رمز دولة يُحفظ الرقم كرقم قطري ‎+974‎</div>
                 <div class="err" id="issue-err"></div>
                 <div class="issue-actions">
@@ -160,7 +160,7 @@
         if (c.el) return c.el;
         const row = document.createElement('div');
         row.className = 'row'; row.dataset.serial = c.serial;
-        row.innerHTML = `<span class="mark" data-role="mark"></span><div class="code">${esc(c.serial)}</div><div class="timer" data-role="timer"></div><button type="button" class="copy" data-copy="${esc(c.serial)}" title="نسخ الكود" aria-label="نسخ الكود"><svg viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h9"/></svg></button><span class="copied" data-role="copied" hidden></span><span class="vin" data-role="vin" hidden></span><span class="sub" data-role="sub"></span><div class="phone-box"><div class="phone-summary" data-role="phone-summary" hidden><span>رقم صاحب السيارة: <b dir="ltr" data-role="phone-value"></b></span><button type="button" class="phone-edit" data-phone-edit>تعديل</button></div><div class="phone-controls" data-role="phone-controls"><input id="phone-${esc(c.serial)}" data-phone type="tel" inputmode="tel" dir="ltr" placeholder="رقم هاتف صاحب السيارة"><button type="button" class="phone-save" data-phone-save>حفظ</button></div><div class="phone-note hint" data-role="phone-note">بدون رمز دولة يُحفظ الرقم كرقم قطري ‎+974‎</div><div class="phone-missing" data-role="phone-missing" hidden>لم يُسجَّل رقم هاتف لهذه السيارة</div></div>`;
+        row.innerHTML = `<span class="mark" data-role="mark"></span><div class="code">${esc(c.serial)}</div><div class="timer" data-role="timer"></div><button type="button" class="copy" data-copy="${esc(c.serial)}" title="نسخ الكود" aria-label="نسخ الكود"><svg viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h9"/></svg></button><span class="copied" data-role="copied" hidden></span><span class="vin" data-role="vin" hidden></span><span class="sub" data-role="sub"></span><div class="phone-box"><div class="phone-summary" data-role="phone-summary" hidden><span>رقم صاحب السيارة: <b dir="ltr" data-role="phone-value"></b></span><button type="button" class="phone-edit" data-phone-edit>تعديل</button></div><div class="phone-controls" data-role="phone-controls"><input id="phone-${esc(c.serial)}" data-phone type="tel" inputmode="tel" lang="en" dir="ltr" placeholder="رقم هاتف صاحب السيارة"><button type="button" class="phone-save" data-phone-save>حفظ</button></div><div class="phone-note hint" data-role="phone-note">بدون رمز دولة يُحفظ الرقم كرقم قطري ‎+974‎</div><div class="phone-missing" data-role="phone-missing" hidden>لم يُسجَّل رقم هاتف لهذه السيارة</div></div>`;
         const input = row.querySelector('[data-phone]');
         input.value = c.phoneDraft || c.customer_phone || '';
         c.el = row; $('codes').appendChild(row);
@@ -247,6 +247,18 @@
             render(); if (codes.size) { armTimers(); pollAll(); }
         } catch (e) { $('err').textContent = e.message || String(e); }
     }
+    // An Arabic keyboard types Arabic-Indic (or Persian) digits; every phone field turns them into English
+    // digits as they are typed, so the number shows in English and is accepted either way (owner, 2026-09-23).
+    const toLatinDigits = v => v.replace(/[٠-٩]/g, d => d.charCodeAt(0) - 0x0660).replace(/[۰-۹]/g, d => d.charCodeAt(0) - 0x06F0).replace(/[‎‏؜‪-‮]/g, '');
+    document.addEventListener('input', e => {
+        const el = e.target;
+        if (!(el instanceof HTMLInputElement) || el.type !== 'tel') return;
+        const fixed = toLatinDigits(el.value);
+        if (fixed === el.value) return;
+        const pos = el.selectionStart == null ? fixed.length : toLatinDigits(el.value.slice(0, el.selectionStart)).length;
+        el.value = fixed;
+        try { el.setSelectionRange(pos, pos); } catch (err) {}
+    }, true);
     function openIssueStep() { $('issue-step').hidden = false; $('gen').hidden = true; $('issue-err').textContent = ''; $('issue-phone').value = ''; setTimeout(() => $('issue-phone').focus(), 0); }
     function closeIssueStep() { $('issue-step').hidden = true; $('gen').hidden = false; $('issue-err').textContent = ''; }
     async function issue(phone, skipped) {
@@ -263,7 +275,7 @@
         finally { buttons.forEach(b => b.disabled = false); }
     }
     $('gen').addEventListener('click', openIssueStep);
-    $('issue-step').addEventListener('submit', e => { e.preventDefault(); issue($('issue-phone').value.trim(), false); });
+    $('issue-step').addEventListener('submit', e => { e.preventDefault(); issue(toLatinDigits($('issue-phone').value).trim(), false); });
     $('issue-skip').addEventListener('click', () => issue('', true));
     $('issue-cancel').addEventListener('click', closeIssueStep);
     // Copy = the button beside the code (tapping the number itself still selects it). Clipboard API
@@ -290,7 +302,7 @@
         c.saving = true; button.disabled = true; c.phoneMessage = true;
         note.className = 'phone-note hint'; note.textContent = 'جارٍ الحفظ…';
         try {
-            const r = await api('/local/codes/phone', { serial: c.serial, phone: input.value });
+            const r = await api('/local/codes/phone', { serial: c.serial, phone: toLatinDigits(input.value) });
             c.customer_phone = r.customer_phone || null; c.phoneDraft = r.customer_phone || ''; c.phoneDirty = false;
             c.editPhone = !c.customer_phone;
             if (c.used_by && c.customer_phone) { c.usedAt = Date.now(); c.boundMessage = true; }

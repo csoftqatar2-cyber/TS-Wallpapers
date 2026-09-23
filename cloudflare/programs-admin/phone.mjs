@@ -17,6 +17,7 @@ export function normalizePhone(raw) {
   let value = String(raw == null ? "" : raw).trim()
     .replace(/[٠-٩]/g, d => String("٠١٢٣٤٥٦٧٨٩".indexOf(d)))
     .replace(/[۰-۹]/g, d => String("۰۱۲۳۴۵۶۷۸۹".indexOf(d)))
+    .replace(/[‎‏؜‪-‮]/g, "")
     .replace(/[\s\-./()]/g, "");
   if (value.startsWith("00")) value = `+${value.slice(2)}`;
   let e164;
