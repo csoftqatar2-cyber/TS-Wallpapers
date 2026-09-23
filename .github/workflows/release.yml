@@ -178,7 +178,7 @@ jobs:
       # the Worker only edits an existing row, never adds one. It runs AFTER the app's own
       # publish (R2 upload + app_versions row) has already succeeded, so a failure here cannot
       # hold back the in-app update; it still fails the job so the mismatch is noticed and the
-      # call can be repeated by hand (see cloudflare/programs-admin/README.md).
+      # call can be repeated by hand (see README.md in repo csoftqatar2-cyber/TS-Programs-Admin).
       - name: Mirror release into the THABTHABA STORE catalog
         if: steps.gate.outputs.publish == 'true'
         env:
