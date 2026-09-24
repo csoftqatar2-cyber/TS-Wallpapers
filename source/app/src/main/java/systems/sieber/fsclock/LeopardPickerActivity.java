@@ -241,6 +241,13 @@ public class LeopardPickerActivity extends AppCompatActivity {
     /** Chosen framing for the next Lynk & Co image apply (fill vs fit). Defaults to fill. */
     private int mLynkcoScaleMode = LynkcoApplier.SCALE_FILL;
 
+    /**
+     * The app language this screen was inflated in. Settings is launched plainly on top of the
+     * picker, so a language switch there leaves this instance alive with the old strings and the
+     * old layout direction; onResume compares against it and rebuilds the screen.
+     */
+    private String mLanguageAtCreate;
+
     @Override
     protected void attachBaseContext(Context newBase) {
         super.attachBaseContext(scaleForLynkco(LocaleHelper.wrap(newBase)));
@@ -269,6 +276,7 @@ public class LeopardPickerActivity extends AppCompatActivity {
     protected void onCreate(Bundle b) {
         EdgeToEdge.enable(this);
         super.onCreate(b);
+        mLanguageAtCreate = LocaleHelper.saved(this);
         setContentView(R.layout.activity_leopard_picker);
 
         // targetSdk 36 = Android 15 lays this out edge to edge whether we ask or not, so without
@@ -444,6 +452,12 @@ public class LeopardPickerActivity extends AppCompatActivity {
     @Override
     protected void onResume() {
         super.onResume();
+        // Language switched in Settings while we sat underneath it: rebuild so the whole screen
+        // follows (strings, RTL/LTR, dialogs). The new instance runs the rest of onResume itself.
+        if(mLanguageAtCreate != null && !mLanguageAtCreate.equals(LocaleHelper.saved(this))) {
+            recreate();
+            return;
+        }
         // Fleet contract 2026-09-03: coming back to the foreground asks the server again
         // (the licence may have been blocked, or a block lifted, while we were away), at
         // most once a minute. The first visit is covered by showCloud()'s own auto-sync;
