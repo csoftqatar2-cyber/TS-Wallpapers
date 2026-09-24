@@ -418,6 +418,26 @@ public class LeopardPickerActivity extends AppCompatActivity {
             mirror.syncAsync(getApplicationContext(), mRepo, null);
         } catch(Throwable ignored) { }
     }
+    /** Same check as FullscreenActivity's: a newer published version lights the dot on the gear. */
+    private void checkForUpdateBadge() {
+        final View dot = findViewById(R.id.viewLeopardUpdateBadge);
+        if(dot == null) return;
+        new UpdateManager(this).checkForUpdate(new UpdateManager.UpdateCheckListener() {
+            @Override
+            public void onUpdateAvailable(int versionCode, String versionName, String apkUrl, String changelog) {
+                dot.setVisibility(View.VISIBLE);
+            }
+            @Override
+            public void onNoUpdate() {
+                dot.setVisibility(View.GONE);
+            }
+            @Override
+            public void onError(String message) {
+                // network/error: keep whatever state we had, don't flash the dot
+            }
+        });
+    }
+
     /** Fleet contract 2026-09-03: a real return to the foreground re-checks, at most once a minute. */
     private static final long RESUME_RECHECK_MIN_MS = 60_000L;
 
@@ -448,6 +468,9 @@ public class LeopardPickerActivity extends AppCompatActivity {
         // Leopard car's dashboard folder. Debounced to 30s inside the mirror, and null in every
         // mode without one, so calling it on every resume is free.
         kickFolderMirror();
+        // Before the early return below: this screen stands in for the clock screen, so it
+        // carries the same red "update available" dot on its gear.
+        checkForUpdateBadge();
         // An apply that is already finished, or a system screen we are coming back from. Read
         // before anything else touches the screen: in the common case this instance was built a
         // moment ago by the configuration change the apply itself caused, and it exists only to

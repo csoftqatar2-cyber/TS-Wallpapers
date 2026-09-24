@@ -104,18 +104,32 @@
         <!-- The only route to Settings. In Leopard the clock screen never runs, and the gear
              that normally opens Settings lives on it — without this button the mode is a
              one-way door with no way back to Normal. -->
-        <ImageView
-            android:id="@+id/buttonLeopardSettings"
-            android:layout_width="44dp"
-            android:layout_height="44dp"
-            android:layout_marginStart="12dp"
-            android:padding="12dp"
-            android:background="@drawable/bar_pill"
-            android:src="@drawable/ic_settings_white_24dp"
-            app:tint="@color/aurora_muted"
-            android:focusable="true"
-            android:clickable="true"
-            android:contentDescription="@string/settings_header_title" />
+        <FrameLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="12dp">
+            <ImageView
+                android:id="@+id/buttonLeopardSettings"
+                android:layout_width="44dp"
+                android:layout_height="44dp"
+                android:layout_margin="4dp"
+                android:padding="12dp"
+                android:background="@drawable/bar_pill"
+                android:src="@drawable/ic_settings_white_24dp"
+                app:tint="@color/aurora_muted"
+                android:focusable="true"
+                android:clickable="true"
+                android:contentDescription="@string/settings_header_title" />
+            <!-- Red dot on the gear's corner: shown only when a newer version is published,
+                 checked on every open (onResume). -->
+            <View
+                android:id="@+id/viewLeopardUpdateBadge"
+                android:layout_width="18dp"
+                android:layout_height="18dp"
+                android:layout_gravity="top|right"
+                android:background="@drawable/badge_dot"
+                android:visibility="gone" />
+        </FrameLayout>
 
     </LinearLayout>
 

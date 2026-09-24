@@ -18,9 +18,7 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_gravity="bottom">
-        <com.google.android.material.floatingactionbutton.FloatingActionButton
-            android:id="@+id/fabSettings"
-            android:focusable="true"
+        <FrameLayout
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginLeft="100dp"
@@ -28,22 +26,30 @@
             android:layout_marginRight="@dimen/fab_margin"
             android:layout_marginEnd="@dimen/fab_margin"
             android:layout_marginTop="@dimen/fab_margin"
-            android:layout_marginBottom="@dimen/fab_margin"
-            app:srcCompat="@drawable/ic_settings_white_24dp"
-            app:tint="#1a1204"
-            app:backgroundTint="@color/gold"
-            app:elevation="6dp"
-            android:contentDescription="@string/open_settings" />
-        <!-- red dot: only visible when an app update is available -->
-        <View
-            android:id="@+id/viewUpdateBadge"
-            android:layout_width="7dp"
-            android:layout_height="7dp"
-            android:layout_gravity="center_vertical"
-            android:layout_marginStart="2dp"
-            android:layout_marginLeft="2dp"
-            android:background="@drawable/badge_dot"
-            android:visibility="gone" />
+            android:layout_marginBottom="@dimen/fab_margin">
+            <com.google.android.material.floatingactionbutton.FloatingActionButton
+                android:id="@+id/fabSettings"
+                android:focusable="true"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_margin="4dp"
+                app:srcCompat="@drawable/ic_settings_white_24dp"
+                app:tint="#1a1204"
+                app:backgroundTint="@color/gold"
+                app:elevation="6dp"
+                android:contentDescription="@string/open_settings" />
+            <!-- Red dot on the button's top corner: shown only when a newer version is published
+                 (checked on every open). Elevation above the FAB's 6dp or the FAB draws over it. -->
+            <View
+                android:id="@+id/viewUpdateBadge"
+                android:layout_width="16dp"
+                android:layout_height="16dp"
+                android:layout_gravity="top|right"
+                android:elevation="10dp"
+                android:outlineProvider="none"
+                android:background="@drawable/badge_dot"
+                android:visibility="gone" />
+        </FrameLayout>
         <View
             android:layout_width="0dp"
             android:layout_height="0dp"
