@@ -129,6 +129,11 @@
                     android:visibility="gone" />
 
                 <RadioButton
+                    android:id="@+id/radioConfirmHaval"
+                    style="@style/ActivationModeRadio"
+                    android:text="@string/mode_haval" />
+
+                <RadioButton
                     android:id="@+id/radioConfirmGwm"
                     style="@style/ActivationModeRadio"
                     android:text="@string/mode_gwm" />

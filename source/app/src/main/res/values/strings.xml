@@ -251,6 +251,7 @@ Roboto Font Copyright (c) Christian Robertson. Licensed under the Apache License
     <string name="leopard_chip">Leopard mode</string>
     <string name="denza_chip">Denza mode</string>
     <string name="icar03t_chip">ICAR 03T mode</string>
+    <string name="haval_chip">Haval V7 mode</string>
     <string name="lynkco_chip">Lynk and Co mode</string>
     <string name="lynkco_scale">Lynk &amp; Co interface size</string>
     <string name="lynkco_scale_hint">Enlarge or shrink the whole wallpaper picker on Lynk &amp; Co screens.</string>
@@ -308,6 +309,18 @@ Roboto Font Copyright (c) Christian Robertson. Licensed under the Apache License
     <string name="icar03t_nothing_ours">This app has not put a wallpaper on this car.</string>
     <string name="icar03t_car_gallery_hint">The pictures the car came with are managed by the car itself — delete them from its own screen.</string>
     <string name="leopard_gif_static_note">This device shows GIFs as a still image.</string>
+    <string name="haval_set">Download wallpapers</string>
+    <string name="haval_remove">Remove from the car</string>
+    <string name="haval_applied">Wallpapers downloaded to the car ✓</string>
+    <string name="haval_failed">Could not download the wallpapers to the car</string>
+    <string name="haval_download_all">Download all</string>
+    <string name="haval_all_progress">Downloading %1$d of %2$d</string>
+    <string name="haval_all_already">Every wallpaper is already on the car.</string>
+    <string name="haval_all_nothing">There is nothing here to download.</string>
+    <string name="haval_no_storage">Storage access is required. Run: adb shell appops set store.thabthaba.clock MANAGE_EXTERNAL_STORAGE allow</string>
+    <string name="haval_no_permission">Permission is required. Run: adb shell pm grant store.thabthaba.clock android.permission.WRITE_SECURE_SETTINGS</string>
+    <string name="haval_removed">The wallpaper was removed from the car.</string>
+    <string name="haval_video_unsupported">This car cannot show a moving wallpaper — still images only.</string>
 
     <!-- Operating mode picker, on the activation screen and in Settings. -->
     <string name="mode_title">Operating mode</string>
@@ -329,6 +342,8 @@ Roboto Font Copyright (c) Christian Robertson. Licensed under the Apache License
          is Leopard's behaviour under its own name. -->
     <string name="mode_icar03t">ICAR 03T</string>
     <string name="mode_icar03t_desc">The app adds the chosen picture to the car\'s own wallpaper carousel and disappears — pictures only, no clock, no switching.</string>
+    <string name="mode_haval">Haval V7</string>
+    <string name="mode_haval_desc">Choose several still images to download to the car; the driver swipes between them on the car\'s own wallpaper screen.</string>
     <string name="mode_gwm">GWM</string>
     <string name="mode_gwm_desc">Same as Others, plus a \"Manage GWM images\" section that mirrors the GWM channel into the shared folder the GWM dashboard app reads.</string>
     <string name="mode_jetour">Jetour</string>
@@ -340,6 +355,7 @@ Roboto Font Copyright (c) Christian Robertson. Licensed under the Apache License
     <string name="mode_leopard_unsupported_note">Some screens do not support Leopard — the option is disabled automatically on those.</string>
     <string name="mode_denza_unsupported_note">Some screens do not support Denza — the option is disabled automatically on those.</string>
     <string name="mode_icar03t_unsupported_note">Some screens do not support ICAR 03T — the option is disabled automatically on those.</string>
+    <string name="chip_mode_haval">Haval V7</string>
     <string name="mode_new_badge">New</string>
 
     <!-- Settings, in Leopard / Denza mode. -->

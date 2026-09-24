@@ -181,6 +181,33 @@
                     android:text="@string/leopard_source_cloud_sub" />
             </LinearLayout>
 
+            <!-- Haval V7 only (hidden everywhere else): "Download all" is the big button at the
+                 bottom on that car, and its progress belongs beside the library it is copying -
+                 so the bar lives here, under the cloud source, rather than under the button. -->
+            <ProgressBar
+                android:id="@+id/havalAllProgress"
+                style="?android:attr/progressBarStyleHorizontal"
+                android:layout_width="match_parent"
+                android:layout_height="6dp"
+                android:layout_marginTop="8dp"
+                android:layout_marginStart="10dp"
+                android:layout_marginEnd="10dp"
+                android:max="100"
+                android:progressTint="@color/colorAccent"
+                android:visibility="gone" />
+
+            <TextView
+                android:id="@+id/havalAllProgressText"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:layout_marginStart="10dp"
+                android:layout_marginEnd="10dp"
+                android:gravity="center"
+                android:textColor="@color/aurora_muted"
+                android:textSize="12sp"
+                android:visibility="gone" />
+
         </LinearLayout>
 
         <!-- The library: two pictures across, scrolling down.

@@ -5,10 +5,12 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
+import android.os.Build;
+import android.provider.Settings;
 
 /**
  * Which product this install is: Normal, FSE, Leopard, GWM, Lynkco, Jetour, Denza, or
- * ICAR 03T. The eight are mutually exclusive.
+ * ICAR 03T, or Haval V7. The nine are mutually exclusive.
  *
  * - NORMAL  : the app owns the screen and draws wallpaper + clock itself.
  * - FSE     : same, but the window is pinned to 1920x720 for ultra-wide head units.
@@ -42,6 +44,10 @@ import android.content.pm.PackageManager;
  *             com.mengbo.launcher3 paints its own carousel of pictures on top. The picture that
  *             reaches the screen goes into a folder the launcher reads. See
  *             {@link Icar03tApplier}.
+ * - HAVAL   : a third hand-off shape. The app draws nothing and gives the GWM launcher a LIST
+ *             of still-image paths; the driver, not this app, swipes between them afterwards.
+ *             Unlike Leopard it never touches WallpaperManager, and unlike Lynkco it does not
+ *             launch a one-file vendor preview. See {@link HavalApplier}.
  *
  * FSE stays on its original boolean key so the six places that already read it, and every
  * device already in the field, keep working untouched. In Leopard/GWM/Jetour that flag reads
@@ -69,6 +75,8 @@ class OperatingMode {
      * exists so the manager can target and count these cars on their own.
      */
     static final int ICAR03T = 7;
+    /** Haval V7's launcher-owned multi-wallpaper list hand-off. */
+    static final int HAVAL = 8;
 
     private static final String PREF_LEOPARD = "leopard-mode";
     private static final String PREF_GWM = "gwm-mode";
@@ -76,6 +84,7 @@ class OperatingMode {
     private static final String PREF_JETOUR = "jetour-mode";
     private static final String PREF_DENZA = "denza-mode";
     private static final String PREF_ICAR03T = "icar03t-mode";
+    private static final String PREF_HAVAL = "haval-mode";
 
     /**
      * Has a human explicitly chosen this car's mode on a build that knows all six modes?
@@ -129,6 +138,7 @@ class OperatingMode {
         if(prefs.getBoolean(PREF_LEOPARD, false)) return LEOPARD;
         if(prefs.getBoolean(PREF_DENZA, false)) return DENZA;
         if(prefs.getBoolean(PREF_ICAR03T, false)) return ICAR03T;
+        if(prefs.getBoolean(PREF_HAVAL, false)) return HAVAL;
         if(prefs.getBoolean(PREF_GWM, false)) return GWM;
         if(prefs.getBoolean(PREF_LYNKCO, false)) return LYNKCO;
         if(prefs.getBoolean(PREF_JETOUR, false)) return JETOUR;
@@ -142,6 +152,7 @@ class OperatingMode {
                 .putBoolean(PREF_LEOPARD, mode == LEOPARD)
                 .putBoolean(PREF_DENZA, mode == DENZA)
                 .putBoolean(PREF_ICAR03T, mode == ICAR03T)
+                .putBoolean(PREF_HAVAL, mode == HAVAL)
                 .putBoolean(PREF_GWM, mode == GWM)
                 .putBoolean(PREF_LYNKCO, mode == LYNKCO)
                 .putBoolean(PREF_JETOUR, mode == JETOUR)
@@ -159,6 +170,10 @@ class OperatingMode {
 
     static boolean isIcar03t(SharedPreferences prefs) {
         return get(prefs) == ICAR03T;
+    }
+
+    static boolean isHaval(SharedPreferences prefs) {
+        return get(prefs) == HAVAL;
     }
 
     /**
@@ -213,7 +228,7 @@ class OperatingMode {
 
     /** {@link #isHandoff} for a mode value that is not in prefs yet (a picker's selection). */
     static boolean isHandoffMode(int m) {
-        return m == LEOPARD || m == DENZA || m == ICAR03T || m == LYNKCO;
+        return m == LEOPARD || m == DENZA || m == ICAR03T || m == HAVAL || m == LYNKCO;
     }
 
     /** Stable wire value the device reports to the backend / manager. Never rename these. */
@@ -222,6 +237,7 @@ class OperatingMode {
             case LEOPARD: return "leopard";
             case DENZA:   return "denza";
             case ICAR03T: return "icar03t";
+            case HAVAL:   return "havalv7";
             case GWM:     return "gwm";
             case LYNKCO:  return "lynkco";
             case JETOUR:  return "jetour";
@@ -258,6 +274,18 @@ class OperatingMode {
      */
     static boolean isIcar03tSupported(Context ctx) {
         return Icar03tApplier.isAvailable(ctx);
+    }
+
+    /** The GWM build identity, or the launcher's observed central-wallpaper output key. */
+    static boolean isHavalSupported(Context ctx) {
+        if("GWM".equalsIgnoreCase(Build.MANUFACTURER)
+                || "GWM".equalsIgnoreCase(Build.BRAND)) return true;
+        try {
+            return Settings.Global.getString(ctx.getContentResolver(),
+                    HavalApplier.KEY_CURRENT_CENTRAL) != null;
+        } catch(Throwable t) {
+            return false;
+        }
     }
 
     /**

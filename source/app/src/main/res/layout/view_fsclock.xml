@@ -425,6 +425,11 @@
                             android:text="@string/mode_icar03t" />
 
                         <RadioButton
+                            android:id="@+id/radioActivationHaval"
+                            style="@style/ActivationModeRadio"
+                            android:text="@string/mode_haval" />
+
+                        <RadioButton
                             android:id="@+id/radioActivationGwm"
                             style="@style/ActivationModeRadio"
                             android:text="@string/mode_gwm" />

@@ -2,6 +2,22 @@
 <resources>
     <string name="app_name">ذبذبة خلفيات</string>
     <string name="app_name_long">ذبذبة خلفيات</string>
+    <string name="mode_haval">Haval V7</string>
+    <string name="mode_haval_desc">اختر عدة صور ثابتة لتنزيلها إلى السيارة، ثم تنقّل بينها من شاشة الخلفيات الخاصة بالسيارة.</string>
+    <string name="chip_mode_haval">Haval V7</string>
+    <string name="haval_chip">وضع Haval V7</string>
+    <string name="haval_set">تنزيل الخلفية</string>
+    <string name="haval_remove">إزالة من السيارة</string>
+    <string name="haval_applied">تم تنزيل الخلفيات إلى السيارة ✓</string>
+    <string name="haval_failed">تعذّر تنزيل الخلفيات إلى السيارة</string>
+    <string name="haval_download_all">تنزيل الكل</string>
+    <string name="haval_all_progress">يجري تنزيل ⁨%1$d⁩ من ⁨%2$d⁩</string>
+    <string name="haval_all_already">جميع الخلفيات منزَّلة على السيارة بالفعل.</string>
+    <string name="haval_all_nothing">لا توجد صور هنا لتنزيلها.</string>
+    <string name="haval_no_storage">يلزم إذن الوصول إلى الملفات. نفّذ: adb shell appops set store.thabthaba.clock MANAGE_EXTERNAL_STORAGE allow</string>
+    <string name="haval_no_permission">يلزم منح الإذن. نفّذ: adb shell pm grant store.thabthaba.clock android.permission.WRITE_SECURE_SETTINGS</string>
+    <string name="haval_removed">أُزيلت الخلفية من السيارة.</string>
+    <string name="haval_video_unsupported">هذه السيارة لا تعرض خلفية متحركة — الصور الثابتة فقط.</string>
 
     <!-- in-app self update -->
     <string name="update_check">التحقق من التحديثات</string>

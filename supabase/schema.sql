@@ -74,7 +74,7 @@ create table if not exists public.wallpapers (
     -- When set, this wallpaper only reaches cars whose last reported mode matches
     -- (e.g. 'lynkco' + is_global = "every Lynk & Co car"). null = the normal
     -- library that syncs to every car. See get_wallpapers.
-    target_mode text check (target_mode is null or target_mode in ('normal','fse','leopard','gwm','lynkco','jetour','denza')),
+    target_mode text check (target_mode is null or target_mode in ('normal','fse','leopard','gwm','lynkco','jetour','denza','icar03t','havalv7')),
     -- Delivery channel. 'app' = shown by our own slideshow. The others are NOT shown
     -- by us at all: the car downloads them into a folder the head unit's own app
     -- reads — 'gwm_split' into /sdcard/Pictures/GWMSplit_Styles (the same folder the

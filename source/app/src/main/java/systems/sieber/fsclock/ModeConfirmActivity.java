@@ -273,6 +273,8 @@ public class ModeConfirmActivity extends AppCompatActivity {
         // ICAR 03T is gated by the car's launcher, which is what actually shows the picture.
         disableUnsupported(R.id.radioConfirmIcar03t, R.id.textViewConfirmIcar03tNote,
                 R.string.icar03t_unsupported, OperatingMode.isIcar03tSupported(this));
+        // Haval is dimmed the same way: the launcher we write the list for only exists on GWM.
+        disableUnsupported(R.id.radioConfirmHaval, 0, 0, OperatingMode.isHavalSupported(this));
         // Lynkco is dimmed when the unit cannot do it, with no explanatory line: the dimming is
         // the whole message on a customer-facing screen.
         disableUnsupported(R.id.radioConfirmLynkco, 0, 0, mLynkcoSupported);
@@ -429,6 +431,7 @@ public class ModeConfirmActivity extends AppCompatActivity {
         if(id == R.id.radioConfirmLeopard) return OperatingMode.LEOPARD;
         if(id == R.id.radioConfirmDenza) return OperatingMode.DENZA;
         if(id == R.id.radioConfirmIcar03t) return OperatingMode.ICAR03T;
+        if(id == R.id.radioConfirmHaval) return OperatingMode.HAVAL;
         if(id == R.id.radioConfirmGwm) return OperatingMode.GWM;
         if(id == R.id.radioConfirmJetour) return OperatingMode.JETOUR;
         if(id == R.id.radioConfirmLynkco) return OperatingMode.LYNKCO;
@@ -441,6 +444,7 @@ public class ModeConfirmActivity extends AppCompatActivity {
         int res = mode == OperatingMode.LEOPARD ? R.string.mode_leopard_desc
                 : mode == OperatingMode.DENZA ? R.string.mode_denza_desc
                 : mode == OperatingMode.ICAR03T ? R.string.mode_icar03t_desc
+                : mode == OperatingMode.HAVAL ? R.string.mode_haval_desc
                 : mode == OperatingMode.FSE ? R.string.mode_fse_desc
                 : mode == OperatingMode.GWM ? R.string.mode_gwm_desc
                 : mode == OperatingMode.JETOUR ? R.string.mode_jetour_desc

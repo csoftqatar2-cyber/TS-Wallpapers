@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The outside mark for a wallpaper that is already on the car.
+
+     The corner badge alone is not enough on this screen: the grid is two columns of photographs
+     and a small word sinks into a busy picture. A ring round the whole cell reads from a metre
+     away, which is the distance a driver actually looks at a head unit from.
+
+     Deliberately NOT the same colour as the selection ring in leopard_cell_bg (gold): selection
+     is "what you are looking at now" and this is "what the car already has" — two different
+     facts that must not be confused with each other. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+    <solid android:color="#00000000" />
+    <stroke android:width="3dp" android:color="@color/colorAccent" />
+    <corners android:radius="16dp" />
+</shape>

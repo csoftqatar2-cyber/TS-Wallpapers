@@ -34,4 +34,7 @@
          The other bar tokens already exist under their Aurora names: bar text = aurora_text,
          muted icons = aurora_muted, 1dp hairline = aurora_border, highlight = gold. -->
     <color name="bar_glass">#802E2417</color>
+    <!-- The "this one is on the car" tick. Green rather than the gold used everywhere else:
+         gold already means "selected" on this screen, and done is not the same as chosen. -->
+    <color name="haval_tick">#2FD46A</color>
 </resources>

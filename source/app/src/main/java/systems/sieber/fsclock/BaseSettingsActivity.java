@@ -451,6 +451,7 @@ public class BaseSettingsActivity extends AppCompatActivity {
                 case OperatingMode.LEOPARD: mode.setText(R.string.chip_mode_leopard); break;
                 case OperatingMode.DENZA:   mode.setText(R.string.chip_mode_denza); break;
                 case OperatingMode.ICAR03T: mode.setText(R.string.chip_mode_icar03t); break;
+                case OperatingMode.HAVAL:   mode.setText(R.string.chip_mode_haval); break;
                 case OperatingMode.FSE:     mode.setText(R.string.chip_mode_fse); break;
                 case OperatingMode.GWM:     mode.setText(R.string.chip_mode_gwm); break;
                 case OperatingMode.JETOUR:  mode.setText(R.string.chip_mode_jetour); break;
@@ -1035,7 +1036,8 @@ public class BaseSettingsActivity extends AppCompatActivity {
         // a device that has not been activated, where picking FSE would also quietly switch on
         // start-on-boot. Gate both routes.
         int[] modeViews = { R.id.radioGroupMode, R.id.radioModeNormal, R.id.radioModeFse,
-                R.id.radioModeLeopard, R.id.radioModeDenza, R.id.radioModeIcar03t, R.id.chipMode };
+                R.id.radioModeLeopard, R.id.radioModeDenza, R.id.radioModeIcar03t,
+                R.id.radioModeHaval, R.id.chipMode };
         for(int id : modeViews) {
             View v = findViewById(id);
             if(v == null) continue;
@@ -2214,6 +2216,12 @@ public class BaseSettingsActivity extends AppCompatActivity {
             icar03t.setEnabled(false);
             icar03t.setAlpha(0.4f);
         }
+        final RadioButton haval = findViewById(R.id.radioModeHaval);
+        boolean havalSupported = OperatingMode.isHavalSupported(this);
+        if(haval != null && !havalSupported) {
+            haval.setEnabled(false);
+            haval.setAlpha(0.4f);
+        }
 
         // Lynkco is only a real product on a head unit that ships the Flyme theme app we hand the
         // wallpaper to. Everywhere else the switch would do nothing, so it is shown disabled
@@ -2228,6 +2236,7 @@ public class BaseSettingsActivity extends AppCompatActivity {
         int mode = OperatingMode.get(mSharedPref);
         if(OperatingMode.isLeopardFamily(mSharedPref) && !supported) mode = OperatingMode.NORMAL;
         if(mode == OperatingMode.LYNKCO && !lynkcoSupported) mode = OperatingMode.NORMAL;
+        if(mode == OperatingMode.HAVAL && !havalSupported) mode = OperatingMode.NORMAL;
         group.check(radioFor(mode));
         updateModeDescription(mode, supported);
 
@@ -2235,6 +2244,7 @@ public class BaseSettingsActivity extends AppCompatActivity {
             int m = checkedId == R.id.radioModeLeopard ? OperatingMode.LEOPARD
                     : checkedId == R.id.radioModeDenza ? OperatingMode.DENZA
                     : checkedId == R.id.radioModeIcar03t ? OperatingMode.ICAR03T
+                    : checkedId == R.id.radioModeHaval ? OperatingMode.HAVAL
                     : checkedId == R.id.radioModeFse ? OperatingMode.FSE
                     : checkedId == R.id.radioModeGwm ? OperatingMode.GWM
                     : checkedId == R.id.radioModeJetour ? OperatingMode.JETOUR
@@ -2254,6 +2264,7 @@ public class BaseSettingsActivity extends AppCompatActivity {
         return mode == OperatingMode.LEOPARD ? R.id.radioModeLeopard
                 : mode == OperatingMode.DENZA ? R.id.radioModeDenza
                 : mode == OperatingMode.ICAR03T ? R.id.radioModeIcar03t
+                : mode == OperatingMode.HAVAL ? R.id.radioModeHaval
                 : mode == OperatingMode.FSE ? R.id.radioModeFse
                 : mode == OperatingMode.GWM ? R.id.radioModeGwm
                 : mode == OperatingMode.JETOUR ? R.id.radioModeJetour
@@ -2325,8 +2336,8 @@ public class BaseSettingsActivity extends AppCompatActivity {
         final boolean supported = OperatingMode.isSupported(this);
         final boolean lynkcoSupported = OperatingMode.isLynkcoSupported(this);
         final int[] modes = { OperatingMode.NORMAL, OperatingMode.FSE, OperatingMode.LEOPARD,
-                OperatingMode.DENZA, OperatingMode.ICAR03T, OperatingMode.GWM, OperatingMode.LYNKCO,
-                OperatingMode.JETOUR };
+                OperatingMode.DENZA, OperatingMode.ICAR03T, OperatingMode.HAVAL, OperatingMode.GWM,
+                OperatingMode.LYNKCO, OperatingMode.JETOUR };
         CharSequence[] labels = {
                 getString(R.string.mode_normal),
                 getString(R.string.mode_fse),
@@ -2336,6 +2347,7 @@ public class BaseSettingsActivity extends AppCompatActivity {
                         : getString(R.string.mode_denza) + " — " + getString(R.string.denza_unsupported),
                 OperatingMode.isIcar03tSupported(this) ? getString(R.string.mode_icar03t)
                         : getString(R.string.mode_icar03t) + " — " + getString(R.string.icar03t_unsupported),
+                getString(R.string.mode_haval),
                 getString(R.string.mode_gwm),
                 // The row is the mode name, nothing appended. The note that used to hang off it
                 // ("not a Lynk & Co / Flyme head unit") was shop-facing detail on a screen the
@@ -2349,9 +2361,10 @@ public class BaseSettingsActivity extends AppCompatActivity {
                 : current == OperatingMode.FSE ? 1
                 : current == OperatingMode.DENZA ? 3
                 : current == OperatingMode.ICAR03T ? 4
-                : current == OperatingMode.GWM ? 5
-                : current == OperatingMode.LYNKCO ? 6
-                : current == OperatingMode.JETOUR ? 7 : 0;
+                : current == OperatingMode.HAVAL ? 5
+                : current == OperatingMode.GWM ? 6
+                : current == OperatingMode.LYNKCO ? 7
+                : current == OperatingMode.JETOUR ? 8 : 0;
 
         new AuroraDialog.Builder(this)
                 .setTitle(R.string.mode_title)
@@ -2379,6 +2392,11 @@ public class BaseSettingsActivity extends AppCompatActivity {
                         Toast.makeText(this, R.string.mode_unavailable_here, Toast.LENGTH_LONG).show();
                         return;
                     }
+                    if(modes[which] == OperatingMode.HAVAL
+                            && !OperatingMode.isHavalSupported(this)) {
+                        Toast.makeText(this, R.string.mode_unavailable_here, Toast.LENGTH_LONG).show();
+                        return;
+                    }
                     d.dismiss();
                     // Drive the radio group, whose listener is what actually applies the mode —
                     // setting it here as well would apply everything twice.
@@ -2396,6 +2414,7 @@ public class BaseSettingsActivity extends AppCompatActivity {
         int res = mode == OperatingMode.LEOPARD ? R.string.mode_leopard_desc
                 : mode == OperatingMode.DENZA ? R.string.mode_denza_desc
                 : mode == OperatingMode.ICAR03T ? R.string.mode_icar03t_desc
+                : mode == OperatingMode.HAVAL ? R.string.mode_haval_desc
                 : mode == OperatingMode.FSE ? R.string.mode_fse_desc
                 : mode == OperatingMode.GWM ? R.string.mode_gwm_desc
                 : mode == OperatingMode.JETOUR ? R.string.mode_jetour_desc

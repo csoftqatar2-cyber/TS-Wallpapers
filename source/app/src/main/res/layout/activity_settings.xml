@@ -688,6 +688,10 @@
                                     style="@style/ModeRadio"
                                     android:text="@string/mode_icar03t" />
                                 <RadioButton
+                                    android:id="@+id/radioModeHaval"
+                                    style="@style/ModeRadio"
+                                    android:text="@string/mode_haval" />
+                                <RadioButton
                                     android:id="@+id/radioModeGwm"
                                     style="@style/ModeRadio"
                                     android:text="@string/mode_gwm" />

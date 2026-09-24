@@ -7,4 +7,5 @@
          them up. -->
     <item name="leopardBadgeVideo" type="id" />
     <item name="leopardBadgeImage" type="id" />
+    <item name="havalDownloadedMark" type="id" />
 </resources>

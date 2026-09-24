@@ -1356,6 +1356,7 @@ public class FsClockView extends FrameLayout {
         final android.widget.RadioButton leopard = findViewById(R.id.radioActivationLeopard);
         final android.widget.RadioButton denza = findViewById(R.id.radioActivationDenza);
         final android.widget.RadioButton icar03t = findViewById(R.id.radioActivationIcar03t);
+        final android.widget.RadioButton haval = findViewById(R.id.radioActivationHaval);
         final android.widget.TextView desc = findViewById(R.id.textViewActivationModeDesc);
         final boolean supported = OperatingMode.isSupported(getContext());
         if(leopard != null && !supported) {
@@ -1371,6 +1372,12 @@ public class FsClockView extends FrameLayout {
         if(icar03t != null && !OperatingMode.isIcar03tSupported(getContext())) {
             icar03t.setEnabled(false);
             icar03t.setAlpha(0.4f);
+        }
+        // Haval writes a list into the GWM launcher's settings key; on any other unit there is
+        // nothing on the other end of that write, so the radio is dimmed rather than lying.
+        if(haval != null && !OperatingMode.isHavalSupported(getContext())) {
+            haval.setEnabled(false);
+            haval.setAlpha(0.4f);
         }
 
         // Unless the controller (لوحة تحكم ذبذبة) has already said which car this is. Then the
@@ -1478,6 +1485,7 @@ public class FsClockView extends FrameLayout {
             case OperatingMode.LEOPARD: return R.id.radioActivationLeopard;
             case OperatingMode.DENZA:   return R.id.radioActivationDenza;
             case OperatingMode.ICAR03T: return R.id.radioActivationIcar03t;
+            case OperatingMode.HAVAL:   return R.id.radioActivationHaval;
             case OperatingMode.GWM:     return R.id.radioActivationGwm;
             case OperatingMode.JETOUR:  return R.id.radioActivationJetour;
             case OperatingMode.LYNKCO:  return R.id.radioActivationLynkco;
@@ -1492,6 +1500,7 @@ public class FsClockView extends FrameLayout {
             case OperatingMode.LEOPARD: return R.string.mode_leopard;
             case OperatingMode.DENZA:   return R.string.mode_denza;
             case OperatingMode.ICAR03T: return R.string.mode_icar03t;
+            case OperatingMode.HAVAL:   return R.string.mode_haval;
             case OperatingMode.GWM:     return R.string.mode_gwm;
             case OperatingMode.JETOUR:  return R.string.mode_jetour;
             case OperatingMode.LYNKCO:  return R.string.mode_lynkco;
@@ -1535,6 +1544,7 @@ public class FsClockView extends FrameLayout {
         int res = mode == OperatingMode.LEOPARD ? R.string.mode_leopard_desc
                 : mode == OperatingMode.DENZA ? R.string.mode_denza_desc
                 : mode == OperatingMode.ICAR03T ? R.string.mode_icar03t_desc
+                : mode == OperatingMode.HAVAL ? R.string.mode_haval_desc
                 : mode == OperatingMode.LYNKCO ? R.string.mode_lynkco_desc
                 : mode == OperatingMode.GWM ? R.string.mode_gwm_desc
                 : mode == OperatingMode.JETOUR ? R.string.mode_jetour_desc
@@ -1542,7 +1552,8 @@ public class FsClockView extends FrameLayout {
         String text = getContext().getString(res);
         // The note is about the live-wallpaper support Leopard (and Denza, the same hand-off)
         // needs; Lynk & Co hands the file to the theme app instead and does not care either way.
-        if(!supported && mode != OperatingMode.LYNKCO && mode != OperatingMode.ICAR03T) {
+        if(!supported && mode != OperatingMode.LYNKCO && mode != OperatingMode.ICAR03T
+                && mode != OperatingMode.HAVAL) {
             text += "\n" + getContext().getString(mode == OperatingMode.DENZA
                     ? R.string.mode_denza_unsupported_note
                     : R.string.mode_leopard_unsupported_note);
@@ -1560,6 +1571,7 @@ public class FsClockView extends FrameLayout {
         if(id == R.id.radioActivationLeopard) return OperatingMode.LEOPARD;
         if(id == R.id.radioActivationDenza) return OperatingMode.DENZA;
         if(id == R.id.radioActivationIcar03t) return OperatingMode.ICAR03T;
+        if(id == R.id.radioActivationHaval) return OperatingMode.HAVAL;
         if(id == R.id.radioActivationGwm) return OperatingMode.GWM;
         if(id == R.id.radioActivationJetour) return OperatingMode.JETOUR;
         if(id == R.id.radioActivationLynkco) return OperatingMode.LYNKCO;

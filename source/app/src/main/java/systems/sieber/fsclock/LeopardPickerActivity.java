@@ -105,6 +105,20 @@ public class LeopardPickerActivity extends AppCompatActivity {
     private int mPreviewToken;
 
     private final List<WallpaperItem> mShown = new ArrayList<>();
+
+    /**
+     * Haval V7 only: the set of wallpapers currently ON the car, in the order they were picked.
+     *
+     * Every other mode has one wallpaper, so the picker keeps a single mSelected. This car takes
+     * a LIST - the launcher renders it and the driver swipes between them - so the app's real
+     * state here is a set, and the button toggles membership instead of committing a choice.
+     * It is persisted because it must survive the app closing: on the next open the grid has to
+     * show exactly what the car is carrying, and HavalApplier rewrites the whole list every time.
+     */
+    private static final String PREF_HAVAL_SELECTION = "haval-selection";
+    /** A tick, not a word: at this cell size a label is a smear and the mark has to read at a glance. */
+    private static final String HAVAL_TICK = "\u2713";
+    private final java.util.LinkedHashSet<String> mHavalSel = new java.util.LinkedHashSet<>();
     private WallpaperItem mSelected;
     private String mSource = SOURCE_CLOUD;
     private String mLocalPick;      // content:// uri chosen from the system picker
@@ -287,6 +301,23 @@ public class LeopardPickerActivity extends AppCompatActivity {
             ((TextView) findViewById(R.id.leopardChip)).setText(R.string.lynkco_chip);
         } else if (OperatingMode.isDenza(mPrefs)) {
             ((TextView) findViewById(R.id.leopardChip)).setText(R.string.denza_chip);
+        } else if (OperatingMode.isHaval(mPrefs)) {
+            ((TextView) findViewById(R.id.leopardChip)).setText(R.string.haval_chip);
+            // Same reason as ICAR 03T below: on this car the app does not set a wallpaper, it
+            // downloads pictures into the launcher's own list. "Set" would promise something
+            // the car does not do.
+            // The big button is the one an owner reaches for, and on this car the thing they
+            // almost always want is the whole library on the car at once - so that is what it
+            // does here. The single-picture wording stays on the preview button, where one
+            // picture is what is being looked at.
+            setTextIfPresent(R.id.buttonSetWallpaper, R.string.haval_download_all);
+            setTextIfPresent(R.id.buttonPreviewSet, R.string.haval_set);
+            havalLoadSelection();
+            // One of the two type filters can never match now, so the pair is noise.
+            View typeFilter = findViewById(R.id.leopardTypeFilter);
+            if(typeFilter != null) typeFilter.setVisibility(View.GONE);
+            // No manage pill in the bar on this car: removal lives on the picture itself
+            // (havalRemoveButton), which is where the owner is already looking.
         } else if (OperatingMode.isIcar03t(mPrefs)) {
             ((TextView) findViewById(R.id.leopardChip)).setText(R.string.icar03t_chip);
             // On this car the app is not setting the wallpaper — it is putting a picture into
@@ -334,7 +365,13 @@ public class LeopardPickerActivity extends AppCompatActivity {
         mSourceCloud.setOnClickListener(v -> selectSource(SOURCE_CLOUD));
         mSourceLocal.setOnClickListener(v -> selectSource(SOURCE_LOCAL));
         mSourcePhone.setOnClickListener(v -> selectSource(SOURCE_PHONE));
-        mSetButton.setOnClickListener(v -> applySelection());
+        // Haval's big button is "download all", not "apply the highlighted one". Bound HERE and
+        // not up in the mode branch, because mSetButton is only resolved further down: an earlier
+        // setOnClickListener lands on a null field and the default binding wins, which is exactly
+        // how the button ended up answering "pick a wallpaper first" on a car that already had
+        // the whole library on it.
+        if(OperatingMode.isHaval(mPrefs)) mSetButton.setOnClickListener(v -> havalDownloadAll());
+        else mSetButton.setOnClickListener(v -> applySelection());
         findViewById(R.id.buttonPreviewSet).setOnClickListener(v -> applySelection());
         findViewById(R.id.buttonPreviewChange).setOnClickListener(v -> hidePreview());
         findViewById(R.id.buttonLeopardSettings).setOnClickListener(v ->
@@ -1141,6 +1178,13 @@ public class LeopardPickerActivity extends AppCompatActivity {
 
     /** True if the type filter lets this item onto the cloud grid. Anything not a video is an image (GIFs included). */
     private boolean passesTypeFilter(WallpaperItem it) {
+        // Haval V7 shows stills only, so a clip is not filtered here - it is not offered at all.
+        // The car's launcher renders the list itself and decodes jpg/png/webp; there is nothing
+        // on that car a video could play through (HavalApplier's header has the evidence), so a
+        // visible clip would only be a tile that refuses every time it is tapped.
+        if(OperatingMode.isHaval(mPrefs) && (it.isVideo() || WallpaperItem.TYPE_GIF.equals(it.type))) {
+            return false;
+        }
         if(mShowVideos == mShowImages) return true;      // none or both lit: no filtering
         return it.isVideo() ? mShowVideos : mShowImages;
     }
@@ -1626,7 +1670,20 @@ public class LeopardPickerActivity extends AppCompatActivity {
             cell.addView(typeBadge(R.drawable.ic_badge_image_20dp, R.id.leopardBadgeImage, d));
         }
 
-        if(!currentUri.isEmpty() && currentUri.equals(samePath(item.url))) {
+        if(OperatingMode.isHaval(mPrefs)) {
+            // "Current" is the launcher's business on this car - the driver moves it with a
+            // swipe and we are never told. What we CAN say is which pictures we put there.
+            if(mHavalSel.contains(item.url)) {
+                // The ring first, so the badge sits on top of it rather than under its stroke.
+                View onCar = new View(this);
+                onCar.setLayoutParams(new FrameLayout.LayoutParams(
+                        FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
+                onCar.setBackgroundResource(R.drawable.haval_downloaded_ring);
+                cell.addView(onCar);
+                cell.addView(havalTick(d));
+                cell.addView(havalRemoveButton(item, d));
+            }
+        } else if(!currentUri.isEmpty() && currentUri.equals(samePath(item.url))) {
             cell.addView(badge(getString(R.string.leopard_badge_current), Gravity.TOP | Gravity.END, d));
         }
 
@@ -1719,6 +1776,10 @@ public class LeopardPickerActivity extends AppCompatActivity {
         File baked = new File(new File(getCacheDir(), "leopard"), bakedName(src));
         if(baked.exists()) //noinspection ResultOfMethodCallIgnored
             baked.delete();
+        // Take it off the car BEFORE deleting the file. The other order leaves a path in the
+        // launcher's list pointing at nothing, and a list whose files have all gone makes the
+        // launcher fall back to the car's own wallpapers - taking the user's other picks with it.
+        if(OperatingMode.isHaval(mPrefs) && mHavalSel.remove(item.url)) havalPublish(0);
         if(!mRepo.deleteLocal(src)) { toast(R.string.wallpaper_delete_failed); return; }
         if(mSelected == item) {
             mSelected = null;
@@ -2106,6 +2167,29 @@ public class LeopardPickerActivity extends AppCompatActivity {
         return cell;
     }
 
+    /**
+     * The "on the car" tick.
+     *
+     * Its own builder rather than {@link #badge}: that one is a small gold word-badge, and this
+     * has to read as a state at a glance from a driver's seat - so it is bigger, heavier, and
+     * green, because gold already means "selected" on this screen and done is not chosen.
+     */
+    private TextView havalTick(float d) {
+        TextView t = new TextView(this);
+        FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT);
+        lp.gravity = Gravity.TOP | Gravity.END;
+        lp.setMargins(Math.round(10 * d), Math.round(10 * d), Math.round(10 * d), Math.round(10 * d));
+        t.setLayoutParams(lp);
+        t.setBackgroundResource(R.drawable.fit_badge_bg);
+        t.setPadding(Math.round(11 * d), Math.round(3 * d), Math.round(11 * d), Math.round(5 * d));
+        t.setTextSize(22);
+        t.setTypeface(t.getTypeface(), android.graphics.Typeface.BOLD);
+        t.setTextColor(ContextCompat.getColor(this, R.color.haval_tick));
+        t.setText(HAVAL_TICK);
+        return t;
+    }
+
     private TextView badge(String text, int gravity, float d) {
         TextView t = new TextView(this);
         FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(
@@ -2143,7 +2227,9 @@ public class LeopardPickerActivity extends AppCompatActivity {
             cells.getChildAt(i).setSelected(
                     item >= 0 && item < mShown.size() && mShown.get(item) == mSelected);
         }
-        mSetButton.setAlpha(mSelected == null ? 0.5f : 1f);
+        // On Haval the button does not act on the highlighted picture - it puts the whole
+        // library on the car - so dimming it for want of a selection would be a lie.
+        mSetButton.setAlpha(OperatingMode.isHaval(mPrefs) || mSelected != null ? 1f : 0.5f);
     }
 
     // ---------------------------------------------------------------- preview
@@ -2303,10 +2389,201 @@ public class LeopardPickerActivity extends AppCompatActivity {
         super.onBackPressed();
     }
 
+    // ---------------------------------------------------------------- Haval V7
+
+    private void havalLoadSelection() {
+        mHavalSel.clear();
+        try {
+            org.json.JSONArray a = new org.json.JSONArray(mPrefs.getString(PREF_HAVAL_SELECTION, "[]"));
+            for(int i = 0; i < a.length(); i++) mHavalSel.add(a.getString(i));
+        } catch(Throwable ignored) { }
+    }
+
+    private void havalSaveSelection() {
+        org.json.JSONArray a = new org.json.JSONArray();
+        for(String u : mHavalSel) a.put(u);
+        mPrefs.edit().putString(PREF_HAVAL_SELECTION, a.toString()).apply();
+    }
+
+    /** The button: put the previewed picture on the car, or take it back off. */
+    private void havalToggleSelected() {
+        if(mSelected.isVideo() || WallpaperItem.TYPE_GIF.equals(mSelected.type)) {
+            // Said out loud rather than failed quietly: the library holds clips, and on this car
+            // there is nowhere for one to go. HavalApplier's header says why.
+            sayLoud(R.string.haval_video_unsupported);
+            return;
+        }
+        boolean removing = mHavalSel.contains(mSelected.url);
+        if(removing) mHavalSel.remove(mSelected.url); else mHavalSel.add(mSelected.url);
+        havalPublish(removing ? R.string.haval_removed : R.string.haval_applied);
+    }
+
+    /**
+     * Stage every chosen picture and rewrite the launcher's whole list.
+     *
+     * One operation on purpose: the settings key IS the list, so there is no such thing as
+     * adding a single entry. A failure therefore leaves the set unsaved and reloads it from
+     * prefs, so the grid keeps telling the truth about what is on the car rather than what we
+     * hoped to put there.
+     */
+    private void havalPublish(final int okMessage) {
+        setBusy(true, R.string.leopard_applying);
+        final java.util.List<WallpaperItem> items = new ArrayList<>();
+        for(String u : mHavalSel) items.add(new WallpaperItem(WallpaperItem.guessType(u), u));
+        new Thread(() -> {
+            final int r = HavalApplier.apply(this, items);
+            runOnUiThread(() -> {
+                setBusy(false, 0);
+                if(r == HavalApplier.RESULT_APPLIED) {
+                    havalSaveSelection();
+                    if(okMessage != 0) sayLoud(okMessage);
+                } else {
+                    havalLoadSelection();   // roll back to what the car actually has
+                    sayLoud(havalErrorMessage(r));
+                }
+                buildFilmstrip();
+                refreshSelection();
+            });
+        }).start();
+    }
+
+    /**
+     * Name the actual obstacle.
+     *
+     * Both grants are invisible until something needs them, and both fail at the same moment
+     * in the same place, so one shared "could not download" message sends the technician
+     * hunting the network. Each of the two says which command fixes it.
+     */
+    private int havalErrorMessage(int result) {
+        if(result == HavalApplier.RESULT_NO_PERMISSION) return R.string.haval_no_permission;
+        if(result == HavalApplier.RESULT_NO_STORAGE) return R.string.haval_no_storage;
+        return R.string.haval_failed;
+    }
+
+    /**
+     * The bin on a picture that is on the car: one press takes it off.
+     *
+     * It sits on the picture rather than behind a manage screen because that is where the
+     * question is asked - the owner is looking at the wallpaper they want gone. It is drawn
+     * only on cells that carry the tick, so it can never mean anything but "remove this one".
+     *
+     * This removes the picture from the CAR. A picture the owner added themselves is deleted
+     * by the bin in the cell's own action bar, which also takes it off the car first.
+     */
+    private View havalRemoveButton(final WallpaperItem item, float d) {
+        ImageView v = new ImageView(this);
+        int size = Math.round(40 * d);
+        FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(size, size);
+        lp.gravity = Gravity.TOP | Gravity.START;
+        lp.setMargins(Math.round(10 * d), Math.round(10 * d), Math.round(10 * d), Math.round(10 * d));
+        v.setLayoutParams(lp);
+        v.setBackgroundResource(R.drawable.leopard_badge_circle);
+        int pad = Math.round(9 * d);
+        v.setPadding(pad, pad, pad, pad);
+        v.setImageResource(R.drawable.ic_delete_24dp);
+        v.setContentDescription(getString(R.string.haval_remove));
+        v.setFocusable(true);
+        v.setClickable(true);
+        v.setOnClickListener(x -> {
+            if(!mHavalSel.remove(item.url)) return;
+            havalPublish(R.string.haval_removed);
+        });
+        return v;
+    }
+
+    /** Tick one cell the instant its picture lands, without rebuilding the whole grid. */
+    private void havalMarkCell(String url) {
+        if(mFilmstrip == null || url == null) return;
+        int index = -1;
+        for(int i = 0; i < mShown.size(); i++) {
+            if(url.equals(mShown.get(i).url)) { index = i; break; }
+        }
+        if(index < 0) return;
+        int child = index + mStripOffset;
+        if(child < 0 || child >= mFilmstrip.getChildCount()) return;
+        View cellView = mFilmstrip.getChildAt(child);
+        if(!(cellView instanceof FrameLayout)) return;
+        FrameLayout cell = (FrameLayout) cellView;
+        if(cell.findViewById(R.id.havalDownloadedMark) != null) return;   // already ticked
+        float d = getResources().getDisplayMetrics().density;
+        View ring = new View(this);
+        ring.setId(R.id.havalDownloadedMark);
+        ring.setLayoutParams(new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
+        ring.setBackgroundResource(R.drawable.haval_downloaded_ring);
+        cell.addView(ring);
+        cell.addView(havalTick(d));
+    }
+
+    /**
+     * Put the whole visible library on the car in one press.
+     *
+     * Only meaningful on this car: elsewhere a wallpaper is a single choice, here the car holds
+     * a list and the driver swipes it, so "all of them" is the setting most owners actually
+     * want. It adds to the selection rather than replacing it, so pictures added earlier from a
+     * phone are not silently dropped.
+     *
+     * Staging runs picture by picture over the car's connection, so the bar is not decoration:
+     * without it a press on a twenty-picture library looks like nothing happened.
+     */
+    private void havalDownloadAll() {
+        final java.util.List<WallpaperItem> adding = new ArrayList<>();
+        for(WallpaperItem it : mShown) {
+            if(it == null || it.url == null) continue;
+            if(it.isVideo() || WallpaperItem.TYPE_GIF.equals(it.type)) continue;
+            if(mHavalSel.add(it.url)) adding.add(it);
+        }
+        if(mHavalSel.isEmpty()) { sayLoud(R.string.haval_all_nothing); return; }
+        // Nothing new to copy. Saying "downloaded ✓" here would claim work that did not happen
+        // and leave the owner wondering why it was instant.
+        if(adding.isEmpty()) { sayLoud(R.string.haval_all_already); return; }
+
+        final ProgressBar bar = findViewById(R.id.havalAllProgress);
+        final TextView line = findViewById(R.id.havalAllProgressText);
+        final View button = mSetButton;
+        final java.util.List<WallpaperItem> items = new ArrayList<>();
+        for(String u : mHavalSel) items.add(new WallpaperItem(WallpaperItem.guessType(u), u));
+        final int total = items.size();
+        if(button != null) button.setEnabled(false);
+        if(bar != null) { bar.setVisibility(View.VISIBLE); bar.setProgress(0); }
+        if(line != null) {
+            line.setVisibility(View.VISIBLE);
+            line.setText(getString(R.string.haval_all_progress, 0, total));
+        }
+        setBusy(true, R.string.leopard_applying);
+        new Thread(() -> {
+            final int r = HavalApplier.apply(this, items, (done, count, url) -> runOnUiThread(() -> {
+                if(bar != null) bar.setProgress(count == 0 ? 0 : done * 100 / count);
+                if(line != null) line.setText(getString(R.string.haval_all_progress, done, count));
+                havalMarkCell(url);
+            }));
+            runOnUiThread(() -> {
+                setBusy(false, 0);
+                if(button != null) button.setEnabled(true);
+                if(bar != null) bar.setVisibility(View.GONE);
+                if(line != null) line.setVisibility(View.GONE);
+                if(r == HavalApplier.RESULT_APPLIED) {
+                    havalSaveSelection();
+                    sayLoud(R.string.haval_applied);
+                } else {
+                    havalLoadSelection();   // roll back to what the car actually has
+                    sayLoud(havalErrorMessage(r));
+                }
+                buildFilmstrip();
+                refreshSelection();
+            });
+        }).start();
+    }
+
     // ---------------------------------------------------------------- apply
 
     private void applySelection() {
         if(mSelected == null) { toast(R.string.leopard_pick_first); return; }
+
+        // Haval takes a list, so the button adds to it or takes back out of it. Nothing below
+        // this line applies on that car: no framing question, no Android wallpaper screen, no
+        // live-wallpaper engine - the launcher reads one settings key and draws the list itself.
+        if(OperatingMode.isHaval(mPrefs)) { havalToggleSelected(); return; }
 
         // Free the grid's decoders before asking for the big one. The live wallpaper engine, or
         // the theme app on a Lynk & Co, is about to want a hardware decoder of its own, and on a
