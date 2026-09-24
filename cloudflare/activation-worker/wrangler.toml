@@ -27,5 +27,17 @@ binding = "DB"
 database_name = "ts-activation"
 database_id = "978813d3-eeb3-4697-9d73-241242d0cfde"
 
+# First-mint fence on /v1/devices/enroll (security review C2, 2026-09-16 — see anonFirstMintFenced
+# in worker.js). A token for a listed app is minted WITHOUT a matching activation serial only
+# while the row's activated_at is younger than the window; older = {status:'refused',
+# reason:'first_mint_guard'} + an 'enroll_guard_refused' audit row. Postgres applies the same rule
+# first (migration 20260924_enroll_first_mint_guard); this is the copy on the deciding side.
+# Both lines commented = fence OFF: deploying this file alone changes nothing. To turn it on,
+# uncomment (or `wrangler deploy --var ANON_FIRST_MINT_WINDOW_MIN:360`) — keep the minutes equal
+# to cf.settings token_first_mint_activation_window_min so the two sides agree.
+# [vars]
+# ANON_FIRST_MINT_WINDOW_MIN = "360"
+# ANON_FIRST_MINT_APPS = "controller"
+
 [observability]
 enabled = true

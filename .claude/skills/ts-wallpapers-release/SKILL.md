@@ -93,7 +93,7 @@ This is cosmetic. Skip it if the local build fights the OneDrive path (see cavea
 «انشر» is not finished until the published build replaces the old copy in the technicians' folder:
 
 ```bash
-curl -L "<apk_url from app_versions>" -o "/c/Users/abdor/OneDrive/Documents/Github/Cars/Cars installer/APK-Store/TS Wallpapers.apk"
+curl -L "<apk_url from app_versions>" -o "/c/Work/Github/Cars/Cars installer/APK-Store/TS Wallpapers.apk"
 ```
 
 Same file name as the one already there (the installer .bat and the sync tooling key on it). Compare the size with

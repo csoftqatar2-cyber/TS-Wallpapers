@@ -48,3 +48,9 @@ tmp/
 temp/
 MAC-304AC4239A25/
 src_git_backup/
+
+# Local tool output / scratch (not project files)
+.evolver/
+graphify-out/
+.claude/settings.local.json
+review.md

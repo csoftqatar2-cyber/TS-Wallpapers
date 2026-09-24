@@ -19,7 +19,7 @@ as you like — just don't bump the version to do it.
 ## 1. Build
 
 ```bash
-cd "C:/Users/abdor/OneDrive/Documents/Github/Apps/APks/TS WALLPAPERS/source" && ./gradlew assembleStandaloneRelease
+cd "C:/Work/Github/Apps/APks/TS WALLPAPERS/source" && ./gradlew assembleStandaloneRelease
 ```
 
 - **Always the `standalone` flavor.** `google` and `amazon` exist for stores that were never
@@ -66,7 +66,7 @@ If ADB won't connect at all, the privileged-channel playbook is a separate skill
 ## 3. Install and launch
 
 ```bash
-adb install -r "C:/Users/abdor/OneDrive/Documents/Github/Apps/APks/TS WALLPAPERS/TS Wallpapers.apk"
+adb install -r "C:/Work/Github/Apps/APks/TS WALLPAPERS/TS Wallpapers.apk"
 adb shell am start -n store.thabthaba.clock/systems.sieber.fsclock.FullscreenActivity
 ```
 

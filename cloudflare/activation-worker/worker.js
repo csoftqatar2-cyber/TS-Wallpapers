@@ -223,6 +223,27 @@ async function sha256Hex(text) {
   return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('');
 }
 
+/**
+ * The first-mint fence (see handleEnroll). TRUE when a mint WITHOUT a matching serial must be
+ * refused for this app: the fence is switched on (ANON_FIRST_MINT_WINDOW_MIN > 0), the app is
+ * listed (ANON_FIRST_MINT_APPS, default "controller"), and the row's activated_at — the moment
+ * the last activation code was accepted — is missing, unparsable, or older than the window.
+ *
+ * Deliberately a pure function of the row and the env: no clock skew games (Postgres writes
+ * activated_at from its own now(), and both clocks are NTP'd), and a row that has never been
+ * activated through this system has no window at all.
+ */
+function anonFirstMintFenced(env, appId, row) {
+  const windowMin = Number(env && env.ANON_FIRST_MINT_WINDOW_MIN);
+  if (!Number.isFinite(windowMin) || windowMin <= 0) return false;
+  const apps = String((env && env.ANON_FIRST_MINT_APPS) || 'controller')
+    .split(',').map((a) => a.trim().toLowerCase()).filter(Boolean);
+  if (!apps.includes(appId)) return false;
+  const at = row && row.activated_at ? Date.parse(row.activated_at) : NaN;
+  if (!Number.isFinite(at)) return true;
+  return Date.now() - at > windowMin * 60 * 1000;
+}
+
 function randomTokenHex() {
   const bytes = new Uint8Array(32);
   crypto.getRandomValues(bytes);
@@ -239,7 +260,7 @@ function randomTokenHex() {
  * primary key is the race guard, so two concurrent enrols produce exactly one token. Nothing here ever activates,
  * blocks or renames a car.
  */
-async function handleEnroll(db, body) {
+async function handleEnroll(db, body, env) {
   const hardwareId = (body.hardware_id || '').trim();
   const appId = normalizeAppId(body.app_id);
   if (!hardwareId) return json({ error: 'hardware_id required' }, 400);
@@ -263,6 +284,23 @@ async function handleEnroll(db, body) {
   // that passed every gate gets a live one. Audited separately so it stays countable.
   const reissue = body.reissue === true;
   const rotate = bySerial || reissue;
+
+  // FIRST-MINT FENCE (2026-09-16, security review C2). "A stranger with the VIN alone can
+  // never rotate" was true; nothing here ever stopped him ENROLLING a car that had not
+  // enrolled this app yet, and Postgres' anonymous enroll_device passes no serial at all.
+  // Postgres now refuses that itself (migration 20260924_enroll_first_mint_guard: an
+  // anonymous first mint is honoured only inside a window after an accepted activation
+  // code). This is the same rule kept on the deciding side as well, because a Postgres
+  // guard has already been removed by mistake once (20260910, restored the same day) and D1
+  // is the authority. The window is this row's activated_at — refreshed by every accepted
+  // code, including a re-typed one — so the legitimate flow (code typed, enrol follows) is
+  // untouched. OFF until ANON_FIRST_MINT_WINDOW_MIN is set (wrangler.toml), so this deploy
+  // changes nothing by itself; ANON_FIRST_MINT_APPS lists the apps it applies to.
+  if (!bySerial && anonFirstMintFenced(env, appId, before)) {
+    await auditStmt(db, hardwareId, 'enroll_guard_refused', before,
+      { ...shape(before), app_id: appId, reissue, activated_at: before.activated_at || null }).run();
+    return json({ status: 'refused', token: null, app_id: appId, reason: 'first_mint_guard', row: shape(before) });
+  }
 
   if (existing && !rotate) {
     // A second enrol for this app on an enrolled car: either a reinstalled genuine
@@ -778,7 +816,7 @@ export default {
           case '/v1/devices/set-state':
             return await handleSetState(db, body);
           case '/v1/devices/enroll':
-            return await handleEnroll(db, body);
+            return await handleEnroll(db, body, env);
           case '/v1/devices/verify':
             return await handleVerify(db, body);
           case '/v1/devices/bulk-upsert':
