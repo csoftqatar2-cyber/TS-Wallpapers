@@ -33,6 +33,35 @@ public class FsClockApp extends Application {
         // service's included, so it fired the instant Android restored our live wallpaper at boot
         // and replaced it with a plain bitmap. See the note in LeopardApplier.
         guardTheWallpaperCard();
+        kickIcar03tBootBurst();
+    }
+
+    /**
+     * On an iCar 03T, put our wallpaper back into the launcher's carousel when this process was
+     * started by the boot itself.
+     *
+     * Why here as well as in {@link BootReceiver}: measured on the car, boot at 16:24:10, the
+     * MENGBO launcher was up at +2 s and this process at +8 s — started by the notification
+     * listener binding — while BOOT_COMPLETED did not reach our receiver until +25 s. Starting
+     * the burst from whichever of the two happens first is what closes the gap the owner saw as
+     * "after restart the picture disappeared". The applier keeps it to one burst per process.
+     *
+     * The elapsed-realtime test is what keeps this out of the way the rest of the time: a process
+     * started three minutes or more after boot is the driver opening something, and the launcher
+     * only wipes the carousel while it starts.
+     */
+    private void kickIcar03tBootBurst() {
+        try {
+            if(android.os.SystemClock.elapsedRealtime() >= 180000) return;
+            // Cheap first: the clock check above costs nothing, the pref read only happens on a
+            // process that really did start with the car.
+            SharedPreferences prefs = getSharedPreferences(
+                    BaseSettingsActivity.SHARED_PREF_DOMAIN, Context.MODE_PRIVATE);
+            if(!OperatingMode.isIcar03t(prefs)) return;
+            Icar03tApplier.startBootBurst(getApplicationContext());
+        } catch(Throwable t) {
+            Log.w("FsClockApp", "could not start the icar03t boot burst", t);
+        }
     }
 
     /**

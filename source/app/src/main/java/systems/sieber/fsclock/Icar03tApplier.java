@@ -54,7 +54,16 @@ import java.net.URL;
  *     folder of many, like GWM or Jetour.</li>
  * <li><b>Never reuse a folder name.</b> The launcher loads through Glide, which caches by
  *     path: writing a new picture under the old name leaves the OLD one on the screen. Every
- *     apply therefore gets a fresh name and the previous folder is removed afterwards.</li>
+ *     apply therefore gets a fresh name.</li>
+ * <li><b>Never send REMOVE after an INSERT.</b> Status 0 reaches
+ *     {@code WallPaperManager.deleteFestivalWallPaper()}, which ignores the {@code holiday}
+ *     extra entirely and drops EVERY entry whose path lives under {@code Download/holiday} —
+ *     including the one we just inserted. Tidying the old slot that way wiped the new
+ *     wallpaper on the car, and only looked to work when there was no previous slot. It is
+ *     unnecessary anyway: status 1 already clears the old entry before adding the new one.
+ *     So an apply sends the insert and nothing else, and the folders left behind by earlier
+ *     applies are swept from disk at the start of the NEXT apply — never right after the
+ *     broadcast, which the launcher processes asynchronously and may still be reading.</li>
  * </ul>
  *
  * PNG only, because the launcher decodes a still. A video cannot go through here at all.
@@ -106,6 +115,12 @@ class Icar03tApplier {
     static int apply(Context ctx, String uriStr, int canvasW, int canvasH) {
         File dir = null;
         try {
+            SharedPreferences p = prefs(ctx);
+            String previous = p.getString(PREF_SLOT, null);
+            // Sweep now, not after the insert: the folders of applies older than the current
+            // slot are certainly unused, and deleting them here cannot race the launcher.
+            sweepOldSlots(previous);
+
             Bitmap bmp = decode(ctx, uriStr);
             if(bmp == null) {
                 Log.e(TAG, "could not decode " + uriStr);
@@ -129,26 +144,117 @@ class Icar03tApplier {
             if(fitted != bmp) fitted.recycle();
             bmp.recycle();
 
-            SharedPreferences p = prefs(ctx);
-            String previous = p.getString(PREF_SLOT, null);
             // Record before broadcasting: if the process dies between the two, the next apply
-            // must still know which folder to clean up.
+            // must still know which folder is ours.
             p.edit().putString(PREF_SLOT, slot).apply();
 
+            // Insert only. No REMOVE for the previous slot — see the class comment: it would
+            // delete this entry too. The launcher drops the old entry on insert by itself, and
+            // the previous folder is swept from disk by the next apply.
             broadcast(ctx, STATUS_INSERT, slot);
             CrashReporter.breadcrumb("icar03t: applied " + slot);
-
-            // Tidy the previous slot only after the new one is in: the launcher clears the old
-            // entry itself on insert, so deleting first would blank the screen in between.
-            if(previous != null && !previous.equals(slot)) {
-                broadcast(ctx, STATUS_REMOVE, previous);
-                deleteTree(new File(holidayRoot(), previous));
-            }
             return RESULT_APPLIED;
         } catch(Throwable t) {
             Log.e(TAG, "apply failed", t);
             if(dir != null) deleteTree(dir.getParentFile());
             return RESULT_FAILED;
+        }
+    }
+
+    /**
+     * Put the slot we already wrote back into the launcher's carousel, without touching disk.
+     *
+     * The launcher wipes us on every car start: {@code WallPaperManager.init()} calls
+     * {@code deleteFestivalWallPaper()}, which drops every festival entry under
+     * {@code Download/holiday}. It then asks providers to resend with an IMPLICIT broadcast
+     * ({@code com.mengbo.holiday.reply}, ~5 s after {@code NewMainActivity.onCreate}) — useless
+     * to us, because a manifest receiver in an app targeting a modern SDK never sees an implicit
+     * broadcast. So we re-send the insert ourselves after a car start.
+     *
+     * The folder name deliberately does NOT change: the files are untouched, so the launcher's
+     * Glide cache keyed by that path holds exactly the picture we want back on the screen.
+     *
+     * @return true if an insert was sent.
+     */
+    static boolean reinsert(Context ctx) {
+        return reinsert(ctx, true);
+    }
+
+    /**
+     * @param breadcrumb false for the repeats inside a boot burst: ~30 identical lines would
+     *                   push everything else out of the breadcrumb buffer a crash report carries.
+     */
+    private static boolean reinsert(Context ctx, boolean breadcrumb) {
+        try {
+            String slot = prefs(ctx).getString(PREF_SLOT, null);
+            if(slot == null) return false;
+            File dir = new File(holidayRoot(), slot + "/launcher");
+            // Both files or nothing, the same rule as apply(): a half-present slot makes the
+            // launcher log "no picture loaded" and we would have announced a wallpaper that
+            // cannot be shown.
+            if(!new File(dir, "img_launch_wall_light.png").isFile()) return false;
+            if(!new File(dir, "img_launch_wall_dark.png").isFile()) return false;
+            broadcast(ctx, STATUS_INSERT, slot);
+            if(breadcrumb) CrashReporter.breadcrumb("icar03t: reinserted " + slot);
+            return true;
+        } catch(Throwable t) {
+            Log.w(TAG, "could not reinsert the wallpaper", t);
+            return false;
+        }
+    }
+
+    /** One burst at a time per process: two triggers racing would just double the traffic. */
+    private static final java.util.concurrent.atomic.AtomicBoolean sBurstRunning =
+            new java.util.concurrent.atomic.AtomicBoolean(false);
+
+    /** How long to keep offering the wallpaper back, and how often. */
+    private static final long BURST_TOTAL_MS = 90000;
+    private static final long BURST_INTERVAL_MS = 3000;
+
+    /**
+     * Keep handing the launcher its festival entry for the first minute and a half of a car start.
+     *
+     * Why a burst and not one delayed send. Measured on the car (boot at 16:24:10): the launcher
+     * process started at +2 s, ours at +8 s — started by the notification-listener binding, not by
+     * the boot broadcast, which only reached {@code BootReceiver} at +25 s. A single insert 20 s
+     * after that broadcast landed at +46 s and worked, but the owner spent those 45 s looking at a
+     * screen with no wallpaper on it. The only way to be on screen as early as the launcher allows
+     * is to keep asking from the moment we exist.
+     *
+     * Why asking early is free. The launcher registers the festival receiver at the END of
+     * {@code NewMainActivity.onCreate}, and the handler touches {@code WallPaperManager
+     * .getInstance()} — whose {@code init()} does the wipe — BEFORE adding our entry. So an insert
+     * is either lost (receiver not up yet) or it sticks; it can never be wiped afterwards. And a
+     * repeat with the same holiday name hits the launcher's own dedup (same status + same holiday
+     * → return), so all the sends after the one that landed cost nothing.
+     */
+    static void startBootBurst(final Context ctx) {
+        try {
+            if(!sBurstRunning.compareAndSet(false, true)) return;
+            final Context app = ctx.getApplicationContext();
+            new Thread(new Runnable() {
+                @Override
+                public void run() {
+                    int sends = 0;
+                    try {
+                        long until = android.os.SystemClock.elapsedRealtime() + BURST_TOTAL_MS;
+                        while(true) {
+                            if(reinsert(app, sends == 0)) sends++;
+                            if(android.os.SystemClock.elapsedRealtime() >= until) break;
+                            Thread.sleep(BURST_INTERVAL_MS);
+                        }
+                    } catch(InterruptedException ignored) {
+                    } catch(Throwable t) {
+                        Log.w(TAG, "boot burst failed", t);
+                    } finally {
+                        sBurstRunning.set(false);
+                        CrashReporter.breadcrumb("icar03t: boot burst done, " + sends + " sends");
+                    }
+                }
+            }).start();
+        } catch(Throwable t) {
+            Log.w(TAG, "could not start the boot burst", t);
+            sBurstRunning.set(false);
         }
     }
 
@@ -164,6 +270,27 @@ class Icar03tApplier {
             CrashReporter.breadcrumb("icar03t: cleared " + slot);
         } catch(Throwable t) {
             Log.w(TAG, "could not clear the wallpaper", t);
+        }
+    }
+
+    /**
+     * Delete every folder of ours under the holiday root except {@code keep} (the slot the
+     * launcher is showing right now). Only our own {@link #SLOT_PREFIX} names are touched —
+     * the root is shared with the car's real theme packs.
+     */
+    private static void sweepOldSlots(String keep) {
+        try {
+            File[] kids = holidayRoot().listFiles();
+            if(kids == null) return;
+            for(File k : kids) {
+                if(!k.isDirectory()) continue;
+                String name = k.getName();
+                if(!name.startsWith(SLOT_PREFIX)) continue;
+                if(name.equals(keep)) continue;
+                deleteTree(k);
+            }
+        } catch(Throwable t) {
+            Log.w(TAG, "could not sweep old slots", t);
         }
     }
 

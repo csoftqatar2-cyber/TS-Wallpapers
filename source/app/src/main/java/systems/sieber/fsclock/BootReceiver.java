@@ -91,6 +91,10 @@ public class BootReceiver extends BroadcastReceiver {
         // a boot broadcast.
         reportCheckIn(context);
 
+        // The iCar 03T launcher deletes every festival wallpaper while it starts, so our picture
+        // is gone on every car start unless we hand it back. See Icar03tApplier.reinsert().
+        reinsertIcar03tWallpaper(context);
+
         maybeStart(context, TAG + "/" + action, action);
     }
 
@@ -142,6 +146,27 @@ public class BootReceiver extends BroadcastReceiver {
                 @Override
                 public void run() { launch(context, attempt); }
             }, ATTEMPTS_MS[i]);
+        }
+    }
+
+    /**
+     * Re-send the launcher its festival entry after a car start.
+     *
+     * The schedule lives in {@link Icar03tApplier#startBootBurst}, which keeps offering the
+     * wallpaper back for 90 s — measured on the car, this broadcast arrived 25 s after boot while
+     * the launcher had been up since +2 s, so waiting for it alone leaves the owner looking at a
+     * bare screen. The burst is also started from {@code FsClockApp}, whichever happens first;
+     * an AtomicBoolean in the applier keeps it to one.
+     */
+    private static void reinsertIcar03tWallpaper(Context context) {
+        try {
+            SharedPreferences prefs = context.getSharedPreferences(
+                    BaseSettingsActivity.SHARED_PREF_DOMAIN, Context.MODE_PRIVATE);
+            if(!OperatingMode.isIcar03t(prefs)) return;
+            Icar03tApplier.startBootBurst(context);
+        } catch(Throwable t) {
+            // A boot broadcast must never crash, whatever state the device is still unlocking in.
+            Log.w(TAG, "cannot start the icar03t re-insert", t);
         }
     }
 
