@@ -433,6 +433,10 @@
     <string name="leopard_local_none">لم يُختَر أي ملف</string>
     <string name="leopard_local_empty">لا توجد صور مخزّنة على الشاشة بعد</string>
     <string name="leopard_local_browse">تصفّح ملفات الجهاز</string>
+    <!-- الضغط المطوّل على «من الجهاز»: نسخ عدة ملفات إلى مجلد الخلفيات دفعة واحدة. -->
+    <string name="leopard_import_done">تمت إضافة %d ملف إلى «من الجهاز» ✓</string>
+    <string name="leopard_import_skipped">تمت إضافة %1$d ملف ✓ — وتُرك %2$d (الحد 100 في المرة)</string>
+    <string name="leopard_import_failed">تعذّر نسخ الملفات</string>
     <string name="leopard_video_first_title">خطوة أخيرة في شاشة أندرويد</string>
     <string name="leopard_video_first_message">ستُفتح الآن شاشة الخلفيات الخاصة بنظام أندرويد، وستظهر فيها معاينة لما اخترته.\n\n١ — اضغط زر «Set wallpaper» في تلك الشاشة.\n٢ — إن سألتك عن مكان التطبيق فاختر «Home screen».\n٣ — ستُغلق وحدها وتظهر الخلفية الجديدة على السيارة.\n\nهذه الشاشة من نظام أندرويد نفسه وليست جزءًا من التطبيق، ولهذا تظهر بالإنجليزية. وهي أيضًا ما يجعل الخلفية تبقى بعد إطفاء السيارة وتشغيلها — لذلك تُفتح في كل مرة، للصور وللخلفيات الحيّة على السواء.</string>
     <string name="leopard_video_first_ok">فهمت، متابعة</string>

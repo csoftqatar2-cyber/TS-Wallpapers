@@ -289,6 +289,10 @@ Roboto Font Copyright (c) Christian Robertson. Licensed under the Apache License
     <string name="leopard_local_none">No file chosen</string>
     <string name="leopard_local_empty">Nothing stored on this screen yet</string>
     <string name="leopard_local_browse">Browse device files</string>
+    <!-- Long-press on «من الجهاز»: many files copied into the wallpaper folder at once. -->
+    <string name="leopard_import_done">%d files added to this screen ✓</string>
+    <string name="leopard_import_skipped">%1$d files added ✓ — %2$d left out (100 at a time)</string>
+    <string name="leopard_import_failed">Could not copy the files</string>
     <string name="leopard_video_first_title">One last step, on Android\'s screen</string>
     <string name="leopard_video_first_message">Android\'s own wallpaper screen is about to open, showing a preview of what you picked.\n\n1 — Press the "Set wallpaper" button on that screen.\n2 — If it asks where to apply it, choose "Home screen".\n3 — It closes by itself and your new wallpaper is on the car.\n\nThat screen belongs to Android, not to this app, which is why it is in English. It is also what keeps the wallpaper after the car is switched off and on — so it opens every time, for pictures and for live wallpapers alike.</string>
     <string name="leopard_video_first_ok">Got it, continue</string>

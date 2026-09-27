@@ -61,6 +61,14 @@ public class LeopardPickerActivity extends AppCompatActivity {
 
     private static final int PICK_LOCAL_REQUEST = 41;
     private static final int FIT_EDITOR_REQUEST = 42;
+    /** Long-press on «من الجهاز»: many files at once, straight into the folder, no editor. */
+    private static final int PICK_LOCAL_MULTI_REQUEST = 43;
+    /**
+     * The most one long-press import takes. A technician loading a customer's whole camera roll
+     * would otherwise sit behind a copy of several gigabytes with nothing to stop it; a hundred is
+     * more than anyone scrolls through on a car, and the rest is one more press away.
+     */
+    private static final int MAX_BULK_IMPORT = 100;
     private static final String PREF_DEFAULT_SOURCE = "leopard-default-source";
     /**
      * Set when the owner ticks "do not show this again" in the hand-off dialog and then confirms.
@@ -121,7 +129,13 @@ public class LeopardPickerActivity extends AppCompatActivity {
     private final java.util.LinkedHashSet<String> mHavalSel = new java.util.LinkedHashSet<>();
     private WallpaperItem mSelected;
     private String mSource = SOURCE_CLOUD;
-    private String mLocalPick;      // content:// uri chosen from the system picker
+    /**
+     * The last file browsed from the device. Since 7.27 that is the COPY in the local wallpaper
+     * folder (a path), not the content:// uri — the uri is only kept when the copy failed.
+     */
+    private String mLocalPick;
+    /** A long-press import is copying; a second one on top would race it for the same names. */
+    private boolean mBulkImporting;
     /** How many leading filmstrip cells are not wallpapers (the device tab's browse cell). */
     private int mStripOffset;
     /** The image handed to the fit editor, and the screen it was framed against. */
@@ -140,6 +154,18 @@ public class LeopardPickerActivity extends AppCompatActivity {
 
     /** Set while the one-shot "grid has a width now" listener is attached. See awaitGridWidth(). */
     private boolean mAwaitingGridWidth = false;
+
+    /**
+     * The width each grid was last laid out for, so a band that changes width afterwards is noticed.
+     *
+     * Inside the dashboard's panel the file picker takes this task to display 0 and back, and
+     * since 7.26 that no longer recreates the screen (configChanges covers what the move changes).
+     * So nothing rebuilt the grid either: the result came back while we were still on the wider
+     * main screen, the cells were sized for that band, and back in the narrower panel the right
+     * column ran under the «من الجهاز» rail («x2-x0<=1488 are inconsistent» on the L5 UI5, cells
+     * built for ~1544) until the section was left and re-entered. -1 = nothing measured yet.
+     */
+    private int mBuiltFilmW = -1, mBuiltPhoneW = -1;
 
     /**
      * Clips this screen is fetching for itself, in the order they were asked for.
@@ -344,6 +370,22 @@ public class LeopardPickerActivity extends AppCompatActivity {
         mFilmstripScroll = findViewById(R.id.filmstripScroll);
         mPhonePane = findViewById(R.id.leopardPhonePane);
         mPhoneGrid = findViewById(R.id.phoneGrid);
+        // Permanent, unlike awaitGridWidth(): a rebuild records the width it used, so the layout it
+        // causes reads back the same number and does not rebuild again. See mBuiltFilmW.
+        mFilmstripScroll.addOnLayoutChangeListener((v, l, t, r, bt, ol, ot, or_, ob) -> {
+            int w = mFilmstrip.getWidth();
+            if(mBuiltFilmW <= 0 || w <= 0 || w == mBuiltFilmW) return;
+            if(mFilmstripScroll.getVisibility() != View.VISIBLE) return;
+            mBuiltFilmW = w;
+            v.post(() -> { if(!gone() && mFilmstripScroll.getVisibility() == View.VISIBLE) buildFilmstrip(); });
+        });
+        ((View) mPhoneGrid.getParent()).addOnLayoutChangeListener((v, l, t, r, bt, ol, ot, or_, ob) -> {
+            int w = mPhoneGrid.getWidth();
+            if(mBuiltPhoneW <= 0 || w <= 0 || w == mBuiltPhoneW) return;
+            if(mPhonePane.getVisibility() != View.VISIBLE) return;
+            mBuiltPhoneW = w;
+            v.post(() -> { if(!gone() && mPhonePane.getVisibility() == View.VISIBLE) buildPhoneGrid(); });
+        });
         mPhoneQrBox = findViewById(R.id.phoneQrBox);
         mSourceCloud = findViewById(R.id.sourceCloud);
         mSourceLocal = findViewById(R.id.sourceLocal);
@@ -372,6 +414,14 @@ public class LeopardPickerActivity extends AppCompatActivity {
 
         mSourceCloud.setOnClickListener(v -> selectSource(SOURCE_CLOUD));
         mSourceLocal.setOnClickListener(v -> selectSource(SOURCE_LOCAL));
+        // Long-press is the technician's door: the car's own file manager, many files at once,
+        // straight into the folder with no editor in between. A tap stays exactly what it was —
+        // the list, and one browsed file that gets framed — because that is the customer's path.
+        // Consumed (true), or the tap listener would fire as well when the finger comes up.
+        mSourceLocal.setOnLongClickListener(v -> {
+            openLocalPickerMulti();
+            return true;
+        });
         mSourcePhone.setOnClickListener(v -> selectSource(SOURCE_PHONE));
         // Haval's big button is "download all", not "apply the highlighted one". Bound HERE and
         // not up in the mode branch, because mSetButton is only resolved further down: an earlier
@@ -395,7 +445,9 @@ public class LeopardPickerActivity extends AppCompatActivity {
         mFilmstripScroll.getViewTreeObserver().addOnScrollChangedListener(this::scheduleTileBind);
 
         mSource = mPrefs.getString(PREF_DEFAULT_SOURCE, SOURCE_CLOUD);
+        if(b != null) mSource = b.getString(STATE_SOURCE, mSource);
         selectSource(mSource);
+        if(b != null) restorePick(b);
 
         // A hand-off car never opens the clock screen, so this picker is its first screen after
         // activation — and on a Leopard's passenger instance nobody ever opens Settings. Ask for
@@ -846,6 +898,7 @@ public class LeopardPickerActivity extends AppCompatActivity {
         // band has once the sources and the QR are taken out of it.
         int paneW = mPhoneGrid.getWidth();
         if(paneW <= 0) paneW = getResources().getDisplayMetrics().widthPixels - Math.round(560 * d);
+        mBuiltPhoneW = paneW;   // a guess too: the first real layout that disagrees rebuilds
         mPhoneGrid.setColumnCount(Math.max(1, paneW / (cellW + gap)));
 
         String currentUri = samePath(mPrefs.getString(MediaWallpaperService.PREF_URI, ""));
@@ -856,6 +909,81 @@ public class LeopardPickerActivity extends AppCompatActivity {
     }
 
     /** The grid's own copy of an item, so the selection ring lands on a cell that exists. */
+    private static final String STATE_SOURCE = "leopard-state-source";
+    private static final String STATE_LOCAL_PICK = "leopard-state-local-pick";
+    private static final String STATE_EDIT_TYPE = "leopard-state-edit-type";
+    private static final String STATE_EDIT_URL = "leopard-state-edit-url";
+    private static final String STATE_EDIT_W = "leopard-state-edit-w";
+    private static final String STATE_EDIT_H = "leopard-state-edit-h";
+    private static final String STATE_EDIT_GRID = "leopard-state-edit-grid";
+    private static final String STATE_SEL_TYPE = "leopard-state-sel-type";
+    private static final String STATE_SEL_URL = "leopard-state-sel-url";
+    private static final String STATE_PREVIEW = "leopard-state-preview";
+
+    /**
+     * What this screen is in the middle of, so a relaunch does not throw it away.
+     *
+     * Inside the dashboard's panel every trip to a system screen (the file picker) moves this task
+     * to display 0 and back, and the two displays differ in more than configChanges can list: a
+     * BYD DiLink 5.0 L5 (lap 2, 2026-09-27) relaunched us with changed=0x4808 — touchscreen,
+     * smallestScreenSize AND colorMode (display 0 is highdr, the panel lowdr). The new instance
+     * then met the editor's result with mEditing == null and returned, and a video picked from the
+     * device came back to the cloud grid. configChanges now covers those three; this is for the
+     * next field a head unit finds that is not on the list.
+     */
+    @Override
+    protected void onSaveInstanceState(Bundle out) {
+        super.onSaveInstanceState(out);
+        out.putString(STATE_SOURCE, mSource);
+        out.putString(STATE_LOCAL_PICK, mLocalPick);
+        if(mEditing != null) {
+            out.putString(STATE_EDIT_TYPE, mEditing.type);
+            out.putString(STATE_EDIT_URL, mEditing.url);
+            out.putInt(STATE_EDIT_W, mEditingW);
+            out.putInt(STATE_EDIT_H, mEditingH);
+            out.putBoolean(STATE_EDIT_GRID, mFromGridPencil);
+        }
+        if(mSelected != null) {
+            out.putString(STATE_SEL_TYPE, mSelected.type);
+            out.putString(STATE_SEL_URL, mSelected.url);
+        }
+        out.putBoolean(STATE_PREVIEW, mPreview != null && mPreview.getVisibility() == View.VISIBLE);
+    }
+
+    /** The other half of {@link #onSaveInstanceState}; runs after selectSource has built the pane. */
+    private void restorePick(Bundle b) {
+        mLocalPick = b.getString(STATE_LOCAL_PICK);
+        String editUrl = b.getString(STATE_EDIT_URL);
+        if(editUrl != null) {
+            // The editor is still open over us: its result lands on this instance next.
+            mEditing = new WallpaperItem(b.getString(STATE_EDIT_TYPE), editUrl);
+            mEditingW = b.getInt(STATE_EDIT_W);
+            mEditingH = b.getInt(STATE_EDIT_H);
+            mFromGridPencil = b.getBoolean(STATE_EDIT_GRID);
+        }
+        String selUrl = b.getString(STATE_SEL_URL);
+        if(selUrl == null) return;
+        WallpaperItem sel = new WallpaperItem(b.getString(STATE_SEL_TYPE), selUrl);
+        if(SOURCE_LOCAL.equals(mSource)) {
+            // A browsed uri or a freshly baked file is not in the stored list showLocal() reads:
+            // put it back as the one cell, the way the pick itself showed it.
+            WallpaperItem inList = pickFromGrid(sel);
+            if(inList == sel) {
+                mShown.clear();
+                mShown.add(sel);
+                hideState();
+                buildFilmstrip();
+            }
+            sel = inList;
+        } else {
+            sel = pickFromGrid(sel);
+        }
+        mSelected = sel;
+        refreshSelection();
+        // Only while the editor is not still to come back: its result opens the preview itself.
+        if(editUrl == null && b.getBoolean(STATE_PREVIEW)) showPreview(mSelected);
+    }
+
     private WallpaperItem pickFromGrid(WallpaperItem wanted) {
         for(WallpaperItem it : mShown) {
             if(samePath(it.url).equals(samePath(wanted.url))) return it;
@@ -1268,7 +1396,10 @@ public class LeopardPickerActivity extends AppCompatActivity {
             public void done(boolean success, int count, String error) {
                 runOnUiThread(() -> {
                     if(standDownIfInactive(success)) return;
-                    if(success) showCloud();
+                    // Only onto the cloud circle. This fires on the way back from the file
+                    // picker too (a minute is enough), and redrawing the cloud list under the
+                    // device circle put the whole library where the device files belong.
+                    if(success && SOURCE_CLOUD.equals(mSource)) showCloud();
                 });
             }
             @Override
@@ -1407,6 +1538,11 @@ public class LeopardPickerActivity extends AppCompatActivity {
             return;
         }
 
+        if(req == PICK_LOCAL_MULTI_REQUEST) {
+            onBulkPicked(res, data);
+            return;
+        }
+
         if(req != PICK_LOCAL_REQUEST) return;
 
         // The system picker is a screen we do not control and cannot style. What we DO own is
@@ -1418,7 +1554,88 @@ public class LeopardPickerActivity extends AppCompatActivity {
             showLocal();
             return;
         }
-        Uri uri = data.getData();
+        final Uri uri = data.getData();
+
+        // Copy it into the wallpaper folder before anything else happens to it.
+        //
+        // This used to keep the content:// uri and nothing more, and the uri is not a place: the
+        // pick was shown as the one cell of the strip and that was its whole life. Open «من الجهاز»
+        // again and it said «لا توجد صور مخزنة» — the list reads the folder, and nothing had ever
+        // been put in the folder. A video was worse off still: every thumbnail and in-cell player
+        // on this screen works from a FILE, so its cell spun for ever (see videoFile). A copy is
+        // what makes a browsed file one of the car's own — listed, reopenable after a restart,
+        // editable and deletable with the same pencil and bin as everything else in the list.
+        //
+        // Off the UI thread: a 30 MB clip off a USB stick is seconds, not milliseconds, and the
+        // busy ring is what says those seconds are work and not a hang.
+        setBusy(true, R.string.leopard_preparing);
+        new Thread(() -> {
+            final File copied = importLocalDocument(uri);
+            runOnUiThread(() -> {
+                if(gone()) return;
+                setBusy(false, 0);
+                mStatus.setText("");   // setBusy(false, 0) leaves «جارٍ التجهيز…» standing
+                if(copied == null) {
+                    // The folder refused it (no external storage, a full disk, a grant revoked
+                    // mid-copy). Fall back to the pick as it came rather than to nothing: the old
+                    // one-cell strip is still a picture that can be set.
+                    showPickedUri(uri);
+                    return;
+                }
+                showPickedFile(copied);
+            });
+        }).start();
+    }
+
+    /**
+     * A browsed file that is now in the wallpaper folder: list it among the others, then carry on
+     * exactly as a pick always has — a picture to the fit editor, a clip to the preview.
+     */
+    private void showPickedFile(File copied) {
+        WallpaperItem item = new WallpaperItem(
+                WallpaperItem.guessType(copied.getName()), copied.getAbsolutePath());
+        mLocalPick = item.url;
+        mSelected = showLocalWith(item);
+        refreshSelection();
+
+        // A picture browsed on the head unit is in exactly the same position as one that arrived
+        // from a phone: it has just entered the app, nobody has decided how it should sit on a
+        // screen this wide, and dropping it straight into the preview is where that question gets
+        // answered badly and silently. So it takes the same route — editor, then preview with the
+        // Set button. A video skips it, as it does on the phone side (there is no still to frame).
+        if(item.isVideo()) {
+            showPreview(mSelected);
+            return;
+        }
+        // It is in the list now, so the editor comes back the way a pencil on a listed cell does:
+        // to the whole list with the burnt-in result selected, not to a strip of one. That is also
+        // what keeps a relaunch coherent — restorePick finds the selection with pickFromGrid.
+        mFromGridPencil = true;
+        openFitEditor(new WallpaperItem(WallpaperItem.TYPE_IMAGE, item.url));
+    }
+
+    /**
+     * Rebuild the device list and hand back the listed copy of this item.
+     *
+     * Normally the item is in the list — it was just written into the folder the list reads. The
+     * exception is a car where the owner switched the local folder off in Settings (the repo then
+     * does not scan it at all): the file still went where it belongs, and it is shown as the one
+     * cell so this pick is not lost to a setting about the slideshow.
+     */
+    private WallpaperItem showLocalWith(WallpaperItem item) {
+        showLocal();
+        WallpaperItem listed = pickFromGrid(item);
+        if(listed == item) {
+            mShown.clear();
+            mShown.add(item);
+            hideState();
+            buildFilmstrip();
+        }
+        return listed;
+    }
+
+    /** The pre-7.27 behaviour, now only the fallback for a pick that could not be copied. */
+    private void showPickedUri(Uri uri) {
         try {
             // Persist the grant, or the choice dies at the next reboot.
             getContentResolver().takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION);
@@ -1431,13 +1648,185 @@ public class LeopardPickerActivity extends AppCompatActivity {
         mSelected = item;
         hideState();
         buildFilmstrip();
-
-        // A picture browsed on the head unit is in exactly the same position as one that arrived
-        // from a phone: it has just entered the app, nobody has decided how it should sit on a
-        // screen this wide, and dropping it straight into the preview is where that question gets
-        // answered badly and silently. So it takes the same route — editor, then preview with the
-        // Set button. A video skips it, as it does on the phone side (there is no still to frame).
         if(!item.isVideo()) stageThenEdit(uri);
+    }
+
+    /**
+     * The long-press door: the car's file manager with multi-select on, pictures and clips only.
+     *
+     * Same intent as {@link #openLocalPicker} but for the opposite job. The tap is one customer
+     * choosing one wallpaper; this is a technician filling the car with a folder of them, and an
+     * editor per file would punish exactly the person loading forty.
+     */
+    private void openLocalPickerMulti() {
+        if(mBulkImporting) return;
+        Intent i = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+        i.addCategory(Intent.CATEGORY_OPENABLE);
+        i.setType("*/*");
+        i.putExtra(Intent.EXTRA_MIME_TYPES, new String[]{"image/*", "video/*"});
+        i.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
+        i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+        try {
+            startActivityForResult(i, PICK_LOCAL_MULTI_REQUEST);
+        } catch(ActivityNotFoundException e) {
+            toast(R.string.leopard_apply_failed);
+        }
+    }
+
+    /**
+     * Copy everything the long-press picker returned into the wallpaper folder, then show it.
+     *
+     * No persistable grants are taken here, on purpose: the files are copied while this result's
+     * own grant is still alive, and the system caps persisted grants per app — a hundred of them
+     * per import would use that allowance up for uris nothing will ever read again.
+     */
+    private void onBulkPicked(int res, Intent data) {
+        if(res != RESULT_OK || data == null) return;   // cancelled: leave the screen as it was
+        final List<Uri> uris = new ArrayList<>();
+        if(data.getClipData() != null) {
+            for(int i = 0; i < data.getClipData().getItemCount(); i++) {
+                Uri u = data.getClipData().getItemAt(i).getUri();
+                if(u != null) uris.add(u);
+            }
+        } else if(data.getData() != null) {
+            uris.add(data.getData());
+        }
+        if(uris.isEmpty()) return;
+        // The first hundred, in the order the picker gave them; the rest are counted and said, so
+        // a technician who selected 140 knows to go back for 40 rather than wonder where they went.
+        final int skipped = Math.max(0, uris.size() - MAX_BULK_IMPORT);
+        final List<Uri> take = skipped > 0 ? new ArrayList<>(uris.subList(0, MAX_BULK_IMPORT)) : uris;
+
+        mBulkImporting = true;
+        setBusy(true, R.string.leopard_preparing);
+        new Thread(() -> {
+            int ok = 0;
+            for(Uri u : take) {
+                if(importLocalDocument(u) != null) ok++;
+            }
+            final int imported = ok;
+            runOnUiThread(() -> {
+                mBulkImporting = false;
+                if(gone()) return;
+                setBusy(false, 0);
+                mStatus.setText("");
+                // Onto the device list whichever source was up, so what was just added is the
+                // thing on screen — selectSource re-reads the folder through showLocal.
+                selectSource(SOURCE_LOCAL);
+                if(imported == 0) toast(R.string.leopard_import_failed);
+                else if(skipped > 0) toast(getString(R.string.leopard_import_skipped, imported, skipped));
+                else toast(getString(R.string.leopard_import_done, imported));
+            });
+        }).start();
+    }
+
+    /**
+     * Copy one document into the local wallpaper folder and return the file, or null.
+     * Blocking — call from a background thread.
+     *
+     * Named after the document's display name, so the list reads the way the file manager did. The
+     * same document picked twice must not become two cells: when a file of that name is already
+     * there with the same size it is taken to be this one and reused — cheaply, before a byte is
+     * copied, whenever the provider tells us the size, and after the copy when it does not. A
+     * different file that happens to share the name gets "name (2).ext" instead of overwriting it.
+     *
+     * Written aside as ".part" and renamed into place: the folder scan only lists media
+     * extensions, so a copy cut short (card pulled, car switched off) never shows up as a
+     * truncated wallpaper. Never given UploadServer's prefix — that is what marks a phone upload,
+     * and a file carrying it would be listed under the phone source instead of this one.
+     */
+    private File importLocalDocument(Uri uri) {
+        InputStream in = null;
+        FileOutputStream out = null;
+        File tmp = null;
+        try {
+            File dir = mRepo.getLocalFolder();
+            if(dir == null || (!dir.exists() && !dir.mkdirs())) return null;
+            String name = localNameFor(uri);
+            long size = querySize(uri);
+            String base = name, ext = "";
+            int dot = name.lastIndexOf('.');
+            if(dot > 0) { base = name.substring(0, dot); ext = name.substring(dot); }
+
+            if(size > 0) {
+                for(int n = 1; n <= 99; n++) {
+                    File cand = new File(dir, n == 1 ? name : base + " (" + n + ")" + ext);
+                    if(!cand.exists()) break;
+                    if(cand.length() == size) return cand;      // picked before: reuse it
+                }
+            }
+
+            tmp = new File(dir, "." + System.nanoTime() + ".part");
+            in = getContentResolver().openInputStream(uri);
+            if(in == null) return null;
+            out = new FileOutputStream(tmp);
+            byte[] buf = new byte[64 * 1024];
+            int n;
+            while((n = in.read(buf)) > 0) out.write(buf, 0, n);
+            out.flush();
+            out.close();
+            out = null;
+            long got = tmp.length();
+            if(got == 0) return null;
+
+            for(int i = 1; i <= 99; i++) {
+                File cand = new File(dir, i == 1 ? name : base + " (" + i + ")" + ext);
+                if(cand.exists()) {
+                    if(cand.length() == got) return cand;      // same file, size was unknown
+                    continue;
+                }
+                if(tmp.renameTo(cand)) { tmp = null; return cand; }
+                return null;
+            }
+            return null;
+        } catch(Throwable t) {
+            return null;
+        } finally {
+            if(in != null) try { in.close(); } catch(Exception ignored) {}
+            if(out != null) try { out.close(); } catch(Exception ignored) {}
+            if(tmp != null && tmp.exists()) //noinspection ResultOfMethodCallIgnored
+                tmp.delete();
+        }
+    }
+
+    /**
+     * A file name for this document that the folder scan will list and type correctly: its own
+     * display name, cleaned of path characters, with an extension from its MIME type when the
+     * name has none the app recognises (some providers hand out "IMG_0042" or a bare id).
+     */
+    private String localNameFor(Uri uri) {
+        String name = queryName(uri);
+        if(name == null || name.trim().isEmpty()) {
+            name = "wp_" + Integer.toHexString(uri.toString().hashCode());
+        }
+        name = name.trim().replaceAll("[\\\\/:*?\"<>|]", "_");
+        // A leading dot would make it a hidden file (and could collide with our own ".part"
+        // scratch names), and "upload_" would file it under the phone source (see showLocal).
+        while(name.startsWith(".")) name = name.substring(1);
+        if(name.startsWith(UploadServer.RECEIVED_PREFIX)) name = "device_" + name;
+        if(!WallpaperItem.isSupportedMedia(name)) {
+            String mime = null;
+            try { mime = getContentResolver().getType(uri); } catch(Throwable ignored) { }
+            String ext = mime == null ? null
+                    : android.webkit.MimeTypeMap.getSingleton().getExtensionFromMimeType(mime);
+            if(ext == null || !WallpaperItem.isSupportedMedia("x." + ext)) {
+                ext = mime != null && mime.startsWith("video/") ? "mp4" : "jpg";
+            }
+            name = name + "." + ext;
+        }
+        return name;
+    }
+
+    /** The document's size in bytes as its provider reports it, or -1 when it does not say. */
+    private long querySize(Uri uri) {
+        android.database.Cursor c = null;
+        try {
+            c = getContentResolver().query(uri, new String[]{android.provider.OpenableColumns.SIZE},
+                    null, null, null);
+            if(c != null && c.moveToFirst() && !c.isNull(0)) return c.getLong(0);
+        } catch(Exception ignored) {
+        } finally { if(c != null) c.close(); }
+        return -1;
     }
 
     /**
@@ -1555,6 +1944,9 @@ public class LeopardPickerActivity extends AppCompatActivity {
             // The guess is the screen less the two 210dp source rails that flank this band.
             paneW = getResources().getDisplayMetrics().widthPixels - Math.round(420 * d);
             awaitGridWidth();
+            mBuiltFilmW = -1;       // awaitGridWidth owns the first rebuild; see mBuiltFilmW
+        } else {
+            mBuiltFilmW = paneW;
         }
         // Whatever is left, split in two. Deliberately no lower bound beyond a sanity floor: a
         // minimum wide enough to be comfortable would, on the narrow panels this mode runs on,
@@ -1647,17 +2039,23 @@ public class LeopardPickerActivity extends AppCompatActivity {
             // already cached we can pull frame 0 out of it locally. Only a video that has
             // not been fetched yet falls back to the flat placeholder.
             String local = videoFile(item);
-            if(local == null) {
+            // A document uri straight from the system picker. Since 7.27 a pick is copied into
+            // the folder first, so this is only the fallback for a copy that failed — but it has
+            // no file and never will, so it must not get the spinner below: Glide can pull frame
+            // 0 through the content resolver instead.
+            final boolean doc = item.url != null && item.url.startsWith("content://");
+            if(local == null && !doc && LeopardCache.isRemote(item.url)) {
                 // Nothing to draw yet. Say so — a spinner is "coming", a bare brown box is
                 // "broken" — and put the clip on this screen's own download queue so the cell
-                // fills itself in instead of waiting for a sync that may never come.
+                // fills itself in instead of waiting for a sync that may never come. Remote
+                // clips only: nothing else is ever coming, and a spinner for it is a hang.
                 cell.addView(cellSpinner(d));
                 queueVideoFetch(item);
             }
-            if(local != null) {
+            if(local != null || doc) {
                 Glide.with(this)
                         .asBitmap()
-                        .load(new File(local))
+                        .load(local != null ? (Object) new File(local) : Uri.parse(item.url))
                         .apply(RequestOptions.frameOf(0))
                         .override(cellW, cellH)
                         .listener(new RequestListener<Bitmap>() {
@@ -1679,7 +2077,8 @@ public class LeopardPickerActivity extends AppCompatActivity {
                 // black fade-in and says nothing about the clip; the whole reason to choose a
                 // video is the movement, so it has to be visible without committing to it first.
                 // The library only — the phone pane is a short list of things you already know.
-                if(shapeToImage) mVideoTiles.add(new VideoTile(cell, local));
+                // (A file only: the tile player opens a path, and a document uri keeps its still.)
+                if(shapeToImage && local != null) mVideoTiles.add(new VideoTile(cell, local));
             }
             cell.addView(typeBadge(R.drawable.ic_badge_video_20dp, R.id.leopardBadgeVideo, d));
         } else {
@@ -2067,6 +2466,16 @@ public class LeopardPickerActivity extends AppCompatActivity {
      */
     private String videoFile(WallpaperItem item) {
         if(item == null || !item.isVideo()) return null;
+        // A clip that already IS a file on this car — the device folder, a copied pick — is its
+        // own local copy. This check was missing: only the two download caches below were asked,
+        // and neither has ever heard of a path on the car's own storage, so every device video
+        // came back "not here yet" and its cell was given a spinner and a download that
+        // queueVideoFetch then refuses to start (it only fetches http). A spinner with nothing
+        // behind it spins for ever — that was the hang after picking a video from the device.
+        if(isLocalFile(item.url)) {
+            File own = new File(samePath(item.url));
+            if(own.isFile() && own.length() > 0) return own.getAbsolutePath();
+        }
         String local = mRepo.localVideoPath(item);
         if(local != null) return local;
         File f = LeopardCache.cachedFile(this, item.url);
@@ -2307,7 +2716,8 @@ public class LeopardPickerActivity extends AppCompatActivity {
 
         if(!LeopardCache.isRemote(url)) {
             // A local pick (content:// or a file on the head unit) needs no download.
-            playPreviewVideo(Uri.parse(url.startsWith("content://") ? url : "file://" + url));
+            // samePath first: a url already spelled "file://…" must not become "file://file://…".
+            playPreviewVideo(Uri.parse(url.startsWith("content://") ? url : "file://" + samePath(url)));
             return;
         }
 
@@ -3046,6 +3456,11 @@ public class LeopardPickerActivity extends AppCompatActivity {
      * the screen and there is nothing to leak.
      */
     private void toast(int res) {
+        toast(getText(res));
+    }
+
+    /** The same banner for a message with numbers in it (an import count, say). */
+    private void toast(CharSequence res) {
         if(gone()) return;
         if(mBanner == null) {
             ViewGroup root = findViewById(android.R.id.content);
