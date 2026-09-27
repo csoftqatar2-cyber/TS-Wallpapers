@@ -78,13 +78,15 @@
         <activity
             android:name=".FitEditorActivity"
             android:exported="false"
-            android:configChanges="orientation|screenSize|keyboardHidden"
+            android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|touchscreen|keyboardHidden"
+            android:allowEmbedded="true"
             android:theme="@style/AppTheme" />
 
         <activity
             android:name=".LeopardPickerActivity"
             android:exported="false"
-            android:configChanges="orientation|screenSize|keyboardHidden"
+            android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|touchscreen|keyboardHidden"
+            android:allowEmbedded="true"
             android:theme="@style/AppTheme" />
 
         <!-- The one-time mode confirmation gate. Not exported and not launchable on its own:
@@ -174,10 +176,19 @@
              launcher. Exported because `am start` runs as shell; it reads no extras and
              adds no behaviour - it IS FullscreenActivity, so both gates run unchanged.
              configChanges must match FullscreenActivity: landing on another display is a
-             configuration change, and being recreated by it is its own visible flicker. -->
+             configuration change, and being recreated by it is its own visible flicker.
+             smallestScreenSize|screenLayout|touchscreen (here, on LeopardPicker and on FitEditor): the
+             dashboard's panel is smaller than display 0, so the move back after the file picker
+             changed the smallest width, the size class and the touch type (the panel reports
+             -touch) and recreated the screen - the picture just chosen
+             was lost with it (bench, 2026-09-27). allowEmbedded: the panel is an untrusted
+             virtual display, and the platform refuses any activity there that does not carry
+             it («Not allow to launch …FitEditorActivity on display 15»), so the editor escaped
+             to the main screen and had to be carried back. -->
         <activity
             android:name=".LeopardEntryActivity"
-            android:configChanges="orientation|screenSize|keyboardHidden"
+            android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|touchscreen|keyboardHidden"
+            android:allowEmbedded="true"
             android:theme="@style/AppTheme"
             android:exported="true"
             android:taskAffinity=":entry"
