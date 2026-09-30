@@ -218,6 +218,23 @@
             </intent-filter>
         </receiver>
 
+        <!-- The receiver's job through an activity start, for when the app is not running:
+             BYD's self-start ban drops a broadcast that would have to start the process.
+             No UI, same DUMP guard, same one boolean. See IconToggleActivity. -->
+        <activity
+            android:name="systems.sieber.fsclock.IconToggleActivity"
+            android:exported="true"
+            android:permission="android.permission.DUMP"
+            android:theme="@android:style/Theme.NoDisplay"
+            android:excludeFromRecents="true"
+            android:noHistory="true"
+            android:taskAffinity="">
+            <intent-filter>
+                <action android:name="com.thabthaba.action.SET_LAUNCHER_ICON" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity>
+
         <receiver android:name=".PowerReceiver"
             android:exported="true">
             <intent-filter>
