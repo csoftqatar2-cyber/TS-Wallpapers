@@ -280,6 +280,10 @@ Roboto Font Copyright (c) Christian Robertson. Licensed under the Apache License
          most Android versions. One string cannot claim both. -->
     <string name="leopard_applied_image">Set ✓ — home and lock screen</string>
     <string name="leopard_applied_video">Set ✓ — home screen</string>
+    <!-- ==== MERGE:OWNER begin ==== -->
+    <string name="dashboard_owns_wallpaper">تُدار من ذبذبة داشبورد / Managed by THABTHABA Dashboard</string>
+    <string name="dashboard_open">Open THABTHABA Dashboard</string>
+    <!-- ==== MERGE:OWNER end ==== -->
     <string name="leopard_apply_failed">Could not set this wallpaper</string>
     <!-- Shown when the head unit cleared our live wallpaper — a force-stop from the recents
          list does exactly that. Offering the same picture back beats hunting for it again. -->

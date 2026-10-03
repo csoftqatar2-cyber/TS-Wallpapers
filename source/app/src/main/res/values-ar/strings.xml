@@ -426,6 +426,10 @@
     <string name="leopard_applying">جارٍ التطبيق…</string>
     <string name="leopard_applied_image">تم التعيين ✓ — الشاشة الرئيسية واللوك</string>
     <string name="leopard_applied_video">تم التعيين ✓ — الشاشة الرئيسية</string>
+    <!-- ==== MERGE:OWNER begin ==== -->
+    <string name="dashboard_owns_wallpaper">تُدار من ذبذبة داشبورد / Managed by THABTHABA Dashboard</string>
+    <string name="dashboard_open">افتح ذبذبة داشبورد</string>
+    <!-- ==== MERGE:OWNER end ==== -->
     <string name="leopard_apply_failed">تعذّر تعيين هذه الخلفية</string>
     <string name="leopard_restore_title">تمت إزالة الخلفية</string>
     <string name="leopard_restore_message">أزالت الشاشة الخلفية التي عيّنتها. هل تريد إعادتها؟</string>

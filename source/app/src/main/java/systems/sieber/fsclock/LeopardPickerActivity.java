@@ -679,8 +679,13 @@ public class LeopardPickerActivity extends AppCompatActivity {
         new AuroraDialog.Builder(this)
                 .setTitle(R.string.leopard_restore_title)
                 .setMessage(R.string.leopard_restore_message)
-                .setPositiveButton(R.string.leopard_restore_ok,
-                        (dlg, w) -> onApplied(LeopardApplier.apply(this, uri, type), type))
+                .setPositiveButton(R.string.leopard_restore_ok, (dlg, w) -> {
+                    /* ==== MERGE:OWNER begin ==== */
+                    // The dashboard may have taken the wallpaper over while this dialog was up.
+                    if(DashboardOwner.owned(this, DashboardOwner.PAPER)) { showManagedByDashboard(); return; }
+                    /* ==== MERGE:OWNER end ==== */
+                    onApplied(LeopardApplier.apply(this, uri, type), type);
+                })
                 .setNegativeButton(R.string.update_cancel, null)
                 .show();
     }
@@ -3025,6 +3030,11 @@ public class LeopardPickerActivity extends AppCompatActivity {
     // ---------------------------------------------------------------- apply
 
     private void applySelection() {
+        /* ==== MERGE:OWNER begin ==== */
+        // THABTHABA Dashboard owns the wallpaper on this car: setting one from here would fight it
+        // for the same live-wallpaper slot. Point the owner at the dashboard instead.
+        if(DashboardOwner.owned(this, DashboardOwner.PAPER)) { showManagedByDashboard(); return; }
+        /* ==== MERGE:OWNER end ==== */
         if(mSelected == null) { toast(R.string.leopard_pick_first); return; }
 
         // Haval takes a list, so the button adds to it or takes back out of it. Nothing below
@@ -3195,10 +3205,39 @@ public class LeopardPickerActivity extends AppCompatActivity {
                 Uri shared = LeopardCache.localFile(this, applyUrl);
                 if(shared != null) applyUrl = shared.toString();
             }
+            /* ==== MERGE:OWNER begin ==== */
+            // Re-checked here as well: the framing/hand-off dialogs and the download above can
+            // take long enough for the dashboard switch to be turned on in between.
+            if(DashboardOwner.owned(this, DashboardOwner.PAPER)) {
+                runOnUiThread(() -> { setBusy(false, 0); scheduleTileBind(); showManagedByDashboard(); });
+                return;
+            }
+            /* ==== MERGE:OWNER end ==== */
             final int result = LeopardApplier.apply(this, applyUrl, type);
             runOnUiThread(() -> { setBusy(false, 0); onApplied(result, type); });
         }).start();
     }
+
+    /* ==== MERGE:OWNER begin ==== */
+    /**
+     * The note shown instead of applying while THABTHABA Dashboard owns the wallpaper, with a
+     * button straight to the dashboard's wallpaper section. Everything else on this screen keeps
+     * working; only "set as wallpaper" is handed over.
+     */
+    private void showManagedByDashboard() {
+        if(gone()) return;
+        CrashReporter.breadcrumb("leopard: apply skipped, wallpaper owned by the dashboard");
+        new AuroraDialog.Builder(this)
+                .setTitle(R.string.dashboard_owns_wallpaper)
+                .setPositiveButton(R.string.dashboard_open, (dlg, w) -> {
+                    if(!DashboardOwner.openDashboard(this, DashboardOwner.PAPER)) {
+                        sayLoud(R.string.leopard_apply_failed);
+                    }
+                })
+                .setNegativeButton(R.string.update_cancel, null)
+                .show();
+    }
+    /* ==== MERGE:OWNER end ==== */
 
     /**
      * Lynkco's apply does not finish here — it opens the head unit's own preview with an "Apply"

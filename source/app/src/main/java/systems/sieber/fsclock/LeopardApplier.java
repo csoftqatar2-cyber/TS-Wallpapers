@@ -231,6 +231,11 @@ class LeopardApplier {
      */
     static boolean wasTakenFromUs(Context ctx) {
         try {
+            /* ==== MERGE:OWNER begin ==== */
+            // THABTHABA Dashboard owns the wallpaper: it replacing ours is the plan, not a loss,
+            // and offering to "restore" ours would fight it.
+            if(DashboardOwner.owned(ctx, DashboardOwner.PAPER)) return false;
+            /* ==== MERGE:OWNER end ==== */
             SharedPreferences p = prefs(ctx);
             if(p.getString(MediaWallpaperService.PREF_URI, null) == null) return false;
             if(!needsSystemScreen(ctx, p.getString(PREF_TYPE, null))) return false;

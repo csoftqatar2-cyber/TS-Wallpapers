@@ -54,6 +54,10 @@
         <package android:name="com.flyme.auto.customize" />
         <!-- ICAR 03T: the launcher whose wallpaper carousel we write into. -->
         <package android:name="com.mengbo.launcher3" />
+        <!-- ==== MERGE:OWNER begin ==== -->
+        <!-- THABTHABA Dashboard: DashboardOwner checks it is installed before honouring thab_owner. -->
+        <package android:name="com.thabthaba.controller" />
+        <!-- ==== MERGE:OWNER end ==== -->
         <intent>
             <action android:name="com.flyme.auto.customize.wallpaper.setting" />
         </intent>
