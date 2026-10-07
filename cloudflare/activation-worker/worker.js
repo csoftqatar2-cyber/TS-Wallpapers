@@ -58,6 +58,16 @@ const RESERVE_SERIAL_RE = /^572[0-9]{3}$/;
 const LEGACY_SERIAL_PREFIX = '7078';
 
 /**
+ * Controller licence codes (owner's rule of 2026-10-07): '579' + 6 random digits, minted for the
+ * ذبذبة Dashboard Controller (com.thabthaba.controller) and redeemed on a separate path
+ * (controller_codes / controller_entitlements, migration 0008). They are NOT activation serials.
+ * A driver who types one into the store/wallpapers activation box gets the plain
+ * 'invalid_format' answer, but the attempt is NOT counted toward FAILED_ATTEMPT_LIMIT: a
+ * mistyped-into-the-wrong-app controller code must never move a paying car toward auto-block.
+ */
+const CONTROLLER_CODE_RE = /^579[0-9]{6}$/;
+
+/**
  * Closed blocks carved out of the open '578' space.
  *
  * The prefix rule alone means a customer who bought 578300001 can activate a
@@ -541,6 +551,25 @@ async function handleActivate(db, body) {
   // also means no rule added below can ever lock out a car already in the
   // field — the worst a bad rule can do is refuse a NEW activation.
   const ownedByThisCar = !!serialOwner && serialOwner.hardware_id === hardwareId;
+
+  // A controller licence code ('579' + 6 digits) typed into the activation box: refuse it like
+  // any malformed code, but without recordFailure — no counter, no last_failed_serial, no row
+  // created. `attempts: 0` keeps the Postgres mirror in activate_device on its no-op branch
+  // (it only writes failed_attempts/last_failed_serial when attempts > 0). Placed after the
+  // blocked check (a blocked car still answers 'blocked') and after ownedByThisCar (Rule 2:
+  // a serial already on file for this car is always honored ahead of every format rule).
+  if (CONTROLLER_CODE_RE.test(serial) && !ownedByThisCar) {
+    return json({
+      status: RESULT.INVALID_FORMAT,
+      row: shape(before),
+      attempts: 0,
+      attempts_limit: FAILED_ATTEMPT_LIMIT,
+      blocked_now: false,
+      counted: false,
+      reason: 'controller_code',
+      current_failed_attempts: (before && before.failed_attempts) || 0,
+    });
+  }
 
   // Since 2026-09-07 a '578...' code is valid ONLY inside a closed block and only when
   // that block actually issued it (the sold codes). The open 578 space is closed. '7078...'
