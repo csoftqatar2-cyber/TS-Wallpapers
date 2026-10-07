@@ -9,8 +9,9 @@
  *   CUTOFF = 2026-10-07T21:00:00Z  (end of 2026-10-07, Qatar time, UTC+3)
  *
  * The set (union, first source wins for snapshot_source):
- *   pg.devices  — Postgres public.devices rows with created_at < CUTOFF that were activated at
- *                 least once (activated_at or serial_number set). Rows created only by failed
+ *   pg.devices  — Postgres public.devices rows with created_at < CUTOFF that were activated before
+ *                 the cutoff: activated_at < CUTOFF, or activated_at null but serial_number set.
+ *                 (activated_at >= CUTOFF → excluded.) Rows created only by failed
  *                 code attempts (never activated) are NOT included. is_active / is_blocked are
  *                 ignored on purpose: the family gate still governs blocked cars.
  *   pg.alias    — device_id_aliases.old_id whose current_id is in pg.devices (a car that later
@@ -40,6 +41,9 @@
  * Other flags
  *   --out <file>               SQL output path (default tools/out/controller-grandfather-<stamp>.sql, git-ignored)
  *   --batch <n>                rows per INSERT statement (default 200)
+ *   --include-unactivated-attempts  also grandfather pg.devices rows (created before the cutoff) that
+ *                              have neither activated_at nor a serial — cars that only typed wrong codes.
+ *                              OFF by default; the owner has not decided on these (3 rows on 2026-10-07).
  *   --expect <hardware_id>     add an id that MUST be in the set (repeatable). The bench/test ids below
  *                              are always asserted; a missing one fails the run (exit 2) before any apply.
  *
@@ -74,7 +78,7 @@ const workerDir = resolve(here, '..');
 
 // ------------------------------------------------------------------ args
 const argv = process.argv.slice(2);
-const opt = { apply: false, forceEarly: false, pgJson: null, out: null, batch: 200, expect: [], printSql: false };
+const opt = { apply: false, forceEarly: false, pgJson: null, out: null, batch: 200, expect: [], printSql: false, includeUnactivatedAttempts: false };
 for (let i = 0; i < argv.length; i++) {
   const a = argv[i];
   if (a === '--dry-run') opt.apply = false;
@@ -85,6 +89,7 @@ for (let i = 0; i < argv.length; i++) {
   else if (a === '--batch') opt.batch = Math.max(1, parseInt(argv[++i], 10) || 200);
   else if (a === '--expect') opt.expect.push(argv[++i]);
   else if (a === '--print-pg-sql') opt.printSql = true;
+  else if (a === '--include-unactivated-attempts') opt.includeUnactivatedAttempts = true;
   else { console.error(`unknown argument: ${a}`); process.exit(64); }
 }
 
@@ -177,7 +182,7 @@ const d1Rows = d1Select('SELECT hardware_id, activated_at, is_active, is_blocked
 const set = new Map(); // hardware_id → { granted_at, source }
 const stats = {
   'pg.devices': 0, 'pg.alias': 0, 'd1.devices': 0,
-  pg_rows_read: pg.devices.length, pg_skipped_after_cutoff: 0, pg_skipped_never_activated: 0,
+  pg_rows_read: pg.devices.length, pg_skipped_after_cutoff: 0, pg_skipped_activated_after_cutoff: 0, pg_skipped_never_activated: 0,
   alias_rows_read: pg.aliases.length, alias_skipped_current_not_in_set: 0, alias_already_in_set: 0,
   d1_rows_read: d1Rows.length, d1_skipped_after_cutoff: 0, d1_already_in_set: 0,
 };
@@ -187,7 +192,11 @@ for (const r of pg.devices) {
   if (!id) continue;
   const created = toMs(r.created_at);
   if (!(created < CUTOFF_MS)) { stats.pg_skipped_after_cutoff++; continue; }
-  if (r.activated_at == null && !r.has_serial) { stats.pg_skipped_never_activated++; continue; }
+  // activated_at set → it decides (a row created before the cutoff but activated after it is NOT
+  // grandfathered). activated_at null → only a row holding a serial counts as activated.
+  if (r.activated_at != null) {
+    if (!(toMs(r.activated_at) < CUTOFF_MS)) { stats.pg_skipped_activated_after_cutoff++; continue; }
+  } else if (!r.has_serial && !opt.includeUnactivatedAttempts) { stats.pg_skipped_never_activated++; continue; }
   if (!set.has(id)) { set.set(id, { granted_at: iso(r.created_at), source: 'pg.devices' }); stats['pg.devices']++; }
 }
 const pgIds = new Set(set.keys());
