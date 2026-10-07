@@ -17,6 +17,14 @@
  *   pg.alias    — device_id_aliases.old_id whose current_id is in pg.devices (a car that later
  *                 started reporting its VIN keeps its licence under the old id too).
  *   d1.devices  — D1 devices rows with activated_at < CUTOFF (safety net).
+ *   d1.audit    — rescue for a re-activation restamp: activated_at is overwritten on every
+ *                 re-activation (Postgres and D1 alike), so a car first activated months ago that
+ *                 re-activates after the cutoff would look new. Such a row is still grandfathered
+ *                 when D1 devices_audit holds an action='activate' entry before the CUTOFF for its
+ *                 hardware_id or any alias of it (device_id_aliases, both directions). The same
+ *                 rescue adds a car with NO pg row at all whose D1 devices row is active and has
+ *                 such an audit entry. devices_audit only starts on 2026-08-02: a car activated
+ *                 before that and re-activated after the cutoff cannot be rescued this way.
  * NOT included: cars that only opened the store (store_installs) and never activated.
  *
  * Modes
@@ -177,14 +185,37 @@ async function loadPg() {
 
 // ------------------------------------------------------------------ build the set
 const pg = await loadPg();
-const d1Rows = d1Select('SELECT hardware_id, activated_at, is_active, is_blocked FROM devices WHERE activated_at IS NOT NULL');
+const d1Rows = d1Select('SELECT hardware_id, activated_at, is_active, is_blocked FROM devices WHERE activated_at IS NOT NULL OR is_active = 1');
+// First 'activate' audit entry per hardware id (filtered against the cutoff in JS, not in SQL text).
+const auditFirst = new Map();
+for (const r of d1Select("SELECT hardware_id, MIN(at) AS first_at FROM devices_audit WHERE action = 'activate' GROUP BY hardware_id")) {
+  if (r.hardware_id && toMs(r.first_at) < CUTOFF_MS) auditFirst.set(r.hardware_id.trim(), r.first_at);
+}
+// Alias graph, both directions: old_id <-> current_id.
+const aliasOf = new Map();
+const link = (x, y) => { if (!aliasOf.has(x)) aliasOf.set(x, new Set()); aliasOf.get(x).add(y); };
+for (const a of pg.aliases) {
+  const o = (a.old_id || '').trim(), c = (a.current_id || '').trim();
+  if (o && c) { link(o, c); link(c, o); }
+}
+/** Earliest pre-cutoff 'activate' audit time for this id or any alias of it, else null. */
+function auditBeforeCutoff(id) {
+  let best = null;
+  for (const k of [id, ...(aliasOf.get(id) || [])]) {
+    const t = auditFirst.get(k);
+    if (t && (best == null || toMs(t) < toMs(best))) best = t;
+  }
+  return best;
+}
+const pgAllIds = new Set(pg.devices.map((r) => (r.hardware_id || '').trim()).filter(Boolean));
 
 const set = new Map(); // hardware_id → { granted_at, source }
 const stats = {
-  'pg.devices': 0, 'pg.alias': 0, 'd1.devices': 0,
+  'pg.devices': 0, 'pg.alias': 0, 'd1.devices': 0, 'd1.audit': 0,
   pg_rows_read: pg.devices.length, pg_skipped_after_cutoff: 0, pg_skipped_activated_after_cutoff: 0, pg_skipped_never_activated: 0,
   alias_rows_read: pg.aliases.length, alias_skipped_current_not_in_set: 0, alias_already_in_set: 0,
   d1_rows_read: d1Rows.length, d1_skipped_after_cutoff: 0, d1_already_in_set: 0,
+  audit_entries_before_cutoff: auditFirst.size, audit_rescued_pg: 0, audit_rescued_d1_only: 0,
 };
 
 for (const r of pg.devices) {
@@ -195,29 +226,50 @@ for (const r of pg.devices) {
   // activated_at set → it decides (a row created before the cutoff but activated after it is NOT
   // grandfathered). activated_at null → only a row holding a serial counts as activated.
   if (r.activated_at != null) {
-    if (!(toMs(r.activated_at) < CUTOFF_MS)) { stats.pg_skipped_activated_after_cutoff++; continue; }
+    if (!(toMs(r.activated_at) < CUTOFF_MS)) {
+      const t = auditBeforeCutoff(id);
+      if (t && !set.has(id)) { set.set(id, { granted_at: iso(t), source: 'd1.audit' }); stats.audit_rescued_pg++; continue; }
+      stats.pg_skipped_activated_after_cutoff++; continue;
+    }
   } else if (!r.has_serial && !opt.includeUnactivatedAttempts) { stats.pg_skipped_never_activated++; continue; }
   if (!set.has(id)) { set.set(id, { granted_at: iso(r.created_at), source: 'pg.devices' }); stats['pg.devices']++; }
 }
-const pgIds = new Set(set.keys());
-for (const a of pg.aliases) {
-  const oldId = (a.old_id || '').trim();
-  const cur = (a.current_id || '').trim();
-  if (!oldId) continue;
-  if (!pgIds.has(cur)) { stats.alias_skipped_current_not_in_set++; continue; }
-  if (set.has(oldId)) { stats.alias_already_in_set++; continue; }
-  set.set(oldId, { granted_at: set.get(cur).granted_at, source: 'pg.alias' });
-  stats['pg.alias']++;
+// Aliases follow their current_id's FINAL decision, so this runs twice: once here (so an old id that
+// is also a D1 row keeps the pg.alias tag) and once after the D1 pass (current ids rescued there).
+const aliasDone = new Set();
+function aliasPass() {
+  for (const a of pg.aliases) {
+    const oldId = (a.old_id || '').trim();
+    const cur = (a.current_id || '').trim();
+    if (!oldId || aliasDone.has(oldId) || !set.has(cur)) continue;
+    aliasDone.add(oldId);
+    if (set.has(oldId)) { stats.alias_already_in_set++; continue; }
+    set.set(oldId, { granted_at: set.get(cur).granted_at, source: 'pg.alias' });
+    stats['pg.alias']++;
+  }
 }
+aliasPass();
 for (const r of d1Rows) {
   const id = (r.hardware_id || '').trim();
   if (!id) continue;
   const act = toMs(r.activated_at);
-  if (!(act < CUTOFF_MS)) { stats.d1_skipped_after_cutoff++; continue; }
   if (set.has(id)) { stats.d1_already_in_set++; continue; }
+  if (!(act < CUTOFF_MS)) {
+    // No pg row at all (under this id or an alias), active in D1, activated before the cutoff per the audit.
+    const t = auditBeforeCutoff(id);
+    const hasPgRow = pgAllIds.has(id) || [...(aliasOf.get(id) || [])].some((k) => pgAllIds.has(k));
+    if (t && !hasPgRow && Number(r.is_active) === 1) {
+      set.set(id, { granted_at: iso(t), source: 'd1.audit' }); stats.audit_rescued_d1_only++; continue;
+    }
+    stats.d1_skipped_after_cutoff++; continue;
+  }
   set.set(id, { granted_at: iso(r.activated_at), source: 'd1.devices' });
   stats['d1.devices']++;
 }
+
+aliasPass();
+stats.alias_skipped_current_not_in_set = pg.aliases.filter((a) => (a.old_id || '').trim() && !aliasDone.has((a.old_id || '').trim())).length;
+stats['d1.audit'] = stats.audit_rescued_pg + stats.audit_rescued_d1_only;
 
 // ------------------------------------------------------------------ assertions
 const expected = [...MUST_INCLUDE, ...opt.expect.map((id) => [id, '--expect'])];

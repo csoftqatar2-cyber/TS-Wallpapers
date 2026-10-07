@@ -7,7 +7,7 @@
 --
 --   controller_entitlements — one row per hardware id allowed to run the controller.
 --       kind 'grandfather' = registered (activated) before 2026-10-07T21:00:00Z, written once by
---       tools/snapshot-controller-grandfather.mjs (snapshot_source pg.devices|pg.alias|d1.devices);
+--       tools/snapshot-controller-grandfather.mjs (snapshot_source pg.devices|pg.alias|d1.devices|d1.audit);
 --       'code' = redeemed a 579xxxxxx code; 'manual' = granted by the admin.
 --       revoked_at set = revoked; revoke is final — only an admin "restore" clears it, a new code
 --       does NOT re-unlock a revoked car.
