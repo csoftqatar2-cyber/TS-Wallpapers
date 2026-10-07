@@ -64,3 +64,16 @@ CREATE TABLE IF NOT EXISTS devices_audit (
 );
 
 CREATE INDEX IF NOT EXISTS idx_audit_hw ON devices_audit (hardware_id, at DESC);
+
+-- Self-healing controller token (migration 0009_device_fingerprints.sql, 2026-10-07). One hardware
+-- fingerprint per car, stored as sha256(fingerprint + thab-voice's FP_PEPPER); written only by the
+-- thab-voice Worker (worker/src/enrol.js in the Thabthaba Dashboard repo).
+CREATE TABLE IF NOT EXISTS device_fingerprints (
+  hardware_id  TEXT PRIMARY KEY,
+  fp_hash      TEXT NOT NULL,
+  bound_at     TEXT NOT NULL,
+  bound_by     TEXT NOT NULL,      -- 'enroll' | 'bind' | 'serial'
+  last_seen_at TEXT,
+  rotate_day   TEXT,               -- UTC day of the last fingerprint rotation
+  rotate_count INTEGER NOT NULL DEFAULT 0
+);
