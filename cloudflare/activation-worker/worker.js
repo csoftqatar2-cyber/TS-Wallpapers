@@ -314,6 +314,14 @@ async function handleEnroll(db, body, env) {
     return json({ status: 'refused', token: null, app_id: appId, reason: 'first_mint_guard', row: shape(before) });
   }
 
+  // Automatic reissue (2026-10-10): an already-activated controller that lost its token (reinstall,
+  // UI5->UI6 format) and never bound a fingerprint gets a new one without its code. See
+  // controllerAutoReissue for the guards; the token it replaces keeps working for 30 days.
+  if (existing && !rotate && appId === 'controller') {
+    const auto = await controllerAutoReissue(db, env, hardwareId, before, existing, body);
+    if (auto) return json({ ...auto, app_id: appId, row: shape(before) });
+  }
+
   if (existing && !rotate) {
     // A second enrol for this app on an enrolled car: either a reinstalled genuine
     // unit that has not re-typed its code yet, or a stranger who lost the race.
@@ -334,7 +342,8 @@ async function handleEnroll(db, body, env) {
              VALUES (?, ?, ?, ?, 1)
            ON CONFLICT(hardware_id, app_id) DO UPDATE SET
              token_hash = excluded.token_hash, token_issued_at = excluded.token_issued_at,
-             token_version = device_tokens.token_version + 1`,
+             token_version = device_tokens.token_version + 1,
+             prev_token_hash = NULL, prev_valid_until = NULL`,
         )
         .bind(hardwareId, appId, hash, stamp)
         .run()
@@ -358,6 +367,100 @@ async function handleEnroll(db, body, env) {
     token_version: after ? after.token_version : 1, row: shape(before) });
 }
 
+/* ----------------------------------------------------------------------------
+ * Automatic controller-token reissue (2026-10-10)
+ *
+ * WHY: a reinstalled or formatted head unit loses the controller's token, while its VIN-based
+ * hardware id and the server's token row survive, so every enrol answered already_enrolled and
+ * the voice stayed dead until someone deleted the Postgres mirror row by hand (several cars on
+ * 2026-10-10). Cars that bound a hardware fingerprint heal through thab-voice; the fleet in the
+ * field (2.30.56 and older) never bound one, so this is their road, with no new APK.
+ *
+ * The hardware id is NOT a secret (it is on the activation screen and in the support QR), so a
+ * reissue on its strength alone is guarded instead of trusted:
+ *   - controller only, VIN- ids only, family row active and unblocked;
+ *   - the car holds a live controller licence: a non-revoked controller_entitlements row, or a
+ *     family activation before the grandfather cut-off with no entitlement row at all;
+ *   - no fingerprint bound for this car (a bound car must prove itself with it, or its code);
+ *   - the token it replaces is at least AUTO_MIN_AGE_MS old (no flip-flop with a fresh mint);
+ *   - at most 1 per car per 24 h and 3 per car per 30 days (counted from devices_audit
+ *     'auto_reissue', which thab-voice writes too, so the caps are shared);
+ *   - the replaced token stays valid for 30 days (prev_token_hash, migration 0010), and a second
+ *     reissue inside that window keeps the ORIGINAL there: a stranger who copies the id gets a
+ *     token, but cannot lock the real car out.
+ * Switch off with AUTO_REISSUE_CONTROLLER = "off".
+ * ------------------------------------------------------------------------- */
+const AUTO_MIN_AGE_MS = 2 * 60 * 1000;
+const AUTO_CAP_DAY = 1;
+const AUTO_CAP_30D = 3;
+const AUTO_PREV_GRACE_MS = 30 * 24 * 3600 * 1000;
+const CONTROLLER_GRANDFATHER_CUTOFF_MS = Date.parse('2026-10-07T21:00:00Z');
+
+async function controllerLicensed(db, hardwareId, row) {
+  const ent = await db
+    .prepare('SELECT revoked_at FROM controller_entitlements WHERE hardware_id = ?')
+    .bind(hardwareId)
+    .first();
+  if (ent) return !ent.revoked_at;
+  const at = row && row.activated_at ? Date.parse(row.activated_at) : NaN;
+  return Number.isFinite(at) && at < CONTROLLER_GRANDFATHER_CUTOFF_MS;
+}
+
+async function controllerAutoReissue(db, env, hardwareId, before, existing, body) {
+  if (String((env && env.AUTO_REISSUE_CONTROLLER) || 'on').trim().toLowerCase() === 'off') return null;
+  if (!hardwareId.startsWith('VIN-')) return null;
+  if (!before || !before.is_active || before.is_blocked) return null;
+  const nowMs = Date.now();
+  const issued = Date.parse(existing.token_issued_at || '');
+  if (Number.isFinite(issued) && nowMs - issued < AUTO_MIN_AGE_MS) return null;
+  let bound = null;
+  try {
+    if (!(await controllerLicensed(db, hardwareId, before))) return null;
+    bound = await db.prepare('SELECT 1 AS b FROM device_fingerprints WHERE hardware_id = ?').bind(hardwareId).first();
+  } catch (e) {
+    return null; // a table missing or D1 trouble: no automatic reissue, the old answer stands
+  }
+  if (bound) return null;
+  const counts = await db
+    .prepare(
+      `SELECT SUM(CASE WHEN at >= ? THEN 1 ELSE 0 END) AS day, COUNT(*) AS month
+         FROM devices_audit WHERE hardware_id = ? AND action = 'auto_reissue' AND at >= ?`,
+    )
+    .bind(new Date(nowMs - 24 * 3600 * 1000).toISOString(), hardwareId, new Date(nowMs - 30 * 24 * 3600 * 1000).toISOString())
+    .first();
+  const day = Number(counts && counts.day) || 0;
+  const month = Number(counts && counts.month) || 0;
+  if (day >= AUTO_CAP_DAY || month >= AUTO_CAP_30D) {
+    await auditStmt(db, hardwareId, 'auto_reissue_capped', before,
+      { app_id: 'controller', day, month, via: 'enroll_device' }).run();
+    return null;
+  }
+  const token = randomTokenHex();
+  const hash = await sha256Hex(token);
+  const stamp = new Date(nowMs).toISOString();
+  const graceUntil = new Date(nowMs + AUTO_PREV_GRACE_MS).toISOString();
+  // Conditional on the hash it read: a concurrent rotation makes this a no-op (changes = 0).
+  const res = await db
+    .prepare(
+      `UPDATE device_tokens SET
+         prev_token_hash  = CASE WHEN prev_valid_until IS NOT NULL AND prev_valid_until > ? THEN prev_token_hash ELSE token_hash END,
+         prev_valid_until = CASE WHEN prev_valid_until IS NOT NULL AND prev_valid_until > ? THEN prev_valid_until ELSE ? END,
+         token_hash = ?, token_issued_at = ?, token_version = token_version + 1
+       WHERE hardware_id = ? AND app_id = 'controller' AND token_hash = ?`,
+    )
+    .bind(stamp, stamp, graceUntil, hash, stamp, hardwareId, existing.token_hash)
+    .run();
+  if (!res || !res.meta || (res.meta.changes ?? 0) === 0) return null;
+  const after = await getToken(db, hardwareId, 'controller');
+  await auditStmt(db, hardwareId, 'auto_reissue', before, {
+    ...shape(before), app_id: 'controller', via: 'enroll_device',
+    app_version_code: Number(body && body.app_version_code) || 0,
+    old_token_version: existing.token_version, old_token_issued_at: existing.token_issued_at,
+    token_version: after ? after.token_version : null,
+  }).run();
+  return { status: 'rotated', token, token_version: after ? after.token_version : null };
+}
+
 /**
  * POST /v1/devices/verify {hardware_id, app_id, token} -> {active, enrolled}
  * `active` is true only for an active, unblocked car whose token FOR THAT APP matches.
@@ -373,7 +476,11 @@ async function handleVerify(db, body) {
   if (!row || !row.is_active || row.is_blocked || !enrolled || !token) {
     return json({ active: false, enrolled, app_id: appId });
   }
-  const ok = secretMatches(await sha256Hex(token), tok.token_hash);
+  const h = await sha256Hex(token);
+  // A token replaced by an automatic reissue stays valid until prev_valid_until (migration 0010).
+  const ok = secretMatches(h, tok.token_hash)
+    || (!!tok.prev_token_hash && !!tok.prev_valid_until && tok.prev_valid_until > nowIso()
+        && secretMatches(h, tok.prev_token_hash));
   return json({ active: ok, enrolled, app_id: appId });
 }
 
