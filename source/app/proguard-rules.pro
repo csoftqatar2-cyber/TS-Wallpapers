@@ -96,6 +96,13 @@
     public static java.lang.String getHardwareId(android.content.Context);
 }
 
+# MediaWallpaperService: overrides the hidden (@hide, API 31+) Engine method that turns off the
+# framework's Android 12 local-colors PixelCopy sampler (a process-killing framework bug). Nothing
+# of ours calls it, so without this R8 would shrink it away and the fix would silently vanish.
+-keepclassmembers class systems.sieber.fsclock.MediaWallpaperService$MediaEngine {
+    public boolean supportsLocalColorExtraction();
+}
+
 # ── Remove debugging info ────────────────────────────────────────────
 -renamesourcefileattribute SourceFile
 -keepattributes SourceFile,LineNumberTable

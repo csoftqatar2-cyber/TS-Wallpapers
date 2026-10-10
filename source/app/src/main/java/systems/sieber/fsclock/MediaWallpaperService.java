@@ -92,6 +92,78 @@ public class MediaWallpaperService extends WallpaperService {
         return sLiveEngines.get() > 0;
     }
 
+    /**
+     * Android 12 / 12L (API 31-32) only: the framework's default "local colors" sampler can kill
+     * this whole process, and nothing of ours is on the stack when it does.
+     *
+     * Fleet trace (BYD "D150F", leopard + denza, 2026-10):
+     *
+     *     IllegalArgumentException: Surface isn't valid, source.isValid() == false
+     *       at android.view.PixelCopy.request
+     *       at android.service.wallpaper.WallpaperService$Engine.updatePage
+     *       at android.service.wallpaper.WallpaperService$Engine.lambda$processLocalColors$0
+     *
+     * In the API 31/32 source, Engine.processLocalColors() checks surface.isValid() and then
+     * POSTS the work to the engine's handler; the posted lambda calls updatePage() -> PixelCopy
+     * without checking again. It is triggered from updateSurface (redraw), visibility and offset
+     * changes and notifyColorsChanged. When an engine's surface dies in between — exactly what a
+     * preview engine does when the system's "set wallpaper" screen opens and closes within a
+     * second, or two engines bouncing at car start — PixelCopy throws on the main thread and the
+     * picker the customer is standing in goes down with it. Android 13 re-checks; 12 does not.
+     *
+     * The primary fix is in {@link MediaEngine#supportsLocalColorExtraction()}: it makes the
+     * framework skip that sampler entirely on 31-32. This guard is the safety net in case a vendor
+     * build ignores the override: it swallows ONLY that exact framework exception, only on 31-32,
+     * leaves a breadcrumb, and rethrows everything else to the normal crash handler unchanged.
+     */
+    private static boolean sLocalColorsGuardInstalled;
+
+    private static boolean isAndroid12() {
+        return Build.VERSION.SDK_INT == 31 || Build.VERSION.SDK_INT == 32;
+    }
+
+    @Override
+    public void onCreate() {
+        super.onCreate();
+        installLocalColorsGuard();
+    }
+
+    private static void installLocalColorsGuard() {
+        if(!isAndroid12() || sLocalColorsGuardInstalled) return;
+        sLocalColorsGuardInstalled = true;
+        CrashReporter.breadcrumb("wp: android 12 local-colors guard installed");
+        new Handler(Looper.getMainLooper()).post(new Runnable() {
+            @Override public void run() {
+                // Run the main loop from inside this message. When the framework's sampler throws,
+                // we land here instead of in the process-killing uncaught handler, and simply carry
+                // on looping. Anything that is not that exact exception leaves this method exactly
+                // as it would have left Looper.loop(), so the crash handler sees it unchanged.
+                while(true) {
+                    try {
+                        Looper.loop();
+                        return;   // the main looper never quits; if it ever does, behave as before
+                    } catch(IllegalArgumentException e) {
+                        if(!isFrameworkLocalColorsCrash(e)) throw e;
+                        CrashReporter.breadcrumb("wp: swallowed android 12 local-colors PixelCopy on a dead surface — " + e.getMessage());
+                    }
+                }
+            }
+        });
+    }
+
+    /** True only for the API 31/32 WallpaperService local-colors PixelCopy fault. */
+    static boolean isFrameworkLocalColorsCrash(Throwable t) {
+        if(!(t instanceof IllegalArgumentException)) return false;
+        boolean pixelCopy = false, wallpaperEngine = false;
+        for(StackTraceElement f : t.getStackTrace()) {
+            String c = f.getClassName(), m = f.getMethodName();
+            if("android.view.PixelCopy".equals(c) && "request".equals(m)) pixelCopy = true;
+            if(c.startsWith("android.service.wallpaper.WallpaperService$Engine")
+                    && (m.equals("updatePage") || m.contains("processLocalColors"))) wallpaperEngine = true;
+        }
+        return pixelCopy && wallpaperEngine;
+    }
+
     @Override
     public Engine onCreateEngine() {
         return new MediaEngine();
@@ -161,6 +233,30 @@ public class MediaWallpaperService extends WallpaperService {
          */
         private void trace(String what) {
             CrashReporter.breadcrumb("wp[" + Integer.toHexString(hashCode()) + "] " + what);
+        }
+
+        /** Whether the framework has been seen asking {@link #supportsLocalColorExtraction}. */
+        private boolean localColorsAsked;
+
+        /**
+         * Overrides a hidden (@hide) Engine method that exists from API 31. Returning true tells
+         * the framework "this wallpaper extracts its own local colors", so Engine.processLocalColors,
+         * addLocalColorsAreas and resetWindowPages all return at once and the PixelCopy that kills
+         * the process on Android 12 is never requested (see {@link MediaWallpaperService}'s guard).
+         * The cost: launchers that tint widgets from the wallpaper get no per-area colors from us
+         * on 31-32 — nothing in a car uses that.
+         *
+         * Android 12/12L only; every other version keeps the framework default (false). Must stay
+         * public with this exact signature, and is kept by name in proguard-rules.pro — nothing of
+         * ours calls it, so R8 would otherwise remove it.
+         */
+        public boolean supportsLocalColorExtraction() {
+            if(!isAndroid12()) return false;
+            if(!localColorsAsked) {
+                localColorsAsked = true;
+                trace("framework asked supportsLocalColorExtraction -> true (sdk " + Build.VERSION.SDK_INT + ")");
+            }
+            return true;
         }
 
         @Override
