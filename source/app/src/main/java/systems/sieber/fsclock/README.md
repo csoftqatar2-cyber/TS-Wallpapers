@@ -42,6 +42,9 @@ applicationId is `store.thabthaba.clock`). Read this before editing any class.
 - `WallpaperView` — two ping-pong slots with crossfade; Glide for image/GIF,
   TextureView+MediaPlayer (muted, looping, center-crop) for video; `sampleLuminance()`
   drives auto-contrast clock colors.
+- `SilentPlayback` — every wallpaper/preview video is a bare MediaPlayer at volume 0 that
+  never requests audio focus (all cars, modes and screens). **Never use a `VideoView`** for
+  wallpaper video: it takes AUDIOFOCUS_GAIN and pauses the car's music (fixed in 7.31/207).
 - **Per-image fit** — `FitSettings` (serialized `mode,blur,barColor,zoom,fade,rotation` under
   pref `wp-fit:<url>`; short forms from older builds still parse) + `FitEditorActivity` /
   `FitPreviewView`. `rotation` is 0/90/180/270 and is applied *before* anything is measured:

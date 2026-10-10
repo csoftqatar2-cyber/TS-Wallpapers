@@ -620,11 +620,12 @@ public class WallpaperView extends FrameLayout {
             String local = (mRepo != null) ? mRepo.localVideoPath(item) : null;
             mp.setDataSource(local != null ? local : item.url);
             mp.setLooping(true);
+            SilentPlayback.mute(mp);   // silent from the start, never asks for audio focus
             mp.setOnPreparedListener(new MediaPlayer.OnPreparedListener() {
                 @Override
                 public void onPrepared(MediaPlayer p) {
                     if(slot.player != mp) { p.release(); return; }
-                    try { p.setVolume(0f, 0f); } catch(Exception ignored) {}
+                    SilentPlayback.mute(p);
                     applyVideoScale(slot, p.getVideoWidth(), p.getVideoHeight());
                     p.start();
                     if(onReady != null) onReady.run();

@@ -635,7 +635,7 @@ public class MediaWallpaperService extends WallpaperService {
                 final MediaPlayer mp = new MediaPlayer();
                 mp.setDataSource(getApplicationContext(), uri);
                 mp.setLooping(true);
-                mp.setVolume(0f, 0f);   // wallpapers are silent
+                SilentPlayback.mute(mp);   // wallpapers are silent and never take audio focus
                 trace("video: handing the surface to MediaPlayer");
                 mp.setSurface(getSurfaceHolder().getSurface());
                 mp.setOnErrorListener((p, w1, w2) -> {
@@ -645,6 +645,7 @@ public class MediaWallpaperService extends WallpaperService {
                 mp.setOnPreparedListener(p -> {
                     trace("video: prepared, visible=" + visible);
                     videoPrepared = true;
+                    SilentPlayback.mute(p);
                     try {
                         p.setVideoScalingMode(MediaPlayer.VIDEO_SCALING_MODE_SCALE_TO_FIT_WITH_CROPPING);
                     } catch(Exception ignored) { }
