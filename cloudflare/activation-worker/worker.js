@@ -64,6 +64,8 @@ const LEGACY_SERIAL_PREFIX = '7078';
  * A driver who types one into the store/wallpapers activation box gets the plain
  * 'invalid_format' answer, but the attempt is NOT counted toward FAILED_ATTEMPT_LIMIT: a
  * mistyped-into-the-wrong-app controller code must never move a paying car toward auto-block.
+ * Since 2026-10-10 new controller codes are 6 digits; those are recognised by lookup in controller_codes
+ * (handleActivate), and this prefix rule keeps covering any 579 code still in flight.
  */
 const CONTROLLER_CODE_RE = /^579[0-9]{6}$/;
 
@@ -583,6 +585,31 @@ async function handleActivate(db, body) {
   try {
     minted = await db.prepare('SELECT expires_at, used_by FROM issued_codes WHERE serial = ?').bind(serial).first();
   } catch (e) { minted = null; }
+
+  // Since 2026-10-10 controller codes are six digits — the store-code shape — so the prefix rule above no
+  // longer catches them. A six-digit serial that is a controller code on file (controller_codes, live or
+  // spent) is refused exactly like a '579' one: plain 'invalid_format', NOT counted, nothing written. Only
+  // when it is not this car's own serial (Rule 2) and not a minted store code (the two generators never
+  // hand out the same digits, so that guard is belt and braces). A missing table reads as "not one".
+  if (!ownedByThisCar && !minted && /^[0-9]{6}$/.test(serial)) {
+    let ctrl = null;
+    try {
+      ctrl = await db.prepare('SELECT 1 AS x FROM controller_codes WHERE code = ?').bind(serial).first();
+    } catch (e) { ctrl = null; }
+    if (ctrl) {
+      return json({
+        status: RESULT.INVALID_FORMAT,
+        row: shape(before),
+        attempts: 0,
+        attempts_limit: FAILED_ATTEMPT_LIMIT,
+        blocked_now: false,
+        counted: false,
+        reason: 'controller_code',
+        current_failed_attempts: (before && before.failed_attempts) || 0,
+      });
+    }
+  }
+
   const mintedOk = !minted || ownedByThisCar ||
     ((!minted.used_by || minted.used_by === hardwareId) && String(minted.expires_at) > nowIso());
 

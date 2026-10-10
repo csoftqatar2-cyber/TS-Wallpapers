@@ -19,8 +19,9 @@ if (!globalThis.crypto?.subtle?.timingSafeEqual) {
 const SECRET = 'test-secret';
 
 /** Just enough D1 to serve the statements handleActivate actually issues. */
-function makeDb(seed = []) {
+function makeDb(seed = [], { ctrl = [], issued = [] } = {}) {
   const rows = new Map();
+  const ctrlCodes = new Set(ctrl), issuedCodes = new Set(issued);
   for (const r of seed) {
     rows.set(r.hardware_id, {
       hardware_id: r.hardware_id, serial_number: r.serial_number ?? null,
@@ -44,6 +45,11 @@ function makeDb(seed = []) {
     }
 
     if (s.startsWith('INSERT INTO devices_audit')) return null;
+
+    if (s.startsWith('SELECT 1 AS x FROM controller_codes WHERE code')) return ctrlCodes.has(args[0]) ? { x: 1 } : null;
+    if (s.startsWith('SELECT expires_at, used_by FROM issued_codes WHERE serial'))
+      return issuedCodes.has(args[0]) ? { expires_at: '2999-01-01T00:00:00Z', used_by: null } : null;
+    if (s.startsWith('UPDATE issued_codes')) return null;
 
     if (s.startsWith('INSERT INTO devices') && s.includes("'activate'")) {
       const [hardware_id, serial_number, activated_at, updated_at] = args;
@@ -149,6 +155,34 @@ function check(label, actual, expected) {
   let last;
   for (let i = 0; i < 10; i++) last = await activate(db, 'CAR-F', '578300' + (200 + i));
   check('ordinary guesses still auto-block at 10', last.status, 'blocked');
+}
+
+// ------------------------------------------------- 6-digit controller codes (2026-10-10)
+{
+  const db = makeDb([{ hardware_id: 'CAR-G', serial_number: '578300007', is_active: true, failed_attempts: 9 }], { ctrl: ['048213', '777001'] });
+  const r = await activate(db, 'CAR-G', '048213');
+  check('a 6-digit controller code on file answers invalid_format', r.status, 'invalid_format');
+  check('...with attempts 0 (Postgres mirror no-op)', r.attempts, 0);
+  check('...and reason controller_code', r.reason, 'controller_code');
+  for (let i = 0; i < 5; i++) await activate(db, 'CAR-G', '777001');
+  check('a car at 9/10 typing controller codes is not counted', db.__rows.get('CAR-G').failed_attempts, 9);
+  check('...not blocked', db.__rows.get('CAR-G').is_blocked, 0);
+  check('...still active with its own serial', db.__rows.get('CAR-G').serial_number, '578300007');
+  const n = await activate(db, 'CAR-G', '123987');
+  check('a 6-digit code that is NOT a controller code is still an ordinary counted rejection', n.attempts, 10);
+}
+{
+  const db = makeDb([], { ctrl: ['048213'] });
+  await activate(db, 'CAR-H', '048213');
+  check('no D1 row created for an unknown car typing a 6-digit controller code', db.__rows.has('CAR-H'), false);
+}
+{
+  const db = makeDb([], { ctrl: ['555666'], issued: ['555666'] });
+  check('a minted store code wins over a same-digit controller row (never minted, guard only)', (await activate(db, 'CAR-I', '555666')).status, 'success');
+}
+{
+  const db = makeDb([{ hardware_id: 'CAR-J', serial_number: '246810', is_active: true }], { ctrl: ['246810'] });
+  check('Rule 2: a car re-typing its own 6-digit serial still re-activates', (await activate(db, 'CAR-J', '246810')).status, 'success');
 }
 
 console.log(`
