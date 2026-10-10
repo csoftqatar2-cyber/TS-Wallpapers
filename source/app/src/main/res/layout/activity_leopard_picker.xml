@@ -434,8 +434,9 @@
     <!-- A video used to preview as a flat brown rectangle with the word "video" on it, which is
          no basis for committing a dashboard to a clip. It is fetched first (the file is needed on
          disk to apply it anyway, so this costs nothing extra) and then played here, looping and
-         muted, with the same Set / Change buttons underneath. -->
-    <VideoView
+         muted, with the same Set / Change buttons underneath. A TextureView fed by our own muted
+         MediaPlayer, not a VideoView: a VideoView takes the car's audio focus and stops the music. -->
+    <TextureView
         android:id="@+id/leopardPreviewVideo"
         android:layout_width="match_parent"
         android:layout_height="match_parent"

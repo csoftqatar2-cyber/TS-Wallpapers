@@ -28,7 +28,6 @@ import android.widget.LinearLayout;
 import android.widget.ProgressBar;
 import android.widget.TextView;
 import android.widget.Toast;
-import android.widget.VideoView;
 
 import androidx.activity.EdgeToEdge;
 import androidx.appcompat.app.AppCompatActivity;
@@ -107,7 +106,16 @@ public class LeopardPickerActivity extends AppCompatActivity {
     private ImageView mPreviewImage;
     private TextView mPreviewBadge;
     private ProgressBar mPreviewProgress;
-    private VideoView mPreviewVideo;
+    /**
+     * The preview's clip, played by our own muted MediaPlayer — not a VideoView, which takes the
+     * car's audio focus every time it opens a clip and so stops the driver's music.
+     * See {@link SilentPlayback}.
+     */
+    private TextureView mPreviewVideo;
+    private MediaPlayer mPreviewPlayer;
+    private Surface mPreviewSurface;
+    /** The clip the preview should be playing, or null once it is stopped. */
+    private Uri mPreviewUri;
     private TextView mPreviewLoading;
     /** Bumped whenever the preview changes, so a slow download knows it is no longer wanted. */
     private int mPreviewToken;
@@ -402,6 +410,22 @@ public class LeopardPickerActivity extends AppCompatActivity {
         mPreviewBadge = findViewById(R.id.leopardPreviewBadge);
         mPreviewProgress = findViewById(R.id.leopardPreviewProgress);
         mPreviewVideo = findViewById(R.id.leopardPreviewVideo);
+        mPreviewVideo.setOpaque(false);   // nothing drawn until the first frame — the backdrop shows
+        mPreviewVideo.setSurfaceTextureListener(new TextureView.SurfaceTextureListener() {
+            @Override
+            public void onSurfaceTextureAvailable(SurfaceTexture st, int w, int h) {
+                if(mPreviewUri != null && mPreviewPlayer == null) startPreviewPlayer(st);
+            }
+            @Override
+            public boolean onSurfaceTextureDestroyed(SurfaceTexture st) {
+                releasePreviewPlayer();
+                return true;
+            }
+            @Override
+            public void onSurfaceTextureSizeChanged(SurfaceTexture st, int w, int h) { }
+            @Override
+            public void onSurfaceTextureUpdated(SurfaceTexture st) { }
+        });
         mPreviewLoading = findViewById(R.id.leopardPreviewLoading);
 
         mFilterRow = findViewById(R.id.leopardTypeFilter);
@@ -1281,6 +1305,7 @@ public class LeopardPickerActivity extends AppCompatActivity {
         // a surprise on a device that never really shuts down.
         stopUploadServer();
         releaseTilePlayers();
+        releasePreviewPlayer();
         super.onDestroy();
     }
 
@@ -2267,9 +2292,10 @@ public class LeopardPickerActivity extends AppCompatActivity {
                     mp.setLooping(true);
                     // Silent, like the wallpaper itself. A grid of clips that all started talking
                     // at once would be its own bug report.
-                    mp.setVolume(0f, 0f);
+                    SilentPlayback.mute(mp);
                     mp.setOnPreparedListener(p -> {
                         if(gone()) return;
+                        SilentPlayback.mute(p);
                         try { p.start(); } catch(Throwable ignored) { }
                     });
                     mp.setOnErrorListener((p, what, extra) -> true);   // still frame stays up
@@ -2766,38 +2792,87 @@ public class LeopardPickerActivity extends AppCompatActivity {
 
     private void playPreviewVideo(Uri uri) {
         try {
+            releasePreviewPlayer();
+            mPreviewUri = uri;
+            // Full box until the clip says how big it is; fitPreviewVideo then letterboxes it.
+            FrameLayout.LayoutParams lp = (FrameLayout.LayoutParams) mPreviewVideo.getLayoutParams();
+            lp.width = FrameLayout.LayoutParams.MATCH_PARENT;
+            lp.height = FrameLayout.LayoutParams.MATCH_PARENT;
+            lp.gravity = Gravity.CENTER;
+            mPreviewVideo.setLayoutParams(lp);
+            // Must be VISIBLE to ever get a SurfaceTexture; it is translucent until frames arrive.
             mPreviewVideo.setVisibility(View.VISIBLE);
-            mPreviewVideo.setVideoURI(uri);
-            mPreviewVideo.setOnPreparedListener(new MediaPlayer.OnPreparedListener() {
-                @Override
-                public void onPrepared(MediaPlayer mp) {
-                    mp.setLooping(true);
-                    // Silent: this is a preview on a dashboard, and the wallpaper itself has no
-                    // sound either — playing audio here would misrepresent the result.
-                    try { mp.setVolume(0f, 0f); } catch(Exception ignored) {}
-                }
-            });
-            mPreviewVideo.setOnErrorListener(new MediaPlayer.OnErrorListener() {
-                @Override
-                public boolean onError(MediaPlayer mp, int what, int extra) {
-                    // Some clips the wallpaper engine can still play will not open in a VideoView.
-                    // Fall back to the old flat panel rather than a system "can't play" dialog:
-                    // the file is already downloaded, so applying it may well work regardless.
-                    mPreviewVideo.setVisibility(View.GONE);
-                    mPreviewLoading.setVisibility(View.GONE);
-                    return true;
-                }
-            });
-            mPreviewVideo.start();
+            if(mPreviewVideo.isAvailable() && mPreviewVideo.getSurfaceTexture() != null) {
+                startPreviewPlayer(mPreviewVideo.getSurfaceTexture());
+            }   // else: onSurfaceTextureAvailable starts it
         } catch(Throwable t) {
-            mPreviewVideo.setVisibility(View.GONE);
+            stopPreviewVideo();
+        }
+    }
+
+    private void startPreviewPlayer(SurfaceTexture st) {
+        final Uri uri = mPreviewUri;
+        if(uri == null || gone()) return;
+        final MediaPlayer mp = new MediaPlayer();
+        mPreviewPlayer = mp;
+        try {
+            mPreviewSurface = new Surface(st);
+            mp.setSurface(mPreviewSurface);
+            mp.setDataSource(this, uri);
+            mp.setLooping(true);
+            // Silent: this is a preview on a dashboard, and the wallpaper itself has no sound
+            // either. No audio focus is ever asked for, so the car's music keeps playing.
+            SilentPlayback.mute(mp);
+            mp.setOnPreparedListener(p -> {
+                if(mPreviewPlayer != mp || gone()) return;
+                SilentPlayback.mute(p);
+                fitPreviewVideo(p.getVideoWidth(), p.getVideoHeight());
+                try { p.start(); } catch(Throwable ignored) { }
+            });
+            mp.setOnErrorListener((p, what, extra) -> {
+                // Some clips the wallpaper engine can still play will not open here. Fall back
+                // to the still panel rather than an error: the file is already downloaded, so
+                // applying it may well work regardless.
+                CrashReporter.breadcrumb("picker preview: player error " + what + "/" + extra);
+                if(mPreviewPlayer == mp) stopPreviewVideo();
+                mPreviewLoading.setVisibility(View.GONE);
+                return true;
+            });
+            mp.prepareAsync();
+        } catch(Throwable t) {
+            CrashReporter.breadcrumb("picker preview: could not open " + uri + " — " + t);
+            stopPreviewVideo();
+        }
+    }
+
+    /** Fit the clip inside the preview box, keeping its proportions (what a VideoView did). */
+    private void fitPreviewVideo(int vw, int vh) {
+        int pw = mPreview.getWidth(), ph = mPreview.getHeight();
+        if(vw <= 0 || vh <= 0 || pw <= 0 || ph <= 0) return;
+        float scale = Math.min(pw / (float) vw, ph / (float) vh);
+        FrameLayout.LayoutParams lp = (FrameLayout.LayoutParams) mPreviewVideo.getLayoutParams();
+        lp.width = Math.max(1, Math.round(vw * scale));
+        lp.height = Math.max(1, Math.round(vh * scale));
+        lp.gravity = Gravity.CENTER;
+        mPreviewVideo.setLayoutParams(lp);
+    }
+
+    private void releasePreviewPlayer() {
+        MediaPlayer mp = mPreviewPlayer;
+        mPreviewPlayer = null;
+        if(mp != null) {
+            try { mp.reset(); } catch(Throwable ignored) { }
+            try { mp.release(); } catch(Throwable ignored) { }
+        }
+        if(mPreviewSurface != null) {
+            try { mPreviewSurface.release(); } catch(Throwable ignored) { }
+            mPreviewSurface = null;
         }
     }
 
     private void stopPreviewVideo() {
-        try {
-            if(mPreviewVideo.isPlaying()) mPreviewVideo.stopPlayback();
-        } catch(Throwable ignored) {}
+        mPreviewUri = null;
+        releasePreviewPlayer();
         mPreviewVideo.setVisibility(View.GONE);
     }
 
