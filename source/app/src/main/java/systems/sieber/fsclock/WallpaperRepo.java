@@ -2125,11 +2125,30 @@ public class WallpaperRepo {
                     if (!now) Thread.sleep((long) (Math.random() * ENROLL_JITTER_MAX_MS));
                     if (DeviceToken.get(mContext) != null) return;                // the other process won
                     if (!now && stamp.equals(mPref.getString(PREF_TOKEN_ENROLL_STAMP, ""))) return;
+                    String hw = getDeviceId();
                     JSONObject body = new JSONObject();
-                    body.put("device_hw_id", getDeviceId());
+                    body.put("device_hw_id", hw);
                     body.put("app_id", DeviceToken.APP_ID);
                     body.put("app_version_code", BuildConfig.VERSION_CODE);
-                    String[] r = httpPostRaw(sbUrl + "/rest/v1/rpc/enroll_device", body.toString());
+                    String[] r = null;
+                    // A format or reinstall loses the token file while the server still holds one
+                    // for this car, so plain enroll_device refuses. The controller daemon's
+                    // fingerprint lets the server prove it is the same unit and rotate the token.
+                    // Only for VIN ids: legacy ids come from the serial and prove nothing.
+                    String fp = hw != null && hw.startsWith("VIN-") ? daemonFingerprint() : "";
+                    if (!fp.isEmpty()) {
+                        try {
+                            JSONObject fpBody = new JSONObject(body.toString());
+                            fpBody.put("fingerprint", fp);
+                            r = httpPostRaw(sbUrl + "/rest/v1/rpc/enroll_device_fp", fpBody.toString());
+                            int c = Integer.parseInt(r[0]);
+                            // 404/PGRST202 (RPC not deployed yet) or any error: today's call below.
+                            if (c < 200 || c >= 300) r = null;
+                        } catch (Throwable fpFailed) {
+                            r = null;
+                        }
+                    }
+                    if (r == null) r = httpPostRaw(sbUrl + "/rest/v1/rpc/enroll_device", body.toString());
                     int code = Integer.parseInt(r[0]);
                     if (code < 200 || code >= 300) return;          // no stamp: ask again next sync
                     mPref.edit().putString(PREF_TOKEN_ENROLL_STAMP, stamp).apply();
@@ -2146,6 +2165,35 @@ public class WallpaperRepo {
                 }
             }
         }, "ts-enrol").start();
+    }
+
+    /**
+     * The unit fingerprint from the dashboard controller's shell daemon (127.0.0.1:8899, this
+     * package is on its peer allow-list): "FPR\n" -> "OK <64 hex>". Anything else - no
+     * controller on this car, "ERR ...", a closed socket - is "" and enrol goes on as before.
+     * Blocking network I/O: call it off the main thread only (the enrol thread does).
+     */
+    private static String daemonFingerprint() {
+        java.net.Socket s = new java.net.Socket();
+        try {
+            s.connect(new java.net.InetSocketAddress("127.0.0.1", 8899), 900);
+            s.setSoTimeout(2500);
+            java.io.OutputStream out = s.getOutputStream();
+            out.write("FPR\n".getBytes("UTF-8"));
+            out.flush();
+            java.io.BufferedReader in = new java.io.BufferedReader(
+                    new InputStreamReader(s.getInputStream(), "UTF-8"));
+            String line = in.readLine();
+            if (line == null) return "";
+            line = line.trim();
+            if (!line.startsWith("OK ")) return "";
+            String fp = line.substring(3).trim();
+            return fp.matches("[0-9a-f]{64}") ? fp : "";
+        } catch (Throwable t) {
+            return "";
+        } finally {
+            try { s.close(); } catch (Throwable ignored) { }
+        }
     }
 
     /** "yyyy-m-d:versionCode" in local time - the day boundary only has to be consistent on this car. */

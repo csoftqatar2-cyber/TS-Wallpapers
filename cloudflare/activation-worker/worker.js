@@ -254,6 +254,64 @@ function anonFirstMintFenced(env, appId, row) {
   return Date.now() - at > windowMin * 60 * 1000;
 }
 
+/* ---------------------------------------------------------------------------
+ * Same-unit fingerprint for every app (2026-10-10). Tables: device_fingerprints (0009, written only
+ * by thab-voice) and device_fp_rotations (0010, per-(car, app) daily rotation counter).
+ * ------------------------------------------------------------------------- */
+const FP_MISMATCH_CAP_PER_DAY = 5;   // shared with thab-voice: both count devices_audit enroll_fp_mismatch
+const FP_ROTATE_CAP_PER_DAY = 3;     // per (car, app)
+
+/**
+ * 'ok' (same unit, rotation claimed) | 'rotate_capped' | null (no proof: no/invalid fingerprint,
+ * non-VIN id, no pepper, nothing bound, mismatch, or today's mismatch budget spent). Every
+ * non-null outcome and every refused comparison is audited; the fingerprint itself never is.
+ */
+async function fingerprintProof(db, env, hardwareId, appId, raw, before) {
+  const fp = typeof raw === 'string' ? raw.trim().toLowerCase() : '';
+  const pepper = env && typeof env.FP_PEPPER === 'string' ? env.FP_PEPPER : '';
+  // A legacy id (SYS-/BOOT-…) is built from the serial the fingerprint hides: it proves nothing there.
+  if (!/^[0-9a-f]{64}$/.test(fp) || !hardwareId.startsWith('VIN-') || !pepper) return null;
+  const now = new Date();
+  const day = now.toISOString().slice(0, 10);
+  const base = { ...shape(before), app_id: appId };
+
+  const bound = await db.prepare('SELECT fp_hash FROM device_fingerprints WHERE hardware_id = ?').bind(hardwareId).first();
+  if (!bound) {
+    await auditStmt(db, hardwareId, 'enroll_fp_unbound', before, base).run();
+    return null;
+  }
+  const miss = await db
+    .prepare("SELECT COUNT(*) AS n FROM devices_audit WHERE hardware_id = ? AND action = 'enroll_fp_mismatch' AND at >= ?")
+    .bind(hardwareId, day + 'T00:00:00.000Z')
+    .first();
+  if (Number(miss && miss.n) >= FP_MISMATCH_CAP_PER_DAY) {
+    await auditStmt(db, hardwareId, 'enroll_fp_locked', before, { ...base, day }).run();
+    return null;
+  }
+  const hash = await sha256Hex(fp + pepper);
+  if (!secretMatches(hash, String(bound.fp_hash || ''))) {
+    await auditStmt(db, hardwareId, 'enroll_fp_mismatch', before, { ...base, fp8: hash.slice(0, 8) }).run();
+    return null;
+  }
+  // Claimed first, conditionally, so parallel requests cannot slip past the cap.
+  const claim = await db
+    .prepare(
+      `INSERT INTO device_fp_rotations (hardware_id, app_id, rotate_day, rotate_count) VALUES (?, ?, ?, 1)
+       ON CONFLICT(hardware_id, app_id) DO UPDATE SET
+         rotate_count = CASE WHEN device_fp_rotations.rotate_day = excluded.rotate_day THEN device_fp_rotations.rotate_count + 1 ELSE 1 END,
+         rotate_day = excluded.rotate_day
+       WHERE NOT (device_fp_rotations.rotate_day = excluded.rotate_day AND device_fp_rotations.rotate_count >= ?)
+       RETURNING rotate_count`,
+    )
+    .bind(hardwareId, appId, day, FP_ROTATE_CAP_PER_DAY)
+    .first();
+  if (!claim) {
+    await auditStmt(db, hardwareId, 'rotate_fp_capped', before, { ...base, day, cap: FP_ROTATE_CAP_PER_DAY }).run();
+    return 'rotate_capped';
+  }
+  return 'ok';
+}
+
 function randomTokenHex() {
   const bytes = new Uint8Array(32);
   crypto.getRandomValues(bytes);
@@ -293,7 +351,7 @@ async function handleEnroll(db, body, env) {
   // statement timeout after our reply). The dead token is rotated away and the caller
   // that passed every gate gets a live one. Audited separately so it stays countable.
   const reissue = body.reissue === true;
-  const rotate = bySerial || reissue;
+  let rotate = bySerial || reissue;
 
   // FIRST-MINT FENCE (2026-09-16, security review C2). "A stranger with the VIN alone can
   // never rotate" was true; nothing here ever stopped him ENROLLING a car that had not
@@ -310,6 +368,24 @@ async function handleEnroll(db, body, env) {
     await auditStmt(db, hardwareId, 'enroll_guard_refused', before,
       { ...shape(before), app_id: appId, reissue, activated_at: before.activated_at || null }).run();
     return json({ status: 'refused', token: null, app_id: appId, reason: 'first_mint_guard', row: shape(before) });
+  }
+
+  // SAME-UNIT FINGERPRINT (2026-10-10). A format / reinstall wipes every app's storage while the
+  // car keeps its id and this row keeps its token, so the anonymous road answers already_enrolled
+  // for ever (TS Wallpapers on VIN-byd1108D9EBDCBD89E1: 23 conflicts). The car can prove it is the
+  // SAME physical unit with the per-car hardware fingerprint that thab-voice bound with proof (the
+  // controller's live token, the car's own code, or the first mint right after a code). Here it is
+  // only COMPARED — never bound — so there is no trust on first use: a car with nothing bound keeps
+  // its code road. Off until FP_PEPPER (the SAME secret value as thab-voice's) is set.
+  let byFp = false;
+  if (existing && !rotate) {
+    const fp = await fingerprintProof(db, env, hardwareId, appId, body.fingerprint, before);
+    if (fp === 'ok') {
+      byFp = true;
+      rotate = true;
+    } else if (fp === 'rotate_capped') {
+      return json({ status: 'already_enrolled', token: null, app_id: appId, reason: 'rotate_capped', row: shape(before) });
+    }
   }
 
   if (existing && !rotate) {
@@ -350,7 +426,7 @@ async function handleEnroll(db, body, env) {
   }
   const after = await getToken(db, hardwareId, appId);
   const rotated = rotate && !!existing;
-  await auditStmt(db, hardwareId, rotated ? (reissue && !bySerial ? 'reissue_token' : 'rotate_token') : 'enroll', before,
+  await auditStmt(db, hardwareId, rotated ? (byFp ? 'rotate_fp' : reissue && !bySerial ? 'reissue_token' : 'rotate_token') : 'enroll', before,
     { ...shape(before), app_id: appId, token_version: after ? after.token_version : 1 }).run();
   return json({ status: rotated ? 'rotated' : 'enrolled', token, app_id: appId,
     token_version: after ? after.token_version : 1, row: shape(before) });
