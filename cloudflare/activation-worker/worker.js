@@ -544,7 +544,15 @@ async function migrateIdentity(db, oldId, newId) {
  */
 async function recordFailure(db, hardwareId, serial, before, status) {
   const attempts = ((before && before.failed_attempts) || 0) + 1;
-  const blockNow = attempts >= FAILED_ATTEMPT_LIMIT;
+  /* Owner 2026-10-11: a car that is ALREADY activated is never auto-blocked by wrong codes. Its wrong
+     tries are still counted and audited (failed_attempts, last_failed_serial, devices_audit), but only an
+     explicit admin block takes a paid licence away. A block on the family row closes every app on the
+     car (Store, Wallpapers, the ذبذبة controller ...), and an installer typing a controller code or a
+     typo into an activated car's code box must not be able to do that. The 10-try lock still guards rows
+     that are not activated yet, the brute-force case it exists for. Postgres activate_device mirrors
+     blocked_now, so it follows this rule without a change of its own. */
+  const alreadyActive = !!(before && Number(before.is_active) === 1);
+  const blockNow = attempts >= FAILED_ATTEMPT_LIMIT && !alreadyActive;
   const stamp = nowIso();
 
   const after = {

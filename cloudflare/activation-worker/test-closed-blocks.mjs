@@ -188,5 +188,22 @@ async function check(label, actual, expected) {
   await check('9 fresh failures do not block yet', last, 'invalid_format');
 }
 
+// ------------------- an ACTIVATED car is never auto-blocked by wrong codes (owner 2026-10-11)
+{
+  const db = makeDb([{ hardware_id: 'CAR-X', serial_number: '578300050', is_active: true }]);
+  let last;
+  for (let i = 0; i < 12; i++) last = await activate(db, 'CAR-X', '578300' + (400 + i));
+  await check('12 wrong codes on an activated car: still not blocked', last, 'invalid_format');
+  const r = db.__rows.get('CAR-X');
+  await check('activated car: is_blocked stays 0', String(r.is_blocked), '0');
+  await check('activated car: wrong tries are still counted', String(r.failed_attempts), '12');
+  await check('activated car: still active', String(!!r.is_active), 'true');
+  await check('activated car: block_reason stays empty', String(r.block_reason), 'null');
+}
+{
+  const db = makeDb([{ hardware_id: 'CAR-Y', serial_number: '578300051', is_active: true, is_blocked: true, block_reason: 'admin' }]);
+  await check('admin block on an activated car still answers blocked', await activate(db, 'CAR-Y', '578300051'), 'blocked');
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
