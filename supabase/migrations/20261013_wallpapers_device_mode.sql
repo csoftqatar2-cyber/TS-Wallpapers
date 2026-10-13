@@ -11,9 +11,15 @@
 --     caller sends is used ONLY when devices.mode is NULL (a mode the TS WALLPAPERS app
 --     reported always wins), and only when it is one of the known modes.
 --   * get_leopard_wallpapers gets the same parameter and the same two filters
---     get_wallpapers already has: target_mode and the per-car hides (wallpaper_hides). On this
---     Leopard-only channel a car with no mode at all counts as 'leopard', so nothing that
---     reaches a Leopard today stops reaching it.
+--     get_wallpapers already has: target_mode and the per-car hides (wallpaper_hides). Mode
+--     priority there is coalesce(device_mode asked, devices.mode, 'leopard'): the dashboard is
+--     the real consumer of this channel and says what it is; TS WALLPAPERS does not send it and
+--     keeps devices.mode; a car with neither counts as 'leopard' (a Leopard-only channel).
+--
+-- FOLDER CHANNELS (leopard_dash and the others mirrored into a folder on the car): the mirror
+-- treats the answer as AUTHORITATIVE — a row that leaves the answer, by a hide
+-- (wallpaper_hides) or by target_mode, makes the car DELETE that file from «TS Leo Dashboard».
+-- That is the intended meaning of a hide on these channels.
 --
 -- Backward compatible: the old two-argument call (every TS WALLPAPERS build, every dashboard
 -- build before this) resolves to the new function through the default — so the old
@@ -21,14 +27,26 @@
 -- PostgREST answer 300 "ambiguous" to every car). One transaction; grants re-made.
 --
 -- ORDER: apply any time. The dashboard build that sends device_mode falls back to asking
--- without it when the function does not take it (HTTP 404/400), so either order works.
+-- without it when the function does not take it (HTTP 404/400), so either order works. The
+-- dashboard only READS with device_mode; it never writes devices.mode (report_device_mode
+-- stays TS WALLPAPERS' alone).
 --
 -- Verify after applying:
 --   select pg_get_function_identity_arguments(oid) from pg_proc
 --    where proname in ('get_wallpapers','get_leopard_wallpapers');      -- one row each, 3 args
+--   select proname, proacl::text from pg_proc
+--    where proname in ('get_wallpapers','get_leopard_wallpapers');
+--     -- each proacl holds exactly: =X (PUBLIC), postgres, anon, authenticated, service_role
+--     -- (compare as a set: {=X/postgres, postgres=X/postgres, anon=X/postgres,
+--     --  authenticated=X/postgres, service_role=X/postgres})
 --   select * from public.get_wallpapers('<an activated hw id>');              -- as before
 --   select * from public.get_wallpapers('<a dashboard-only hw id>', null, 'leopard');
 --                                     -- now includes the target_mode = 'leopard' wallpapers
+--
+-- AFTER APPLYING — only with the owner's approval: update supabase/schema.sql to these two
+-- definitions and remove this file's PENDING marker below.
+--
+-- PENDING: not applied.
 -- ============================================================================
 
 begin;
@@ -77,7 +95,7 @@ begin
 end;
 $function$;
 
-grant execute on function public.get_wallpapers(text, text, text) to anon, authenticated;
+grant execute on function public.get_wallpapers(text, text, text) to anon, authenticated, service_role;
 
 drop function if exists public.get_leopard_wallpapers(text, text);
 
@@ -110,9 +128,10 @@ begin
         join public.devices d on d.hardware_id = hw
         where w.channel = 'leopard_dash'
           and (w.is_global = true or w.hardware_id = hw)
-          -- A Leopard-only channel: a car that never reported a mode (and did not send one) is a
-          -- Leopard here — rows the panel saved with target_mode 'leopard' must keep reaching it.
-          and (w.target_mode is null or w.target_mode = coalesce(d.mode, asked, 'leopard'))
+          -- The mode the caller says first (the dashboard, this channel's consumer), then the one
+          -- TS WALLPAPERS reported, then 'leopard' (a Leopard-only channel: rows saved with
+          -- target_mode 'leopard' keep reaching a car that has neither).
+          and (w.target_mode is null or w.target_mode = coalesce(asked, d.mode, 'leopard'))
           and not exists (
               select 1 from public.wallpaper_hides h
               where h.wallpaper_id = w.id and h.hardware_id = hw
@@ -124,8 +143,8 @@ begin
 end;
 $function$;
 
-grant execute on function public.get_leopard_wallpapers(text, text, text) to anon, authenticated;
-
-commit;
+grant execute on function public.get_leopard_wallpapers(text, text, text) to anon, authenticated, service_role;
 
 notify pgrst, 'reload schema';
+
+commit;
