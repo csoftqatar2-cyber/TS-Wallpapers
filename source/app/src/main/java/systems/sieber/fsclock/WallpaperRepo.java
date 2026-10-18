@@ -289,6 +289,17 @@ public class WallpaperRepo {
                 if (isPlausibleVin(v)) return v.trim();
             } catch (Throwable ignored) { }
         }
+        // Lynk & Co on the ECARX L946 / DHU1DS1 build (SDK 32) leaves geely_gpt_vin empty and
+        // files the VIN as the account device id instead — the same value as the vehicle HAL's
+        // INFO_VIN. The name has no "vin" in it, so the table scan below cannot find it either,
+        // and the car fell back to ANDROID_ID: a different id per signing key, so the store and
+        // this app reported two identities for one car. Strict VIN only: the key is generic and
+        // another ROM could keep anything under it.
+        try {
+            String v = android.provider.Settings.Global.getString(
+                    context.getContentResolver(), "ACCOUNT_DEVICE_ID");
+            if (isStrictVin(v)) return v.trim().toUpperCase(java.util.Locale.ROOT);
+        } catch (Throwable ignored) { }
         // Desay SV (Jetour) files its copy in Settings.System, not Global — but the table scan
         // below already reads System and accepts exactly what the sibling apps accept, so there
         // is deliberately no named shortcut for it here.
