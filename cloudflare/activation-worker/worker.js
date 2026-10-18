@@ -525,7 +525,37 @@ async function migrateIdentity(db, oldId, newId) {
     db.prepare('UPDATE OR IGNORE device_tokens SET hardware_id = ? WHERE hardware_id = ?').bind(newId, oldId),
     auditStmt(db, newId, 'migrate', source, { ...shape(source), hardware_id: newId }),
   ]);
+  await moveCarRows(db, oldId, newId);
   return true;
+}
+
+/* The other per-car rows in this D1 that the family row's rename must carry (2026-10-18). They were
+   left under the old id, so after a rename the car's phone link, its controller licence and its
+   fingerprint answered for a name the car no longer uses. Each moves only when the new id has no
+   row of its own (UPDATE OR IGNORE: never merge two rows, never overwrite one), and each is
+   best-effort and separate: a table another Worker owns may not exist in every environment, and the
+   family row has already moved. Audit trails (devices_audit, controller_audit) stay under the name
+   they were written with — they are history. */
+const CAR_ROWS = [
+  ['car_customers', 'hw_id'],
+  ['controller_entitlements', 'hardware_id'],
+  ['controller_attempts', 'hardware_id'],
+  ['device_fingerprints', 'hardware_id'],
+];
+async function moveCarRows(db, oldId, newId) {
+  for (const [table, col] of CAR_ROWS) {
+    try {
+      await db.prepare(`UPDATE OR IGNORE ${table} SET ${col} = ? WHERE ${col} = ?`).bind(newId, oldId).run();
+    } catch (e) {
+      console.log(`migrate: ${table} not moved: ${String(e && e.message).slice(0, 120)}`);
+    }
+  }
+}
+
+/** migrate_device_hardware_id's direction guard: a legacy (non-VIN) id onto a VIN, or a case-only VIN rename. */
+function isLegalMove(oldId, newId) {
+  return newId.startsWith('VIN-') &&
+    (!oldId.startsWith('VIN-') || oldId.toUpperCase() === newId.toUpperCase());
 }
 
 /**
@@ -633,10 +663,7 @@ async function handleActivate(db, body) {
   // in another case. Any other shape is a stranger naming a VIN read off a
   // windscreen, and must not move anyone's licence. Mirrors
   // public.migrate_device_hardware_id in Postgres (20260903_migration_direction_guard.sql).
-  const legalMove =
-    hardwareId.startsWith('VIN-') &&
-    (!legacyId.startsWith('VIN-') || legacyId.toUpperCase() === hardwareId.toUpperCase());
-  if (legacyId && legacyId !== hardwareId && legalMove) {
+  if (legacyId && legacyId !== hardwareId && isLegalMove(legacyId, hardwareId)) {
     const existing = await getDevice(db, hardwareId);
     if (!existing) await migrateIdentity(db, legacyId, hardwareId);
   }
@@ -896,8 +923,48 @@ async function handleBulkUpsert(db, body) {
   const CHUNK = 50;
   let written = 0;
 
+  /* «Same serial, different id» (2026-10-18). Postgres renames a car's row from its legacy id to its
+     VIN inside the read RPCs (get_wallpapers & co. -> migrate_device_hardware_id) without telling D1,
+     so D1 kept the old name holding the serial and every nightly push of the VIN row died on
+     UNIQUE(serial_number): reconcile answered 'push HTTP 500' every night from 2026-08-05 and 114 cars
+     never got their VIN row here — the controller's store gate then read them as not activated
+     (VIN-byd96F0BA85E398916B). Before writing, a pushed row whose id is new here and whose serial
+     sits under another id is resolved: a legal rename (legacy -> VIN, or VIN case) is carried out
+     here as Postgres did it; anything else is a real clash between two cars, which is skipped and
+     reported instead of failing the whole push. */
+  const migrated = [], conflicts = [];
+  const pushable = [];
+  /* One query per chunk finds who holds each pushed serial; only a clash costs more. (A full
+     bulk_import of the fleet must stay well inside a Worker's per-request query budget.) */
+  const holders = new Map();
   for (let i = 0; i < rows.length; i += CHUNK) {
-    const statements = rows.slice(i, i + CHUNK).map((r) =>
+    const serials = rows.slice(i, i + CHUNK).map((r) => r.serial_number).filter((s) => s != null && s !== '');
+    if (!serials.length) continue;
+    const { results } = await db
+      .prepare(`SELECT hardware_id, serial_number FROM devices WHERE serial_number IN (${serials.map(() => '?').join(',')})`)
+      .bind(...serials)
+      .all();
+    for (const h of results || []) holders.set(h.serial_number, h.hardware_id);
+  }
+  for (const r of rows) {
+    const id = String(r.hardware_id || '');
+    const serial = r.serial_number ?? null;
+    const heldBy = serial != null ? holders.get(serial) : undefined;
+    if (id && heldBy && heldBy !== id) {
+      // migrateIdentity refuses when the pushed id already has a row here (never merge two cars)
+      // or the move is not a legal legacy -> VIN rename; both are reported, not written.
+      if (isLegalMove(heldBy, id) && await migrateIdentity(db, heldBy, id)) {
+        migrated.push({ from: heldBy, to: id });
+      } else {
+        conflicts.push({ hardware_id: id, serial_number: serial, held_by: heldBy });
+        continue;
+      }
+    }
+    pushable.push(r);
+  }
+
+  for (let i = 0; i < pushable.length; i += CHUNK) {
+    const statements = pushable.slice(i, i + CHUNK).map((r) =>
       db.prepare(
         `INSERT INTO devices (hardware_id, serial_number, is_active, is_blocked, activated_at, updated_at, source)
          VALUES (?, ?, ?, ?, ?, ?, ?)
@@ -929,7 +996,7 @@ async function handleBulkUpsert(db, body) {
     written += statements.length;
   }
 
-  return json({ status: 'ok', written });
+  return json({ status: 'ok', written, migrated, conflicts });
 }
 
 /** Paginated dump, for checksum comparison against Postgres. */
