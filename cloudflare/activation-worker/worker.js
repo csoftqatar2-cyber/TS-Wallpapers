@@ -643,6 +643,164 @@ async function recordFailure(db, hardwareId, serial, before, status) {
 }
 
 /**
+ * A controller code (controller_codes, or '579' + 6 digits) typed into the family activation box.
+ *
+ * Owner 2026-10-19 (car VIN-bydD28D8914F1D780D0, code 377548): the Controller code from the generator
+ * must activate the dashboard BY ITSELF, on a car that never had ThabThaba Store and that no backend has
+ * ever heard of. Until now this box refused it (plain invalid_format, nothing written) and the app's
+ * second try, /v1/controller/redeem on thab-voice, stopped at the family gate ('family_inactive',
+ * nothing written either) — the code was never looked at and the attempt left no trace in D1.
+ *
+ * Now, on a car that is NOT a family member yet:
+ *   - a valid code (on file, unused, not cancelled, not expired) is claimed for this car, and in the
+ *     same transaction the car is registered/activated in `devices` (source 'controller_code', the
+ *     typed code as its serial, so Postgres activate_device mirrors it into public.devices exactly
+ *     like a store activation), the controller entitlement is written (kind 'code') and both audits
+ *     are kept. The answer is 'success', so the app's family gate AND controller gate open together.
+ *   - this car's own code again (the first answer was lost) restores the same state: 'success'.
+ *   - anything else (unknown 579, used by another car, cancelled, expired, the controller lock, a
+ *     revoked controller licence, a family licence an admin withdrew) is refused with the same plain
+ *     invalid_format as before and attempts:0 — the FAMILY counter is never touched (no family
+ *     auto-block from a controller code, as before) — but it is counted on the controller's own counter
+ *     (controller_attempts, lock at 10, the same counter thab-voice uses) and audited.
+ * A car that already IS a family member gets the old answer unchanged (the app sends the code on to
+ * /v1/controller/redeem), with an audit row so the attempt is visible.
+ * Every outcome leaves a controller_audit row (by 'family-box').
+ */
+const CONTROLLER_LOCK_AFTER = 10; // = LOCK_AFTER in thab-voice worker/src/licence.js
+
+async function controllerCodeAtFamilyBox(db, hardwareId, legacyId, serial, before, serialOwner) {
+  const at = nowIso();
+  const ids = legacyId && legacyId !== hardwareId ? [hardwareId, legacyId] : [hardwareId];
+  const ctrlAudit = (action, detail) =>
+    db.prepare("INSERT INTO controller_audit (hardware_id, action, detail, by, at) VALUES (?, ?, ?, 'family-box', ?)")
+      .bind(hardwareId, action, JSON.stringify(detail), at);
+  const plainRefusal = (why) => json({
+    status: RESULT.INVALID_FORMAT,
+    row: shape(before),
+    attempts: 0,
+    attempts_limit: FAILED_ATTEMPT_LIMIT,
+    blocked_now: false,
+    counted: false,
+    reason: 'controller_code',
+    why,
+    current_failed_attempts: (before && before.failed_attempts) || 0,
+  });
+  const note = async (action, detail) => {
+    try { await ctrlAudit(action, detail).run(); } catch (e) { /* the trace is best-effort */ }
+  };
+  const refuse = async (why, count) => {
+    if (count) {
+      try {
+        const r = await db.prepare(
+          `INSERT INTO controller_attempts (hardware_id, failed, last_failed_at, locked_at)
+           VALUES (?, 1, ?, CASE WHEN 1 >= ? THEN ? ELSE NULL END)
+           ON CONFLICT(hardware_id) DO UPDATE SET
+             failed = controller_attempts.failed + 1,
+             last_failed_at = excluded.last_failed_at,
+             locked_at = COALESCE(controller_attempts.locked_at,
+               CASE WHEN controller_attempts.failed + 1 >= ? THEN excluded.last_failed_at ELSE NULL END)
+           RETURNING failed, locked_at`,
+        ).bind(hardwareId, at, CONTROLLER_LOCK_AFTER, at, CONTROLLER_LOCK_AFTER).first();
+        if (r && r.locked_at === at) await note('auto_lock', { failed: r.failed, last: why, code: serial.slice(0, 16) });
+      } catch (e) { /* counting is best-effort here; the refusal stands */ }
+    }
+    await note('family_box_refused', { code: serial.slice(0, 16), why, legacy_hw_id: legacyId || null });
+    return plainRefusal(why);
+  };
+
+  // Already a family member: unchanged — the controller half is thab-voice's /v1/controller/redeem.
+  if (before && Number(before.is_active) === 1) {
+    await note('family_box_seen', { code: serial.slice(0, 16), why: 'family_active' });
+    return plainRefusal('family_active');
+  }
+  // A family licence an admin withdrew (the row has held a serial) is not reopened by a controller code.
+  if (before && before.serial_number) return refuse('family_withdrawn', false);
+  if (serialOwner && serialOwner.hardware_id !== hardwareId) return refuse('used', true); // its serial is already another car's: the code was claimed there
+
+  const att = await db.prepare('SELECT locked_at FROM controller_attempts WHERE hardware_id = ?').bind(hardwareId).first();
+  if (att && att.locked_at != null) return refuse('locked', false);
+
+  const entSql = ids.length > 1
+    ? 'SELECT hardware_id, revoked_at FROM controller_entitlements WHERE hardware_id IN (?, ?)'
+    : 'SELECT hardware_id, revoked_at FROM controller_entitlements WHERE hardware_id = ?';
+  const ents = (await db.prepare(entSql).bind(...ids).all()).results || [];
+  if (ents.some((r) => r.revoked_at != null)) return refuse('revoked', false);
+
+  // '579' + a six-digit code on file IS that code (same bridge as thab-voice effectiveCode).
+  let code = serial;
+  const m = /^579(\d{6})$/.exec(serial);
+  if (m && !(await db.prepare('SELECT 1 AS x FROM controller_codes WHERE code = ?').bind(serial).first())) {
+    if (await db.prepare('SELECT 1 AS x FROM controller_codes WHERE code = ?').bind(m[1]).first()) code = m[1];
+  }
+
+  const after = {
+    hardware_id: hardwareId, serial_number: serial, is_active: true, is_blocked: false,
+    activated_at: at, failed_attempts: 0, source: 'controller_code',
+  };
+  const activateStmts = (claimedSql, claimedArgs, auditAction) => [
+    db.prepare(
+      `INSERT INTO devices (hardware_id, serial_number, is_active, is_blocked, activated_at, updated_at, source)
+       SELECT ?, ?, 1, 0, ?, ?, 'controller_code' WHERE ${claimedSql}
+       ON CONFLICT(hardware_id) DO UPDATE SET
+         serial_number = excluded.serial_number, is_active = 1, activated_at = excluded.activated_at,
+         updated_at = excluded.updated_at, source = 'controller_code', failed_attempts = 0,
+         first_failed_at = NULL, last_failed_at = NULL, last_failed_serial = NULL,
+         blocked_at = NULL, block_reason = NULL`,
+    ).bind(hardwareId, serial, at, at, ...claimedArgs),
+    db.prepare(
+      `INSERT INTO devices_audit (hardware_id, action, before_json, after_json)
+       SELECT ?, 'activate', ?, ? WHERE ${claimedSql}`,
+    ).bind(hardwareId, before ? JSON.stringify(shape(before)) : null, JSON.stringify(after), ...claimedArgs),
+    db.prepare(
+      `INSERT INTO controller_entitlements (hardware_id, kind, code, granted_at, granted_by)
+       SELECT ?, 'code', ?, ?, 'car' WHERE ${claimedSql}
+       ON CONFLICT(hardware_id) DO UPDATE SET kind = 'code', code = excluded.code,
+         granted_at = excluded.granted_at, granted_by = 'car'
+       WHERE controller_entitlements.revoked_at IS NULL`,
+    ).bind(hardwareId, code, at, ...claimedArgs),
+    db.prepare(
+      `INSERT INTO controller_audit (hardware_id, action, detail, by, at)
+       SELECT ?, ?, ?, 'family-box', ? WHERE ${claimedSql}`,
+    ).bind(hardwareId, auditAction,
+      JSON.stringify({ code, typed: serial, legacy_hw_id: legacyId || null, registered: !before }), at, ...claimedArgs),
+    db.prepare(`UPDATE controller_attempts SET failed = 0 WHERE hardware_id = ? AND ${claimedSql}`)
+      .bind(hardwareId, ...claimedArgs),
+  ];
+  const success = async () => json({
+    status: RESULT.SUCCESS,
+    row: shape(await getDevice(db, hardwareId)),
+    attempts: 0,
+    attempts_limit: FAILED_ATTEMPT_LIMIT,
+    blocked_now: false,
+    via: 'controller_code',
+  });
+
+  // Claim + register + activate + entitle in ONE transaction; every write after the claim runs only
+  // when this very claim happened.
+  const claimed = 'EXISTS (SELECT 1 FROM controller_codes WHERE code = ? AND used_by = ? AND used_at = ?)';
+  const res = await db.batch([
+    db.prepare(
+      `UPDATE controller_codes SET used_by = ?, used_at = ?
+       WHERE code = ? AND used_by IS NULL AND cancelled_at IS NULL AND expires_at > ?`,
+    ).bind(hardwareId, at, code, at),
+    ...activateStmts(claimed, [code, hardwareId, at], 'redeem'),
+  ]);
+  if (Number(res[0] && res[0].meta && res[0].meta.changes) === 1) return await success();
+
+  const c = await db.prepare('SELECT used_by, expires_at, cancelled_at FROM controller_codes WHERE code = ?').bind(code).first();
+  if (!c) return refuse('invalid', true);
+  if (c.used_by != null) {
+    if (!ids.includes(c.used_by)) return refuse('used', true);
+    // This car's own code again: restore what it already paid for (never over a revoke — checked above).
+    await db.batch(activateStmts('1 = 1', [], 'redeem_repeat'));
+    return await success();
+  }
+  if (c.cancelled_at != null) return refuse('cancelled', true);
+  return refuse('expired', true);
+}
+
+/**
  * The activation decision. Mirrors activate_device's logic and its four return
  * values in the same order of checks, because the order is observable: a blocked
  * car with a malformed serial has always answered 'blocked', not 'invalid_format'.
@@ -703,16 +861,7 @@ async function handleActivate(db, body) {
   // blocked check (a blocked car still answers 'blocked') and after ownedByThisCar (Rule 2:
   // a serial already on file for this car is always honored ahead of every format rule).
   if (CONTROLLER_CODE_RE.test(serial) && !ownedByThisCar) {
-    return json({
-      status: RESULT.INVALID_FORMAT,
-      row: shape(before),
-      attempts: 0,
-      attempts_limit: FAILED_ATTEMPT_LIMIT,
-      blocked_now: false,
-      counted: false,
-      reason: 'controller_code',
-      current_failed_attempts: (before && before.failed_attempts) || 0,
-    });
+    return await controllerCodeAtFamilyBox(db, hardwareId, legacyId, serial, before, serialOwner);
   }
 
   // Since 2026-09-07 a '578...' code is valid ONLY inside a closed block and only when
@@ -739,16 +888,7 @@ async function handleActivate(db, body) {
       ctrl = await db.prepare('SELECT 1 AS x FROM controller_codes WHERE code = ?').bind(serial).first();
     } catch (e) { ctrl = null; }
     if (ctrl) {
-      return json({
-        status: RESULT.INVALID_FORMAT,
-        row: shape(before),
-        attempts: 0,
-        attempts_limit: FAILED_ATTEMPT_LIMIT,
-        blocked_now: false,
-        counted: false,
-        reason: 'controller_code',
-        current_failed_attempts: (before && before.failed_attempts) || 0,
-      });
+      return await controllerCodeAtFamilyBox(db, hardwareId, legacyId, serial, before, serialOwner);
     }
   }
 

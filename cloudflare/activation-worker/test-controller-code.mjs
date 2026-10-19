@@ -46,6 +46,10 @@ function makeDb(seed = [], { ctrl = [], issued = [] } = {}) {
 
     if (s.startsWith('INSERT INTO devices_audit')) return null;
 
+    // controllerCodeAtFamilyBox (2026-10-19): controller tables are covered by test-controller-register.mjs
+    // on a real SQLite; here they read as empty, so an unknown code is a plain refusal.
+    if (/controller_(attempts|audit|codes|entitlements)/.test(s) && !s.startsWith('SELECT 1 AS x FROM controller_codes')) return null;
+
     if (s.startsWith('SELECT 1 AS x FROM controller_codes WHERE code')) return ctrlCodes.has(args[0]) ? { x: 1 } : null;
     if (s.startsWith('SELECT expires_at, used_by FROM issued_codes WHERE serial'))
       return issuedCodes.has(args[0]) ? { expires_at: '2999-01-01T00:00:00Z', used_by: null } : null;
