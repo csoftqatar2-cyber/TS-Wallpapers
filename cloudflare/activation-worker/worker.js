@@ -670,11 +670,14 @@ async function recordFailure(db, hardwareId, serial, before, status) {
 const CONTROLLER_LOCK_AFTER = 10; // = LOCK_AFTER in thab-voice worker/src/licence.js
 
 async function controllerCodeAtFamilyBox(db, hardwareId, legacyId, serial, before, serialOwner) {
+  /* Round trips are the budget here: Postgres activate_device runs under the anon role's 3 s
+     statement_timeout and waits on this answer, and every D1 query from this Worker costs ~0.25 s.
+     So: ONE read, ONE write batch, whatever the outcome (2026-10-19, measured: a 10-query version
+     made the first activate_device time out after D1 had already said yes). */
   const at = nowIso();
-  const ids = legacyId && legacyId !== hardwareId ? [hardwareId, legacyId] : [hardwareId];
-  const ctrlAudit = (action, detail) =>
-    db.prepare("INSERT INTO controller_audit (hardware_id, action, detail, by, at) VALUES (?, ?, ?, 'family-box', ?)")
-      .bind(hardwareId, action, JSON.stringify(detail), at);
+  const legacy = legacyId && legacyId !== hardwareId ? legacyId : hardwareId;
+  const ids = legacy !== hardwareId ? [hardwareId, legacy] : [hardwareId];
+  const typed = serial.slice(0, 16);
   const plainRefusal = (why) => json({
     status: RESULT.INVALID_FORMAT,
     row: shape(before),
@@ -686,59 +689,84 @@ async function controllerCodeAtFamilyBox(db, hardwareId, legacyId, serial, befor
     why,
     current_failed_attempts: (before && before.failed_attempts) || 0,
   });
-  const note = async (action, detail) => {
-    try { await ctrlAudit(action, detail).run(); } catch (e) { /* the trace is best-effort */ }
-  };
+  const auditStmtCtrl = (action, detail) =>
+    db.prepare("INSERT INTO controller_audit (hardware_id, action, detail, by, at) VALUES (?, ?, ?, 'family-box', ?)")
+      .bind(hardwareId, action, JSON.stringify(detail), at);
   const refuse = async (why, count) => {
+    const stmts = [];
     if (count) {
-      try {
-        const r = await db.prepare(
+      stmts.push(
+        db.prepare(
           `INSERT INTO controller_attempts (hardware_id, failed, last_failed_at, locked_at)
            VALUES (?, 1, ?, CASE WHEN 1 >= ? THEN ? ELSE NULL END)
            ON CONFLICT(hardware_id) DO UPDATE SET
              failed = controller_attempts.failed + 1,
              last_failed_at = excluded.last_failed_at,
              locked_at = COALESCE(controller_attempts.locked_at,
-               CASE WHEN controller_attempts.failed + 1 >= ? THEN excluded.last_failed_at ELSE NULL END)
-           RETURNING failed, locked_at`,
-        ).bind(hardwareId, at, CONTROLLER_LOCK_AFTER, at, CONTROLLER_LOCK_AFTER).first();
-        if (r && r.locked_at === at) await note('auto_lock', { failed: r.failed, last: why, code: serial.slice(0, 16) });
-      } catch (e) { /* counting is best-effort here; the refusal stands */ }
+               CASE WHEN controller_attempts.failed + 1 >= ? THEN excluded.last_failed_at ELSE NULL END)`,
+        ).bind(hardwareId, at, CONTROLLER_LOCK_AFTER, at, CONTROLLER_LOCK_AFTER),
+        // The lock this very failure set (locked_at = now) gets its own audit row, as in thab-voice.
+        db.prepare(
+          `INSERT INTO controller_audit (hardware_id, action, detail, by, at)
+           SELECT ?, 'auto_lock', json_object('failed', failed, 'last', ?, 'code', ?), 'family-box', ?
+             FROM controller_attempts WHERE hardware_id = ? AND locked_at = ?`,
+        ).bind(hardwareId, why, typed, at, hardwareId, at),
+      );
     }
-    await note('family_box_refused', { code: serial.slice(0, 16), why, legacy_hw_id: legacyId || null });
+    stmts.push(auditStmtCtrl('family_box_refused', { code: typed, why, legacy_hw_id: legacyId || null }));
+    try { await db.batch(stmts); } catch (e) { /* the trace is best-effort; the refusal stands */ }
     return plainRefusal(why);
   };
 
   // Already a family member: unchanged — the controller half is thab-voice's /v1/controller/redeem.
   if (before && Number(before.is_active) === 1) {
-    await note('family_box_seen', { code: serial.slice(0, 16), why: 'family_active' });
+    try { await auditStmtCtrl('family_box_seen', { code: typed, why: 'family_active' }).run(); } catch (e) { /* best-effort */ }
     return plainRefusal('family_active');
   }
   // A family licence an admin withdrew (the row has held a serial) is not reopened by a controller code.
   if (before && before.serial_number) return refuse('family_withdrawn', false);
-  if (serialOwner && serialOwner.hardware_id !== hardwareId) return refuse('used', true); // its serial is already another car's: the code was claimed there
+  // Its serial is already another car's: the code was claimed there.
+  if (serialOwner && serialOwner.hardware_id !== hardwareId) return refuse('used', true);
 
-  const att = await db.prepare('SELECT locked_at FROM controller_attempts WHERE hardware_id = ?').bind(hardwareId).first();
-  if (att && att.locked_at != null) return refuse('locked', false);
-
-  const entSql = ids.length > 1
-    ? 'SELECT hardware_id, revoked_at FROM controller_entitlements WHERE hardware_id IN (?, ?)'
-    : 'SELECT hardware_id, revoked_at FROM controller_entitlements WHERE hardware_id = ?';
-  const ents = (await db.prepare(entSql).bind(...ids).all()).results || [];
-  if (ents.some((r) => r.revoked_at != null)) return refuse('revoked', false);
-
-  // '579' + a six-digit code on file IS that code (same bridge as thab-voice effectiveCode).
-  let code = serial;
+  // ONE read: the lock, a revoke on either id, and the code row ('579' + a six-digit code on file IS
+  // that code — the same bridge as thab-voice effectiveCode; a real 9-digit code on file wins).
   const m = /^579(\d{6})$/.exec(serial);
-  if (m && !(await db.prepare('SELECT 1 AS x FROM controller_codes WHERE code = ?').bind(serial).first())) {
-    if (await db.prepare('SELECT 1 AS x FROM controller_codes WHERE code = ?').bind(m[1]).first()) code = m[1];
-  }
+  const bridged = m ? m[1] : serial;
+  const st = await db.prepare(
+    `SELECT
+       (SELECT locked_at FROM controller_attempts WHERE hardware_id = ?) AS locked_at,
+       (SELECT COUNT(*) FROM controller_entitlements WHERE hardware_id IN (?, ?) AND revoked_at IS NOT NULL) AS revoked,
+       c.code, c.used_by, c.expires_at, c.cancelled_at
+     FROM (SELECT 1) AS one
+     LEFT JOIN controller_codes c ON c.code = CASE
+       WHEN EXISTS (SELECT 1 FROM controller_codes WHERE code = ?) THEN ? ELSE ? END`,
+  ).bind(hardwareId, hardwareId, legacy, serial, serial, bridged).first();
+
+  if (st && st.locked_at != null) return refuse('locked', false);
+  if (st && Number(st.revoked) > 0) return refuse('revoked', false);
+  if (!st || !st.code) return refuse('invalid', true);
+  if (st.cancelled_at != null) return refuse('cancelled', true);
+  if (st.used_by != null && !ids.includes(st.used_by)) return refuse('used', true);
+  const repeat = st.used_by != null; // this car's own code again: restore what it already paid for
+  if (!repeat && !(String(st.expires_at) > at)) return refuse('expired', true);
+  const code = st.code;
 
   const after = {
     hardware_id: hardwareId, serial_number: serial, is_active: true, is_blocked: false,
     activated_at: at, failed_attempts: 0, source: 'controller_code',
   };
-  const activateStmts = (claimedSql, claimedArgs, auditAction) => [
+  // ONE write batch (one transaction). For a first claim every write after the UPDATE runs only when
+  // this very claim happened (a parallel claim that won makes this one a no-op = refused below).
+  const claimedSql = repeat ? '1 = 1' : 'EXISTS (SELECT 1 FROM controller_codes WHERE code = ? AND used_by = ? AND used_at = ?)';
+  const claimedArgs = repeat ? [] : [code, hardwareId, at];
+  const stmts = [];
+  if (!repeat) {
+    stmts.push(db.prepare(
+      `UPDATE controller_codes SET used_by = ?, used_at = ?
+       WHERE code = ? AND used_by IS NULL AND cancelled_at IS NULL AND expires_at > ?`,
+    ).bind(hardwareId, at, code, at));
+  }
+  stmts.push(
     db.prepare(
       `INSERT INTO devices (hardware_id, serial_number, is_active, is_blocked, activated_at, updated_at, source)
        SELECT ?, ?, 1, 0, ?, ?, 'controller_code' WHERE ${claimedSql}
@@ -762,42 +790,23 @@ async function controllerCodeAtFamilyBox(db, hardwareId, legacyId, serial, befor
     db.prepare(
       `INSERT INTO controller_audit (hardware_id, action, detail, by, at)
        SELECT ?, ?, ?, 'family-box', ? WHERE ${claimedSql}`,
-    ).bind(hardwareId, auditAction,
+    ).bind(hardwareId, repeat ? 'redeem_repeat' : 'redeem',
       JSON.stringify({ code, typed: serial, legacy_hw_id: legacyId || null, registered: !before }), at, ...claimedArgs),
     db.prepare(`UPDATE controller_attempts SET failed = 0 WHERE hardware_id = ? AND ${claimedSql}`)
       .bind(hardwareId, ...claimedArgs),
-  ];
-  const success = async () => json({
+  );
+  const res = await db.batch(stmts);
+  if (!repeat && Number(res[0] && res[0].meta && res[0].meta.changes) !== 1) return refuse('used', true); // lost a race
+
+  return json({
     status: RESULT.SUCCESS,
-    row: shape(await getDevice(db, hardwareId)),
+    row: { ...shape(before), ...after, updated_at: at, last_failed_at: null, last_failed_serial: null,
+      blocked_at: null, block_reason: null },
     attempts: 0,
     attempts_limit: FAILED_ATTEMPT_LIMIT,
     blocked_now: false,
     via: 'controller_code',
   });
-
-  // Claim + register + activate + entitle in ONE transaction; every write after the claim runs only
-  // when this very claim happened.
-  const claimed = 'EXISTS (SELECT 1 FROM controller_codes WHERE code = ? AND used_by = ? AND used_at = ?)';
-  const res = await db.batch([
-    db.prepare(
-      `UPDATE controller_codes SET used_by = ?, used_at = ?
-       WHERE code = ? AND used_by IS NULL AND cancelled_at IS NULL AND expires_at > ?`,
-    ).bind(hardwareId, at, code, at),
-    ...activateStmts(claimed, [code, hardwareId, at], 'redeem'),
-  ]);
-  if (Number(res[0] && res[0].meta && res[0].meta.changes) === 1) return await success();
-
-  const c = await db.prepare('SELECT used_by, expires_at, cancelled_at FROM controller_codes WHERE code = ?').bind(code).first();
-  if (!c) return refuse('invalid', true);
-  if (c.used_by != null) {
-    if (!ids.includes(c.used_by)) return refuse('used', true);
-    // This car's own code again: restore what it already paid for (never over a revoke — checked above).
-    await db.batch(activateStmts('1 = 1', [], 'redeem_repeat'));
-    return await success();
-  }
-  if (c.cancelled_at != null) return refuse('cancelled', true);
-  return refuse('expired', true);
 }
 
 /**
