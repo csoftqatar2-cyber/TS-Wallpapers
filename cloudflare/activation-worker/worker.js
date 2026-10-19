@@ -794,6 +794,17 @@ async function controllerCodeAtFamilyBox(db, hardwareId, legacyId, serial, befor
       JSON.stringify({ code, typed: serial, legacy_hw_id: legacyId || null, registered: !before }), at, ...claimedArgs),
     db.prepare(`UPDATE controller_attempts SET failed = 0 WHERE hardware_id = ? AND ${claimedSql}`)
       .bind(hardwareId, ...claimedArgs),
+    /* The phone the generator stored on the code becomes this car's customer, as a store code's phone
+       does (car_customers, the admin panel's «رقم العميل»; owner 2026-10-19). A car that already has a
+       customer row keeps it. car_customers is created by the admin site's migrations (Website repo) and
+       exists in production — checked 2026-10-19 — so it rides in the same transaction. */
+    db.prepare(
+      `INSERT INTO car_customers (hw_id, phone, serial, bound_at, updated_at, note)
+       SELECT ?, customer_phone, code, ?, ?, 'controller code'
+         FROM controller_codes
+        WHERE code = ? AND customer_phone IS NOT NULL AND customer_phone <> '' AND ${claimedSql}
+       ON CONFLICT(hw_id) DO NOTHING`,
+    ).bind(hardwareId, at, at, code, ...claimedArgs),
   );
   const res = await db.batch(stmts);
   if (!repeat && Number(res[0] && res[0].meta && res[0].meta.changes) !== 1) return refuse('used', true); // lost a race

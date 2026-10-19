@@ -22,6 +22,8 @@ function makeDb() {
   const db = new DatabaseSync(':memory:');
   db.exec(readFileSync(new URL('./schema.sql', import.meta.url), 'utf8'));
   db.exec(readFileSync(new URL('./migrations/0008_controller_licence.sql', import.meta.url), 'utf8'));
+  // Owned by the admin site's migrations (Website repo); same shape as production.
+  db.exec('CREATE TABLE car_customers (hw_id TEXT PRIMARY KEY, phone TEXT NOT NULL, serial TEXT, bound_at TEXT NOT NULL, updated_at TEXT NOT NULL, note TEXT)');
   const exec = (sql, p) => {
     const s = db.prepare(sql);
     if (/^\s*(SELECT|WITH)/i.test(sql) || /\bRETURNING\b/i.test(sql)) {
@@ -75,7 +77,9 @@ const q = (db, sql, ...p) => db.raw.prepare(sql).get(...p);
 {
   const db = makeDb();
   code(db, '377548');
+  db.raw.prepare("UPDATE controller_codes SET customer_phone = '+971555272407' WHERE code = '377548'").run();
   const r = await activate(db, 'VIN-bydNEW1', '377548', 'AID-x');
+  check('customer phone bound to the car', q(db, 'SELECT phone FROM car_customers WHERE hw_id=?', 'VIN-bydNEW1')?.phone, '+971555272407');
   check('unknown car: success', r.status, 'success');
   check('row active', q(db, 'SELECT is_active FROM devices WHERE hardware_id=?', 'VIN-bydNEW1').is_active, 1);
   check('row source', q(db, 'SELECT source FROM devices WHERE hardware_id=?', 'VIN-bydNEW1').source, 'controller_code');
