@@ -41,3 +41,10 @@ database_id = "978813d3-eeb3-4697-9d73-241242d0cfde"
 
 [observability]
 enabled = true
+
+# Smart Placement (2026-10-19). The only caller is Supabase Postgres in ap-south-1 (Mumbai); D1 lives
+# in Western Europe. Without it the Worker ran next to the caller and paid ~0.25 s per D1 query, so a
+# controller code redeemed at the family box took ~2.9 s of activate_device's 3 s anon statement_timeout.
+# With it the Worker runs next to D1: one long hop for the request, short ones for the queries.
+[placement]
+mode = "smart"
