@@ -55,9 +55,23 @@
  *   --expect <hardware_id>     add an id that MUST be in the set (repeatable). The bench/test ids below
  *                              are always asserted; a missing one fails the run (exit 2) before any apply.
  *
+ * Per-family cutoff (owner 2026-10-20, BYD Ti7)
+ *   --family <key>             snapshot ONE car family with its own, later cutoff (FAMILY_CUTOFFS below).
+ *                              The dashboard did not run on that family before, so a car of it activated
+ *                              in the store after the global cutoff must still get it free. Membership is
+ *                              Postgres public.store_installs.car = <key> (the store pins a Ti7 to 'ti7'
+ *                              from ro.product.device/model BYD100F, HardwareCar.kt), closed over
+ *                              device_id_aliases both ways. Every pass below is restricted to members;
+ *                              the activation rules are the same, only CUTOFF and granted_by change
+ *                              (granted_by 'snapshot-<date>-<key>'). The bench ids are not asserted in
+ *                              this mode (they are not of the family); use --expect.
+ *                              pg-json gains "family": [hw_id, ...] (see --print-pg-sql --family <key>).
+ *
  * Run (from cloudflare/activation-worker):
  *   node tools/snapshot-controller-grandfather.mjs --pg-json pg.json            # dry run
  *   node tools/snapshot-controller-grandfather.mjs --pg-json pg.json --apply    # after the cutoff only
+ *   node tools/snapshot-controller-grandfather.mjs --family ti7 --pg-json pg-ti7.json           # dry run
+ *   node tools/snapshot-controller-grandfather.mjs --family ti7 --pg-json pg-ti7.json --apply   # after 2026-10-20T21:00Z
  */
 
 import { spawnSync } from 'node:child_process';
@@ -65,14 +79,16 @@ import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const CUTOFF = '2026-10-07T21:00:00Z';
-const CUTOFF_MS = Date.parse(CUTOFF);
-const GRANTED_BY = 'snapshot-2026-10-07';
+const GLOBAL_CUTOFF = '2026-10-07T21:00:00Z';
+/* A family the dashboard reached later gets its own cutoff (end of that day, Qatar UTC+3).
+   ti7: the dashboard first runs on the Ti7 HSUM in 3.0.6; every Ti7 activated in the store up to and
+   including 2026-10-20 keeps it free (owner 2026-10-20). */
+const FAMILY_CUTOFFS = { ti7: '2026-10-20T21:00:00Z' };
 const PG_PROJECT_REF = 'ihgmqwzdpugdzddobhbc';
 const D1_NAME = 'ts-activation';
 
 // Bench / test head units that must be grandfathered (resolved from repo docs + Postgres 2026-10-07).
-const MUST_INCLUDE = [
+const BENCH_IDS = [
   ['SYS-1b2021f9', 'AI Box test channel'],
   ['SYS-00000091439HSD215', 'HSD-215 bench (client_name «بنش HSD-215»)'],
   // BYD ids are 'VIN-' + the controller's own car id (thab_cars.vin in the controller telemetry project).
@@ -86,10 +102,11 @@ const workerDir = resolve(here, '..');
 
 // ------------------------------------------------------------------ args
 const argv = process.argv.slice(2);
-const opt = { apply: false, forceEarly: false, pgJson: null, out: null, batch: 200, expect: [], printSql: false, includeUnactivatedAttempts: false };
+const opt = { family: null, apply: false, forceEarly: false, pgJson: null, out: null, batch: 200, expect: [], printSql: false, includeUnactivatedAttempts: false };
 for (let i = 0; i < argv.length; i++) {
   const a = argv[i];
-  if (a === '--dry-run') opt.apply = false;
+  if (a === '--family') opt.family = String(argv[++i] || '').trim().toLowerCase();
+  else if (a === '--dry-run') opt.apply = false;
   else if (a === '--apply') opt.apply = true;
   else if (a === '--force-early') opt.forceEarly = true;
   else if (a === '--pg-json') opt.pgJson = argv[++i];
@@ -101,13 +118,25 @@ for (let i = 0; i < argv.length; i++) {
   else { console.error(`unknown argument: ${a}`); process.exit(64); }
 }
 
+if (opt.family != null && !Object.prototype.hasOwnProperty.call(FAMILY_CUTOFFS, opt.family)) {
+  console.error(`unknown --family '${opt.family}' (known: ${Object.keys(FAMILY_CUTOFFS).join(', ')})`);
+  process.exit(64);
+}
+const FAMILY = opt.family;
+const CUTOFF = FAMILY ? FAMILY_CUTOFFS[FAMILY] : GLOBAL_CUTOFF;
+const CUTOFF_MS = Date.parse(CUTOFF);
+const GRANTED_BY = FAMILY ? `snapshot-${CUTOFF.slice(0, 10)}-${FAMILY}` : 'snapshot-2026-10-07';
+const MUST_INCLUDE = FAMILY ? [] : BENCH_IDS;
+
 const PG_DEVICES_SQL =
   `select hardware_id, created_at, activated_at, (serial_number is not null) as has_serial
      from public.devices where created_at < '${CUTOFF}'`;
 const PG_ALIASES_SQL = `select old_id, current_id from public.device_id_aliases`;
+// FAMILY is one of FAMILY_CUTOFFS' own keys (checked above), never free text.
+const PG_FAMILY_SQL = FAMILY ? `select hw_id from public.store_installs where car = '${FAMILY}'` : null;
 
 if (opt.printSql) {
-  console.log(PG_DEVICES_SQL + ';\n' + PG_ALIASES_SQL + ';');
+  console.log(PG_DEVICES_SQL + ';\n' + PG_ALIASES_SQL + ';' + (PG_FAMILY_SQL ? '\n' + PG_FAMILY_SQL + ';' : ''));
   process.exit(0);
 }
 
@@ -162,25 +191,28 @@ async function pgQuery(sql) {
 }
 
 async function loadPg() {
-  let devices, aliases, how;
+  let devices, aliases, family = null, how;
   if (opt.pgJson) {
     const j = JSON.parse(readFileSync(opt.pgJson, 'utf8'));
-    devices = j.devices; aliases = j.aliases; how = `file ${opt.pgJson}`;
+    devices = j.devices; aliases = j.aliases; family = j.family ?? null; how = `file ${opt.pgJson}`;
   } else if (process.env.SUPABASE_ACCESS_TOKEN) {
     devices = await pgQuery(PG_DEVICES_SQL);
     aliases = await pgQuery(PG_ALIASES_SQL);
+    if (PG_FAMILY_SQL) family = await pgQuery(PG_FAMILY_SQL);
     how = 'Supabase Management API';
   } else {
     console.error('No Postgres source: pass --pg-json <file> (see --print-pg-sql) or set SUPABASE_ACCESS_TOKEN.');
     process.exit(64);
   }
   if (!Array.isArray(devices) || !Array.isArray(aliases)) throw new Error('pg source must have devices[] and aliases[]');
+  if (FAMILY && !Array.isArray(family)) throw new Error(`--family ${FAMILY}: pg source must have family[] (store_installs.hw_id where car = '${FAMILY}')`);
   const norm = (r) => Array.isArray(r)
     ? { hardware_id: r[0], created_at: r[1], activated_at: r[2], has_serial: !!r[3] }
     : { hardware_id: r.hardware_id, created_at: r.created_at, activated_at: r.activated_at,
         has_serial: r.has_serial != null ? !!r.has_serial : r.serial_number != null };
   const normA = (r) => (Array.isArray(r) ? { old_id: r[0], current_id: r[1] } : r);
-  return { devices: devices.map(norm), aliases: aliases.map(normA), how };
+  const normF = (r) => String((Array.isArray(r) ? r[0] : r && typeof r === 'object' ? r.hw_id : r) || '').trim();
+  return { devices: devices.map(norm), aliases: aliases.map(normA), family: family ? family.map(normF).filter(Boolean) : null, how };
 }
 
 // ------------------------------------------------------------------ build the set
@@ -207,6 +239,20 @@ function auditBeforeCutoff(id) {
   }
   return best;
 }
+/* --family: the member ids - the store's family rows, closed over the alias graph (a car that later
+   reports its VIN is the same car under both ids). null = no family filter (the global snapshot). */
+let members = null;
+if (FAMILY) {
+  members = new Set();
+  const stack = [...pg.family];
+  while (stack.length) {
+    const id = stack.pop();
+    if (members.has(id)) continue;
+    members.add(id);
+    for (const k of aliasOf.get(id) || []) stack.push(k);
+  }
+}
+const isMember = (id) => members == null || members.has(id);
 const pgAllIds = new Set(pg.devices.map((r) => (r.hardware_id || '').trim()).filter(Boolean));
 
 const set = new Map(); // hardware_id → { granted_at, source }
@@ -214,6 +260,8 @@ const stats = {
   'pg.devices': 0, 'pg.alias': 0, 'd1.devices': 0, 'd1.audit': 0,
   pg_rows_read: pg.devices.length, pg_skipped_after_cutoff: 0, pg_skipped_activated_after_cutoff: 0, pg_skipped_never_activated: 0,
   alias_rows_read: pg.aliases.length, alias_skipped_current_not_in_set: 0, alias_already_in_set: 0,
+  family_store_rows: pg.family ? pg.family.length : 0, family_members_with_aliases: members ? members.size : 0,
+  pg_skipped_not_in_family: 0, d1_skipped_not_in_family: 0,
   d1_rows_read: d1Rows.length, d1_skipped_after_cutoff: 0, d1_already_in_set: 0,
   audit_entries_before_cutoff: auditFirst.size, audit_rescued_pg: 0, audit_rescued_d1_only: 0,
 };
@@ -221,6 +269,7 @@ const stats = {
 for (const r of pg.devices) {
   const id = (r.hardware_id || '').trim();
   if (!id) continue;
+  if (!isMember(id)) { stats.pg_skipped_not_in_family++; continue; }
   const created = toMs(r.created_at);
   if (!(created < CUTOFF_MS)) { stats.pg_skipped_after_cutoff++; continue; }
   // activated_at set → it decides (a row created before the cutoff but activated after it is NOT
@@ -241,7 +290,7 @@ function aliasPass() {
   for (const a of pg.aliases) {
     const oldId = (a.old_id || '').trim();
     const cur = (a.current_id || '').trim();
-    if (!oldId || aliasDone.has(oldId) || !set.has(cur)) continue;
+    if (!oldId || aliasDone.has(oldId) || !set.has(cur) || !isMember(oldId)) continue;
     aliasDone.add(oldId);
     if (set.has(oldId)) { stats.alias_already_in_set++; continue; }
     set.set(oldId, { granted_at: set.get(cur).granted_at, source: 'pg.alias' });
@@ -252,6 +301,7 @@ aliasPass();
 for (const r of d1Rows) {
   const id = (r.hardware_id || '').trim();
   if (!id) continue;
+  if (!isMember(id)) { stats.d1_skipped_not_in_family++; continue; }
   const act = toMs(r.activated_at);
   if (set.has(id)) { stats.d1_already_in_set++; continue; }
   if (!(act < CUTOFF_MS)) {
@@ -285,7 +335,7 @@ for (const [id, label] of expected) {
 const now = new Date().toISOString();
 const rows = [...set.entries()].sort((a, b) => a[0].localeCompare(b[0]));
 const lines = [
-  `-- controller_entitlements grandfather snapshot — generated ${now}`,
+  `-- controller_entitlements grandfather snapshot${FAMILY ? ` (family ${FAMILY} only)` : ''} — generated ${now}`,
   `-- cutoff ${CUTOFF}; pg via ${pg.how}; ${rows.length} rows`,
   `-- INSERT OR IGNORE: never touches an existing row (revoked / code / manual rows keep their state).`,
 ];
@@ -296,7 +346,7 @@ for (let i = 0; i < rows.length; i += opt.batch) {
     'INSERT OR IGNORE INTO controller_entitlements (hardware_id, kind, granted_at, granted_by, snapshot_source) VALUES\n  ' +
     chunk.join(',\n  ') + ';');
 }
-const outFile = resolve(opt.out || join(here, 'out', `controller-grandfather-${now.replace(/[:.]/g, '-')}.sql`));
+const outFile = resolve(opt.out || join(here, 'out', `controller-grandfather-${FAMILY ? FAMILY + '-' : ''}${now.replace(/[:.]/g, '-')}.sql`));
 mkdirSync(dirname(outFile), { recursive: true });
 writeFileSync(outFile, lines.join('\n') + '\n', 'utf8');
 
@@ -322,6 +372,7 @@ if (!tables.length) {
   process.exit(4);
 }
 const before = d1Select("SELECT COUNT(*) AS n FROM controller_entitlements WHERE kind='grandfather'")[0].n;
+console.log(`granted_by ${GRANTED_BY}`);
 wrangler(['d1', 'execute', D1_NAME, '--remote', '--yes', '--file', outFile]);
 const after = d1Select("SELECT COUNT(*) AS n FROM controller_entitlements WHERE kind='grandfather'")[0].n;
 console.log(`\nApplied. grandfather rows in D1: ${before} → ${after}`);
