@@ -720,6 +720,20 @@ async function controllerCodeAtFamilyBox(db, hardwareId, legacyId, serial, befor
 
   // Already a family member: unchanged — the controller half is thab-voice's /v1/controller/redeem.
   if (before && Number(before.is_active) === 1) {
+    /* Unless this code is THIS car's own (it registered the car here): then the answer is success, so a
+       Postgres mirror that failed the first time (timeout after D1 had said yes — seen live 2026-10-19)
+       heals on the driver's next try instead of leaving D1 active and public.devices empty for good. */
+    const m6 = /^579(\d{6})$/.exec(serial);
+    const own = await db.prepare(
+      `SELECT code FROM controller_codes WHERE code IN (?, ?) AND used_by IN (?, ?) LIMIT 1`,
+    ).bind(serial, m6 ? m6[1] : serial, hardwareId, legacy).first();
+    if (own) {
+      try { await auditStmtCtrl('family_box_heal', { code: own.code, typed }).run(); } catch (e) { /* best-effort */ }
+      return json({
+        status: RESULT.SUCCESS, row: shape(before), attempts: 0,
+        attempts_limit: FAILED_ATTEMPT_LIMIT, blocked_now: false, via: 'controller_code',
+      });
+    }
     try { await auditStmtCtrl('family_box_seen', { code: typed, why: 'family_active' }).run(); } catch (e) { /* best-effort */ }
     return plainRefusal('family_active');
   }

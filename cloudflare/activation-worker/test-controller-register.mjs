@@ -141,5 +141,19 @@ const q = (db, sql, ...p) => db.raw.prepare(sql).get(...p);
   check('active family car: audited', q(db, "SELECT COUNT(*) n FROM controller_audit WHERE hardware_id='A1' AND action='family_box_seen'").n, 1);
 }
 
+// a car activated here by its own code whose Postgres mirror failed heals on the next try
+{
+  const db = makeDb();
+  code(db, '400001');
+  await activate(db, 'H1', '400001');
+  check('own code on an active car: success (Postgres heal)', (await activate(db, 'H1', '400001')).status, 'success');
+  check('…another car still refused', (await activate(db, 'H2', '400001')).status, 'invalid_format');
+  // (the 6-digit re-type above heals through Rule 2 — the serial is on file for this car)
+  code(db, '400002');
+  await activate(db, 'H3', '579400002');   // registered with the 579 form as its D1 serial
+  check('579-registered car re-typing the six digits: success (heal)', (await activate(db, 'H3', '400002')).status, 'success');
+  check('heal audited', q(db, "SELECT COUNT(*) n FROM controller_audit WHERE hardware_id='H3' AND action='family_box_heal'").n, 1);
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
