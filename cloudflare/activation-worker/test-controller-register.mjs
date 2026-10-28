@@ -1,8 +1,8 @@
 /**
- * A controller code typed into the family activation box on a car no backend knows (owner 2026-10-19,
- * VIN-bydD28D8914F1D780D0 / 377548): it registers + activates the car and grants the controller in one
- * go; every refusal is counted on the controller's own counter and audited; the family counter is never
- * touched. Real SQLite (node:sqlite) with schema.sql + migration 0008, driving the REAL worker.js.
+ * A controller code typed into the family activation box. Since 2026-10-28 (licence decoupled from the
+ * family) a dashboard code NEVER registers or activates a car in `devices` here: on a non-member it is
+ * refused plainly, not counted, not claimed, audited as family_box_seen; the app redeems it on thab-voice.
+ * The member branch (its own code heals, any other is refused) is unchanged. Real SQLite (node:sqlite) with schema.sql + migration 0008, driving the REAL worker.js.
  *
  * Run:  node test-controller-register.mjs
  */
@@ -73,54 +73,62 @@ const code = (db, c, { exp = future, used = null, cancelled = null } = {}) =>
     .run(c, new Date().toISOString(), exp, used, cancelled);
 const q = (db, sql, ...p) => db.raw.prepare(sql).get(...p);
 
-// unknown car + valid code → registered, active, entitled, code used, audited
+const snapDevices = (db) => JSON.stringify(db.raw.prepare('SELECT * FROM devices ORDER BY hardware_id').all());
+const nDevices = (db) => q(db, 'SELECT COUNT(*) n FROM devices').n;
+
+// 2026-10-28 (licence decoupled): unknown car + valid dashboard code → REFUSED; nothing claimed, devices untouched
 {
   const db = makeDb();
   code(db, '377548');
   db.raw.prepare("UPDATE controller_codes SET customer_phone = '+971555272407' WHERE code = '377548'").run();
+  const before = snapDevices(db);
   const r = await activate(db, 'VIN-bydNEW1', '377548', 'AID-x');
-  check('customer phone bound to the car', q(db, 'SELECT phone FROM car_customers WHERE hw_id=?', 'VIN-bydNEW1')?.phone, '+971555272407');
-  check('unknown car: success', r.status, 'success');
-  check('row active', q(db, 'SELECT is_active FROM devices WHERE hardware_id=?', 'VIN-bydNEW1').is_active, 1);
-  check('row source', q(db, 'SELECT source FROM devices WHERE hardware_id=?', 'VIN-bydNEW1').source, 'controller_code');
-  check('entitlement kind', q(db, 'SELECT kind FROM controller_entitlements WHERE hardware_id=?', 'VIN-bydNEW1').kind, 'code');
-  check('code used_by', q(db, 'SELECT used_by FROM controller_codes WHERE code=?', '377548').used_by, 'VIN-bydNEW1');
-  check('audit redeem', q(db, "SELECT COUNT(*) n FROM controller_audit WHERE hardware_id=? AND action='redeem'", 'VIN-bydNEW1').n, 1);
-  check('devices_audit activate', q(db, "SELECT COUNT(*) n FROM devices_audit WHERE hardware_id=? AND action='activate'", 'VIN-bydNEW1').n, 1);
-  check('re-typed (Rule 2) still success', (await activate(db, 'VIN-bydNEW1', '377548')).status, 'success');
-  check('another car with the same code refused', (await activate(db, 'VIN-bydOTHER', '377548')).status, 'invalid_format');
-  check('…counted on the controller counter', q(db, 'SELECT failed FROM controller_attempts WHERE hardware_id=?', 'VIN-bydOTHER').failed, 1);
-  check('…family row not created', q(db, 'SELECT COUNT(*) n FROM devices WHERE hardware_id=?', 'VIN-bydOTHER').n, 0);
-  check('…audited', q(db, "SELECT json_extract(detail,'$.why') w FROM controller_audit WHERE hardware_id=? AND action='family_box_refused'", 'VIN-bydOTHER').w, 'used');
+  check('unknown car + dashboard code: refused', r.status, 'invalid_format');
+  check('…reason controller_code', r.reason, 'controller_code');
+  check('…why controller_code', r.why, 'controller_code');
+  check('…not counted (family)', r.attempts, 0);
+  check('…counted:false', r.counted, false);
+  check('…devices unchanged (byte-identical)', snapDevices(db), before);
+  check('…no devices row for the car', q(db, 'SELECT COUNT(*) n FROM devices WHERE hardware_id=?', 'VIN-bydNEW1').n, 0);
+  check('…no devices_audit activate', q(db, "SELECT COUNT(*) n FROM devices_audit WHERE action='activate'").n, 0);
+  check('…code NOT claimed', q(db, 'SELECT used_by FROM controller_codes WHERE code=?', '377548').used_by, null);
+  check('…no entitlement written', q(db, 'SELECT COUNT(*) n FROM controller_entitlements').n, 0);
+  check('…controller counter untouched', q(db, 'SELECT COUNT(*) n FROM controller_attempts').n, 0);
+  check('…no customer bound here (redeem does it)', q(db, 'SELECT COUNT(*) n FROM car_customers').n, 0);
+  check('…audited family_box_seen / not_member',
+    q(db, "SELECT json_extract(detail,'$.why') w FROM controller_audit WHERE hardware_id=? AND action='family_box_seen'", 'VIN-bydNEW1').w, 'not_member');
+  // Typing it again changes nothing either, and another car is refused the same way.
+  check('…again: refused', (await activate(db, 'VIN-bydNEW1', '377548')).status, 'invalid_format');
+  check('…another car: refused', (await activate(db, 'VIN-bydOTHER', '377548')).status, 'invalid_format');
+  check('…devices still unchanged', snapDevices(db), before);
 }
-// a row that only collected failed codes counts as unknown
+// a row that only collected failed codes is not a member: refused, its family counter untouched
 {
   const db = makeDb();
   db.raw.prepare("INSERT INTO devices (hardware_id, is_active, failed_attempts, source) VALUES ('C2', 0, 3, 'failed_attempt')").run();
   code(db, '111222');
-  check('failed-only row: success', (await activate(db, 'C2', '111222')).status, 'success');
-  check('failed counter reset', q(db, 'SELECT failed_attempts FROM devices WHERE hardware_id=?', 'C2').failed_attempts, 0);
+  const before = snapDevices(db);
+  check('failed-only row: refused', (await activate(db, 'C2', '111222')).status, 'invalid_format');
+  check('failed-only row: devices unchanged', snapDevices(db), before);
+  check('failed-only row: code free', q(db, 'SELECT used_by FROM controller_codes WHERE code=?', '111222').used_by, null);
 }
-// '579' + a six-digit code on file
+// '579' + a six-digit code on file, non-member: refused, not claimed
 {
   const db = makeDb();
   code(db, '654321');
-  check('579 bridge: success', (await activate(db, 'C3', '579654321')).status, 'success');
-  check('579 bridge: entitlement on the 6-digit code', q(db, 'SELECT code FROM controller_entitlements WHERE hardware_id=?', 'C3').code, '654321');
+  check('579 bridge non-member: refused', (await activate(db, 'C3', '579654321')).status, 'invalid_format');
+  check('579 bridge non-member: no devices row', nDevices(db), 0);
+  check('579 bridge non-member: code free', q(db, 'SELECT used_by FROM controller_codes WHERE code=?', '654321').used_by, null);
 }
-// expired / cancelled / locked / revoked / withdrawn / blocked
+// expired / cancelled / locked / revoked / withdrawn: all the same plain refusal, nothing counted; blocked answers blocked
 {
   const db = makeDb();
   code(db, '200001', { exp: past });
   code(db, '200002', { cancelled: past });
   code(db, '200003');
   check('expired refused', (await activate(db, 'E1', '200001')).status, 'invalid_format');
-  check('expired: no family row', q(db, 'SELECT COUNT(*) n FROM devices WHERE hardware_id=?', 'E1').n, 0);
   check('cancelled refused', (await activate(db, 'E1', '200002')).status, 'invalid_format');
-  check('two failures counted', q(db, 'SELECT failed FROM controller_attempts WHERE hardware_id=?', 'E1').failed, 2);
-  db.raw.prepare("INSERT INTO controller_attempts (hardware_id, failed, locked_at) VALUES ('L1', 10, ?)").run(past);
-  check('locked car refused', (await activate(db, 'L1', '200003')).status, 'invalid_format');
-  check('locked: code not consumed', q(db, 'SELECT used_by FROM controller_codes WHERE code=?', '200003').used_by, null);
+  check('nothing counted on the controller counter', q(db, 'SELECT COUNT(*) n FROM controller_attempts').n, 0);
   db.raw.prepare("INSERT INTO controller_entitlements (hardware_id, kind, granted_at, revoked_at) VALUES ('R1','code',?,?)").run(past, past);
   check('revoked car refused', (await activate(db, 'R1', '200003')).status, 'invalid_format');
   db.raw.prepare("INSERT INTO devices (hardware_id, serial_number, is_active) VALUES ('W1', '578300001', 0)").run();
@@ -128,7 +136,8 @@ const q = (db, sql, ...p) => db.raw.prepare(sql).get(...p);
   db.raw.prepare("INSERT INTO devices (hardware_id, is_active, is_blocked) VALUES ('B1', 0, 1)").run();
   check('blocked car answers blocked', (await activate(db, 'B1', '200003')).status, 'blocked');
   check('code still free after all refusals', q(db, 'SELECT used_by FROM controller_codes WHERE code=?', '200003').used_by, null);
-  check('every refusal audited', q(db, "SELECT COUNT(*) n FROM controller_audit WHERE action='family_box_refused'").n, 5);
+  check('no family row created', q(db, "SELECT COUNT(*) n FROM devices WHERE hardware_id IN ('E1','R1')").n, 0);
+  check('every non-member refusal audited as family_box_seen', q(db, "SELECT COUNT(*) n FROM controller_audit WHERE action='family_box_seen'").n, 4);
 }
 // family member already: unchanged answer, but visible
 {
@@ -137,20 +146,20 @@ const q = (db, sql, ...p) => db.raw.prepare(sql).get(...p);
   code(db, '300001');
   const r = await activate(db, 'A1', '300001');
   check('active family car: invalid_format (redeem on thab-voice)', r.status, 'invalid_format');
+  check('active family car: why family_active', r.why, 'family_active');
   check('active family car: code untouched', q(db, 'SELECT used_by FROM controller_codes WHERE code=?', '300001').used_by, null);
   check('active family car: audited', q(db, "SELECT COUNT(*) n FROM controller_audit WHERE hardware_id='A1' AND action='family_box_seen'").n, 1);
 }
 
-// a car activated here by its own code whose Postgres mirror failed heals on the next try
+// a car registered by its own code BEFORE 2026-10-28 (member branch unchanged) still heals
 {
   const db = makeDb();
-  code(db, '400001');
-  await activate(db, 'H1', '400001');
-  check('own code on an active car: success (Postgres heal)', (await activate(db, 'H1', '400001')).status, 'success');
+  code(db, '400001', { used: 'H1' });
+  db.raw.prepare("INSERT INTO devices (hardware_id, serial_number, is_active, source) VALUES ('H1', '400001', 1, 'controller_code')").run();
+  check('own code on an active car: success (Rule 2 / Postgres heal)', (await activate(db, 'H1', '400001')).status, 'success');
   check('…another car still refused', (await activate(db, 'H2', '400001')).status, 'invalid_format');
-  // (the 6-digit re-type above heals through Rule 2 — the serial is on file for this car)
-  code(db, '400002');
-  await activate(db, 'H3', '579400002');   // registered with the 579 form as its D1 serial
+  code(db, '400002', { used: 'H3' });
+  db.raw.prepare("INSERT INTO devices (hardware_id, serial_number, is_active, source) VALUES ('H3', '579400002', 1, 'controller_code')").run();
   check('579-registered car re-typing the six digits: success (heal)', (await activate(db, 'H3', '400002')).status, 'success');
   check('heal audited', q(db, "SELECT COUNT(*) n FROM controller_audit WHERE hardware_id='H3' AND action='family_box_heal'").n, 1);
 }

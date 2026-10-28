@@ -645,38 +645,27 @@ async function recordFailure(db, hardwareId, serial, before, status) {
 /**
  * A controller code (controller_codes, or '579' + 6 digits) typed into the family activation box.
  *
- * Owner 2026-10-19 (car VIN-bydD28D8914F1D780D0, code 377548): the Controller code from the generator
- * must activate the dashboard BY ITSELF, on a car that never had ThabThaba Store and that no backend has
- * ever heard of. Until now this box refused it (plain invalid_format, nothing written) and the app's
- * second try, /v1/controller/redeem on thab-voice, stopped at the family gate ('family_inactive',
- * nothing written either) — the code was never looked at and the attempt left no trace in D1.
+ * Owner 2026-10-28 (licence decoupled from the family, feat/licence-decouple-1028): a dashboard code buys
+ * the DASHBOARD only. It must never register or activate a car in `devices` (and so never reach
+ * Supabase public.devices through activate_device's mirror) — that row is what opens ThabThaba Store and
+ * TS Wallpapers. From 2026-10-19 to 2026-10-28 this box did exactly that on a car outside the family
+ * (claim + INSERT INTO devices + entitlement); that road is closed.
  *
- * Now, on a car that is NOT a family member yet:
- *   - a valid code (on file, unused, not cancelled, not expired) is claimed for this car, and in the
- *     same transaction the car is registered/activated in `devices` (source 'controller_code', the
- *     typed code as its serial, so Postgres activate_device mirrors it into public.devices exactly
- *     like a store activation), the controller entitlement is written (kind 'code') and both audits
- *     are kept. The answer is 'success', so the app's family gate AND controller gate open together.
- *   - this car's own code again (the first answer was lost) restores the same state: 'success'.
- *   - anything else (unknown 579, used by another car, cancelled, expired, the controller lock, a
- *     revoked controller licence, a family licence an admin withdrew) is refused with the same plain
- *     invalid_format as before and attempts:0 — the FAMILY counter is never touched (no family
- *     auto-block from a controller code, as before) — but it is counted on the controller's own counter
- *     (controller_attempts, lock at 10, the same counter thab-voice uses) and audited.
- * A car that already IS a family member gets the old answer unchanged (the app sends the code on to
- * /v1/controller/redeem), with an audit row so the attempt is visible.
+ * Now:
+ *   - a car that is NOT a family member: the same plain invalid_format refusal as any controller code
+ *     here, attempts:0 and counted:false — neither the family counter nor the controller counter moves,
+ *     the code is NOT claimed and nothing but one controller_audit row ('family_box_seen', why
+ *     'not_member') is written. The app sends the code on to thab-voice /v1/controller/redeem, which
+ *     claims it and writes the dashboard-only entitlement.
+ *   - a family member: unchanged — its own code again answers success (heals a Postgres mirror that
+ *     failed the first time), any other controller code is refused plainly and sent on to redeem.
  * Every outcome leaves a controller_audit row (by 'family-box').
  */
-const CONTROLLER_LOCK_AFTER = 10; // = LOCK_AFTER in thab-voice worker/src/licence.js
-
 async function controllerCodeAtFamilyBox(db, hardwareId, legacyId, serial, before, serialOwner) {
   /* Round trips are the budget here: Postgres activate_device runs under the anon role's 3 s
-     statement_timeout and waits on this answer, and every D1 query from this Worker costs ~0.25 s.
-     So: ONE read, ONE write batch, whatever the outcome (2026-10-19, measured: a 10-query version
-     made the first activate_device time out after D1 had already said yes). */
+     statement_timeout and waits on this answer, and every D1 query from this Worker costs ~0.25 s. */
   const at = nowIso();
   const legacy = legacyId && legacyId !== hardwareId ? legacyId : hardwareId;
-  const ids = legacy !== hardwareId ? [hardwareId, legacy] : [hardwareId];
   const typed = serial.slice(0, 16);
   const plainRefusal = (why) => json({
     status: RESULT.INVALID_FORMAT,
@@ -692,37 +681,12 @@ async function controllerCodeAtFamilyBox(db, hardwareId, legacyId, serial, befor
   const auditStmtCtrl = (action, detail) =>
     db.prepare("INSERT INTO controller_audit (hardware_id, action, detail, by, at) VALUES (?, ?, ?, 'family-box', ?)")
       .bind(hardwareId, action, JSON.stringify(detail), at);
-  const refuse = async (why, count) => {
-    const stmts = [];
-    if (count) {
-      stmts.push(
-        db.prepare(
-          `INSERT INTO controller_attempts (hardware_id, failed, last_failed_at, locked_at)
-           VALUES (?, 1, ?, CASE WHEN 1 >= ? THEN ? ELSE NULL END)
-           ON CONFLICT(hardware_id) DO UPDATE SET
-             failed = controller_attempts.failed + 1,
-             last_failed_at = excluded.last_failed_at,
-             locked_at = COALESCE(controller_attempts.locked_at,
-               CASE WHEN controller_attempts.failed + 1 >= ? THEN excluded.last_failed_at ELSE NULL END)`,
-        ).bind(hardwareId, at, CONTROLLER_LOCK_AFTER, at, CONTROLLER_LOCK_AFTER),
-        // The lock this very failure set (locked_at = now) gets its own audit row, as in thab-voice.
-        db.prepare(
-          `INSERT INTO controller_audit (hardware_id, action, detail, by, at)
-           SELECT ?, 'auto_lock', json_object('failed', failed, 'last', ?, 'code', ?), 'family-box', ?
-             FROM controller_attempts WHERE hardware_id = ? AND locked_at = ?`,
-        ).bind(hardwareId, why, typed, at, hardwareId, at),
-      );
-    }
-    stmts.push(auditStmtCtrl('family_box_refused', { code: typed, why, legacy_hw_id: legacyId || null }));
-    try { await db.batch(stmts); } catch (e) { /* the trace is best-effort; the refusal stands */ }
-    return plainRefusal(why);
-  };
 
   // Already a family member: unchanged — the controller half is thab-voice's /v1/controller/redeem.
   if (before && Number(before.is_active) === 1) {
-    /* Unless this code is THIS car's own (it registered the car here): then the answer is success, so a
-       Postgres mirror that failed the first time (timeout after D1 had said yes — seen live 2026-10-19)
-       heals on the driver's next try instead of leaving D1 active and public.devices empty for good. */
+    /* Unless this code is THIS car's own (it registered the car here before 2026-10-28): then the answer
+       is success, so a Postgres mirror that failed the first time (timeout after D1 had said yes — seen
+       live 2026-10-19) heals on the driver's next try instead of leaving D1 active and public.devices empty. */
     const m6 = /^579(\d{6})$/.exec(serial);
     const own = await db.prepare(
       `SELECT code FROM controller_codes WHERE code IN (?, ?) AND used_by IN (?, ?) LIMIT 1`,
@@ -737,101 +701,15 @@ async function controllerCodeAtFamilyBox(db, hardwareId, legacyId, serial, befor
     try { await auditStmtCtrl('family_box_seen', { code: typed, why: 'family_active' }).run(); } catch (e) { /* best-effort */ }
     return plainRefusal('family_active');
   }
-  // A family licence an admin withdrew (the row has held a serial) is not reopened by a controller code.
-  if (before && before.serial_number) return refuse('family_withdrawn', false);
-  // Its serial is already another car's: the code was claimed there.
-  if (serialOwner && serialOwner.hardware_id !== hardwareId) return refuse('used', true);
 
-  // ONE read: the lock, a revoke on either id, and the code row ('579' + a six-digit code on file IS
-  // that code — the same bridge as thab-voice effectiveCode; a real 9-digit code on file wins).
-  const m = /^579(\d{6})$/.exec(serial);
-  const bridged = m ? m[1] : serial;
-  const st = await db.prepare(
-    `SELECT
-       (SELECT locked_at FROM controller_attempts WHERE hardware_id = ?) AS locked_at,
-       (SELECT COUNT(*) FROM controller_entitlements WHERE hardware_id IN (?, ?) AND revoked_at IS NOT NULL) AS revoked,
-       c.code, c.used_by, c.expires_at, c.cancelled_at
-     FROM (SELECT 1) AS one
-     LEFT JOIN controller_codes c ON c.code = CASE
-       WHEN EXISTS (SELECT 1 FROM controller_codes WHERE code = ?) THEN ? ELSE ? END`,
-  ).bind(hardwareId, hardwareId, legacy, serial, serial, bridged).first();
-
-  if (st && st.locked_at != null) return refuse('locked', false);
-  if (st && Number(st.revoked) > 0) return refuse('revoked', false);
-  if (!st || !st.code) return refuse('invalid', true);
-  if (st.cancelled_at != null) return refuse('cancelled', true);
-  if (st.used_by != null && !ids.includes(st.used_by)) return refuse('used', true);
-  const repeat = st.used_by != null; // this car's own code again: restore what it already paid for
-  if (!repeat && !(String(st.expires_at) > at)) return refuse('expired', true);
-  const code = st.code;
-
-  const after = {
-    hardware_id: hardwareId, serial_number: serial, is_active: true, is_blocked: false,
-    activated_at: at, failed_attempts: 0, source: 'controller_code',
-  };
-  // ONE write batch (one transaction). For a first claim every write after the UPDATE runs only when
-  // this very claim happened (a parallel claim that won makes this one a no-op = refused below).
-  const claimedSql = repeat ? '1 = 1' : 'EXISTS (SELECT 1 FROM controller_codes WHERE code = ? AND used_by = ? AND used_at = ?)';
-  const claimedArgs = repeat ? [] : [code, hardwareId, at];
-  const stmts = [];
-  if (!repeat) {
-    stmts.push(db.prepare(
-      `UPDATE controller_codes SET used_by = ?, used_at = ?
-       WHERE code = ? AND used_by IS NULL AND cancelled_at IS NULL AND expires_at > ?`,
-    ).bind(hardwareId, at, code, at));
-  }
-  stmts.push(
-    db.prepare(
-      `INSERT INTO devices (hardware_id, serial_number, is_active, is_blocked, activated_at, updated_at, source)
-       SELECT ?, ?, 1, 0, ?, ?, 'controller_code' WHERE ${claimedSql}
-       ON CONFLICT(hardware_id) DO UPDATE SET
-         serial_number = excluded.serial_number, is_active = 1, activated_at = excluded.activated_at,
-         updated_at = excluded.updated_at, source = 'controller_code', failed_attempts = 0,
-         first_failed_at = NULL, last_failed_at = NULL, last_failed_serial = NULL,
-         blocked_at = NULL, block_reason = NULL`,
-    ).bind(hardwareId, serial, at, at, ...claimedArgs),
-    db.prepare(
-      `INSERT INTO devices_audit (hardware_id, action, before_json, after_json)
-       SELECT ?, 'activate', ?, ? WHERE ${claimedSql}`,
-    ).bind(hardwareId, before ? JSON.stringify(shape(before)) : null, JSON.stringify(after), ...claimedArgs),
-    db.prepare(
-      `INSERT INTO controller_entitlements (hardware_id, kind, code, granted_at, granted_by)
-       SELECT ?, 'code', ?, ?, 'car' WHERE ${claimedSql}
-       ON CONFLICT(hardware_id) DO UPDATE SET kind = 'code', code = excluded.code,
-         granted_at = excluded.granted_at, granted_by = 'car'
-       WHERE controller_entitlements.revoked_at IS NULL`,
-    ).bind(hardwareId, code, at, ...claimedArgs),
-    db.prepare(
-      `INSERT INTO controller_audit (hardware_id, action, detail, by, at)
-       SELECT ?, ?, ?, 'family-box', ? WHERE ${claimedSql}`,
-    ).bind(hardwareId, repeat ? 'redeem_repeat' : 'redeem',
-      JSON.stringify({ code, typed: serial, legacy_hw_id: legacyId || null, registered: !before }), at, ...claimedArgs),
-    db.prepare(`UPDATE controller_attempts SET failed = 0 WHERE hardware_id = ? AND ${claimedSql}`)
-      .bind(hardwareId, ...claimedArgs),
-    /* The phone the generator stored on the code becomes this car's customer, as a store code's phone
-       does (car_customers, the admin panel's «رقم العميل»; owner 2026-10-19). A car that already has a
-       customer row keeps it. car_customers is created by the admin site's migrations (Website repo) and
-       exists in production — checked 2026-10-19 — so it rides in the same transaction. */
-    db.prepare(
-      `INSERT INTO car_customers (hw_id, phone, serial, bound_at, updated_at, note)
-       SELECT ?, customer_phone, code, ?, ?, 'controller code'
-         FROM controller_codes
-        WHERE code = ? AND customer_phone IS NOT NULL AND customer_phone <> '' AND ${claimedSql}
-       ON CONFLICT(hw_id) DO NOTHING`,
-    ).bind(hardwareId, at, at, code, ...claimedArgs),
-  );
-  const res = await db.batch(stmts);
-  if (!repeat && Number(res[0] && res[0].meta && res[0].meta.changes) !== 1) return refuse('used', true); // lost a race
-
-  return json({
-    status: RESULT.SUCCESS,
-    row: { ...shape(before), ...after, updated_at: at, last_failed_at: null, last_failed_serial: null,
-      blocked_at: null, block_reason: null },
-    attempts: 0,
-    attempts_limit: FAILED_ATTEMPT_LIMIT,
-    blocked_now: false,
-    via: 'controller_code',
-  });
+  // Not a family member: refused, not counted, not claimed, nothing written to devices (owner 2026-10-28).
+  try {
+    await auditStmtCtrl('family_box_seen', {
+      code: typed, why: 'not_member', legacy_hw_id: legacyId || null,
+      serial_owner: serialOwner && serialOwner.hardware_id !== hardwareId ? serialOwner.hardware_id : null,
+    }).run();
+  } catch (e) { /* the trace is best-effort; the refusal stands */ }
+  return plainRefusal('controller_code');
 }
 
 /**
