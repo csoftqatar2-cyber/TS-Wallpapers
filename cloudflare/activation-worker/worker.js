@@ -667,7 +667,8 @@ async function recordFailure(db, hardwareId, serial, before, status) {
  * /v1/controller/redeem), with an audit row so the attempt is visible.
  * Every outcome leaves a controller_audit row (by 'family-box').
  */
-const CONTROLLER_LOCK_AFTER = 10; // = LOCK_AFTER in thab-voice worker/src/licence.js
+const CONTROLLER_LOCK_AFTER = 10;
+const ENTITLEMENT_SLOT = Symbol('controller_entitlements grant'); // = LOCK_AFTER in thab-voice worker/src/licence.js
 
 async function controllerCodeAtFamilyBox(db, hardwareId, legacyId, serial, before, serialOwner) {
   /* Round trips are the budget here: Postgres activate_device runs under the anon role's 3 s
@@ -750,7 +751,7 @@ async function controllerCodeAtFamilyBox(db, hardwareId, legacyId, serial, befor
     `SELECT
        (SELECT locked_at FROM controller_attempts WHERE hardware_id = ?) AS locked_at,
        (SELECT COUNT(*) FROM controller_entitlements WHERE hardware_id IN (?, ?) AND revoked_at IS NOT NULL) AS revoked,
-       c.code, c.used_by, c.expires_at, c.cancelled_at
+       c.*
      FROM (SELECT 1) AS one
      LEFT JOIN controller_codes c ON c.code = CASE
        WHEN EXISTS (SELECT 1 FROM controller_codes WHERE code = ?) THEN ? ELSE ? END`,
@@ -764,6 +765,15 @@ async function controllerCodeAtFamilyBox(db, hardwareId, legacyId, serial, befor
   const repeat = st.used_by != null; // this car's own code again: restore what it already paid for
   if (!repeat && !(String(st.expires_at) > at)) return refuse('expired', true);
   const code = st.code;
+  /* Jetour G700 dashboard-code tier (owner 2026-10-31): the generator stores controller_codes.car/tier
+     (Website migrations/20261031_controller_code_car_tier.sql; c.* above reads them when present). The
+     entitlement row carries the code's tier — 'core' only for car 'jetour_g700' + tier 'core', else
+     'full' (thab-voice licence.js codeTierOf). This box does not know the car model; thab-voice answers
+     'core' for such a row only on a jetour_g700 request. controller_entitlements.tier comes from
+     thab-voice worker/migrations-activation/20261031_controller_entitlement_tier.sql: without it a full
+     code is written exactly as before, and a core code throws (5xx, the batch rolls back, nothing is
+     consumed or activated) — it must never become a full row. */
+  const tier = st.car === 'jetour_g700' && st.tier === 'core' ? 'core' : 'full';
 
   const after = {
     hardware_id: hardwareId, serial_number: serial, is_active: true, is_blocked: false,
@@ -794,18 +804,13 @@ async function controllerCodeAtFamilyBox(db, hardwareId, legacyId, serial, befor
       `INSERT INTO devices_audit (hardware_id, action, before_json, after_json)
        SELECT ?, 'activate', ?, ? WHERE ${claimedSql}`,
     ).bind(hardwareId, before ? JSON.stringify(shape(before)) : null, JSON.stringify(after), ...claimedArgs),
-    db.prepare(
-      `INSERT INTO controller_entitlements (hardware_id, kind, code, granted_at, granted_by)
-       SELECT ?, 'code', ?, ?, 'car' WHERE ${claimedSql}
-       ON CONFLICT(hardware_id) DO UPDATE SET kind = 'code', code = excluded.code,
-         granted_at = excluded.granted_at, granted_by = 'car'
-       WHERE controller_entitlements.revoked_at IS NULL`,
-    ).bind(hardwareId, code, at, ...claimedArgs),
+    ENTITLEMENT_SLOT,
     db.prepare(
       `INSERT INTO controller_audit (hardware_id, action, detail, by, at)
        SELECT ?, ?, ?, 'family-box', ? WHERE ${claimedSql}`,
     ).bind(hardwareId, repeat ? 'redeem_repeat' : 'redeem',
-      JSON.stringify({ code, typed: serial, legacy_hw_id: legacyId || null, registered: !before }), at, ...claimedArgs),
+      JSON.stringify({ code, typed: serial, legacy_hw_id: legacyId || null, registered: !before,
+        ...(st.car ? { code_car: st.car, code_tier: st.tier === 'core' ? 'core' : 'full', tier } : {}) }), at, ...claimedArgs),
     db.prepare(`UPDATE controller_attempts SET failed = 0 WHERE hardware_id = ? AND ${claimedSql}`)
       .bind(hardwareId, ...claimedArgs),
     /* The phone the generator stored on the code becomes this car's customer, as a store code's phone
@@ -820,7 +825,30 @@ async function controllerCodeAtFamilyBox(db, hardwareId, legacyId, serial, befor
        ON CONFLICT(hw_id) DO NOTHING`,
     ).bind(hardwareId, at, at, code, ...claimedArgs),
   );
-  const res = await db.batch(stmts);
+  const grant = (withTier) => withTier
+    ? db.prepare(
+      `INSERT INTO controller_entitlements (hardware_id, kind, code, granted_at, granted_by, tier)
+       SELECT ?, 'code', ?, ?, 'car', ? WHERE ${claimedSql}
+       ON CONFLICT(hardware_id) DO UPDATE SET kind = 'code', code = excluded.code,
+         granted_at = excluded.granted_at, granted_by = 'car', tier = excluded.tier
+       WHERE controller_entitlements.revoked_at IS NULL`,
+    ).bind(hardwareId, code, at, tier, ...claimedArgs)
+    : db.prepare(
+      `INSERT INTO controller_entitlements (hardware_id, kind, code, granted_at, granted_by)
+       SELECT ?, 'code', ?, ?, 'car' WHERE ${claimedSql}
+       ON CONFLICT(hardware_id) DO UPDATE SET kind = 'code', code = excluded.code,
+         granted_at = excluded.granted_at, granted_by = 'car'
+       WHERE controller_entitlements.revoked_at IS NULL`,
+    ).bind(hardwareId, code, at, ...claimedArgs);
+  const slot = stmts.indexOf(ENTITLEMENT_SLOT);
+  const withGrant = (withTier) => stmts.map((x, i) => (i === slot ? grant(withTier) : x));
+  let res;
+  try {
+    res = await db.batch(withGrant(true));
+  } catch (e) {
+    if (tier === 'core' || !/no such column|has no column/i.test(String((e && e.message) || ''))) throw e;
+    res = await db.batch(withGrant(false)); // ts-activation before the entitlement tier column: as before
+  }
   if (!repeat && Number(res[0] && res[0].meta && res[0].meta.changes) !== 1) return refuse('used', true); // lost a race
 
   return json({

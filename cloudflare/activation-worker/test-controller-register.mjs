@@ -155,5 +155,52 @@ const q = (db, sql, ...p) => db.raw.prepare(sql).get(...p);
   check('heal audited', q(db, "SELECT COUNT(*) n FROM controller_audit WHERE hardware_id='H3' AND action='family_box_heal'").n, 1);
 }
 
+// Jetour G700 dashboard-code tier (owner 2026-10-31). Column migrations copied from their repos:
+//   controller_codes.car/tier — Website migrations/20261031_controller_code_car_tier.sql
+//   controller_entitlements.tier — Thabthaba Dashboard worker/migrations-activation/20261031_controller_entitlement_tier.sql
+const CODES_MIG = "ALTER TABLE controller_codes ADD COLUMN car TEXT; ALTER TABLE controller_codes ADD COLUMN tier TEXT DEFAULT 'full';";
+const ENT_MIG = "ALTER TABLE controller_entitlements ADD COLUMN tier TEXT NOT NULL DEFAULT 'full' CHECK (tier IN ('full', 'core'));";
+const tcode = (db, c, car, tier) =>
+  db.raw.prepare('INSERT INTO controller_codes (code, issued_at, expires_at, car, tier) VALUES (?, ?, ?, ?, ?)')
+    .run(c, new Date().toISOString(), future, car, tier);
+{
+  const db = makeDb();
+  db.raw.exec(CODES_MIG + ENT_MIG);
+  tcode(db, '510001', 'jetour_g700', 'core');
+  tcode(db, '510002', 'jetour_g700', 'full');
+  tcode(db, '510003', null, 'core'); // tier without the G700 car means nothing
+  code(db, '510004');                 // plain code: car NULL, tier default
+  check('tier: G700 core code → success', (await activate(db, 'T1', '510001')).status, 'success');
+  check('tier: …entitlement tier core', q(db, 'SELECT tier FROM controller_entitlements WHERE hardware_id=?', 'T1').tier, 'core');
+  check('tier: …family activation as before', q(db, 'SELECT is_active FROM devices WHERE hardware_id=?', 'T1').is_active, 1);
+  check('tier: …audit carries code tier', q(db, "SELECT json_extract(detail,'$.tier') t FROM controller_audit WHERE hardware_id='T1' AND action='redeem'").t, 'core');
+  check('tier: own core code re-typed keeps core', (await activate(db, 'T1', '510001')).status, 'success');
+  check('tier: …still core', q(db, 'SELECT tier FROM controller_entitlements WHERE hardware_id=?', 'T1').tier, 'core');
+  check('tier: G700 full code → full', (await activate(db, 'T2', '510002')).status, 'success');
+  check('tier: …row full', q(db, 'SELECT tier FROM controller_entitlements WHERE hardware_id=?', 'T2').tier, 'full');
+  check('tier: core without car → full', (await activate(db, 'T3', '510003')).status, 'success');
+  check('tier: …row full', q(db, 'SELECT tier FROM controller_entitlements WHERE hardware_id=?', 'T3').tier, 'full');
+  check('tier: plain code → full', (await activate(db, 'T4', '510004')).status, 'success');
+  check('tier: …row full', q(db, 'SELECT tier FROM controller_entitlements WHERE hardware_id=?', 'T4').tier, 'full');
+}
+// codes migrated, entitlements NOT: full codes as before; a core code is a 5xx and nothing is written
+{
+  const db = makeDb();
+  db.raw.exec(CODES_MIG);
+  tcode(db, '520001', 'jetour_g700', 'full');
+  tcode(db, '520002', 'jetour_g700', 'core');
+  check('no ent column: G700 full code → success', (await activate(db, 'U1', '520001')).status, 'success');
+  check('no ent column: …entitled', q(db, 'SELECT kind FROM controller_entitlements WHERE hardware_id=?', 'U1').kind, 'code');
+  const res = await worker.fetch(new Request('https://w/v1/devices/activate', {
+    method: 'POST',
+    headers: { authorization: `Bearer ${SECRET}`, 'content-type': 'application/json' },
+    body: JSON.stringify({ hardware_id: 'U2', activation_serial: '520002' }),
+  }), { DB: db, SHARED_SECRET: SECRET });
+  check('no ent column: core code → 5xx', res.status >= 500, true);
+  check('no ent column: …code not consumed', q(db, 'SELECT used_by FROM controller_codes WHERE code=?', '520002').used_by, null);
+  check('no ent column: …no family row', q(db, 'SELECT COUNT(*) n FROM devices WHERE hardware_id=?', 'U2').n, 0);
+  check('no ent column: …no entitlement', q(db, 'SELECT COUNT(*) n FROM controller_entitlements WHERE hardware_id=?', 'U2').n, 0);
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
