@@ -1,8 +1,9 @@
 /**
- * A controller code typed into the family activation box on a car no backend knows (owner 2026-10-19,
- * VIN-bydD28D8914F1D780D0 / 377548): it registers + activates the car and grants the controller in one
- * go; every refusal is counted on the controller's own counter and audited; the family counter is never
- * touched. Real SQLite (node:sqlite) with schema.sql + migration 0008, driving the REAL worker.js.
+ * A controller (dashboard) code typed into the family activation box (owner rule 2026-10-28, review S4
+ * 2026-10-31): never claimed there, never registers/activates the car in devices, never writes an
+ * entitlement, counted on neither counter — plain invalid_format so the app takes it to thab-voice
+ * /v1/controller/redeem. A car the box registered before 2026-10-31 still heals with its own code.
+ * Real SQLite (node:sqlite) with schema.sql + migration 0008, driving the REAL worker.js.
  *
  * Run:  node test-controller-register.mjs
  */
@@ -73,62 +74,77 @@ const code = (db, c, { exp = future, used = null, cancelled = null } = {}) =>
     .run(c, new Date().toISOString(), exp, used, cancelled);
 const q = (db, sql, ...p) => db.raw.prepare(sql).get(...p);
 
-// unknown car + valid code → registered, active, entitled, code used, audited
+const nothingWritten = (db, hw, c, label) => {
+  check(`${label}: no family row`, q(db, 'SELECT COUNT(*) n FROM devices WHERE hardware_id=? AND is_active=1', hw).n, 0);
+  check(`${label}: no entitlement`, q(db, 'SELECT COUNT(*) n FROM controller_entitlements WHERE hardware_id=?', hw).n, 0);
+  check(`${label}: no controller counter`, q(db, 'SELECT COUNT(*) n FROM controller_attempts WHERE hardware_id=? AND failed > 0', hw).n, 0);
+  if (c) check(`${label}: code not consumed`, q(db, 'SELECT used_by FROM controller_codes WHERE code=?', c).used_by, null);
+};
+
+// S4 (2026-10-31, owner rule 10-28): unknown car + valid dashboard code → plain refusal, nothing written,
+// not counted, code free for thab-voice /v1/controller/redeem (the app's second door).
 {
   const db = makeDb();
   code(db, '377548');
   db.raw.prepare("UPDATE controller_codes SET customer_phone = '+971555272407' WHERE code = '377548'").run();
   const r = await activate(db, 'VIN-bydNEW1', '377548', 'AID-x');
-  check('customer phone bound to the car', q(db, 'SELECT phone FROM car_customers WHERE hw_id=?', 'VIN-bydNEW1')?.phone, '+971555272407');
-  check('unknown car: success', r.status, 'success');
-  check('row active', q(db, 'SELECT is_active FROM devices WHERE hardware_id=?', 'VIN-bydNEW1').is_active, 1);
-  check('row source', q(db, 'SELECT source FROM devices WHERE hardware_id=?', 'VIN-bydNEW1').source, 'controller_code');
-  check('entitlement kind', q(db, 'SELECT kind FROM controller_entitlements WHERE hardware_id=?', 'VIN-bydNEW1').kind, 'code');
-  check('code used_by', q(db, 'SELECT used_by FROM controller_codes WHERE code=?', '377548').used_by, 'VIN-bydNEW1');
-  check('audit redeem', q(db, "SELECT COUNT(*) n FROM controller_audit WHERE hardware_id=? AND action='redeem'", 'VIN-bydNEW1').n, 1);
-  check('devices_audit activate', q(db, "SELECT COUNT(*) n FROM devices_audit WHERE hardware_id=? AND action='activate'", 'VIN-bydNEW1').n, 1);
-  check('re-typed (Rule 2) still success', (await activate(db, 'VIN-bydNEW1', '377548')).status, 'success');
-  check('another car with the same code refused', (await activate(db, 'VIN-bydOTHER', '377548')).status, 'invalid_format');
-  check('…counted on the controller counter', q(db, 'SELECT failed FROM controller_attempts WHERE hardware_id=?', 'VIN-bydOTHER').failed, 1);
-  check('…family row not created', q(db, 'SELECT COUNT(*) n FROM devices WHERE hardware_id=?', 'VIN-bydOTHER').n, 0);
-  check('…audited', q(db, "SELECT json_extract(detail,'$.why') w FROM controller_audit WHERE hardware_id=? AND action='family_box_refused'", 'VIN-bydOTHER').w, 'used');
+  check('unknown car: invalid_format (goes on to the dashboard redeem)', r.status, 'invalid_format');
+  check('unknown car: attempts 0', r.attempts, 0);
+  check('unknown car: why', r.why, 'dashboard_code');
+  nothingWritten(db, 'VIN-bydNEW1', '377548', 'unknown car');
+  check('unknown car: no devices row at all', q(db, 'SELECT COUNT(*) n FROM devices WHERE hardware_id=?', 'VIN-bydNEW1').n, 0);
+  check('unknown car: no customer bound here', q(db, 'SELECT COUNT(*) n FROM car_customers WHERE hw_id=?', 'VIN-bydNEW1').n, 0);
+  check('unknown car: audited', q(db, "SELECT json_extract(detail,'$.why') w FROM controller_audit WHERE hardware_id=? AND action='family_box_refused'", 'VIN-bydNEW1').w, 'dashboard_code');
 }
-// a row that only collected failed codes counts as unknown
+// a row that only collected failed codes: refused, family counter untouched
 {
   const db = makeDb();
   db.raw.prepare("INSERT INTO devices (hardware_id, is_active, failed_attempts, source) VALUES ('C2', 0, 3, 'failed_attempt')").run();
   code(db, '111222');
-  check('failed-only row: success', (await activate(db, 'C2', '111222')).status, 'success');
-  check('failed counter reset', q(db, 'SELECT failed_attempts FROM devices WHERE hardware_id=?', 'C2').failed_attempts, 0);
+  check('failed-only row: invalid_format', (await activate(db, 'C2', '111222')).status, 'invalid_format');
+  check('failed-only row: family counter unchanged', q(db, 'SELECT failed_attempts FROM devices WHERE hardware_id=?', 'C2').failed_attempts, 3);
+  nothingWritten(db, 'C2', '111222', 'failed-only row');
 }
-// '579' + a six-digit code on file
+// '579' + a six-digit code on file, and an unknown 579
 {
   const db = makeDb();
   code(db, '654321');
-  check('579 bridge: success', (await activate(db, 'C3', '579654321')).status, 'success');
-  check('579 bridge: entitlement on the 6-digit code', q(db, 'SELECT code FROM controller_entitlements WHERE hardware_id=?', 'C3').code, '654321');
+  check('579 bridge: invalid_format', (await activate(db, 'C3', '579654321')).status, 'invalid_format');
+  nothingWritten(db, 'C3', '654321', '579 bridge');
+  check('unknown 579: invalid_format', (await activate(db, 'C3', '579000111')).status, 'invalid_format');
+  nothingWritten(db, 'C3', null, 'unknown 579');
 }
-// expired / cancelled / locked / revoked / withdrawn / blocked
+// expired / cancelled / used / locked / revoked / withdrawn / blocked — all plain, none counted
 {
   const db = makeDb();
   code(db, '200001', { exp: past });
   code(db, '200002', { cancelled: past });
   code(db, '200003');
+  code(db, '200004', { used: 'SOMEONE' });
   check('expired refused', (await activate(db, 'E1', '200001')).status, 'invalid_format');
-  check('expired: no family row', q(db, 'SELECT COUNT(*) n FROM devices WHERE hardware_id=?', 'E1').n, 0);
   check('cancelled refused', (await activate(db, 'E1', '200002')).status, 'invalid_format');
-  check('two failures counted', q(db, 'SELECT failed FROM controller_attempts WHERE hardware_id=?', 'E1').failed, 2);
+  check('used by another car refused', (await activate(db, 'E1', '200004')).status, 'invalid_format');
+  nothingWritten(db, 'E1', null, 'expired/cancelled/used');
   db.raw.prepare("INSERT INTO controller_attempts (hardware_id, failed, locked_at) VALUES ('L1', 10, ?)").run(past);
   check('locked car refused', (await activate(db, 'L1', '200003')).status, 'invalid_format');
-  check('locked: code not consumed', q(db, 'SELECT used_by FROM controller_codes WHERE code=?', '200003').used_by, null);
   db.raw.prepare("INSERT INTO controller_entitlements (hardware_id, kind, granted_at, revoked_at) VALUES ('R1','code',?,?)").run(past, past);
   check('revoked car refused', (await activate(db, 'R1', '200003')).status, 'invalid_format');
+  check('revoked car: still revoked', q(db, 'SELECT revoked_at FROM controller_entitlements WHERE hardware_id=?', 'R1').revoked_at, past);
   db.raw.prepare("INSERT INTO devices (hardware_id, serial_number, is_active) VALUES ('W1', '578300001', 0)").run();
   check('withdrawn family licence not reopened', (await activate(db, 'W1', '200003')).status, 'invalid_format');
+  check('withdrawn: still inactive', q(db, 'SELECT is_active FROM devices WHERE hardware_id=?', 'W1').is_active, 0);
   db.raw.prepare("INSERT INTO devices (hardware_id, is_active, is_blocked) VALUES ('B1', 0, 1)").run();
   check('blocked car answers blocked', (await activate(db, 'B1', '200003')).status, 'blocked');
   check('code still free after all refusals', q(db, 'SELECT used_by FROM controller_codes WHERE code=?', '200003').used_by, null);
-  check('every refusal audited', q(db, "SELECT COUNT(*) n FROM controller_audit WHERE action='family_box_refused'").n, 5);
+  check('every non-member refusal audited', q(db, "SELECT COUNT(*) n FROM controller_audit WHERE action='family_box_refused'").n, 6);
+}
+// Jetour G700 codes (car/tier columns present): same — the tier is written by thab-voice, never here
+{
+  const db = makeDb();
+  db.raw.exec("ALTER TABLE controller_codes ADD COLUMN car TEXT; ALTER TABLE controller_codes ADD COLUMN tier TEXT DEFAULT 'full';");
+  db.raw.prepare("INSERT INTO controller_codes (code, issued_at, expires_at, car, tier) VALUES ('510001', ?, ?, 'jetour_g700', 'core')").run(new Date().toISOString(), future);
+  check('G700 core code: invalid_format', (await activate(db, 'T1', '510001')).status, 'invalid_format');
+  nothingWritten(db, 'T1', '510001', 'G700 core code');
 }
 // family member already: unchanged answer, but visible
 {
@@ -140,66 +156,17 @@ const q = (db, sql, ...p) => db.raw.prepare(sql).get(...p);
   check('active family car: code untouched', q(db, 'SELECT used_by FROM controller_codes WHERE code=?', '300001').used_by, null);
   check('active family car: audited', q(db, "SELECT COUNT(*) n FROM controller_audit WHERE hardware_id='A1' AND action='family_box_seen'").n, 1);
 }
-
-// a car activated here by its own code whose Postgres mirror failed heals on the next try
+// a car the box registered with its own code before 2026-10-31 still heals (Postgres mirror retry)
 {
   const db = makeDb();
-  code(db, '400001');
-  await activate(db, 'H1', '400001');
+  db.raw.prepare("INSERT INTO devices (hardware_id, serial_number, is_active, source) VALUES ('H1', '400001', 1, 'controller_code')").run();
+  code(db, '400001', { used: 'H1' });
   check('own code on an active car: success (Postgres heal)', (await activate(db, 'H1', '400001')).status, 'success');
   check('…another car still refused', (await activate(db, 'H2', '400001')).status, 'invalid_format');
-  // (the 6-digit re-type above heals through Rule 2 — the serial is on file for this car)
-  code(db, '400002');
-  await activate(db, 'H3', '579400002');   // registered with the 579 form as its D1 serial
+  db.raw.prepare("INSERT INTO devices (hardware_id, serial_number, is_active, source) VALUES ('H3', '579400002', 1, 'controller_code')").run();
+  code(db, '400002', { used: 'H3' });
   check('579-registered car re-typing the six digits: success (heal)', (await activate(db, 'H3', '400002')).status, 'success');
   check('heal audited', q(db, "SELECT COUNT(*) n FROM controller_audit WHERE hardware_id='H3' AND action='family_box_heal'").n, 1);
-}
-
-// Jetour G700 dashboard-code tier (owner 2026-10-31). Column migrations copied from their repos:
-//   controller_codes.car/tier — Website migrations/20261031_controller_code_car_tier.sql
-//   controller_entitlements.tier — Thabthaba Dashboard worker/migrations-activation/20261031_controller_entitlement_tier.sql
-const CODES_MIG = "ALTER TABLE controller_codes ADD COLUMN car TEXT; ALTER TABLE controller_codes ADD COLUMN tier TEXT DEFAULT 'full';";
-const ENT_MIG = "ALTER TABLE controller_entitlements ADD COLUMN tier TEXT NOT NULL DEFAULT 'full' CHECK (tier IN ('full', 'core'));";
-const tcode = (db, c, car, tier) =>
-  db.raw.prepare('INSERT INTO controller_codes (code, issued_at, expires_at, car, tier) VALUES (?, ?, ?, ?, ?)')
-    .run(c, new Date().toISOString(), future, car, tier);
-{
-  const db = makeDb();
-  db.raw.exec(CODES_MIG + ENT_MIG);
-  tcode(db, '510001', 'jetour_g700', 'core');
-  tcode(db, '510002', 'jetour_g700', 'full');
-  tcode(db, '510003', null, 'core'); // tier without the G700 car means nothing
-  code(db, '510004');                 // plain code: car NULL, tier default
-  check('tier: G700 core code → success', (await activate(db, 'T1', '510001')).status, 'success');
-  check('tier: …entitlement tier core', q(db, 'SELECT tier FROM controller_entitlements WHERE hardware_id=?', 'T1').tier, 'core');
-  check('tier: …family activation as before', q(db, 'SELECT is_active FROM devices WHERE hardware_id=?', 'T1').is_active, 1);
-  check('tier: …audit carries code tier', q(db, "SELECT json_extract(detail,'$.tier') t FROM controller_audit WHERE hardware_id='T1' AND action='redeem'").t, 'core');
-  check('tier: own core code re-typed keeps core', (await activate(db, 'T1', '510001')).status, 'success');
-  check('tier: …still core', q(db, 'SELECT tier FROM controller_entitlements WHERE hardware_id=?', 'T1').tier, 'core');
-  check('tier: G700 full code → full', (await activate(db, 'T2', '510002')).status, 'success');
-  check('tier: …row full', q(db, 'SELECT tier FROM controller_entitlements WHERE hardware_id=?', 'T2').tier, 'full');
-  check('tier: core without car → full', (await activate(db, 'T3', '510003')).status, 'success');
-  check('tier: …row full', q(db, 'SELECT tier FROM controller_entitlements WHERE hardware_id=?', 'T3').tier, 'full');
-  check('tier: plain code → full', (await activate(db, 'T4', '510004')).status, 'success');
-  check('tier: …row full', q(db, 'SELECT tier FROM controller_entitlements WHERE hardware_id=?', 'T4').tier, 'full');
-}
-// codes migrated, entitlements NOT: full codes as before; a core code is a 5xx and nothing is written
-{
-  const db = makeDb();
-  db.raw.exec(CODES_MIG);
-  tcode(db, '520001', 'jetour_g700', 'full');
-  tcode(db, '520002', 'jetour_g700', 'core');
-  check('no ent column: G700 full code → success', (await activate(db, 'U1', '520001')).status, 'success');
-  check('no ent column: …entitled', q(db, 'SELECT kind FROM controller_entitlements WHERE hardware_id=?', 'U1').kind, 'code');
-  const res = await worker.fetch(new Request('https://w/v1/devices/activate', {
-    method: 'POST',
-    headers: { authorization: `Bearer ${SECRET}`, 'content-type': 'application/json' },
-    body: JSON.stringify({ hardware_id: 'U2', activation_serial: '520002' }),
-  }), { DB: db, SHARED_SECRET: SECRET });
-  check('no ent column: core code → 5xx', res.status >= 500, true);
-  check('no ent column: …code not consumed', q(db, 'SELECT used_by FROM controller_codes WHERE code=?', '520002').used_by, null);
-  check('no ent column: …no family row', q(db, 'SELECT COUNT(*) n FROM devices WHERE hardware_id=?', 'U2').n, 0);
-  check('no ent column: …no entitlement', q(db, 'SELECT COUNT(*) n FROM controller_entitlements WHERE hardware_id=?', 'U2').n, 0);
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);
