@@ -1075,6 +1075,47 @@ async function handleExport(db, url) {
   });
 }
 
+/* ----------------------------------------------------------------------------
+ * Cloud wallpapers for a dashboard-licensed car (owner 2026-11-01)
+ *
+ * «مدام انا فعلت ذبذبة داش بورد لازم دي تتفعل»: a car whose ذبذبة Dashboard licence is valid gets the
+ * cloud wallpapers even when the store/family activation never accepted it (Denza B5 activated with a
+ * dashboard code only). Reverses the 2026-10-28 rule «dashboard licence must not unlock wallpapers».
+ * It does NOT activate the car: devices is untouched, the store and the family box keep their rules
+ * (fcabc8c). Only Postgres get_wallpapers asks this, on its "not activated" branch.
+ *
+ * Owner restated the same day: «اي تفعيل لذبذبة داش بورد لازم الخلفيات تشتغل» — ANY dashboard licence.
+ * Entitled = a controller_entitlements row with revoked_at NULL under the car's id, else under its
+ * legacy id — whatever its kind or tier: code (full or G700 core), grandfather (snapshot, worker
+ * fallback, tsg700-live), TS G700 migration, manual. The id's own row decides when it exists (a revoked
+ * VIN row is not rescued by a legacy one; a revoke is final here as in thab-voice licence.js).
+ * No row at all: an active, unblocked D1 family row also counts — that is what licence.js answers
+ * 'licensed' for (grandfather fallback, G700 family 'core'), and D1 is the activation authority even
+ * when Postgres lags behind it.
+ * Rule 1: D1 trouble is a 500, never an invented "no" (Postgres then answers its usual sentinel).
+ * ------------------------------------------------------------------------- */
+async function handleControllerEntitled(db, body) {
+  const hardwareId = String((body && body.hardware_id) || '').trim();
+  const legacyId = String((body && body.legacy_hw_id) || '').trim();
+  if (!hardwareId) return json({ error: 'hardware_id required' }, 400);
+  const ids = legacyId && legacyId !== hardwareId ? [hardwareId, legacyId] : [hardwareId];
+  for (const id of ids) {
+    const ent = await db
+      .prepare('SELECT hardware_id, revoked_at FROM controller_entitlements WHERE hardware_id = ?')
+      .bind(id)
+      .first();
+    if (ent) return json({ status: 'ok', entitled: !ent.revoked_at, via: id === hardwareId ? 'id' : 'legacy' });
+  }
+  for (const id of ids) {
+    const dev = await db
+      .prepare('SELECT is_active, is_blocked FROM devices WHERE hardware_id = ?')
+      .bind(id)
+      .first();
+    if (dev && dev.is_active && !dev.is_blocked) return json({ status: 'ok', entitled: true, via: 'family' });
+  }
+  return json({ status: 'ok', entitled: false, via: null });
+}
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
@@ -1113,6 +1154,8 @@ export default {
             return await handleVerify(db, body);
           case '/v1/devices/bulk-upsert':
             return await handleBulkUpsert(db, body);
+          case '/v1/controller/entitled':
+            return await handleControllerEntitled(db, body);
           case '/v1/devices/migrate': {
             const moved = await migrateIdentity(db, (body.old_id || '').trim(), (body.new_id || '').trim());
             return json({ status: 'ok', moved });
