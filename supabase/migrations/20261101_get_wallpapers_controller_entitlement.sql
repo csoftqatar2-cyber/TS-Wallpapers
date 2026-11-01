@@ -23,6 +23,7 @@
 -- is not cached and answers the sentinel, exactly as before this migration (fail closed). The http
 -- call is capped at 1.5 s so get_wallpapers stays inside anon's 3 s statement_timeout.
 --
+-- APPLIED 2026-11-01 (Supabase MCP apply_migration) after ts-activation d385b997.
 -- DEPLOY ORDER: 1) deploy the activation Worker with /v1/controller/entitled; 2) apply this.
 -- (Applied first, the Worker answers 404 → not entitled → sentinel: harmless, nothing breaks.)
 --
@@ -63,8 +64,10 @@ begin
         if secret is null then
             return false;
         end if;
+        -- TIMEOUT_MS only (it caps the connect too). curl options persist on the pooled backend; the other http
+        -- callers (activate_device 4 s, migrate_device_hardware_id 3 s, admin_set_device_block 8 s) each set their
+        -- own TIMEOUT_MS first, but none sets CONNECTTIMEOUT_MS, so it is not set here (no leak into them).
         perform extensions.http_set_curlopt('CURLOPT_TIMEOUT_MS', '1500');
-        perform extensions.http_set_curlopt('CURLOPT_CONNECTTIMEOUT_MS', '1000');
         select * into resp from extensions.http((
             'POST', 'https://ts-activation.tsdash-qatar.workers.dev/v1/controller/entitled',
             array[extensions.http_header('Authorization', 'Bearer ' || secret)],
