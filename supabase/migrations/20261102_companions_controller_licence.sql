@@ -1,4 +1,6 @@
 -- 2026-11-02 — a valid ذبذبة Dashboard licence also activates ذبذبة ستور and BackButton.
+-- APPLIED 2026-11-02 to ihgmqwzdpugdzddobhbc (owner approved: «الداشبورد هو البرنامج الأساسي، لو اتفعل كل البرامج التانية تتفعل»,
+-- covering TS Link / Leo / the dashboard family flag). Checked after: 03T true/active, store car unchanged.
 --
 -- WHY: owner rule 2026-11-02: ANY dashboard licence (D1 ts-activation controller_entitlements, not
 -- revoked) must activate ذبذبة ستور, BackButton and TS Wallpapers on that car. The REVERSE stays false:
