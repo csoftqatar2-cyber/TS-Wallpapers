@@ -77,7 +77,17 @@ for (const [i, r] of rows.entries()) {
     e.file = path.join(a.out, `${i + 1}-${p.id}.jpg`);
     fs.writeFileSync(e.file, buf);
     e.size = sz && `${sz.w}x${sz.h}`;
-    e.exactSize = !!sz && sz.w === tpl.width && sz.h === tpl.height;
+    e.exactSize = !!sz && sz.w === tpl.width && sz.h === tpl.height;   // the template's own output size
+  }
+  // Dual templates (config.dual, e.g. "BYD Dashboard": black frame main + white frame alt) also
+  // write alt_processed_image_url. Saved as *-alt.jpg for reference; deliver it only if asked.
+  if (p.status === "done" && p.alt_processed_image_url) {
+    const buf = Buffer.from(await (await fetch(p.alt_processed_image_url)).arrayBuffer());
+    const sz = imageSize(buf);
+    e.altUrl = p.alt_processed_image_url;
+    e.altFile = path.join(a.out, `${i + 1}-${p.id}-alt.jpg`);
+    fs.writeFileSync(e.altFile, buf);
+    e.altSize = sz && `${sz.w}x${sz.h}`;
   }
   if (p.status !== "done" || p.review_passed === false || !e.exactSize) ok = false;
   out.projects.push(e);

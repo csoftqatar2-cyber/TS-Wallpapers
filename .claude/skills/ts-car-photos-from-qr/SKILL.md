@@ -23,14 +23,20 @@ model, caching and removal: `ts-wallpaper-content-ops` (read it if anything belo
 | main screen / خلفيات عادية / the app's own wallpaper | `app` | `get_wallpapers` | any (leave `target_mode` null) | our slideshow, or the picker on Leopard/Lynk&Co | **none — upload as-is** |
 | GWM Split | `gwm_split` | `get_gwm_wallpapers` | `gwm` | `/sdcard/Pictures/GWMSplit_Styles` → MediaStore → vendor GWM Split app | **Tank 500** `58e129ab-0347-4aea-831a-54fd6ff8a1af`, 1280×480 |
 | Jetour G700 strip picture (centre/right slot of the 4032×284 cluster strip) | `jetour_g700` | `get_jetour_wallpapers` | `jetour` | `/sdcard/Pictures/G700` → TS Dash G700 picker (`CustomArt`, slot 1400×284) | **Jetour** `adff5856-4303-4105-b08c-39fcdf7ddb21`, 4200×852 (= 3 × 1400×284) |
-| Leopard TS Leo Dash (instrument screen) | `leopard_dash` | `get_leopard_wallpapers` | `leopard` | `/sdcard/Pictures/TS Leo Dashboard` | **no exact template** — screen is 1920×720, DPQ's "BYD Dashboard" / "Full BYD Dashboard" are 1980×720 → **ask** |
-| Jetour panoramic background (DP_3, 4032×284), any other Jetour/other screen | — | — | — | no channel exists | **STOP and ask the owner. Do not improvise a channel, a template or a crop.** |
+| Leopard TS Leo Dash (instrument screen / طبلون) — **default** | `leopard_dash` | `get_leopard_wallpapers` | `leopard` | `/sdcard/Pictures/TS Leo Dashboard` | **BYD Dashboard** `6b515cb8-4809-41e0-902c-7e41084ebd51`, 1980×720, framed. Default because it was named "Leopard 8 Dashboard" until 2026-10-25 and its frames are `leo_b/leo_w_nobars.png`. Dual: deliver the main **black-frame** final (`processed_image_url`); the white-frame alt (`*-alt.jpg`) only if the owner asks for white |
+| Leopard TS Leo Dash — owner says full screen / بدون إطار | `leopard_dash` | `get_leopard_wallpapers` | `leopard` | same | **Full BYD Dashboard** `4cbe1da7-1331-4513-9161-1c13edc9a370`, 1980×720, frameless full-bleed |
+| Jetour panoramic background (DP_3, 4032×284), or any screen not in this table | — | — | — | **no channel = nowhere to deliver** | **STOP and ask the owner** — not a template problem: no RPC/folder carries it to the car. Don't invent a channel or put it on another one |
+
+**Owner decision 2026-11-08: use the existing DPQ templates as they are.** Deliver each final at
+the template's native output size — no resize/crop afterwards (Leo Dash gets 1980×720 although
+the hint in `FOLDER_CHANNELS` measures the screen at 1920×720), and no new templates.
 
 Every delivery here is **private**: `is_global=false`, `hardware_id=<full id>`, no `target_mode`.
 Sources: channels + modes `wallpapers_manager.html` `FOLDER_CHANNELS`; RPCs `supabase/schema.sql`
 and `FolderMirror.java` (`GWM`/`JETOUR`/`LEOPARD`); `target_mode` CHECK `schema.sql:77`;
-templates `GET /dpq/api/templates`; Jetour slot sizes TS-Dash-Jetour-G700 `CustomArt.java` /
-DPQ-V3 `docs/pipelines/jetour-4-1.md`; Leo Dash 1920×720 the hint in `FOLDER_CHANNELS`.
+templates `GET /dpq/api/templates` (re-checked live 2026-11-08) and DPQ-V3 `docs/pipelines/`
+(`leopard-8.md` = BYD Dashboard, `full-byd-dashboard.md`, `tank-500.md`, `jetour-4-1.md`);
+Jetour slot sizes TS-Dash-Jetour-G700 `CustomArt.java`.
 If the live template list ever changes, `node scripts/dpq-run.mjs --template x --out x x` prints it.
 
 ## Procedure
@@ -49,11 +55,12 @@ Scripts live in `scripts/` next to this file (run from there; secrets are read a
    channel (the mirror only runs in that mode) — tell the owner and wait. Its `privateRows` show
    what this car already has on that channel.
 3. **DPQ or as-is.** Main screen → as-is, skip to 5. Special screen → DPQ, unless every photo is
-   *already exactly* the template size (then skip DPQ and say so in the report). No template for
-   that screen → stop and ask.
+   *already exactly* the template size (then skip DPQ and say so in the report). Screen not in the
+   table (no channel) → stop and ask.
 4. **DPQ:** `node scripts/dpq-run.mjs --template <id> --out <dir> <photos>` (costs money — one run
    per set). It waits for QA, re-runs a failed/QA-rejected project **once** from Phase 1, downloads
-   the finals and checks exact size. Then **open and look at every output** (Read the jpg): subject
+   the finals (plus `*-alt.jpg` for dual templates) and checks each main final against the
+   template's own width×height. Then **open and look at every output** (Read the jpg): subject
    whole, not cropped, nothing odd. A bad one after the retry → report it, don't deliver it.
 5. **Deliver:** `node scripts/deliver.mjs --hw <HW_ID> --channel <channel> --out <dir> --dry-run <files>`,
    check the plan, then the same without `--dry-run`. It uploads to R2 under a new UUID name,
