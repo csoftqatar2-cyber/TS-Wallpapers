@@ -345,4 +345,5 @@ by name; humans can read them as checklists.
 | `ts-android-ui-change` | Editing a screen: the paired portrait/landscape `view_fsclock.xml`, the `"CLOCK"` prefs contract, ProGuard keeps, where the Arabic text lives. |
 | `ts-crash-triage` | Reading fleet crashes: the on-car files, the forgiving `report_crash`, retention limits, and the ProGuard rules that keep traces readable. |
 | `ts-wallpaper-content-ops` | Adding/targeting/replacing/removing wallpapers: channels, `target_mode`, hides, the URL-keyed cache that makes overwrites invisible, baked hand-off files. |
+| `ts-car-photos-from-qr` | Customer photos + a Device Linking Code QR screenshot → one car's screen: decode the full hardware id, screen→channel→RPC→DPQ template table (main screen as-is; GWM Split / Jetour strip through DPQ), deliver with `x-write-key`, verify via the channel RPC. Scripts in its `scripts/`. |
 | `ts-admin-dashboard-change` | Editing `wallpapers_manager.html`: file map, session/RLS model, which writes need an RPC, the duplicated admin identity, Vercel deploy. |
