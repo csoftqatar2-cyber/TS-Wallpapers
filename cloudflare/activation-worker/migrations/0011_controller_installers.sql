@@ -26,7 +26,10 @@
 --                             grant for a car whose licence is revoked (answered 'revoked', nothing written); anything
 --                             else is the grant_error code. Not logged: 'disabled' (INSTALL_GRANT off) and a grant that
 --                             does not parse ('bad_sig' before any key lookup). A nonce is spent only by an accepted
---                             claim (partial unique index).
+--                             claim (partial unique index). ssid/bssid = the car's Wi-Fi as the grant names it,
+--                             issid/ibssid = the installer device's own Wi-Fi (optional): BSSIDs are COLLECTED here
+--                             (the admin's «BSSIDs seen» list, owner 2026-11-15) and never enforced unless the admin
+--                             pins one on controller_shop_wifi.bssid.
 --                             Refused claims never touch controller_attempts (the 10-try code lock).
 -- All timestamps are ISO-8601 UTC strings except iat (the grant's own Unix seconds).
 
@@ -66,6 +69,8 @@ CREATE TABLE IF NOT EXISTS controller_install_grants (
   req_hw     TEXT,      -- the request's hardware_id (the id the entitlement is written on)
   ssid       TEXT,
   bssid      TEXT,
+  issid      TEXT,      -- the installer device's OWN Wi-Fi SSID at signing time (signed, optional; collected, never matched)
+  ibssid     TEXT,      -- the installer device's OWN Wi-Fi BSSID at signing time (signed, optional; collected, never matched)
   src        TEXT,      -- 'car' | 'installer'
   ip         TEXT,      -- CF-Connecting-IP
   iat        INTEGER,
