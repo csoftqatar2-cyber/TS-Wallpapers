@@ -10,7 +10,8 @@
 -- controller_entitlements row kind 'installer', granted_by 'installer:<iid>' (INSERT OR IGNORE: an existing
 -- row — live or revoked — is never touched). No new entitlement column is needed: kind/granted_by/note/
 -- snapshot_source already exist (0008) and tier (thab-voice migrations-activation/20261031) defaults to 'full';
--- a Jetour G700 grant writes tier 'core' (owner 2026-11-15).
+-- a Jetour G700 grant (the request's car_key, or the installer's signed car containing 'g700') writes tier 'core'
+-- (owner 2026-11-15).
 --
 --   controller_installers     one row per trusted installer. id 'redmagic-<8hex>' | 'laptop-<HOSTNAME>';
 --                             pubkey = ECDSA P-256 public key, SPKI DER, standard base64. revoked_at set = that
@@ -20,9 +21,12 @@
 --                             (lowercase, spaces/'_'/'-' removed), so 'SOFTWARE 5G' = 'software_5g'. bssid NULL =
 --                             any access point; set = the grant's bssid must equal it (case-insensitive).
 --                             enabled 0 = refused (grant_error 'ssid_not_allowed').
---   controller_install_grants every claim, accepted or refused, for audit. result 'ok' = accepted (granted 1 when
---                             it wrote a new entitlement row, 0 when the car already had one); anything else is the
---                             grant_error code. A nonce is spent only by an accepted claim (partial unique index).
+--   controller_install_grants claims, accepted or refused, for audit. result 'ok' = accepted (granted 1 when
+--                             it wrote a new entitlement row, 0 when the car already had one); 'revoked_car' = a valid
+--                             grant for a car whose licence is revoked (answered 'revoked', nothing written); anything
+--                             else is the grant_error code. Not logged: 'disabled' (INSTALL_GRANT off) and a grant that
+--                             does not parse ('bad_sig' before any key lookup). A nonce is spent only by an accepted
+--                             claim (partial unique index).
 --                             Refused claims never touch controller_attempts (the 10-try code lock).
 -- All timestamps are ISO-8601 UTC strings except iat (the grant's own Unix seconds).
 
@@ -66,7 +70,7 @@ CREATE TABLE IF NOT EXISTS controller_install_grants (
   ip         TEXT,      -- CF-Connecting-IP
   iat        INTEGER,
   used_at    TEXT NOT NULL,
-  result     TEXT NOT NULL,   -- 'ok' | bad_sig | unknown_installer | revoked_installer | hw_mismatch | expired | future | replay | ssid_not_allowed | disabled
+  result     TEXT NOT NULL,   -- 'ok' | bad_sig | unknown_installer | revoked_installer | hw_mismatch | expired | future | replay | ssid_not_allowed | revoked_car
   granted    INTEGER NOT NULL DEFAULT 0
 );
 
