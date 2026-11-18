@@ -384,7 +384,8 @@ async function handleEnroll(db, body, env) {
  *   - no fingerprint bound for this car (a bound car must prove itself with it, or its code);
  *   - the token it replaces is at least AUTO_MIN_AGE_MS old (no flip-flop with a fresh mint);
  *   - at most 1 per car per 24 h and 3 per car per 30 days (counted from devices_audit
- *     'auto_reissue', which thab-voice writes too, so the caps are shared);
+ *     'auto_reissue', which thab-voice writes too, so the caps are shared); 3 and 6 for a build
+ *     with app_version_code >= AUTO_WIDE_MIN_VC (2026-11-18, see below);
  *   - the replaced token stays valid for 30 days (prev_token_hash, migration 0010), and a second
  *     reissue inside that window keeps the ORIGINAL there: a stranger who copies the id gets a
  *     token, but cannot lock the real car out.
@@ -393,6 +394,17 @@ async function handleEnroll(db, body, env) {
 const AUTO_MIN_AGE_MS = 2 * 60 * 1000;
 const AUTO_CAP_DAY = 1;
 const AUTO_CAP_30D = 3;
+/* 2026-11-18 (iCar V27 VIN-LNNBDDEU8TJ005497 stuck in reissue_wait for 24 h after one app-data wipe):
+   since dashboard versionCode 1060 the iCar builds have no daemon and can never send a fingerprint, so
+   thab-voice (ذبذبة Dashboard worker/src/enrol.js, NOFP_WIDE_MIN_VC / autoWide) gives every build from 1060
+   on the fingerprint budget, 3 per 24 h and 6 per 30 days, with or without a fingerprint. Same numbers
+   here so the two roads, which share the 'auto_reissue' counter, agree. Older builds keep 1 and 3.
+   app_version_code is the request's own word, but on this road nothing proves the car anyway (the
+   fingerprint thab-voice sees is unchecked until bound), the replaced token keeps its 30-day grace, and a
+   stranger holding the VIN gains nothing he could not already get through thab-voice. */
+const AUTO_WIDE_MIN_VC = 1060;
+const AUTO_CAP_DAY_WIDE = 3;
+const AUTO_CAP_30D_WIDE = 6;
 const AUTO_PREV_GRACE_MS = 30 * 24 * 3600 * 1000;
 const CONTROLLER_GRANDFATHER_CUTOFF_MS = Date.parse('2026-10-07T21:00:00Z');
 
@@ -430,9 +442,10 @@ async function controllerAutoReissue(db, env, hardwareId, before, existing, body
     .first();
   const day = Number(counts && counts.day) || 0;
   const month = Number(counts && counts.month) || 0;
-  if (day >= AUTO_CAP_DAY || month >= AUTO_CAP_30D) {
+  const wide = (Number(body && body.app_version_code) || 0) >= AUTO_WIDE_MIN_VC;
+  if (day >= (wide ? AUTO_CAP_DAY_WIDE : AUTO_CAP_DAY) || month >= (wide ? AUTO_CAP_30D_WIDE : AUTO_CAP_30D)) {
     await auditStmt(db, hardwareId, 'auto_reissue_capped', before,
-      { app_id: 'controller', day, month, via: 'enroll_device' }).run();
+      { app_id: 'controller', day, month, wide, via: 'enroll_device' }).run();
     return null;
   }
   const token = randomTokenHex();

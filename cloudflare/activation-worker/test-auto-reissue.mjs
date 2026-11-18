@@ -160,5 +160,36 @@ const audits = (db, hw, action) => db.raw.prepare('SELECT COUNT(*) n FROM device
   check('AUTO_REISSUE_CONTROLLER=off → already_enrolled', (await enrol(off, 'VIN-off')).status === 'already_enrolled', null);
 }
 
+// 2026-11-18: a build >= 1060 (iCar: no daemon, never a fingerprint) gets 3 per 24 h and 6 per 30 days.
+{
+  const db = makeDb(); const env = { DB: db, SHARED_SECRET: SECRET, ACTIVATION_DB: db };
+  const hw = 'VIN-LNNWIDE00000001';
+  seed(db, hw);
+  const enrolVc = (vc) => call(env, '/v1/devices/enroll', { hardware_id: hw, app_id: 'controller', app_version_code: vc });
+  const age = () => db.raw.prepare('UPDATE device_tokens SET token_issued_at = ? WHERE hardware_id = ?').run(ago(H), hw);
+  let ok = 0;
+  for (let i = 0; i < 3; i++) { age(); if ((await enrolVc(1443)).status === 'rotated') ok++; }
+  check('build 1443: 3 reissues inside 24 h', ok === 3, ok);
+  age();
+  check('build 1443: the 4th inside 24 h → already_enrolled', (await enrolVc(1443)).status === 'already_enrolled', null);
+  const cap = JSON.parse(db.raw.prepare("SELECT after_json FROM devices_audit WHERE hardware_id = ? AND action = 'auto_reissue_capped'").get(hw).after_json);
+  check('capped audit says wide', cap.wide === true && cap.day === 3, cap);
+  // Spread them over the month: 6 in 30 days is the wide cap.
+  db.raw.prepare("UPDATE devices_audit SET at = ? WHERE hardware_id = ? AND action = 'auto_reissue'").run(ago(2 * 24 * H), hw);
+  for (let i = 0; i < 2; i++) db.raw.prepare("INSERT INTO devices_audit (hardware_id, action, at) VALUES (?, 'auto_reissue', ?)").run(hw, ago(3 * 24 * H));
+  age();
+  check('build 1443: 5 in 30 days → one more', (await enrolVc(1443)).status === 'rotated', null);
+  db.raw.prepare("UPDATE devices_audit SET at = ? WHERE hardware_id = ? AND action = 'auto_reissue'").run(ago(2 * 24 * H), hw);
+  age();
+  check('build 1443: 6 in 30 days → already_enrolled', (await enrolVc(1443)).status === 'already_enrolled', null);
+  // An older build stays on 1 per 24 h.
+  const hw2 = 'VIN-OLDBUILD0000001';
+  seed(db, hw2);
+  const old = (vc) => call(env, '/v1/devices/enroll', { hardware_id: hw2, app_id: 'controller', app_version_code: vc });
+  check('build 1059: first → rotated', (await old(1059)).status === 'rotated', null);
+  db.raw.prepare('UPDATE device_tokens SET token_issued_at = ? WHERE hardware_id = ?').run(ago(H), hw2);
+  check('build 1059: second inside 24 h → already_enrolled', (await old(1059)).status === 'already_enrolled', null);
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 if (fail) process.exit(1);
