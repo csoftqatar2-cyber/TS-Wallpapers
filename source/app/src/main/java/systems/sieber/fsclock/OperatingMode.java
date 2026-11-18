@@ -10,7 +10,7 @@ import android.provider.Settings;
 
 /**
  * Which product this install is: Normal, FSE, Leopard, GWM, Lynkco, Jetour, Denza, or
- * ICAR 03T, or Haval V7. The nine are mutually exclusive.
+ * ICAR 03T, or Haval V7, or 212. The ten are mutually exclusive.
  *
  * - NORMAL  : the app owns the screen and draws wallpaper + clock itself.
  * - FSE     : same, but the window is pinned to 1920x720 for ultra-wide head units.
@@ -77,6 +77,14 @@ class OperatingMode {
     static final int ICAR03T = 7;
     /** Haval V7's launcher-owned multi-wallpaper list hand-off. */
     static final int HAVAL = 8;
+    /**
+     * Car "212" (Android 10, "trinket for arm64" head unit). Like {@link #DENZA}, a name rather
+     * than a behaviour: on screen it IS {@link #NORMAL} (Others) — slideshow, clock, download
+     * gate, no folder mirror — and it sits in {@link #isOthersLike}. The separate constant exists
+     * so the car can be told apart (its own wire value) and so the one 212-only fix — the gear
+     * kept clear of the car's always-on bottom bar, see FullscreenActivity — has a switch.
+     */
+    static final int CAR212 = 9;
 
     private static final String PREF_LEOPARD = "leopard-mode";
     private static final String PREF_GWM = "gwm-mode";
@@ -85,6 +93,7 @@ class OperatingMode {
     private static final String PREF_DENZA = "denza-mode";
     private static final String PREF_ICAR03T = "icar03t-mode";
     private static final String PREF_HAVAL = "haval-mode";
+    private static final String PREF_CAR212 = "car212-mode";
 
     /**
      * Has a human explicitly chosen this car's mode on a build that knows all six modes?
@@ -142,6 +151,7 @@ class OperatingMode {
         if(prefs.getBoolean(PREF_GWM, false)) return GWM;
         if(prefs.getBoolean(PREF_LYNKCO, false)) return LYNKCO;
         if(prefs.getBoolean(PREF_JETOUR, false)) return JETOUR;
+        if(prefs.getBoolean(PREF_CAR212, false)) return CAR212;
         if(prefs.getBoolean(FullscreenActivity.PREF_FSE_SCREEN, false)) return FSE;
         return NORMAL;
     }
@@ -156,6 +166,7 @@ class OperatingMode {
                 .putBoolean(PREF_GWM, mode == GWM)
                 .putBoolean(PREF_LYNKCO, mode == LYNKCO)
                 .putBoolean(PREF_JETOUR, mode == JETOUR)
+                .putBoolean(PREF_CAR212, mode == CAR212)
                 .putBoolean(FullscreenActivity.PREF_FSE_SCREEN, mode == FSE)
                 .apply();
     }
@@ -202,6 +213,10 @@ class OperatingMode {
         return get(prefs) == JETOUR;
     }
 
+    static boolean isCar212(SharedPreferences prefs) {
+        return get(prefs) == CAR212;
+    }
+
     /**
      * The modes that draw our own screen — slideshow, clock, download gate, the lot. GWM and
      * Jetour are on this list because on screen they ARE Others; all they add is a folder mirror
@@ -213,7 +228,7 @@ class OperatingMode {
      */
     static boolean isOthersLike(SharedPreferences prefs) {
         int m = get(prefs);
-        return m == NORMAL || m == GWM || m == JETOUR;
+        return m == NORMAL || m == GWM || m == JETOUR || m == CAR212;
     }
 
     /**
@@ -241,6 +256,7 @@ class OperatingMode {
             case GWM:     return "gwm";
             case LYNKCO:  return "lynkco";
             case JETOUR:  return "jetour";
+            case CAR212:  return "212";
             case FSE:     return "fse";
             default:      return "normal";
         }

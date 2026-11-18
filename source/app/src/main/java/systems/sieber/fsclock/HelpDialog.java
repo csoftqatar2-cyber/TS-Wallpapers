@@ -226,7 +226,7 @@ final class HelpDialog {
                 c.getString(R.string.help_modes_intro), rtl);
         int[] modes = { OperatingMode.NORMAL, OperatingMode.FSE, OperatingMode.LEOPARD,
                 OperatingMode.DENZA, OperatingMode.ICAR03T, OperatingMode.GWM,
-                OperatingMode.LYNKCO, OperatingMode.JETOUR };
+                OperatingMode.LYNKCO, OperatingMode.JETOUR, OperatingMode.CAR212 };
         for(int m : modes) {
             String label = c.getString(modeName(m));
             if(m == mode) label += " · " + c.getString(R.string.help_mode_this_car);
@@ -257,6 +257,7 @@ final class HelpDialog {
             case OperatingMode.GWM:     return R.string.mode_gwm;
             case OperatingMode.LYNKCO:  return R.string.mode_lynkco;
             case OperatingMode.JETOUR:  return R.string.mode_jetour;
+            case OperatingMode.CAR212:  return R.string.mode_212;
             default:                    return R.string.mode_normal;
         }
     }
@@ -270,6 +271,7 @@ final class HelpDialog {
             case OperatingMode.GWM:     return R.string.help_mode_gwm;
             case OperatingMode.LYNKCO:  return R.string.help_mode_lynkco;
             case OperatingMode.JETOUR:  return R.string.help_mode_jetour;
+            case OperatingMode.CAR212:  return R.string.help_mode_212;
             default:                    return R.string.help_mode_normal;
         }
     }
@@ -284,6 +286,7 @@ final class HelpDialog {
             case OperatingMode.GWM:     return R.string.mode_gwm_desc;
             case OperatingMode.LYNKCO:  return R.string.mode_lynkco_desc;
             case OperatingMode.JETOUR:  return R.string.mode_jetour_desc;
+            case OperatingMode.CAR212:  return R.string.mode_212_desc;
             default:                    return R.string.mode_normal_desc;
         }
     }

@@ -157,6 +157,12 @@
                     style="@style/ActivationModeRadio"
                     android:text="@string/mode_jetour" />
 
+                <!-- 212: Others under its own name. -->
+                <RadioButton
+                    android:id="@+id/radioConfirm212"
+                    style="@style/ActivationModeRadio"
+                    android:text="@string/mode_212" />
+
             </RadioGroup>
 
             <TextView

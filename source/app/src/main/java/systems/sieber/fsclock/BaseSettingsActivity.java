@@ -455,6 +455,7 @@ public class BaseSettingsActivity extends AppCompatActivity {
                 case OperatingMode.FSE:     mode.setText(R.string.chip_mode_fse); break;
                 case OperatingMode.GWM:     mode.setText(R.string.chip_mode_gwm); break;
                 case OperatingMode.JETOUR:  mode.setText(R.string.chip_mode_jetour); break;
+                case OperatingMode.CAR212:  mode.setText(R.string.chip_mode_212); break;
                 case OperatingMode.LYNKCO:  mode.setText(R.string.chip_mode_lynkco); break;
                 default:                    mode.setText(R.string.chip_mode_normal); break;
             }
@@ -1037,7 +1038,7 @@ public class BaseSettingsActivity extends AppCompatActivity {
         // start-on-boot. Gate both routes.
         int[] modeViews = { R.id.radioGroupMode, R.id.radioModeNormal, R.id.radioModeFse,
                 R.id.radioModeLeopard, R.id.radioModeDenza, R.id.radioModeIcar03t,
-                R.id.radioModeHaval, R.id.chipMode };
+                R.id.radioModeHaval, R.id.radioMode212, R.id.chipMode };
         for(int id : modeViews) {
             View v = findViewById(id);
             if(v == null) continue;
@@ -2248,6 +2249,7 @@ public class BaseSettingsActivity extends AppCompatActivity {
                     : checkedId == R.id.radioModeFse ? OperatingMode.FSE
                     : checkedId == R.id.radioModeGwm ? OperatingMode.GWM
                     : checkedId == R.id.radioModeJetour ? OperatingMode.JETOUR
+                    : checkedId == R.id.radioMode212 ? OperatingMode.CAR212
                     : checkedId == R.id.radioModeLynkco ? OperatingMode.LYNKCO : OperatingMode.NORMAL;
             applyMode(m);
         });
@@ -2268,6 +2270,7 @@ public class BaseSettingsActivity extends AppCompatActivity {
                 : mode == OperatingMode.FSE ? R.id.radioModeFse
                 : mode == OperatingMode.GWM ? R.id.radioModeGwm
                 : mode == OperatingMode.JETOUR ? R.id.radioModeJetour
+                : mode == OperatingMode.CAR212 ? R.id.radioMode212
                 : mode == OperatingMode.LYNKCO ? R.id.radioModeLynkco : R.id.radioModeNormal;
     }
 
@@ -2337,7 +2340,7 @@ public class BaseSettingsActivity extends AppCompatActivity {
         final boolean lynkcoSupported = OperatingMode.isLynkcoSupported(this);
         final int[] modes = { OperatingMode.NORMAL, OperatingMode.FSE, OperatingMode.LEOPARD,
                 OperatingMode.DENZA, OperatingMode.ICAR03T, OperatingMode.HAVAL, OperatingMode.GWM,
-                OperatingMode.LYNKCO, OperatingMode.JETOUR };
+                OperatingMode.LYNKCO, OperatingMode.JETOUR, OperatingMode.CAR212 };
         CharSequence[] labels = {
                 getString(R.string.mode_normal),
                 getString(R.string.mode_fse),
@@ -2354,7 +2357,8 @@ public class BaseSettingsActivity extends AppCompatActivity {
                 // customer reads; the mode still refuses to be picked here, which is the part
                 // that matters.
                 getString(R.string.mode_lynkco),
-                getString(R.string.mode_jetour)
+                getString(R.string.mode_jetour),
+                getString(R.string.mode_212)
         };
         int current = OperatingMode.get(mSharedPref);
         int checked = current == OperatingMode.LEOPARD ? 2
@@ -2364,7 +2368,8 @@ public class BaseSettingsActivity extends AppCompatActivity {
                 : current == OperatingMode.HAVAL ? 5
                 : current == OperatingMode.GWM ? 6
                 : current == OperatingMode.LYNKCO ? 7
-                : current == OperatingMode.JETOUR ? 8 : 0;
+                : current == OperatingMode.JETOUR ? 8
+                : current == OperatingMode.CAR212 ? 9 : 0;
 
         new AuroraDialog.Builder(this)
                 .setTitle(R.string.mode_title)
@@ -2418,6 +2423,7 @@ public class BaseSettingsActivity extends AppCompatActivity {
                 : mode == OperatingMode.FSE ? R.string.mode_fse_desc
                 : mode == OperatingMode.GWM ? R.string.mode_gwm_desc
                 : mode == OperatingMode.JETOUR ? R.string.mode_jetour_desc
+                : mode == OperatingMode.CAR212 ? R.string.mode_212_desc
                 : mode == OperatingMode.LYNKCO ? R.string.mode_lynkco_desc : R.string.mode_normal_desc;
         String text = getString(res);
         // The unsupported note is about Leopard's live-wallpaper requirement; only append it when

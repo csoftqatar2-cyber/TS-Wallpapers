@@ -448,6 +448,13 @@
                             style="@style/ActivationModeRadio"
                             android:text="@string/mode_jetour" />
 
+                        <!-- 212: Others under its own name. Paired with the other
+                             view_fsclock.xml variant - keep both in step. -->
+                        <RadioButton
+                            android:id="@+id/radioActivation212"
+                            style="@style/ActivationModeRadio"
+                            android:text="@string/mode_212" />
+
                     </RadioGroup>
 
                     <TextView

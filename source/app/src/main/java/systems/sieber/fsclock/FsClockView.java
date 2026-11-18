@@ -1488,6 +1488,7 @@ public class FsClockView extends FrameLayout {
             case OperatingMode.HAVAL:   return R.id.radioActivationHaval;
             case OperatingMode.GWM:     return R.id.radioActivationGwm;
             case OperatingMode.JETOUR:  return R.id.radioActivationJetour;
+            case OperatingMode.CAR212:  return R.id.radioActivation212;
             case OperatingMode.LYNKCO:  return R.id.radioActivationLynkco;
             case OperatingMode.FSE:     return R.id.radioActivationFse;
             case OperatingMode.NORMAL:  return R.id.radioActivationNormal;
@@ -1503,6 +1504,7 @@ public class FsClockView extends FrameLayout {
             case OperatingMode.HAVAL:   return R.string.mode_haval;
             case OperatingMode.GWM:     return R.string.mode_gwm;
             case OperatingMode.JETOUR:  return R.string.mode_jetour;
+            case OperatingMode.CAR212:  return R.string.mode_212;
             case OperatingMode.LYNKCO:  return R.string.mode_lynkco;
             case OperatingMode.FSE:     return R.string.mode_fse;
             default:                    return R.string.mode_normal;
@@ -1548,6 +1550,7 @@ public class FsClockView extends FrameLayout {
                 : mode == OperatingMode.LYNKCO ? R.string.mode_lynkco_desc
                 : mode == OperatingMode.GWM ? R.string.mode_gwm_desc
                 : mode == OperatingMode.JETOUR ? R.string.mode_jetour_desc
+                : mode == OperatingMode.CAR212 ? R.string.mode_212_desc
                 : mode == OperatingMode.FSE ? R.string.mode_fse_desc : R.string.mode_normal_desc;
         String text = getContext().getString(res);
         // The note is about the live-wallpaper support Leopard (and Denza, the same hand-off)
@@ -1574,6 +1577,7 @@ public class FsClockView extends FrameLayout {
         if(id == R.id.radioActivationHaval) return OperatingMode.HAVAL;
         if(id == R.id.radioActivationGwm) return OperatingMode.GWM;
         if(id == R.id.radioActivationJetour) return OperatingMode.JETOUR;
+        if(id == R.id.radioActivation212) return OperatingMode.CAR212;
         if(id == R.id.radioActivationLynkco) return OperatingMode.LYNKCO;
         if(id == R.id.radioActivationFse) return OperatingMode.FSE;
         return OperatingMode.NORMAL;

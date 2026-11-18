@@ -342,6 +342,10 @@ public class FullscreenActivity extends AppCompatActivity {
             mlp.rightMargin = insets.right;
             mlp.topMargin = insets.top;
             mlp.bottomMargin = insets.bottom;
+            // 212 only: the car's own bottom bar never hides and is never reported to us.
+            if(OperatingMode.isCar212(mSharedPref)) {
+                mlp.bottomMargin = car212BottomClearance(windowInsets, insets.bottom);
+            }
             v.setLayoutParams(mlp);
             // Return CONSUMED if you don't want the window insets to keep passing down to descendant views.
             return WindowInsetsCompat.CONSUMED;
@@ -378,6 +382,41 @@ public class FullscreenActivity extends AppCompatActivity {
         StartupPermissions.requestIfMissing(this);
     }
 
+    /**
+     * Minimum height of car 212's own bottom bar, measured on the car (2026-11-18): a vendor
+     * NavigationBar window at [0,588][1920,720] on a 1920x720 panel, density 160 — 132 px = 132 dp.
+     * Rounded up so the gear clears the bar's top edge with a little room.
+     */
+    private static final int CAR212_BAR_DP = 140;
+
+    /**
+     * How far above the bottom edge the gear has to sit in 212 mode.
+     *
+     * On that car the bar is always drawn, but this window is laid out with
+     * FLAG_LAYOUT_NO_LIMITS and the hide-navigation flags, so Android reports a bottom inset of
+     * 0 and the gear (bottom-left, 16 dp up) landed underneath the bar where it could not be
+     * tapped. So every source is asked — the visible system-bar inset, the stable inset that
+     * ignores visibility, the platform's navigation_bar_height — and the measured bar height is
+     * the floor. Only 212 mode calls this; every other car keeps the plain inset it always had.
+     */
+    private int car212BottomClearance(WindowInsetsCompat windowInsets, int visibleBottom) {
+        int bottom = Math.max(0, visibleBottom);
+        try {
+            Insets stable = windowInsets.getInsetsIgnoringVisibility(WindowInsetsCompat.Type.systemBars());
+            bottom = Math.max(bottom, stable.bottom);
+        } catch(Throwable ignored) { }
+        try {
+            int id = getResources().getIdentifier("navigation_bar_height", "dimen", "android");
+            if(id > 0) bottom = Math.max(bottom, getResources().getDimensionPixelSize(id));
+        } catch(Throwable ignored) { }
+        float density = getResources().getDisplayMetrics().density;
+        bottom = Math.max(bottom, Math.round(CAR212_BAR_DP * density));
+        // Never more than a third of the screen, whatever a confused source reports.
+        int screenH = getResources().getDisplayMetrics().heightPixels;
+        if(screenH > 0) bottom = Math.min(bottom, screenH / 3);
+        return bottom;
+    }
+
     @Override
     public void onPause() {
         super.onPause();
@@ -406,6 +445,10 @@ public class FullscreenActivity extends AppCompatActivity {
         // check for an app update on every open; show a red dot next to the
         // settings button when a newer version is published on Supabase
         checkForUpdateBadge();
+
+        // The mode may have changed in Settings (into or out of 212): re-run the insets
+        // listener so the gear's bottom clearance follows it.
+        if(mControlsView != null) ViewCompat.requestApplyInsets(mControlsView);
 
         // show TV keys info
         if(uiModeManager.getCurrentModeType() == Configuration.UI_MODE_TYPE_TELEVISION) {

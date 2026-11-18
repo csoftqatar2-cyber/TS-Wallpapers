@@ -352,6 +352,8 @@ Roboto Font Copyright (c) Christian Robertson. Licensed under the Apache License
     <string name="mode_gwm_desc">Same as Others, plus a \"Manage GWM images\" section that mirrors the GWM channel into the shared folder the GWM dashboard app reads.</string>
     <string name="mode_jetour">Jetour</string>
     <string name="mode_jetour_desc">Same as Others, plus a \"Manage Jetour images\" section that downloads the Jetour channel into /sdcard/Pictures/G700 for the head unit\'s own app to read.</string>
+    <string name="mode_212">212</string>
+    <string name="mode_212_desc">Same as Others: the app shows wallpapers and the clock on its own screen. The settings button is kept above the car\'s bottom bar.</string>
     <string name="mode_lynkco">Lynk and Co</string>
     <string name="mode_lynkco_desc">For Lynk &amp; Co / Flyme head units. The app is just a picker — the chosen wallpaper is handed to the car\'s own theme app, which opens a preview with an \"Apply\" button.</string>
     <string name="mode_unavailable_here">This mode is not available on this screen.</string>
@@ -555,6 +557,7 @@ Roboto Font Copyright (c) Christian Robertson. Licensed under the Apache License
     <string name="chip_mode_gwm">Mode: GWM</string>
     <string name="chip_mode_lynkco">Mode: Lynk and Co</string>
     <string name="chip_mode_jetour">Mode: Jetour</string>
+    <string name="chip_mode_212">Mode: 212</string>
 
     <!-- Crash log (Settings -> Updates). Only shown on a car that has actually crashed. -->
     <string name="crash_log_open">Crash log</string>
@@ -588,6 +591,7 @@ Roboto Font Copyright (c) Christian Robertson. Licensed under the Apache License
     <string name="help_mode_fse">Exactly the Others mode (slideshow and clock), but the window is pinned to 1920×720 for the very wide Leopard (FSE) screens. With «Auto-start app when the car turns on» switched on, the program is also brought back to the front whenever the screen wakes up.</string>
     <string name="help_mode_gwm">On screen it is the Others mode: the slideshow and the clock. In addition, Settings → Wallpapers has a «GWM Split» section that copies the pictures tagged GWM Split in the cloud into a folder on this car (Pictures/GWMSplit_Styles), which the GWM Split dashboard app reads.</string>
     <string name="help_mode_jetour">On screen it is the Others mode: the slideshow and the clock. In addition, Settings → Wallpapers has a «Jetour images» section that copies the pictures tagged Jetour in the cloud into Pictures/G700 on this car, which the head unit\'s own gallery app reads.</string>
+    <string name="help_mode_212">The same as the Others mode: the program owns the screen, plays the wallpaper library as a slideshow and draws the clock over it. The only difference is that the gear button sits above the car\'s own bottom bar so it can be tapped.</string>
     <string name="help_mode_leopard">The program draws nothing itself — it is a picker. You choose a picture or a video, it hands it to Android\'s wallpaper system and closes: no clock, no slideshow. Settings → Wallpapers also has a «TS Leo Dash images» section that copies the pictures and videos tagged Leopard into a folder for the TS Leo Dash instrument-screen app.</string>
     <string name="help_mode_denza">The same product as Leopard under its own name: the program is only a picker that hands the chosen picture or video to Android\'s wallpaper system and closes — no clock, no slideshow.</string>
     <string name="help_mode_icar03t">A picker for the Chery iCAR 03T. The car\'s launcher shows its own carousel of pictures, so the chosen picture is downloaded into the folder that launcher reads and added to its carousel. Pictures only — this car cannot take a video.</string>

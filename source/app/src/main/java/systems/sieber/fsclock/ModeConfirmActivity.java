@@ -434,6 +434,7 @@ public class ModeConfirmActivity extends AppCompatActivity {
         if(id == R.id.radioConfirmHaval) return OperatingMode.HAVAL;
         if(id == R.id.radioConfirmGwm) return OperatingMode.GWM;
         if(id == R.id.radioConfirmJetour) return OperatingMode.JETOUR;
+        if(id == R.id.radioConfirm212) return OperatingMode.CAR212;
         if(id == R.id.radioConfirmLynkco) return OperatingMode.LYNKCO;
         return OperatingMode.NORMAL;
     }
@@ -448,6 +449,7 @@ public class ModeConfirmActivity extends AppCompatActivity {
                 : mode == OperatingMode.FSE ? R.string.mode_fse_desc
                 : mode == OperatingMode.GWM ? R.string.mode_gwm_desc
                 : mode == OperatingMode.JETOUR ? R.string.mode_jetour_desc
+                : mode == OperatingMode.CAR212 ? R.string.mode_212_desc
                 : mode == OperatingMode.LYNKCO ? R.string.mode_lynkco_desc
                 : R.string.mode_normal_desc;
         mDesc.setText(getString(res));

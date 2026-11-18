@@ -703,6 +703,12 @@
                                     android:id="@+id/radioModeJetour"
                                     style="@style/ModeRadio"
                                     android:text="@string/mode_jetour" />
+                                <!-- 212: Others under its own name (the gear sits above that
+                                     car's always-on bottom bar - see FullscreenActivity). -->
+                                <RadioButton
+                                    android:id="@+id/radioMode212"
+                                    style="@style/ModeRadio"
+                                    android:text="@string/mode_212" />
                             </RadioGroup>
 
                             <TextView
